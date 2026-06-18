@@ -2,7 +2,7 @@
 
 import { useState, useEffect, FormEvent } from 'react';
 import { useRouter } from 'next/navigation';
-import { Shield } from 'lucide-react';
+import { Building2 } from 'lucide-react';
 import { useAuth } from '@/lib/auth';
 
 export default function LoginPage() {
@@ -17,8 +17,9 @@ export default function LoginPage() {
   const [email, setEmail] = useState('');
   const [password, setPassword] = useState('');
   const [fullName, setFullName] = useState('');
-  const [apartment, setApartment] = useState('');
-  const [building, setBuilding] = useState('');
+  const [company, setCompany] = useState('');
+  const [office, setOffice] = useState('');
+  const [floor, setFloor] = useState('');
   const [error, setError] = useState('');
   const [loading, setLoading] = useState(false);
   const { login, register } = useAuth();
@@ -39,7 +40,7 @@ export default function LoginPage() {
       if (mode === 'login') {
         await login(email, password);
       } else {
-        await register({ email, password, fullName, apartment, building });
+        await register({ email, password, fullName, company, office, floor });
       }
       router.push('/dashboard');
     } catch (err) {
@@ -54,45 +55,37 @@ export default function LoginPage() {
       <div className="w-full max-w-md">
         <div className="text-center mb-8">
           <div className="inline-flex items-center justify-center w-14 h-14 rounded-2xl bg-[var(--primary)] text-white mb-4">
-            <Shield className="w-7 h-7" />
+            <Building2 className="w-7 h-7" />
           </div>
-          <h1 className="text-2xl font-bold">PASS24</h1>
-          <p className="text-[var(--muted)] mt-1">Заказ и контроль пропусков</p>
+          <h1 className="text-2xl font-bold">PASS24 БЦ</h1>
+          <p className="text-[var(--muted)] mt-1">Пропуска для арендаторов бизнес-центра</p>
         </div>
 
         <div className="card p-6">
           <div className="flex gap-2 mb-6 p-1 bg-slate-100 rounded-lg">
-            <button
-              type="button"
-              className={`flex-1 py-2 text-sm rounded-md transition-colors ${mode === 'login' ? 'bg-white shadow-sm font-medium' : 'text-[var(--muted)]'}`}
-              onClick={() => setMode('login')}
-            >
-              Вход
-            </button>
-            <button
-              type="button"
-              className={`flex-1 py-2 text-sm rounded-md transition-colors ${mode === 'register' ? 'bg-white shadow-sm font-medium' : 'text-[var(--muted)]'}`}
-              onClick={() => setMode('register')}
-            >
-              Регистрация
-            </button>
+            <button type="button" className={`flex-1 py-2 text-sm rounded-md transition-colors ${mode === 'login' ? 'bg-white shadow-sm font-medium' : 'text-[var(--muted)]'}`} onClick={() => setMode('login')}>Вход</button>
+            <button type="button" className={`flex-1 py-2 text-sm rounded-md transition-colors ${mode === 'register' ? 'bg-white shadow-sm font-medium' : 'text-[var(--muted)]'}`} onClick={() => setMode('register')}>Регистрация</button>
           </div>
 
           <form onSubmit={handleSubmit} className="space-y-4">
             {mode === 'register' && (
               <>
                 <div>
-                  <label className="label">ФИО</label>
+                  <label className="label">ФИО контактного лица</label>
                   <input className="input" value={fullName} onChange={(e) => setFullName(e.target.value)} required />
+                </div>
+                <div>
+                  <label className="label">Компания (арендатор)</label>
+                  <input className="input" value={company} onChange={(e) => setCompany(e.target.value)} placeholder="ООО «Название»" />
                 </div>
                 <div className="grid grid-cols-2 gap-3">
                   <div>
-                    <label className="label">Квартира</label>
-                    <input className="input" value={apartment} onChange={(e) => setApartment(e.target.value)} />
+                    <label className="label">Офис</label>
+                    <input className="input" value={office} onChange={(e) => setOffice(e.target.value)} placeholder="401" />
                   </div>
                   <div>
-                    <label className="label">Корпус</label>
-                    <input className="input" value={building} onChange={(e) => setBuilding(e.target.value)} />
+                    <label className="label">Этаж</label>
+                    <input className="input" value={floor} onChange={(e) => setFloor(e.target.value)} placeholder="4" />
                   </div>
                 </div>
               </>
@@ -115,8 +108,8 @@ export default function LoginPage() {
 
           <div className="mt-6 pt-4 border-t border-[var(--border)] text-xs text-[var(--muted)] space-y-1">
             <p className="font-medium text-[var(--text)]">Тестовые аккаунты:</p>
-            <p>Житель: resident@pass24.local / resident123</p>
-            <p>Охрана: security@pass24.local / security123</p>
+            <p>Арендатор: tenant@pass24.local / tenant123</p>
+            <p>Ресепшн: security@pass24.local / security123</p>
             <p>Админ: admin@pass24.local / admin123</p>
           </div>
         </div>

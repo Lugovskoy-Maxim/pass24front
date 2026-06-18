@@ -12,7 +12,6 @@ export default function DashboardPage() {
   const { user } = useAuth();
   const [passes, setPasses] = useState<Pass[]>([]);
   const [stats, setStats] = useState({ pending: 0, active: 0, today: 0 });
-
   const [loadError, setLoadError] = useState('');
 
   useEffect(() => {
@@ -35,32 +34,29 @@ export default function DashboardPage() {
     <ProtectedLayout>
       <div className="mb-6">
         <h1 className="text-2xl font-bold">Добро пожаловать, {user?.full_name?.split(' ')[0]}</h1>
-        <p className="text-[var(--muted)]">Управление пропусками для вашего жилого комплекса</p>
+        <p className="text-[var(--muted)]">
+          {user?.company ? `${user.company}` : 'Управление пропусками'}
+          {user?.office && ` · офис ${user.office}`}
+        </p>
       </div>
 
       <div className="grid grid-cols-1 sm:grid-cols-3 gap-4 mb-8">
         <div className="card p-4 flex items-center gap-3">
-          <div className="w-10 h-10 rounded-lg bg-amber-50 flex items-center justify-center">
-            <AlertCircle className="w-5 h-5 text-amber-600" />
-          </div>
+          <AlertCircle className="w-5 h-5 text-amber-600" />
           <div>
             <div className="text-2xl font-bold">{stats.pending}</div>
             <div className="text-sm text-[var(--muted)]">На рассмотрении</div>
           </div>
         </div>
         <div className="card p-4 flex items-center gap-3">
-          <div className="w-10 h-10 rounded-lg bg-emerald-50 flex items-center justify-center">
-            <CheckCircle className="w-5 h-5 text-emerald-600" />
-          </div>
+          <CheckCircle className="w-5 h-5 text-emerald-600" />
           <div>
             <div className="text-2xl font-bold">{stats.active}</div>
-            <div className="text-sm text-[var(--muted)]">На территории</div>
+            <div className="text-sm text-[var(--muted)]">Сейчас в здании</div>
           </div>
         </div>
         <div className="card p-4 flex items-center gap-3">
-          <div className="w-10 h-10 rounded-lg bg-blue-50 flex items-center justify-center">
-            <Clock className="w-5 h-5 text-blue-600" />
-          </div>
+          <Clock className="w-5 h-5 text-blue-600" />
           <div>
             <div className="text-2xl font-bold">{stats.today}</div>
             <div className="text-sm text-[var(--muted)]">Сегодня</div>
@@ -68,12 +64,10 @@ export default function DashboardPage() {
         </div>
       </div>
 
-      {loadError && (
-        <div className="mb-4 text-sm text-red-600 bg-red-50 px-3 py-2 rounded-md">{loadError}</div>
-      )}
+      {loadError && <div className="mb-4 text-sm text-red-600 bg-red-50 px-3 py-2 rounded-md">{loadError}</div>}
 
       <div className="flex gap-3 mb-6">
-        {(user?.role === 'resident' || user?.role === 'admin') && (
+        {(user?.role === 'tenant' || user?.role === 'admin') && (
           <Link href="/passes/new" className="btn btn-primary">
             <Plus className="w-4 h-4" />
             Заказать пропуск
@@ -82,21 +76,19 @@ export default function DashboardPage() {
         {isSecurity && (
           <Link href="/control" className="btn btn-secondary">
             <ClipboardList className="w-4 h-4" />
-            Журнал КПП
+            Панель ресепшн
           </Link>
         )}
       </div>
 
-      <h2 className="text-lg font-semibold mb-4">Последние заявки</h2>
+      <h2 className="text-lg font-semibold mb-4">Последние пропуска</h2>
       {passes.length === 0 ? (
         <div className="card p-8 text-center text-[var(--muted)]">
-          Заявок пока нет. Создайте первый пропуск для гостя.
+          Пропусков пока нет. Закажите пропуск для посетителя или курьера.
         </div>
       ) : (
         <div className="grid gap-3">
-          {passes.map((pass) => (
-            <PassCard key={pass.id} pass={pass} />
-          ))}
+          {passes.map((pass) => <PassCard key={pass.id} pass={pass} />)}
         </div>
       )}
     </ProtectedLayout>

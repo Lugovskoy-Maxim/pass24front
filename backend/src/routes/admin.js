@@ -9,7 +9,7 @@ const settings = require('../services/settings');
 const router = express.Router();
 router.use(auth(), requireRole('admin'));
 
-const ROLES = ['resident', 'security', 'admin'];
+const ROLES = ['tenant', 'security', 'admin'];
 
 function mapUser(row) {
   return {
@@ -17,9 +17,10 @@ function mapUser(row) {
     email: row.email,
     fullName: row.full_name,
     phone: row.phone,
+    company: row.company,
     role: row.role,
-    apartment: row.apartment,
-    building: row.building,
+    office: row.office,
+    floor: row.floor,
     isActive: !!row.is_active,
     createdAt: row.created_at,
     passesCount: row.passes_count ?? undefined,
@@ -43,9 +44,9 @@ router.get('/dashboard', (_req, res) => {
 
   const revenue = db.prepare(`
     SELECT SUM(p.price_monthly) as total
-    FROM complexes c
-    JOIN pricing_plans p ON p.id = c.plan_id
-    WHERE c.is_active = 1
+    FROM business_centers bc
+    JOIN pricing_plans p ON p.id = bc.plan_id
+    WHERE bc.is_active = 1
   `).get();
 
   res.json({
@@ -62,7 +63,7 @@ router.get('/dashboard', (_req, res) => {
       },
       revenue: {
         monthlyTotal: revenue?.total || 0,
-        complexes: db.prepare('SELECT COUNT(*) as c FROM complexes WHERE is_active = 1').get().c,
+        businessCenters: db.prepare('SELECT COUNT(*) as c FROM business_centers WHERE is_active = 1').get().c,
       },
     },
     recentActivity,
@@ -80,9 +81,9 @@ router.get('/users', (req, res) => {
 
   if (role) { sql += ' AND u.role = ?'; params.push(role); }
   if (search) {
-    sql += ' AND (u.full_name LIKE ? OR u.email LIKE ? OR u.apartment LIKE ?)';
+    sql += ' AND (u.full_name LIKE ? OR u.email LIKE ? OR u.office LIKE ? OR u.company LIKE ?)';
     const q = `%${String(search).trim()}%`;
-    params.push(q, q, q);
+    params.push(q, q, q, q);
   }
 
   sql += ' ORDER BY u.created_at DESC LIMIT 200';
@@ -91,7 +92,7 @@ router.get('/users', (req, res) => {
 });
 
 router.post('/users', (req, res) => {
-  const { email, password, fullName, phone, role, apartment, building } = req.body;
+  const { email, password, fullName, phone, company, role, office, floor } = req.body;
 
   if (!email || !password || !fullName || !role) {
     return res.status(400).json({ error: 'Email, пароль, ФИО и роль обязательны' });
@@ -105,17 +106,20 @@ router.post('/users', (req, res) => {
 
   const id = uuid();
   db.prepare(`
-    INSERT INTO users (id, email, password_hash, full_name, phone, role, apartment, building, is_active)
-    VALUES (?, ?, ?, ?, ?, ?, ?, ?, 1)
-  `).run(id, email.toLowerCase(), bcrypt.hashSync(password, 10), fullName, phone || null, role, apartment || null, building || null);
+    INSERT INTO users (id, email, password_hash, full_name, phone, company, role, office, floor, is_active)
+    VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, 1)
+  `).run(
+    id, email.toLowerCase(), bcrypt.hashSync(password, 10), fullName,
+    phone || null, company || null, role, office || null, floor || null,
+  );
 
-  audit.log(req.user.id, 'user.create', 'user', id, { email, role });
+  audit.log(req.user.id, 'user.create', 'user', id, { email, role, company });
   const row = db.prepare('SELECT * FROM users WHERE id = ?').get(id);
   res.status(201).json({ user: mapUser(row) });
 });
 
 router.patch('/users/:id', (req, res) => {
-  const { fullName, phone, role, apartment, building, isActive, password } = req.body;
+  const { fullName, phone, company, role, office, floor, isActive, password } = req.body;
   const existing = db.prepare('SELECT * FROM users WHERE id = ?').get(req.params.id);
   if (!existing) return res.status(404).json({ error: 'Пользователь не найден' });
 
@@ -131,9 +135,10 @@ router.patch('/users/:id', (req, res) => {
 
   if (fullName !== undefined) { updates.push('full_name = ?'); params.push(fullName); }
   if (phone !== undefined) { updates.push('phone = ?'); params.push(phone || null); }
+  if (company !== undefined) { updates.push('company = ?'); params.push(company || null); }
   if (role !== undefined) { updates.push('role = ?'); params.push(role); }
-  if (apartment !== undefined) { updates.push('apartment = ?'); params.push(apartment || null); }
-  if (building !== undefined) { updates.push('building = ?'); params.push(building || null); }
+  if (office !== undefined) { updates.push('office = ?'); params.push(office || null); }
+  if (floor !== undefined) { updates.push('floor = ?'); params.push(floor || null); }
   if (isActive !== undefined) { updates.push('is_active = ?'); params.push(isActive ? 1 : 0); }
   if (password) { updates.push('password_hash = ?'); params.push(bcrypt.hashSync(password, 10)); }
 
@@ -155,7 +160,7 @@ router.get('/pricing', (_req, res) => {
       name: p.name,
       description: p.description,
       priceMonthly: p.price_monthly,
-      maxApartments: p.max_apartments,
+      maxOffices: p.max_offices,
       features: JSON.parse(p.features),
       isActive: !!p.is_active,
     })),
@@ -163,7 +168,7 @@ router.get('/pricing', (_req, res) => {
 });
 
 router.patch('/pricing/:id', (req, res) => {
-  const { name, description, priceMonthly, maxApartments, features, isActive } = req.body;
+  const { name, description, priceMonthly, maxOffices, features, isActive } = req.body;
   const existing = db.prepare('SELECT * FROM pricing_plans WHERE id = ?').get(req.params.id);
   if (!existing) return res.status(404).json({ error: 'Тариф не найден' });
 
@@ -172,14 +177,14 @@ router.patch('/pricing/:id', (req, res) => {
       name = COALESCE(?, name),
       description = COALESCE(?, description),
       price_monthly = COALESCE(?, price_monthly),
-      max_apartments = COALESCE(?, max_apartments),
+      max_offices = COALESCE(?, max_offices),
       features = COALESCE(?, features),
       is_active = COALESCE(?, is_active),
       updated_at = datetime('now')
     WHERE id = ?
   `).run(
     name ?? null, description ?? null, priceMonthly ?? null,
-    maxApartments ?? null, features ? JSON.stringify(features) : null,
+    maxOffices ?? null, features ? JSON.stringify(features) : null,
     isActive !== undefined ? (isActive ? 1 : 0) : null,
     req.params.id,
   );
@@ -192,27 +197,28 @@ router.patch('/pricing/:id', (req, res) => {
       name: row.name,
       description: row.description,
       priceMonthly: row.price_monthly,
-      maxApartments: row.max_apartments,
+      maxOffices: row.max_offices,
       features: JSON.parse(row.features),
       isActive: !!row.is_active,
     },
   });
 });
 
-router.get('/complexes', (_req, res) => {
+router.get('/business-centers', (_req, res) => {
   const rows = db.prepare(`
-    SELECT c.*, p.name as plan_name, p.price_monthly
-    FROM complexes c
-    JOIN pricing_plans p ON p.id = c.plan_id
-    ORDER BY c.name
+    SELECT bc.*, p.name as plan_name, p.price_monthly
+    FROM business_centers bc
+    JOIN pricing_plans p ON p.id = bc.plan_id
+    ORDER BY bc.name
   `).all();
 
   res.json({
-    complexes: rows.map((c) => ({
+    businessCenters: rows.map((c) => ({
       id: c.id,
       name: c.name,
       address: c.address,
-      apartmentsCount: c.apartments_count,
+      officesCount: c.offices_count,
+      totalAreaSqm: c.total_area_sqm,
       planId: c.plan_id,
       planName: c.plan_name,
       priceMonthly: c.price_monthly,

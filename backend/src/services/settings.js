@@ -1,13 +1,14 @@
 const db = require('../db');
 
 const DEFAULTS = {
-  complex_name: 'ЖК PASS24',
-  max_passes_per_day: '10',
-  auto_approve_delivery: 'false',
-  working_hours_from: '08:00',
-  working_hours_to: '22:00',
-  contact_phone: '+7 (495) 000-00-00',
-  contact_email: 'support@pass24.local',
+  business_center_name: 'БЦ Сити-Плаза',
+  max_passes_per_day: '15',
+  auto_approve_delivery: 'true',
+  working_hours_from: '07:00',
+  working_hours_to: '23:00',
+  contact_phone: '+7 (495) 123-45-67',
+  contact_email: 'reception@bc-pass24.local',
+  reception_floor: '1',
 };
 
 function getAll() {
@@ -38,7 +39,7 @@ function setMany(updates) {
 }
 
 function checkPassLimit(userId, visitDate) {
-  const max = parseInt(get('max_passes_per_day') || '10', 10);
+  const max = parseInt(get('max_passes_per_day') || '15', 10);
   const count = db.prepare(`
     SELECT COUNT(*) as c FROM passes
     WHERE created_by = ? AND visit_date = ? AND status NOT IN ('cancelled', 'rejected')

@@ -9,37 +9,32 @@ function formatPrice(n: number) {
   return new Intl.NumberFormat('ru-RU', { style: 'currency', currency: 'RUB', maximumFractionDigits: 0 }).format(n);
 }
 
+const ROLE_NAMES: Record<string, string> = {
+  tenant: 'Арендаторы',
+  security: 'Ресепшн',
+  admin: 'Админы',
+};
+
 export default function AdminDashboardPage() {
   const [data, setData] = useState<AdminDashboard | null>(null);
   const [error, setError] = useState('');
 
   useEffect(() => {
-    api.admin.dashboard()
-      .then(setData)
-      .catch((e) => setError(e instanceof Error ? e.message : 'Ошибка'));
+    api.admin.dashboard().then(setData).catch((e) => setError(e instanceof Error ? e.message : 'Ошибка'));
   }, []);
 
   if (error) {
-    return (
-      <AdminLayout title="Обзор системы">
-        <div className="text-red-600 bg-red-50 p-4 rounded-md">{error}</div>
-      </AdminLayout>
-    );
+    return <AdminLayout title="Обзор БЦ"><div className="text-red-600 bg-red-50 p-4 rounded-md">{error}</div></AdminLayout>;
   }
-
   if (!data) {
-    return (
-      <AdminLayout title="Обзор системы">
-        <div className="animate-pulse text-[var(--muted)]">Загрузка...</div>
-      </AdminLayout>
-    );
+    return <AdminLayout title="Обзор БЦ"><div className="animate-pulse text-[var(--muted)]">Загрузка...</div></AdminLayout>;
   }
 
   const { stats, recentActivity, settings } = data;
 
   return (
-    <AdminLayout title="Обзор системы">
-      <p className="text-[var(--muted)] -mt-4 mb-6">{settings.complex_name}</p>
+    <AdminLayout title="Обзор БЦ">
+      <p className="text-[var(--muted)] -mt-4 mb-6">{settings.business_center_name}</p>
 
       <div className="grid grid-cols-2 lg:grid-cols-4 gap-4 mb-8">
         <div className="card p-4">
@@ -50,17 +45,17 @@ export default function AdminDashboardPage() {
         <div className="card p-4">
           <FileText className="w-5 h-5 text-blue-600 mb-2" />
           <div className="text-2xl font-bold">{stats.passes.total}</div>
-          <div className="text-sm text-[var(--muted)]">Всего заявок</div>
+          <div className="text-sm text-[var(--muted)]">Всего пропусков</div>
         </div>
         <div className="card p-4">
           <Building2 className="w-5 h-5 text-emerald-600 mb-2" />
-          <div className="text-2xl font-bold">{stats.revenue.complexes}</div>
-          <div className="text-sm text-[var(--muted)]">ЖК на обслуживании</div>
+          <div className="text-2xl font-bold">{stats.revenue.businessCenters}</div>
+          <div className="text-sm text-[var(--muted)]">Бизнес-центров</div>
         </div>
         <div className="card p-4">
           <TrendingUp className="w-5 h-5 text-amber-600 mb-2" />
           <div className="text-2xl font-bold">{formatPrice(stats.revenue.monthlyTotal)}</div>
-          <div className="text-sm text-[var(--muted)]">MRR (месяц)</div>
+          <div className="text-sm text-[var(--muted)]">MRR (аренда ПО)</div>
         </div>
       </div>
 
@@ -70,9 +65,7 @@ export default function AdminDashboardPage() {
           <div className="space-y-2">
             {Object.entries(stats.users.byRole).map(([role, count]) => (
               <div key={role} className="flex justify-between text-sm">
-                <span className="text-[var(--muted)]">
-                  {role === 'resident' ? 'Жители' : role === 'security' ? 'Охрана' : 'Админы'}
-                </span>
+                <span className="text-[var(--muted)]">{ROLE_NAMES[role] || role}</span>
                 <span className="font-medium">{count}</span>
               </div>
             ))}
@@ -80,7 +73,7 @@ export default function AdminDashboardPage() {
         </div>
 
         <div className="card p-5">
-          <h2 className="font-semibold mb-4">Заявки по статусам</h2>
+          <h2 className="font-semibold mb-4">Пропуска по статусам</h2>
           <div className="space-y-2">
             {Object.entries(stats.passes.byStatus).map(([status, count]) => (
               <div key={status} className="flex justify-between text-sm">
@@ -107,9 +100,7 @@ export default function AdminDashboardPage() {
                     <span className="font-medium">{AUDIT_LABELS[entry.action] || entry.action}</span>
                     <span className="text-[var(--muted)]"> · {entry.userName || 'Система'}</span>
                   </div>
-                  <span className="text-xs text-[var(--muted)]">
-                    {new Date(entry.createdAt).toLocaleString('ru-RU')}
-                  </span>
+                  <span className="text-xs text-[var(--muted)]">{new Date(entry.createdAt).toLocaleString('ru-RU')}</span>
                 </div>
               ))}
             </div>

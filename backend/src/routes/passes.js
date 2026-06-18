@@ -7,7 +7,7 @@ const settings = require('../services/settings');
 
 const router = express.Router();
 
-const PASS_TYPES = ['guest', 'vehicle', 'delivery', 'service'];
+const PASS_TYPES = ['visitor', 'parking', 'delivery', 'contractor'];
 const STATUS_TRANSITIONS = {
   approved: ['pending'],
   rejected: ['pending'],
@@ -33,16 +33,19 @@ function mapPass(row) {
     passNumber: row.pass_number,
     createdBy: row.created_by,
     creatorName: row.creator_name,
-    guestName: row.guest_name,
-    guestPhone: row.guest_phone,
+    creatorCompany: row.creator_company,
+    visitorName: row.visitor_name,
+    visitorPhone: row.visitor_phone,
+    companyName: row.company_name,
+    visitPurpose: row.visit_purpose,
     passType: row.pass_type,
     vehiclePlate: row.vehicle_plate,
     vehicleModel: row.vehicle_model,
     visitDate: row.visit_date,
     visitTimeFrom: row.visit_time_from,
     visitTimeTo: row.visit_time_to,
-    apartment: row.apartment,
-    building: row.building,
+    office: row.office,
+    floor: row.floor,
     comment: row.comment,
     status: row.status,
     approvedBy: row.approved_by,
@@ -70,6 +73,7 @@ function assertTransition(currentStatus, targetStatus) {
 const passSelect = `
   SELECT p.*,
     u.full_name as creator_name,
+    u.company as creator_company,
     a.full_name as approver_name,
     ci.full_name as checker_in_name,
     co.full_name as checker_out_name
@@ -85,7 +89,7 @@ router.get('/', auth(), (req, res) => {
   let sql = `${passSelect} WHERE 1=1`;
   const params = [];
 
-  if (req.user.role === 'resident') {
+  if (req.user.role === 'tenant') {
     sql += ' AND p.created_by = ?';
     params.push(req.user.id);
   }
@@ -101,9 +105,12 @@ router.get('/', auth(), (req, res) => {
   }
 
   if (search) {
-    sql += ' AND (p.guest_name LIKE ? OR p.pass_number LIKE ? OR p.vehicle_plate LIKE ? OR p.apartment LIKE ?)';
+    sql += ` AND (
+      p.visitor_name LIKE ? OR p.pass_number LIKE ? OR p.vehicle_plate LIKE ?
+      OR p.office LIKE ? OR p.company_name LIKE ? OR p.visit_purpose LIKE ?
+    )`;
     const q = `%${String(search).trim()}%`;
-    params.push(q, q, q, q);
+    params.push(q, q, q, q, q, q);
   }
 
   sql += ' ORDER BY p.created_at DESC LIMIT 200';
@@ -146,38 +153,39 @@ router.get('/:id', auth(), (req, res) => {
   const row = db.prepare(`${passSelect} WHERE p.id = ?`).get(req.params.id);
   if (!row) return res.status(404).json({ error: 'Заявка не найдена' });
 
-  if (req.user.role === 'resident' && row.created_by !== req.user.id) {
+  if (req.user.role === 'tenant' && row.created_by !== req.user.id) {
     return res.status(403).json({ error: 'Нет доступа' });
   }
 
   res.json({ pass: mapPass(row) });
 });
 
-router.post('/', auth(), requireRole('resident', 'admin'), (req, res) => {
+router.post('/', auth(), requireRole('tenant', 'admin'), (req, res) => {
   const {
-    guestName, guestPhone, passType, vehiclePlate, vehicleModel,
-    visitDate, visitTimeFrom, visitTimeTo, apartment, building, comment,
+    visitorName, visitorPhone, companyName, visitPurpose,
+    passType, vehiclePlate, vehicleModel,
+    visitDate, visitTimeFrom, visitTimeTo, office, floor, comment,
   } = req.body;
 
-  const name = String(guestName || '').trim();
+  const name = String(visitorName || '').trim();
   if (!name || !visitDate || !passType) {
-    return res.status(400).json({ error: 'Имя гостя, дата и тип пропуска обязательны' });
+    return res.status(400).json({ error: 'ФИО посетителя, дата и тип пропуска обязательны' });
   }
 
   if (!PASS_TYPES.includes(passType)) {
     return res.status(400).json({ error: 'Недопустимый тип пропуска' });
   }
 
-  if (passType === 'vehicle' && !String(vehiclePlate || '').trim()) {
-    return res.status(400).json({ error: 'Для автомобильного пропуска укажите гос. номер' });
+  if (passType === 'parking' && !String(vehiclePlate || '').trim()) {
+    return res.status(400).json({ error: 'Для парковочного пропуска укажите гос. номер' });
   }
 
   if (visitTimeFrom && visitTimeTo && visitTimeFrom >= visitTimeTo) {
     return res.status(400).json({ error: 'Время «С» должно быть раньше времени «До»' });
   }
 
-  const apt = String(apartment || req.user.apartment || '').trim();
-  if (!apt) return res.status(400).json({ error: 'Укажите номер квартиры' });
+  const officeNum = String(office || req.user.office || '').trim();
+  if (!officeNum) return res.status(400).json({ error: 'Укажите номер офиса' });
 
   const limit = settings.checkPassLimit(req.user.id, visitDate);
   if (!limit.allowed) {
@@ -191,22 +199,26 @@ router.post('/', auth(), requireRole('resident', 'admin'), (req, res) => {
 
   const id = uuid();
   const passNumber = generatePassNumber();
-  const bld = building || req.user.building;
+  const floorNum = floor || req.user.floor;
+  const tenantCompany = companyName || req.user.company;
   const now = new Date().toISOString();
 
   try {
     db.prepare(`
       INSERT INTO passes (
-        id, pass_number, created_by, guest_name, guest_phone, pass_type,
-        vehicle_plate, vehicle_model, visit_date, visit_time_from, visit_time_to,
-        apartment, building, comment, status, approved_by, approved_at
-      ) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
+        id, pass_number, created_by, visitor_name, visitor_phone, company_name, visit_purpose,
+        pass_type, vehicle_plate, vehicle_model, visit_date, visit_time_from, visit_time_to,
+        office, floor, comment, status, approved_by, approved_at
+      ) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
     `).run(
-      id, passNumber, req.user.id, name, guestPhone || null, passType,
+      id, passNumber, req.user.id, name, visitorPhone || null,
+      tenantCompany ? String(tenantCompany).trim() : null,
+      visitPurpose ? String(visitPurpose).trim() : null,
+      passType,
       vehiclePlate ? String(vehiclePlate).trim().toUpperCase() : null,
       vehicleModel ? String(vehicleModel).trim() : null,
       visitDate,
-      visitTimeFrom || null, visitTimeTo || null, apt, bld || null,
+      visitTimeFrom || null, visitTimeTo || null, officeNum, floorNum || null,
       comment ? String(comment).trim() : null,
       initialStatus, autoApprove ? req.user.id : null, autoApprove ? now : null,
     );
@@ -217,7 +229,7 @@ router.post('/', auth(), requireRole('resident', 'admin'), (req, res) => {
     throw err;
   }
 
-  audit.log(req.user.id, 'pass.create', 'pass', id, { passNumber, passType, visitDate });
+  audit.log(req.user.id, 'pass.create', 'pass', id, { passNumber, passType, visitDate, office: officeNum });
   const row = db.prepare(`${passSelect} WHERE p.id = ?`).get(id);
   res.status(201).json({ pass: mapPass(row) });
 });
@@ -298,7 +310,7 @@ router.post('/:id/check-out', auth(), requireRole('security', 'admin'), (req, re
   if (!existing) return res.status(404).json({ error: 'Заявка не найдена' });
 
   if (existing.status !== 'active') {
-    return res.status(400).json({ error: 'Гость не на территории' });
+    return res.status(400).json({ error: 'Посетитель не в здании' });
   }
 
   const now = new Date().toISOString();

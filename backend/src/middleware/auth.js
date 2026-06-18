@@ -1,6 +1,19 @@
 const jwt = require('jsonwebtoken');
 const db = require('../db');
 
+function mapUser(row) {
+  return {
+    id: row.id,
+    email: row.email,
+    full_name: row.full_name,
+    phone: row.phone,
+    company: row.company,
+    role: row.role,
+    office: row.office,
+    floor: row.floor,
+  };
+}
+
 function auth(required = true) {
   return (req, res, next) => {
     const header = req.headers.authorization;
@@ -12,10 +25,12 @@ function auth(required = true) {
     try {
       const token = header.slice(7);
       const payload = jwt.verify(token, process.env.JWT_SECRET || 'dev-secret');
-      const user = db.prepare('SELECT id, email, full_name, phone, role, apartment, building, is_active FROM users WHERE id = ?').get(payload.userId);
+      const user = db.prepare(
+        'SELECT id, email, full_name, phone, company, role, office, floor, is_active FROM users WHERE id = ?',
+      ).get(payload.userId);
       if (!user) return res.status(401).json({ error: 'Пользователь не найден' });
       if (!user.is_active) return res.status(403).json({ error: 'Аккаунт деактивирован' });
-      req.user = user;
+      req.user = mapUser(user);
       next();
     } catch {
       return res.status(401).json({ error: 'Недействительный токен' });
@@ -32,4 +47,4 @@ function requireRole(...roles) {
   };
 }
 
-module.exports = { auth, requireRole };
+module.exports = { auth, requireRole, mapUser };

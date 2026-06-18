@@ -1,35 +1,39 @@
 const API_URL = process.env.NEXT_PUBLIC_API_URL || 'http://localhost:4000/api';
 
-export type UserRole = 'resident' | 'security' | 'admin';
+export type UserRole = 'tenant' | 'security' | 'admin';
 
 export interface User {
   id: string;
   email: string;
   full_name: string;
   phone?: string;
+  company?: string;
   role: UserRole;
-  apartment?: string;
-  building?: string;
+  office?: string;
+  floor?: string;
 }
 
 export type PassStatus = 'pending' | 'approved' | 'rejected' | 'active' | 'completed' | 'expired' | 'cancelled';
-export type PassType = 'guest' | 'vehicle' | 'delivery' | 'service';
+export type PassType = 'visitor' | 'parking' | 'delivery' | 'contractor';
 
 export interface Pass {
   id: string;
   passNumber: string;
   createdBy: string;
   creatorName?: string;
-  guestName: string;
-  guestPhone?: string;
+  creatorCompany?: string;
+  visitorName: string;
+  visitorPhone?: string;
+  companyName?: string;
+  visitPurpose?: string;
   passType: PassType;
   vehiclePlate?: string;
   vehicleModel?: string;
   visitDate: string;
   visitTimeFrom?: string;
   visitTimeTo?: string;
-  apartment: string;
-  building?: string;
+  office: string;
+  floor?: string;
   comment?: string;
   status: PassStatus;
   approvedBy?: string;
@@ -81,7 +85,7 @@ export const api = {
       body: JSON.stringify({ email, password }),
     }),
 
-  register: (data: { email: string; password: string; fullName: string; phone?: string; apartment?: string; building?: string }) =>
+  register: (data: { email: string; password: string; fullName: string; phone?: string; company?: string; office?: string; floor?: string }) =>
     request<{ user: User; token: string }>('/auth/register', {
       method: 'POST',
       body: JSON.stringify(data),
@@ -106,16 +110,18 @@ export const api = {
   getPass: (id: string) => request<{ pass: Pass }>(`/passes/${id}`),
 
   createPass: (data: {
-    guestName: string;
-    guestPhone?: string;
+    visitorName: string;
+    visitorPhone?: string;
+    companyName?: string;
+    visitPurpose?: string;
     passType: PassType;
     vehiclePlate?: string;
     vehicleModel?: string;
     visitDate: string;
     visitTimeFrom?: string;
     visitTimeTo?: string;
-    apartment: string;
-    building?: string;
+    office: string;
+    floor?: string;
     comment?: string;
   }) =>
     request<{ pass: Pass }>('/passes', { method: 'POST', body: JSON.stringify(data) }),
@@ -154,7 +160,7 @@ export const api = {
     updatePricing: (id: string, data: Partial<PricingPlan>) =>
       request<{ plan: PricingPlan }>(`/admin/pricing/${id}`, { method: 'PATCH', body: JSON.stringify(data) }),
 
-    getComplexes: () => request<{ complexes: Complex[] }>('/admin/complexes'),
+    getBusinessCenters: () => request<{ businessCenters: BusinessCenter[] }>('/admin/business-centers'),
 
     getAudit: (offset = 0) => request<{ entries: AuditEntry[]; total: number }>(`/admin/audit?offset=${offset}`),
 
@@ -170,9 +176,10 @@ export interface AdminUser {
   email: string;
   fullName: string;
   phone?: string;
+  company?: string;
   role: UserRole;
-  apartment?: string;
-  building?: string;
+  office?: string;
+  floor?: string;
   isActive: boolean;
   createdAt: string;
   passesCount?: number;
@@ -183,9 +190,10 @@ export interface CreateUserData {
   password: string;
   fullName: string;
   phone?: string;
+  company?: string;
   role: UserRole;
-  apartment?: string;
-  building?: string;
+  office?: string;
+  floor?: string;
 }
 
 export interface PricingPlan {
@@ -193,16 +201,17 @@ export interface PricingPlan {
   name: string;
   description: string;
   priceMonthly: number;
-  maxApartments: number;
+  maxOffices: number;
   features: string[];
   isActive: boolean;
 }
 
-export interface Complex {
+export interface BusinessCenter {
   id: string;
   name: string;
   address: string;
-  apartmentsCount: number;
+  officesCount: number;
+  totalAreaSqm?: number;
   planId: string;
   planName: string;
   priceMonthly: number;
@@ -223,57 +232,58 @@ export interface AuditEntry {
 }
 
 export interface SystemSettings {
-  complex_name: string;
+  business_center_name: string;
   max_passes_per_day: string;
   auto_approve_delivery: string;
   working_hours_from: string;
   working_hours_to: string;
   contact_phone: string;
   contact_email: string;
+  reception_floor: string;
 }
 
 export interface AdminDashboard {
   stats: {
     users: { total: number; byRole: Record<string, number> };
     passes: { total: number; today: number; week: number; byStatus: Record<string, number> };
-    revenue: { monthlyTotal: number; complexes: number };
+    revenue: { monthlyTotal: number; businessCenters: number };
   };
   recentActivity: AuditEntry[];
   settings: SystemSettings;
 }
+
+export const STATUS_LABELS: Record<PassStatus, string> = {
+  pending: 'На рассмотрении',
+  approved: 'Одобрен',
+  rejected: 'Отклонён',
+  active: 'В здании',
+  completed: 'Покинул БЦ',
+  expired: 'Истёк',
+  cancelled: 'Отменён',
+};
+
+export const TYPE_LABELS: Record<PassType, string> = {
+  visitor: 'Посетитель',
+  parking: 'Парковка',
+  delivery: 'Доставка',
+  contractor: 'Подрядчик',
+};
+
+export const ROLE_LABELS: Record<UserRole, string> = {
+  tenant: 'Арендатор',
+  security: 'Ресепшн / Охрана',
+  admin: 'Администратор',
+};
 
 export const AUDIT_LABELS: Record<string, string> = {
   'pass.create': 'Создание пропуска',
   'pass.approved': 'Одобрение',
   'pass.rejected': 'Отклонение',
   'pass.cancelled': 'Отмена',
-  'pass.check_in': 'Въезд',
-  'pass.check_out': 'Выезд',
+  'pass.check_in': 'Вход в БЦ',
+  'pass.check_out': 'Выход из БЦ',
   'user.create': 'Создание пользователя',
   'user.update': 'Изменение пользователя',
   'pricing.update': 'Изменение тарифа',
   'settings.update': 'Изменение настроек',
-};
-
-export const STATUS_LABELS: Record<PassStatus, string> = {
-  pending: 'На рассмотрении',
-  approved: 'Одобрен',
-  rejected: 'Отклонён',
-  active: 'На территории',
-  completed: 'Завершён',
-  expired: 'Истёк',
-  cancelled: 'Отменён',
-};
-
-export const TYPE_LABELS: Record<PassType, string> = {
-  guest: 'Гость',
-  vehicle: 'Автомобиль',
-  delivery: 'Доставка',
-  service: 'Служба',
-};
-
-export const ROLE_LABELS: Record<UserRole, string> = {
-  resident: 'Житель',
-  security: 'Охрана',
-  admin: 'Администратор',
 };

@@ -1,14 +1,14 @@
 'use client';
 
-import { Car, User, Package, Wrench, Clock, MapPin } from 'lucide-react';
+import { Car, User, Package, Wrench, Clock, MapPin, Building2 } from 'lucide-react';
 import { Pass, PassType, TYPE_LABELS } from '@/lib/api';
 import { StatusBadge } from './StatusBadge';
 
 const TYPE_ICONS: Record<PassType, typeof User> = {
-  guest: User,
-  vehicle: Car,
+  visitor: User,
+  parking: Car,
   delivery: Package,
-  service: Wrench,
+  contractor: Wrench,
 };
 
 interface PassCardProps {
@@ -34,8 +34,13 @@ export function PassCard({ pass, actions, onClick }: PassCardProps) {
             <Icon className="w-4 h-4 text-[var(--primary)]" />
           </div>
           <div>
-            <div className="font-semibold">{pass.guestName}</div>
+            <div className="font-semibold">{pass.visitorName}</div>
             <div className="text-xs text-[var(--muted)]">{pass.passNumber}</div>
+            {pass.companyName && (
+              <div className="text-xs text-[var(--muted)] flex items-center gap-1 mt-0.5">
+                <Building2 className="w-3 h-3" />{pass.companyName}
+              </div>
+            )}
           </div>
         </div>
         <StatusBadge status={pass.status} />
@@ -53,11 +58,15 @@ export function PassCard({ pass, actions, onClick }: PassCardProps) {
         <div className="flex items-center gap-1.5">
           <MapPin className="w-3.5 h-3.5 shrink-0" />
           <span>
-            кв. {pass.apartment}
-            {pass.building && `, ${pass.building}`}
+            оф. {pass.office}
+            {pass.floor && `, ${pass.floor} эт.`}
           </span>
         </div>
       </div>
+
+      {pass.visitPurpose && (
+        <div className="text-xs text-[var(--muted)] mb-2">Цель: {pass.visitPurpose}</div>
+      )}
 
       <div className="flex items-center justify-between">
         <span className="text-xs px-2 py-0.5 bg-slate-100 rounded">{TYPE_LABELS[pass.passType]}</span>

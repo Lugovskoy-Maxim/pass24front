@@ -89,8 +89,8 @@ export default function ControlPage() {
     <ProtectedLayout roles={['security', 'admin']}>
       <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-4 mb-6">
         <div>
-          <h1 className="text-2xl font-bold">Контроль КПП</h1>
-          <p className="text-[var(--muted)]">Журнал пропусков на выбранную дату</p>
+          <h1 className="text-2xl font-bold">Панель ресепшн</h1>
+          <p className="text-[var(--muted)]">Журнал посетителей на выбранную дату</p>
         </div>
         <input
           className="input w-auto"
@@ -119,7 +119,7 @@ export default function ControlPage() {
         <div className="card p-3 text-center">
           <LogIn className="w-5 h-5 mx-auto mb-1 text-emerald-600" />
           <div className="text-xl font-bold">{stats.active}</div>
-          <div className="text-xs text-[var(--muted)]">На территории</div>
+          <div className="text-xs text-[var(--muted)]">В здании</div>
         </div>
         <div className="card p-3 text-center">
           <CheckCircle className="w-5 h-5 mx-auto mb-1 text-slate-500" />
@@ -211,7 +211,7 @@ export default function ControlPage() {
             <section>
               <h2 className="text-lg font-semibold mb-3 flex items-center gap-2">
                 <LogIn className="w-5 h-5 text-emerald-600" />
-                На территории ({active.length})
+                В здании ({active.length})
               </h2>
               <div className="grid gap-3">
                 {active.map((pass) => (

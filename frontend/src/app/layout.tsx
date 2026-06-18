@@ -3,8 +3,8 @@ import { AuthProvider } from '@/lib/auth';
 import './globals.css';
 
 export const metadata: Metadata = {
-  title: 'PASS24 — Заказ и контроль пропусков',
-  description: 'Система заказа гостевых пропусков для жилых комплексов',
+  title: 'PASS24 БЦ — Пропуска для бизнес-центра',
+  description: 'Система заказа пропусков для арендаторов офисов в бизнес-центре',
 };
 
 export default function RootLayout({ children }: { children: React.ReactNode }) {

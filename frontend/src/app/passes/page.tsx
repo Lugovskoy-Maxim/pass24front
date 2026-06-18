@@ -42,17 +42,11 @@ export default function PassesPage() {
     setActionLoading(true);
     try {
       let updated: Pass;
-      if (action === 'approve') {
-        ({ pass: updated } = await api.updateStatus(id, 'approved'));
-      } else if (action === 'reject') {
-        ({ pass: updated } = await api.updateStatus(id, 'rejected', reason));
-      } else if (action === 'cancel') {
-        ({ pass: updated } = await api.updateStatus(id, 'cancelled'));
-      } else if (action === 'checkin') {
-        ({ pass: updated } = await api.checkIn(id));
-      } else {
-        ({ pass: updated } = await api.checkOut(id));
-      }
+      if (action === 'approve') ({ pass: updated } = await api.updateStatus(id, 'approved'));
+      else if (action === 'reject') ({ pass: updated } = await api.updateStatus(id, 'rejected', reason));
+      else if (action === 'cancel') ({ pass: updated } = await api.updateStatus(id, 'cancelled'));
+      else if (action === 'checkin') ({ pass: updated } = await api.checkIn(id));
+      else ({ pass: updated } = await api.checkOut(id));
       setPasses((prev) => prev.map((p) => (p.id === id ? updated : p)));
       setSelected(updated);
       setRejectReason('');
@@ -66,26 +60,15 @@ export default function PassesPage() {
   return (
     <ProtectedLayout>
       <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-4 mb-6">
-        <h1 className="text-2xl font-bold">Заявки на пропуска</h1>
+        <h1 className="text-2xl font-bold">Пропуска</h1>
         <div className="flex gap-2">
           <div className="relative flex-1 sm:w-64">
             <Search className="absolute left-3 top-1/2 -translate-y-1/2 w-4 h-4 text-[var(--muted)]" />
-            <input
-              className="input pl-9"
-              placeholder="Поиск..."
-              value={search}
-              onChange={(e) => setSearch(e.target.value)}
-            />
+            <input className="input pl-9" placeholder="Поиск..." value={search} onChange={(e) => setSearch(e.target.value)} />
           </div>
-          <select
-            className="input w-auto"
-            value={statusFilter}
-            onChange={(e) => setStatusFilter(e.target.value)}
-          >
+          <select className="input w-auto" value={statusFilter} onChange={(e) => setStatusFilter(e.target.value)}>
             <option value="">Все статусы</option>
-            {Object.entries(STATUS_LABELS).map(([k, v]) => (
-              <option key={k} value={k}>{v}</option>
-            ))}
+            {Object.entries(STATUS_LABELS).map(([k, v]) => <option key={k} value={k}>{v}</option>)}
           </select>
         </div>
       </div>
@@ -102,29 +85,19 @@ export default function PassesPage() {
           {loading ? (
             <div className="card p-8 text-center text-[var(--muted)]">Загрузка...</div>
           ) : passes.length === 0 ? (
-            <div className="card p-8 text-center text-[var(--muted)]">Заявки не найдены</div>
+            <div className="card p-8 text-center text-[var(--muted)]">Пропуска не найдены</div>
           ) : (
-            passes.map((pass) => (
-              <PassCard
-                key={pass.id}
-                pass={pass}
-                onClick={() => setSelected(pass)}
-              />
-            ))
+            passes.map((pass) => <PassCard key={pass.id} pass={pass} onClick={() => setSelected(pass)} />)
           )}
         </div>
 
         {selected && (
           <div className="card p-5 lg:sticky lg:top-20 h-fit">
             <div className="flex items-center justify-between mb-4">
-              <h2 className="text-lg font-semibold">Детали заявки</h2>
+              <h2 className="text-lg font-semibold">Детали пропуска</h2>
               <div className="flex items-center gap-2">
                 <StatusBadge status={selected.status} />
-                <button
-                  className="p-1 text-[var(--muted)] hover:text-[var(--text)]"
-                  onClick={() => setSelected(null)}
-                  aria-label="Закрыть"
-                >
+                <button className="p-1 text-[var(--muted)] hover:text-[var(--text)]" onClick={() => setSelected(null)} aria-label="Закрыть">
                   <X className="w-4 h-4" />
                 </button>
               </div>
@@ -136,19 +109,31 @@ export default function PassesPage() {
                 <dd className="font-mono font-medium text-right">{selected.passNumber}</dd>
               </div>
               <div className="flex justify-between gap-4">
-                <dt className="text-[var(--muted)] shrink-0">Гость</dt>
-                <dd className="text-right">{selected.guestName}</dd>
+                <dt className="text-[var(--muted)] shrink-0">Посетитель</dt>
+                <dd className="text-right">{selected.visitorName}</dd>
               </div>
-              {selected.guestPhone && (
+              {selected.companyName && (
+                <div className="flex justify-between gap-4">
+                  <dt className="text-[var(--muted)] shrink-0">Компания</dt>
+                  <dd className="text-right">{selected.companyName}</dd>
+                </div>
+              )}
+              {selected.visitPurpose && (
+                <div className="flex justify-between gap-4">
+                  <dt className="text-[var(--muted)] shrink-0">Цель визита</dt>
+                  <dd className="text-right">{selected.visitPurpose}</dd>
+                </div>
+              )}
+              {selected.visitorPhone && (
                 <div className="flex justify-between gap-4">
                   <dt className="text-[var(--muted)] shrink-0">Телефон</dt>
-                  <dd className="text-right">{selected.guestPhone}</dd>
+                  <dd className="text-right">{selected.visitorPhone}</dd>
                 </div>
               )}
               {selected.creatorName && isSecurity && (
                 <div className="flex justify-between gap-4">
                   <dt className="text-[var(--muted)] shrink-0">Заказал</dt>
-                  <dd className="text-right">{selected.creatorName}</dd>
+                  <dd className="text-right">{selected.creatorName}{selected.creatorCompany && ` (${selected.creatorCompany})`}</dd>
                 </div>
               )}
               <div className="flex justify-between gap-4">
@@ -156,8 +141,8 @@ export default function PassesPage() {
                 <dd className="text-right">{selected.visitDate} {selected.visitTimeFrom && `${selected.visitTimeFrom}–${selected.visitTimeTo}`}</dd>
               </div>
               <div className="flex justify-between gap-4">
-                <dt className="text-[var(--muted)] shrink-0">Адрес</dt>
-                <dd className="text-right">кв. {selected.apartment}{selected.building && `, ${selected.building}`}</dd>
+                <dt className="text-[var(--muted)] shrink-0">Офис</dt>
+                <dd className="text-right">оф. {selected.office}{selected.floor && `, ${selected.floor} эт.`}</dd>
               </div>
               {selected.vehiclePlate && (
                 <div className="flex justify-between gap-4">
@@ -179,13 +164,13 @@ export default function PassesPage() {
               )}
               {selected.checkedInAt && (
                 <div className="flex justify-between gap-4">
-                  <dt className="text-[var(--muted)] shrink-0">Въезд</dt>
+                  <dt className="text-[var(--muted)] shrink-0">Вход</dt>
                   <dd className="text-right">{new Date(selected.checkedInAt).toLocaleString('ru-RU')}</dd>
                 </div>
               )}
               {selected.checkedOutAt && (
                 <div className="flex justify-between gap-4">
-                  <dt className="text-[var(--muted)] shrink-0">Выезд</dt>
+                  <dt className="text-[var(--muted)] shrink-0">Выход</dt>
                   <dd className="text-right">{new Date(selected.checkedOutAt).toLocaleString('ru-RU')}</dd>
                 </div>
               )}
@@ -194,54 +179,19 @@ export default function PassesPage() {
             <div className="mt-5 pt-4 border-t border-[var(--border)] space-y-3">
               {isSecurity && selected.status === 'pending' && (
                 <>
-                  <button
-                    className="btn btn-success w-full"
-                    disabled={actionLoading}
-                    onClick={() => handleAction(selected.id, 'approve')}
-                  >
-                    Одобрить
-                  </button>
-                  <input
-                    className="input"
-                    placeholder="Причина отклонения"
-                    value={rejectReason}
-                    onChange={(e) => setRejectReason(e.target.value)}
-                  />
-                  <button
-                    className="btn btn-danger w-full"
-                    disabled={actionLoading || !rejectReason.trim()}
-                    onClick={() => handleAction(selected.id, 'reject', rejectReason)}
-                  >
-                    Отклонить
-                  </button>
+                  <button className="btn btn-success w-full" disabled={actionLoading} onClick={() => handleAction(selected.id, 'approve')}>Одобрить</button>
+                  <input className="input" placeholder="Причина отклонения" value={rejectReason} onChange={(e) => setRejectReason(e.target.value)} />
+                  <button className="btn btn-danger w-full" disabled={actionLoading || !rejectReason.trim()} onClick={() => handleAction(selected.id, 'reject', rejectReason)}>Отклонить</button>
                 </>
               )}
               {isSecurity && selected.status === 'approved' && (
-                <button
-                  className="btn btn-success w-full"
-                  disabled={actionLoading}
-                  onClick={() => handleAction(selected.id, 'checkin')}
-                >
-                  Пропустить на территорию
-                </button>
+                <button className="btn btn-success w-full" disabled={actionLoading} onClick={() => handleAction(selected.id, 'checkin')}>Впустить в здание</button>
               )}
               {isSecurity && selected.status === 'active' && (
-                <button
-                  className="btn btn-primary w-full"
-                  disabled={actionLoading}
-                  onClick={() => handleAction(selected.id, 'checkout')}
-                >
-                  Зафиксировать выезд
-                </button>
+                <button className="btn btn-primary w-full" disabled={actionLoading} onClick={() => handleAction(selected.id, 'checkout')}>Зафиксировать выход</button>
               )}
               {isOwner && selected.status === 'pending' && (
-                <button
-                  className="btn btn-secondary w-full"
-                  disabled={actionLoading}
-                  onClick={() => handleAction(selected.id, 'cancel')}
-                >
-                  Отменить заявку
-                </button>
+                <button className="btn btn-secondary w-full" disabled={actionLoading} onClick={() => handleAction(selected.id, 'cancel')}>Отменить заявку</button>
               )}
             </div>
           </div>
