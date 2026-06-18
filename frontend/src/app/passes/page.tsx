@@ -4,17 +4,23 @@ import { useEffect, useState, useCallback } from 'react';
 import { Search, X } from 'lucide-react';
 import { ProtectedLayout } from '@/components/ProtectedLayout';
 import { PassCard } from '@/components/PassCard';
+import { PassPrintCard } from '@/components/PassPrintCard';
 import { useAuth } from '@/lib/auth';
 import { useDebounce } from '@/hooks/useDebounce';
+import { useConfig } from '@/hooks/useConfig';
+import { useToast } from '@/components/Toast';
 import { api, Pass, STATUS_LABELS } from '@/lib/api';
 import { StatusBadge } from '@/components/StatusBadge';
 
 export default function PassesPage() {
   const { user } = useAuth();
+  const config = useConfig();
+  const { toast } = useToast();
   const [passes, setPasses] = useState<Pass[]>([]);
   const [search, setSearch] = useState('');
   const debouncedSearch = useDebounce(search);
   const [statusFilter, setStatusFilter] = useState('');
+  const [dateFilter, setDateFilter] = useState('');
   const [selected, setSelected] = useState<Pass | null>(null);
   const [loading, setLoading] = useState(true);
   const [loadError, setLoadError] = useState('');
@@ -23,18 +29,23 @@ export default function PassesPage() {
 
   const isSecurity = user?.role === 'security' || user?.role === 'admin';
   const isOwner = selected && user && (selected.createdBy === user.id || user.role === 'admin');
+  const canPrint = selected && ['approved', 'active'].includes(selected.status);
 
   const load = useCallback(() => {
     setLoading(true);
     setLoadError('');
-    api.getPasses({ status: statusFilter || undefined, search: debouncedSearch || undefined })
+    api.getPasses({
+      status: statusFilter || undefined,
+      search: debouncedSearch || undefined,
+      date: dateFilter || undefined,
+    })
       .then(({ passes: data }) => {
         setPasses(data);
         setSelected((prev) => (prev ? data.find((p) => p.id === prev.id) || prev : null));
       })
       .catch((err) => setLoadError(err instanceof Error ? err.message : 'Ошибка загрузки'))
       .finally(() => setLoading(false));
-  }, [statusFilter, debouncedSearch]);
+  }, [statusFilter, debouncedSearch, dateFilter]);
 
   useEffect(() => { load(); }, [load]);
 
@@ -50,8 +61,9 @@ export default function PassesPage() {
       setPasses((prev) => prev.map((p) => (p.id === id ? updated : p)));
       setSelected(updated);
       setRejectReason('');
+      toast('Действие выполнено', 'success');
     } catch (err) {
-      alert(err instanceof Error ? err.message : 'Ошибка');
+      toast(err instanceof Error ? err.message : 'Ошибка', 'error');
     } finally {
       setActionLoading(false);
     }
@@ -61,11 +73,12 @@ export default function PassesPage() {
     <ProtectedLayout>
       <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-4 mb-6">
         <h1 className="text-2xl font-bold">Пропуска</h1>
-        <div className="flex gap-2">
-          <div className="relative flex-1 sm:w-64">
+        <div className="flex flex-wrap gap-2">
+          <div className="relative flex-1 sm:w-56">
             <Search className="absolute left-3 top-1/2 -translate-y-1/2 w-4 h-4 text-[var(--muted)]" />
             <input className="input pl-9" placeholder="Поиск..." value={search} onChange={(e) => setSearch(e.target.value)} />
           </div>
+          <input className="input w-auto" type="date" value={dateFilter} onChange={(e) => setDateFilter(e.target.value)} />
           <select className="input w-auto" value={statusFilter} onChange={(e) => setStatusFilter(e.target.value)}>
             <option value="">Все статусы</option>
             {Object.entries(STATUS_LABELS).map(([k, v]) => <option key={k} value={k}>{v}</option>)}
@@ -102,6 +115,12 @@ export default function PassesPage() {
                 </button>
               </div>
             </div>
+
+            {canPrint && (
+              <div className="mb-5 pb-5 border-b border-[var(--border)]">
+                <PassPrintCard pass={selected} businessCenterName={config?.businessCenterName} />
+              </div>
+            )}
 
             <dl className="space-y-3 text-sm">
               <div className="flex justify-between gap-4">

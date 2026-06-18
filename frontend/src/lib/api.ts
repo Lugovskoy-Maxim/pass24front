@@ -138,6 +138,13 @@ export const api = {
   checkOut: (id: string) =>
     request<{ pass: Pass }>(`/passes/${id}/check-out`, { method: 'POST' }),
 
+  getConfig: () => request<BcConfig>('/config'),
+
+  getStats: () => request<PassStats>('/passes/stats'),
+
+  lookupPass: (passNumber: string) =>
+    request<{ pass: Pass }>(`/passes/lookup/${encodeURIComponent(passNumber)}`),
+
   admin: {
     dashboard: () => request<AdminDashboard>('/admin/dashboard'),
 
@@ -168,8 +175,94 @@ export const api = {
 
     updateSettings: (data: Partial<SystemSettings>) =>
       request<{ settings: SystemSettings }>('/admin/settings', { method: 'PATCH', body: JSON.stringify(data) }),
+
+    getOffices: () => request<{ offices: Office[] }>('/admin/offices'),
+
+    createOffice: (data: CreateOfficeData) =>
+      request<{ office: Office }>('/admin/offices', { method: 'POST', body: JSON.stringify(data) }),
+
+    updateOffice: (id: string, data: Partial<CreateOfficeData & { isActive: boolean }>) =>
+      request<{ office: Office }>(`/admin/offices/${id}`, { method: 'PATCH', body: JSON.stringify(data) }),
+
+    getBlacklist: () => request<{ entries: BlacklistEntry[] }>('/admin/blacklist'),
+
+    addBlacklist: (plate: string, reason?: string) =>
+      request<{ entry: BlacklistEntry }>('/admin/blacklist', { method: 'POST', body: JSON.stringify({ plate, reason }) }),
+
+    deleteBlacklist: (id: string) =>
+      request<{ ok: boolean }>(`/admin/blacklist/${id}`, { method: 'DELETE' }),
+
+    getDailyReport: (date?: string) =>
+      request<DailyReport>(`/admin/reports/daily${date ? `?date=${date}` : ''}`),
   },
 };
+
+export interface BcConfig {
+  businessCenterName: string;
+  workingHoursFrom: string;
+  workingHoursTo: string;
+  contactPhone: string;
+  contactEmail: string;
+  receptionFloor: string;
+  maxPassesPerDay: number;
+}
+
+export interface PassStats {
+  today: string;
+  todayCount: number;
+  weekCount: number;
+  byStatus: Record<string, number>;
+  todayByType: Record<string, number>;
+}
+
+export interface Office {
+  id: string;
+  number: string;
+  floor: string;
+  areaSqm?: number;
+  company?: string;
+  tenantId?: string;
+  tenantName?: string;
+  isActive: boolean;
+  createdAt: string;
+}
+
+export interface CreateOfficeData {
+  number: string;
+  floor: string;
+  areaSqm?: number;
+  company?: string;
+  tenantId?: string;
+}
+
+export interface BlacklistEntry {
+  id: string;
+  plate: string;
+  reason?: string;
+  createdAt: string;
+}
+
+export interface DailyReport {
+  date: string;
+  summary: Array<{
+    pass_type: string;
+    status: string;
+    office: string;
+    floor?: string;
+    company_name?: string;
+    c: number;
+  }>;
+  visitors: Array<{
+    visitor_name: string;
+    company_name?: string;
+    office: string;
+    floor?: string;
+    pass_type: string;
+    status: string;
+    visit_time_from?: string;
+    pass_number: string;
+  }>;
+}
 
 export interface AdminUser {
   id: string;
@@ -286,4 +379,5 @@ export const AUDIT_LABELS: Record<string, string> = {
   'user.update': 'Изменение пользователя',
   'pricing.update': 'Изменение тарифа',
   'settings.update': 'Изменение настроек',
+  'office.create': 'Добавление офиса',
 };

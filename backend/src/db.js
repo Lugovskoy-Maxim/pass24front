@@ -94,10 +94,31 @@ db.exec(`
     created_at TEXT NOT NULL DEFAULT (datetime('now'))
   );
 
+  CREATE TABLE IF NOT EXISTS offices (
+    id TEXT PRIMARY KEY,
+    number TEXT NOT NULL,
+    floor TEXT NOT NULL,
+    area_sqm REAL,
+    company TEXT,
+    tenant_id TEXT REFERENCES users(id),
+    is_active INTEGER NOT NULL DEFAULT 1,
+    created_at TEXT NOT NULL DEFAULT (datetime('now')),
+    UNIQUE(number, floor)
+  );
+
+  CREATE TABLE IF NOT EXISTS vehicle_blacklist (
+    id TEXT PRIMARY KEY,
+    plate TEXT UNIQUE NOT NULL,
+    reason TEXT,
+    created_at TEXT NOT NULL DEFAULT (datetime('now'))
+  );
+
   CREATE INDEX IF NOT EXISTS idx_passes_status ON passes(status);
   CREATE INDEX IF NOT EXISTS idx_passes_visit_date ON passes(visit_date);
   CREATE INDEX IF NOT EXISTS idx_passes_created_by ON passes(created_by);
+  CREATE INDEX IF NOT EXISTS idx_passes_number ON passes(pass_number);
   CREATE INDEX IF NOT EXISTS idx_audit_created ON audit_log(created_at);
+  CREATE INDEX IF NOT EXISTS idx_offices_number ON offices(number);
 `);
 
 function migrateFromResidential() {

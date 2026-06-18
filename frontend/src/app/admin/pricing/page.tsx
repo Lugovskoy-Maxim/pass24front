@@ -3,6 +3,7 @@
 import { useEffect, useState } from 'react';
 import { Building2, Check } from 'lucide-react';
 import { AdminLayout } from '@/components/AdminLayout';
+import { useToast } from '@/components/Toast';
 import { api, PricingPlan, BusinessCenter } from '@/lib/api';
 
 function formatPrice(n: number) {
@@ -10,6 +11,7 @@ function formatPrice(n: number) {
 }
 
 export default function AdminPricingPage() {
+  const { toast } = useToast();
   const [plans, setPlans] = useState<PricingPlan[]>([]);
   const [centers, setCenters] = useState<BusinessCenter[]>([]);
   const [editId, setEditId] = useState<string | null>(null);
@@ -29,8 +31,9 @@ export default function AdminPricingPage() {
       await api.admin.updatePricing(id, { priceMonthly: price });
       setEditId(null);
       load();
+      toast('Тариф обновлён', 'success');
     } catch (err) {
-      alert(err instanceof Error ? err.message : 'Ошибка');
+      toast(err instanceof Error ? err.message : 'Ошибка', 'error');
     } finally {
       setSaving(false);
     }

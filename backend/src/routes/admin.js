@@ -5,6 +5,7 @@ const db = require('../db');
 const { auth, requireRole } = require('../middleware/auth');
 const audit = require('../services/audit');
 const settings = require('../services/settings');
+const officeService = require('../services/offices');
 
 const router = express.Router();
 router.use(auth(), requireRole('admin'));
@@ -226,6 +227,103 @@ router.get('/business-centers', (_req, res) => {
       createdAt: c.created_at,
     })),
   });
+});
+
+router.get('/offices', (_req, res) => {
+  res.json({ offices: officeService.getAll() });
+});
+
+router.post('/offices', (req, res) => {
+  const { number, floor, areaSqm, company, tenantId } = req.body;
+  if (!number || !floor) return res.status(400).json({ error: 'Номер офиса и этаж обязательны' });
+
+  const id = uuid();
+  try {
+    db.prepare(`
+      INSERT INTO offices (id, number, floor, area_sqm, company, tenant_id)
+      VALUES (?, ?, ?, ?, ?, ?)
+    `).run(id, String(number).trim(), String(floor).trim(), areaSqm || null, company || null, tenantId || null);
+  } catch (err) {
+    if (err.code === 'SQLITE_CONSTRAINT_UNIQUE') {
+      return res.status(409).json({ error: 'Офис с таким номером и этажом уже существует' });
+    }
+    throw err;
+  }
+
+  audit.log(req.user.id, 'office.create', 'office', id, { number, floor });
+  const row = db.prepare(`${officeService.officeSelect} WHERE o.id = ?`).get(id);
+  res.status(201).json({ office: officeService.mapOffice(row) });
+});
+
+router.patch('/offices/:id', (req, res) => {
+  const { company, tenantId, areaSqm, isActive } = req.body;
+  const existing = db.prepare('SELECT * FROM offices WHERE id = ?').get(req.params.id);
+  if (!existing) return res.status(404).json({ error: 'Офис не найден' });
+
+  db.prepare(`
+    UPDATE offices SET
+      company = COALESCE(?, company),
+      tenant_id = COALESCE(?, tenant_id),
+      area_sqm = COALESCE(?, area_sqm),
+      is_active = COALESCE(?, is_active)
+    WHERE id = ?
+  `).run(
+    company ?? null, tenantId ?? null, areaSqm ?? null,
+    isActive !== undefined ? (isActive ? 1 : 0) : null,
+    req.params.id,
+  );
+
+  if (tenantId) {
+    const office = db.prepare('SELECT number, floor FROM offices WHERE id = ?').get(req.params.id);
+    db.prepare('UPDATE users SET office = ?, floor = ?, company = COALESCE(?, company) WHERE id = ?')
+      .run(office.number, office.floor, company, tenantId);
+  }
+
+  const row = db.prepare(`${officeService.officeSelect} WHERE o.id = ?`).get(req.params.id);
+  res.json({ office: officeService.mapOffice(row) });
+});
+
+router.get('/blacklist', (_req, res) => {
+  const rows = db.prepare('SELECT * FROM vehicle_blacklist ORDER BY created_at DESC').all();
+  res.json({
+    entries: rows.map((r) => ({ id: r.id, plate: r.plate, reason: r.reason, createdAt: r.created_at })),
+  });
+});
+
+router.post('/blacklist', (req, res) => {
+  const { plate, reason } = req.body;
+  if (!plate) return res.status(400).json({ error: 'Укажите гос. номер' });
+  const id = uuid();
+  const normalized = String(plate).trim().toUpperCase();
+  try {
+    db.prepare('INSERT INTO vehicle_blacklist (id, plate, reason) VALUES (?, ?, ?)').run(id, normalized, reason || null);
+  } catch (err) {
+    if (err.code === 'SQLITE_CONSTRAINT_UNIQUE') return res.status(409).json({ error: 'Номер уже в чёрном списке' });
+    throw err;
+  }
+  res.status(201).json({ entry: { id, plate: normalized, reason } });
+});
+
+router.delete('/blacklist/:id', (req, res) => {
+  db.prepare('DELETE FROM vehicle_blacklist WHERE id = ?').run(req.params.id);
+  res.json({ ok: true });
+});
+
+router.get('/reports/daily', (req, res) => {
+  const date = req.query.date || new Date().toISOString().slice(0, 10);
+  const passes = db.prepare(`
+    SELECT p.pass_type, p.status, p.office, p.floor, p.company_name, COUNT(*) as c
+    FROM passes p WHERE p.visit_date = ?
+    GROUP BY p.pass_type, p.status, p.office, p.floor, p.company_name
+    ORDER BY c DESC
+  `).all(date);
+
+  const visitors = db.prepare(`
+    SELECT visitor_name, company_name, office, floor, pass_type, status, visit_time_from, pass_number
+    FROM passes WHERE visit_date = ? ORDER BY visit_time_from
+  `).all(date);
+
+  res.json({ date, summary: passes, visitors });
 });
 
 router.get('/audit', (req, res) => {

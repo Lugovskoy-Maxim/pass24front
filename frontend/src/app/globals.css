@@ -1,15 +1,15 @@
 @import "tailwindcss";
 
 :root {
-  --bg: #f0f4f8;
+  --bg: #eef1f6;
   --surface: #ffffff;
-  --primary: #1e5a8a;
-  --primary-hover: #164a72;
-  --accent: #2d9cdb;
-  --text: #1a2b3c;
+  --primary: #0f2b4a;
+  --primary-hover: #1a3d66;
+  --accent: #2563eb;
+  --text: #0f172a;
   --muted: #64748b;
   --border: #e2e8f0;
-  --success: #16a34a;
+  --success: #059669;
   --warning: #d97706;
   --danger: #dc2626;
 }
@@ -21,7 +21,7 @@
 body {
   background: var(--bg);
   color: var(--text);
-  font-family: system-ui, -apple-system, "Segoe UI", Roboto, sans-serif;
+  font-family: 'Inter', system-ui, -apple-system, 'Segoe UI', Roboto, sans-serif;
   min-height: 100vh;
 }
 
@@ -39,39 +39,13 @@ body {
   border: none;
 }
 
-.btn-primary {
-  background: var(--primary);
-  color: white;
-}
-
-.btn-primary:hover {
-  background: var(--primary-hover);
-}
-
-.btn-secondary {
-  background: white;
-  color: var(--text);
-  border: 1px solid var(--border);
-}
-
-.btn-secondary:hover {
-  background: #f8fafc;
-}
-
-.btn-success {
-  background: var(--success);
-  color: white;
-}
-
-.btn-danger {
-  background: var(--danger);
-  color: white;
-}
-
-.btn:disabled {
-  opacity: 0.5;
-  cursor: not-allowed;
-}
+.btn-primary { background: var(--primary); color: white; }
+.btn-primary:hover { background: var(--primary-hover); }
+.btn-secondary { background: white; color: var(--text); border: 1px solid var(--border); }
+.btn-secondary:hover { background: #f8fafc; }
+.btn-success { background: var(--success); color: white; }
+.btn-danger { background: var(--danger); color: white; }
+.btn:disabled { opacity: 0.5; cursor: not-allowed; }
 
 .input {
   width: 100%;
@@ -86,7 +60,7 @@ body {
 .input:focus {
   outline: none;
   border-color: var(--accent);
-  box-shadow: 0 0 0 3px rgba(45, 156, 219, 0.15);
+  box-shadow: 0 0 0 3px rgba(37, 99, 235, 0.12);
 }
 
 .label {
@@ -101,5 +75,27 @@ body {
   background: var(--surface);
   border: 1px solid var(--border);
   border-radius: 0.75rem;
-  box-shadow: 0 1px 3px rgba(0, 0, 0, 0.04);
+  box-shadow: 0 1px 3px rgba(15, 43, 74, 0.04);
+}
+
+.stat-card {
+  background: linear-gradient(135deg, #fff 0%, #f8fafc 100%);
+  border: 1px solid var(--border);
+  border-radius: 0.75rem;
+  padding: 1.25rem;
+}
+
+@keyframes slide-up {
+  from { opacity: 0; transform: translateY(12px); }
+  to { opacity: 1; transform: translateY(0); }
+}
+
+.animate-slide-up {
+  animation: slide-up 0.25s ease-out;
+}
+
+@media print {
+  body * { visibility: hidden; }
+  .print-pass, .print-pass * { visibility: visible; }
+  .print-pass { position: absolute; left: 0; top: 0; width: 100%; border: 2px solid #000 !important; }
 }

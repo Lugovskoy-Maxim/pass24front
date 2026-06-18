@@ -4,10 +4,12 @@ import Link from 'next/link';
 import { usePathname } from 'next/navigation';
 import { Building2, LogOut, Plus, List, ClipboardList, Settings } from 'lucide-react';
 import { useAuth } from '@/lib/auth';
+import { useConfig } from '@/hooks/useConfig';
 import { ROLE_LABELS } from '@/lib/api';
 
 export function Header() {
   const { user, logout } = useAuth();
+  const config = useConfig();
   const pathname = usePathname();
 
   if (!user) return null;
@@ -30,7 +32,8 @@ export function Header() {
         <div className="flex items-center gap-6">
           <Link href="/dashboard" className="flex items-center gap-2 font-bold text-[var(--primary)]">
             <Building2 className="w-6 h-6" />
-            <span>PASS24 <span className="font-normal text-xs text-[var(--muted)]">БЦ</span></span>
+            <span className="hidden sm:inline">{config?.businessCenterName || 'PASS24'}</span>
+            <span className="sm:hidden">PASS24</span>
           </Link>
           <nav className="hidden sm:flex items-center gap-1">
             {links.map(({ href, label, icon: Icon }) => (

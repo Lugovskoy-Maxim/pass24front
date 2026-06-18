@@ -1,12 +1,15 @@
 'use client';
 
-import { useEffect, useState, useCallback } from 'react';
-import { LogIn, LogOut, Users, CheckCircle, Clock, AlertCircle } from 'lucide-react';
+import { useEffect, useState, useCallback, FormEvent } from 'react';
+import { LogIn, LogOut, Users, CheckCircle, Clock, AlertCircle, Search } from 'lucide-react';
 import { ProtectedLayout } from '@/components/ProtectedLayout';
 import { PassCard } from '@/components/PassCard';
+import { StatusBadge } from '@/components/StatusBadge';
+import { useToast } from '@/components/Toast';
 import { api, Pass } from '@/lib/api';
 
 export default function ControlPage() {
+  const { toast } = useToast();
   const [date, setDate] = useState(new Date().toISOString().slice(0, 10));
   const [passes, setPasses] = useState<Pass[]>([]);
   const [stats, setStats] = useState({ total: 0, pending: 0, active: 0, completed: 0, approved: 0 });
@@ -14,6 +17,9 @@ export default function ControlPage() {
   const [loadError, setLoadError] = useState('');
   const [actionId, setActionId] = useState<string | null>(null);
   const [rejectReason, setRejectReason] = useState<Record<string, string>>({});
+  const [lookupQuery, setLookupQuery] = useState('');
+  const [lookupResult, setLookupResult] = useState<Pass | null>(null);
+  const [lookupLoading, setLookupLoading] = useState(false);
 
   const load = useCallback(() => {
     setLoading(true);
@@ -29,13 +35,31 @@ export default function ControlPage() {
 
   useEffect(() => { load(); }, [load]);
 
+  const handleLookup = async (e: FormEvent) => {
+    e.preventDefault();
+    const q = lookupQuery.trim();
+    if (!q) return;
+    setLookupLoading(true);
+    setLookupResult(null);
+    try {
+      const { pass } = await api.lookupPass(q);
+      setLookupResult(pass);
+      toast(`Найден пропуск ${pass.passNumber}`, 'success');
+    } catch (err) {
+      toast(err instanceof Error ? err.message : 'Пропуск не найден', 'error');
+    } finally {
+      setLookupLoading(false);
+    }
+  };
+
   const handleApprove = async (id: string) => {
     setActionId(id);
     try {
       await api.updateStatus(id, 'approved');
+      toast('Пропуск одобрен', 'success');
       load();
     } catch (err) {
-      alert(err instanceof Error ? err.message : 'Ошибка');
+      toast(err instanceof Error ? err.message : 'Ошибка', 'error');
     } finally {
       setActionId(null);
     }
@@ -48,9 +72,10 @@ export default function ControlPage() {
     try {
       await api.updateStatus(id, 'rejected', reason);
       setRejectReason((prev) => ({ ...prev, [id]: '' }));
+      toast('Пропуск отклонён', 'success');
       load();
     } catch (err) {
-      alert(err instanceof Error ? err.message : 'Ошибка');
+      toast(err instanceof Error ? err.message : 'Ошибка', 'error');
     } finally {
       setActionId(null);
     }
@@ -60,9 +85,10 @@ export default function ControlPage() {
     setActionId(id);
     try {
       await api.checkIn(id);
+      toast('Посетитель пропущен', 'success');
       load();
     } catch (err) {
-      alert(err instanceof Error ? err.message : 'Ошибка');
+      toast(err instanceof Error ? err.message : 'Ошибка', 'error');
     } finally {
       setActionId(null);
     }
@@ -72,9 +98,10 @@ export default function ControlPage() {
     setActionId(id);
     try {
       await api.checkOut(id);
+      toast('Выход зафиксирован', 'success');
       load();
     } catch (err) {
-      alert(err instanceof Error ? err.message : 'Ошибка');
+      toast(err instanceof Error ? err.message : 'Ошибка', 'error');
     } finally {
       setActionId(null);
     }
@@ -99,6 +126,44 @@ export default function ControlPage() {
           onChange={(e) => setDate(e.target.value)}
         />
       </div>
+
+      <form onSubmit={handleLookup} className="card p-4 mb-6 flex flex-col sm:flex-row gap-3">
+        <div className="relative flex-1">
+          <Search className="absolute left-3 top-1/2 -translate-y-1/2 w-4 h-4 text-[var(--muted)]" />
+          <input
+            className="input pl-9 font-mono"
+            placeholder="Быстрый поиск по номеру пропуска (20260619-0001)"
+            value={lookupQuery}
+            onChange={(e) => setLookupQuery(e.target.value)}
+          />
+        </div>
+        <button type="submit" className="btn btn-primary" disabled={lookupLoading || !lookupQuery.trim()}>
+          {lookupLoading ? 'Поиск...' : 'Найти'}
+        </button>
+      </form>
+
+      {lookupResult && (
+        <div className="card p-4 mb-6 border-[var(--primary)]">
+          <div className="flex items-center justify-between mb-3">
+            <h3 className="font-semibold">Результат поиска</h3>
+            <StatusBadge status={lookupResult.status} />
+          </div>
+          <PassCard pass={lookupResult} />
+          <div className="mt-3 flex gap-2">
+            {lookupResult.status === 'approved' && (
+              <button className="btn btn-success text-sm" disabled={actionId === lookupResult.id} onClick={() => handleCheckIn(lookupResult.id)}>
+                <LogIn className="w-4 h-4" /> Пропустить
+              </button>
+            )}
+            {lookupResult.status === 'active' && (
+              <button className="btn btn-primary text-sm" disabled={actionId === lookupResult.id} onClick={() => handleCheckOut(lookupResult.id)}>
+                <LogOut className="w-4 h-4" /> Выезд
+              </button>
+            )}
+            <button className="btn btn-secondary text-sm" onClick={() => setLookupResult(null)}>Закрыть</button>
+          </div>
+        </div>
+      )}
 
       <div className="grid grid-cols-2 sm:grid-cols-5 gap-3 mb-8">
         <div className="card p-3 text-center">

@@ -4,6 +4,7 @@ const db = require('../db');
 const { auth, requireRole } = require('../middleware/auth');
 const audit = require('../services/audit');
 const settings = require('../services/settings');
+const offices = require('../services/offices');
 
 const router = express.Router();
 
@@ -149,6 +150,36 @@ router.get('/journal', auth(), requireRole('security', 'admin'), (req, res) => {
   res.json({ date: today, stats, passes: rows.map(mapPass) });
 });
 
+router.get('/stats', auth(), (req, res) => {
+  const today = new Date().toISOString().slice(0, 10);
+  const params = [];
+  let where = 'WHERE 1=1';
+
+  if (req.user.role === 'tenant') {
+    where += ' AND created_by = ?';
+    params.push(req.user.id);
+  }
+
+  const byStatus = db.prepare(`SELECT status, COUNT(*) as c FROM passes ${where} GROUP BY status`).all(...params);
+  const todayCount = db.prepare(`SELECT COUNT(*) as c FROM passes ${where} AND visit_date = ?`).get(...params, today).c;
+  const weekCount = db.prepare(`SELECT COUNT(*) as c FROM passes ${where} AND visit_date >= date('now', '-7 days')`).get(...params).c;
+  const byType = db.prepare(`SELECT pass_type, COUNT(*) as c FROM passes ${where} AND visit_date = ? GROUP BY pass_type`).all(...params, today);
+
+  res.json({
+    today,
+    todayCount,
+    weekCount,
+    byStatus: Object.fromEntries(byStatus.map((r) => [r.status, r.c])),
+    todayByType: Object.fromEntries(byType.map((r) => [r.pass_type, r.c])),
+  });
+});
+
+router.get('/lookup/:passNumber', auth(), requireRole('security', 'admin'), (req, res) => {
+  const row = db.prepare(`${passSelect} WHERE p.pass_number = ?`).get(req.params.passNumber);
+  if (!row) return res.status(404).json({ error: 'Пропуск не найден' });
+  res.json({ pass: mapPass(row) });
+});
+
 router.get('/:id', auth(), (req, res) => {
   const row = db.prepare(`${passSelect} WHERE p.id = ?`).get(req.params.id);
   if (!row) return res.status(404).json({ error: 'Заявка не найдена' });
@@ -187,6 +218,25 @@ router.post('/', auth(), requireRole('tenant', 'admin'), (req, res) => {
   const officeNum = String(office || req.user.office || '').trim();
   if (!officeNum) return res.status(400).json({ error: 'Укажите номер офиса' });
 
+  const floorNum = String(floor || req.user.floor || '').trim() || null;
+  const officeCheck = offices.validateTenantOffice(req.user, officeNum, floorNum);
+  if (!officeCheck.ok) return res.status(400).json({ error: officeCheck.error });
+
+  const plate = vehiclePlate ? String(vehiclePlate).trim().toUpperCase() : null;
+  if (plate) {
+    const blocked = db.prepare('SELECT reason FROM vehicle_blacklist WHERE plate = ?').get(plate);
+    if (blocked) return res.status(403).json({ error: `Автомобиль в чёрном списке: ${blocked.reason || 'запрещён'}` });
+  }
+
+  const whFrom = settings.get('working_hours_from');
+  const whTo = settings.get('working_hours_to');
+  if (visitTimeFrom && visitTimeFrom < whFrom) {
+    return res.status(400).json({ error: `Визит раньше рабочих часов БЦ (с ${whFrom})` });
+  }
+  if (visitTimeTo && visitTimeTo > whTo) {
+    return res.status(400).json({ error: `Визит позже рабочих часов БЦ (до ${whTo})` });
+  }
+
   const limit = settings.checkPassLimit(req.user.id, visitDate);
   if (!limit.allowed) {
     return res.status(429).json({
@@ -199,7 +249,6 @@ router.post('/', auth(), requireRole('tenant', 'admin'), (req, res) => {
 
   const id = uuid();
   const passNumber = generatePassNumber();
-  const floorNum = floor || req.user.floor;
   const tenantCompany = companyName || req.user.company;
   const now = new Date().toISOString();
 
@@ -218,7 +267,7 @@ router.post('/', auth(), requireRole('tenant', 'admin'), (req, res) => {
       vehiclePlate ? String(vehiclePlate).trim().toUpperCase() : null,
       vehicleModel ? String(vehicleModel).trim() : null,
       visitDate,
-      visitTimeFrom || null, visitTimeTo || null, officeNum, floorNum || null,
+      visitTimeFrom || null, visitTimeTo || null, officeNum, floorNum,
       comment ? String(comment).trim() : null,
       initialStatus, autoApprove ? req.user.id : null, autoApprove ? now : null,
     );

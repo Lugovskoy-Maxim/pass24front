@@ -87,6 +87,23 @@ Object.entries(settings.DEFAULTS).forEach(([key, value]) => {
   settings.set(key, value);
 });
 
+const tenant1 = db.prepare("SELECT id FROM users WHERE email = 'tenant@pass24.local'").get();
+const tenant2 = db.prepare("SELECT id FROM users WHERE email = 'tenant2@pass24.local'").get();
+
+const officeList = [
+  { id: 'off-401', number: '401', floor: '4', areaSqm: 85, company: 'ООО «ТехноСофт»', tenantId: tenant1?.id },
+  { id: 'off-215', number: '215', floor: '2', areaSqm: 42, company: 'ИП Сидоров', tenantId: tenant2?.id },
+  { id: 'off-102', number: '102', floor: '1', areaSqm: 120, company: 'ООО «ЮрКонсалт»', tenantId: null },
+  { id: 'off-503', number: '503', floor: '5', areaSqm: 200, company: 'ООО «МедиаГруп»', tenantId: null },
+];
+
+for (const o of officeList) {
+  const exists = db.prepare('SELECT id FROM offices WHERE id = ?').get(o.id);
+  if (exists) continue;
+  db.prepare('INSERT INTO offices (id, number, floor, area_sqm, company, tenant_id) VALUES (?, ?, ?, ?, ?, ?)')
+    .run(o.id, o.number, o.floor, o.areaSqm, o.company, o.tenantId || null);
+}
+
 const tenant = db.prepare("SELECT id, office, floor, company FROM users WHERE email = 'tenant@pass24.local'").get();
 const security = db.prepare("SELECT id FROM users WHERE email = 'security@pass24.local'").get();
 const today = new Date().toISOString().slice(0, 10);

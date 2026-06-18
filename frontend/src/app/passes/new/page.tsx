@@ -4,12 +4,16 @@ import { useState, useEffect, FormEvent } from 'react';
 import { useRouter } from 'next/navigation';
 import { ProtectedLayout } from '@/components/ProtectedLayout';
 import { useAuth } from '@/lib/auth';
+import { useConfig } from '@/hooks/useConfig';
+import { useToast } from '@/components/Toast';
 import { api, PassType, TYPE_LABELS } from '@/lib/api';
 
 const PURPOSES = ['Встреча', 'Переговоры', 'Собеседование', 'Доставка', 'Техобслуживание', 'Презентация', 'Другое'];
 
 export default function NewPassPage() {
   const { user } = useAuth();
+  const config = useConfig();
+  const { toast } = useToast();
   const router = useRouter();
   const [loading, setLoading] = useState(false);
   const [error, setError] = useState('');
@@ -66,9 +70,12 @@ export default function NewPassPage() {
         floor: floor.trim() || undefined,
         comment: comment.trim() || undefined,
       });
+      toast('Заявка отправлена', 'success');
       router.push('/passes');
     } catch (err) {
-      setError(err instanceof Error ? err.message : 'Ошибка');
+      const msg = err instanceof Error ? err.message : 'Ошибка';
+      setError(msg);
+      toast(msg, 'error');
     } finally {
       setLoading(false);
     }
@@ -76,7 +83,13 @@ export default function NewPassPage() {
 
   return (
     <ProtectedLayout roles={['tenant', 'admin']}>
-      <h1 className="text-2xl font-bold mb-6">Заказ пропуска</h1>
+      <h1 className="text-2xl font-bold mb-2">Заказ пропуска</h1>
+      {config && (
+        <p className="text-sm text-[var(--muted)] mb-6">
+          Рабочие часы БЦ: {config.workingHoursFrom}–{config.workingHoursTo}
+          {config.maxPassesPerDay > 0 && ` · лимит ${config.maxPassesPerDay} пропусков/день`}
+        </p>
+      )}
 
       <form onSubmit={handleSubmit} className="card p-6 max-w-xl space-y-5">
         <div>

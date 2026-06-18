@@ -3,13 +3,14 @@
 import Link from 'next/link';
 import { usePathname } from 'next/navigation';
 import {
-  LayoutDashboard, Users, CreditCard, ScrollText, Settings, ArrowLeft, Shield,
+  LayoutDashboard, Users, CreditCard, ScrollText, Settings, ArrowLeft, Shield, DoorOpen,
 } from 'lucide-react';
 import { ProtectedLayout } from './ProtectedLayout';
 
 const NAV = [
   { href: '/admin', label: 'Обзор', icon: LayoutDashboard, exact: true },
   { href: '/admin/users', label: 'Пользователи', icon: Users },
+  { href: '/admin/offices', label: 'Офисы', icon: DoorOpen },
   { href: '/admin/pricing', label: 'Тарифы', icon: CreditCard },
   { href: '/admin/audit', label: 'Журнал действий', icon: ScrollText },
   { href: '/admin/settings', label: 'Настройки', icon: Settings },

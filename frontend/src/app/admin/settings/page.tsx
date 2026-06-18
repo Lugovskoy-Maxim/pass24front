@@ -1,33 +1,68 @@
 'use client';
 
 import { useEffect, useState, FormEvent } from 'react';
+import { Trash2 } from 'lucide-react';
 import { AdminLayout } from '@/components/AdminLayout';
-import { api, SystemSettings } from '@/lib/api';
+import { useToast } from '@/components/Toast';
+import { api, SystemSettings, BlacklistEntry } from '@/lib/api';
 
 export default function AdminSettingsPage() {
+  const { toast } = useToast();
   const [settings, setSettings] = useState<SystemSettings | null>(null);
+  const [blacklist, setBlacklist] = useState<BlacklistEntry[]>([]);
   const [saving, setSaving] = useState(false);
-  const [message, setMessage] = useState('');
-  const [error, setError] = useState('');
+  const [newPlate, setNewPlate] = useState('');
+  const [newReason, setNewReason] = useState('');
+  const [addingPlate, setAddingPlate] = useState(false);
+
+  const loadBlacklist = () => {
+    api.admin.getBlacklist().then(({ entries }) => setBlacklist(entries)).catch(() => {});
+  };
 
   useEffect(() => {
     api.admin.getSettings().then(({ settings: s }) => setSettings(s));
+    loadBlacklist();
   }, []);
 
   const handleSubmit = async (e: FormEvent) => {
     e.preventDefault();
     if (!settings) return;
     setSaving(true);
-    setError('');
-    setMessage('');
     try {
       const { settings: updated } = await api.admin.updateSettings(settings);
       setSettings(updated);
-      setMessage('Настройки сохранены');
+      toast('Настройки сохранены', 'success');
     } catch (err) {
-      setError(err instanceof Error ? err.message : 'Ошибка');
+      toast(err instanceof Error ? err.message : 'Ошибка', 'error');
     } finally {
       setSaving(false);
+    }
+  };
+
+  const handleAddBlacklist = async (e: FormEvent) => {
+    e.preventDefault();
+    if (!newPlate.trim()) return;
+    setAddingPlate(true);
+    try {
+      await api.admin.addBlacklist(newPlate.trim(), newReason.trim() || undefined);
+      setNewPlate('');
+      setNewReason('');
+      loadBlacklist();
+      toast('Номер добавлен в чёрный список', 'success');
+    } catch (err) {
+      toast(err instanceof Error ? err.message : 'Ошибка', 'error');
+    } finally {
+      setAddingPlate(false);
+    }
+  };
+
+  const handleDeleteBlacklist = async (id: string) => {
+    try {
+      await api.admin.deleteBlacklist(id);
+      setBlacklist((prev) => prev.filter((e) => e.id !== id));
+      toast('Номер удалён из чёрного списка', 'success');
+    } catch (err) {
+      toast(err instanceof Error ? err.message : 'Ошибка', 'error');
     }
   };
 
@@ -39,7 +74,7 @@ export default function AdminSettingsPage() {
     <AdminLayout title="Настройки БЦ">
       <p className="text-[var(--muted)] -mt-4 mb-6">Параметры пропускного режима бизнес-центра</p>
 
-      <form onSubmit={handleSubmit} className="card p-6 max-w-xl space-y-5">
+      <form onSubmit={handleSubmit} className="card p-6 max-w-xl space-y-5 mb-8">
         <div>
           <label className="label">Название бизнес-центра</label>
           <input className="input" value={settings.business_center_name} onChange={(e) => setSettings({ ...settings, business_center_name: e.target.value })} />
@@ -81,11 +116,49 @@ export default function AdminSettingsPage() {
           <input className="input" type="email" value={settings.contact_email} onChange={(e) => setSettings({ ...settings, contact_email: e.target.value })} />
         </div>
 
-        {message && <div className="text-sm text-emerald-700 bg-emerald-50 px-3 py-2 rounded-md">{message}</div>}
-        {error && <div className="text-sm text-red-600 bg-red-50 px-3 py-2 rounded-md">{error}</div>}
-
         <button type="submit" className="btn btn-primary" disabled={saving}>{saving ? 'Сохранение...' : 'Сохранить'}</button>
       </form>
+
+      <div className="max-w-xl">
+        <h2 className="text-lg font-semibold mb-2">Чёрный список автомобилей</h2>
+        <p className="text-sm text-[var(--muted)] mb-4">Гос. номера из списка не смогут получить парковочный пропуск</p>
+
+        <form onSubmit={handleAddBlacklist} className="card p-4 mb-4 flex flex-col sm:flex-row gap-3">
+          <input
+            className="input font-mono flex-1"
+            placeholder="А123ВС777"
+            value={newPlate}
+            onChange={(e) => setNewPlate(e.target.value)}
+          />
+          <input
+            className="input flex-1"
+            placeholder="Причина (необязательно)"
+            value={newReason}
+            onChange={(e) => setNewReason(e.target.value)}
+          />
+          <button type="submit" className="btn btn-danger" disabled={addingPlate || !newPlate.trim()}>
+            {addingPlate ? '...' : 'Добавить'}
+          </button>
+        </form>
+
+        {blacklist.length === 0 ? (
+          <div className="text-sm text-[var(--muted)]">Список пуст</div>
+        ) : (
+          <div className="card divide-y divide-[var(--border)]">
+            {blacklist.map((entry) => (
+              <div key={entry.id} className="flex items-center justify-between p-3 text-sm">
+                <div>
+                  <span className="font-mono font-medium">{entry.plate}</span>
+                  {entry.reason && <span className="text-[var(--muted)] ml-2">— {entry.reason}</span>}
+                </div>
+                <button className="p-1.5 rounded hover:bg-red-50 text-red-500" onClick={() => handleDeleteBlacklist(entry.id)}>
+                  <Trash2 className="w-4 h-4" />
+                </button>
+              </div>
+            ))}
+          </div>
+        )}
+      </div>
     </AdminLayout>
   );
 }
