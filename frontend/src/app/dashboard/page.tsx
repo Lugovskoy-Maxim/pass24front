@@ -13,16 +13,20 @@ export default function DashboardPage() {
   const [passes, setPasses] = useState<Pass[]>([]);
   const [stats, setStats] = useState({ pending: 0, active: 0, today: 0 });
 
+  const [loadError, setLoadError] = useState('');
+
   useEffect(() => {
-    api.getPasses().then(({ passes: data }) => {
-      setPasses(data.slice(0, 5));
-      const today = new Date().toISOString().slice(0, 10);
-      setStats({
-        pending: data.filter((p) => p.status === 'pending').length,
-        active: data.filter((p) => p.status === 'active').length,
-        today: data.filter((p) => p.visitDate === today).length,
-      });
-    });
+    api.getPasses()
+      .then(({ passes: data }) => {
+        setPasses(data.slice(0, 5));
+        const today = new Date().toISOString().slice(0, 10);
+        setStats({
+          pending: data.filter((p) => p.status === 'pending').length,
+          active: data.filter((p) => p.status === 'active').length,
+          today: data.filter((p) => p.visitDate === today).length,
+        });
+      })
+      .catch((err) => setLoadError(err instanceof Error ? err.message : 'Ошибка загрузки'));
   }, []);
 
   const isSecurity = user?.role === 'security' || user?.role === 'admin';
@@ -63,6 +67,10 @@ export default function DashboardPage() {
           </div>
         </div>
       </div>
+
+      {loadError && (
+        <div className="mb-4 text-sm text-red-600 bg-red-50 px-3 py-2 rounded-md">{loadError}</div>
+      )}
 
       <div className="flex gap-3 mb-6">
         {(user?.role === 'resident' || user?.role === 'admin') && (

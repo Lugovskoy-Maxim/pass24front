@@ -1,35 +1,44 @@
 'use client';
 
 import { useEffect, useState, useCallback } from 'react';
-import { Search, Filter } from 'lucide-react';
+import { Search, X } from 'lucide-react';
 import { ProtectedLayout } from '@/components/ProtectedLayout';
 import { PassCard } from '@/components/PassCard';
 import { useAuth } from '@/lib/auth';
-import { api, Pass, PassStatus, STATUS_LABELS } from '@/lib/api';
+import { useDebounce } from '@/hooks/useDebounce';
+import { api, Pass, STATUS_LABELS } from '@/lib/api';
 import { StatusBadge } from '@/components/StatusBadge';
 
 export default function PassesPage() {
   const { user } = useAuth();
   const [passes, setPasses] = useState<Pass[]>([]);
   const [search, setSearch] = useState('');
+  const debouncedSearch = useDebounce(search);
   const [statusFilter, setStatusFilter] = useState('');
   const [selected, setSelected] = useState<Pass | null>(null);
   const [loading, setLoading] = useState(true);
+  const [loadError, setLoadError] = useState('');
   const [actionLoading, setActionLoading] = useState(false);
   const [rejectReason, setRejectReason] = useState('');
 
   const isSecurity = user?.role === 'security' || user?.role === 'admin';
+  const isOwner = selected && user && (selected.createdBy === user.id || user.role === 'admin');
 
   const load = useCallback(() => {
     setLoading(true);
-    api.getPasses({ status: statusFilter || undefined, search: search || undefined })
-      .then(({ passes: data }) => setPasses(data))
+    setLoadError('');
+    api.getPasses({ status: statusFilter || undefined, search: debouncedSearch || undefined })
+      .then(({ passes: data }) => {
+        setPasses(data);
+        setSelected((prev) => (prev ? data.find((p) => p.id === prev.id) || prev : null));
+      })
+      .catch((err) => setLoadError(err instanceof Error ? err.message : 'Ошибка загрузки'))
       .finally(() => setLoading(false));
-  }, [statusFilter, search]);
+  }, [statusFilter, debouncedSearch]);
 
   useEffect(() => { load(); }, [load]);
 
-  const handleAction = async (id: string, action: 'approve' | 'reject' | 'checkin' | 'checkout', reason?: string) => {
+  const handleAction = async (id: string, action: 'approve' | 'reject' | 'checkin' | 'checkout' | 'cancel', reason?: string) => {
     setActionLoading(true);
     try {
       let updated: Pass;
@@ -37,6 +46,8 @@ export default function PassesPage() {
         ({ pass: updated } = await api.updateStatus(id, 'approved'));
       } else if (action === 'reject') {
         ({ pass: updated } = await api.updateStatus(id, 'rejected', reason));
+      } else if (action === 'cancel') {
+        ({ pass: updated } = await api.updateStatus(id, 'cancelled'));
       } else if (action === 'checkin') {
         ({ pass: updated } = await api.checkIn(id));
       } else {
@@ -79,6 +90,13 @@ export default function PassesPage() {
         </div>
       </div>
 
+      {loadError && (
+        <div className="mb-4 text-sm text-red-600 bg-red-50 px-3 py-2 rounded-md flex items-center justify-between">
+          {loadError}
+          <button className="btn btn-secondary text-xs" onClick={load}>Повторить</button>
+        </div>
+      )}
+
       <div className="grid lg:grid-cols-2 gap-4">
         <div className="space-y-3">
           {loading ? (
@@ -100,36 +118,51 @@ export default function PassesPage() {
           <div className="card p-5 lg:sticky lg:top-20 h-fit">
             <div className="flex items-center justify-between mb-4">
               <h2 className="text-lg font-semibold">Детали заявки</h2>
-              <StatusBadge status={selected.status} />
+              <div className="flex items-center gap-2">
+                <StatusBadge status={selected.status} />
+                <button
+                  className="p-1 text-[var(--muted)] hover:text-[var(--text)]"
+                  onClick={() => setSelected(null)}
+                  aria-label="Закрыть"
+                >
+                  <X className="w-4 h-4" />
+                </button>
+              </div>
             </div>
 
             <dl className="space-y-3 text-sm">
-              <div className="flex justify-between">
-                <dt className="text-[var(--muted)]">Номер</dt>
-                <dd className="font-mono font-medium">{selected.passNumber}</dd>
+              <div className="flex justify-between gap-4">
+                <dt className="text-[var(--muted)] shrink-0">Номер</dt>
+                <dd className="font-mono font-medium text-right">{selected.passNumber}</dd>
               </div>
-              <div className="flex justify-between">
-                <dt className="text-[var(--muted)]">Гость</dt>
-                <dd>{selected.guestName}</dd>
+              <div className="flex justify-between gap-4">
+                <dt className="text-[var(--muted)] shrink-0">Гость</dt>
+                <dd className="text-right">{selected.guestName}</dd>
               </div>
               {selected.guestPhone && (
-                <div className="flex justify-between">
-                  <dt className="text-[var(--muted)]">Телефон</dt>
-                  <dd>{selected.guestPhone}</dd>
+                <div className="flex justify-between gap-4">
+                  <dt className="text-[var(--muted)] shrink-0">Телефон</dt>
+                  <dd className="text-right">{selected.guestPhone}</dd>
                 </div>
               )}
-              <div className="flex justify-between">
-                <dt className="text-[var(--muted)]">Дата визита</dt>
-                <dd>{selected.visitDate} {selected.visitTimeFrom && `${selected.visitTimeFrom}–${selected.visitTimeTo}`}</dd>
+              {selected.creatorName && isSecurity && (
+                <div className="flex justify-between gap-4">
+                  <dt className="text-[var(--muted)] shrink-0">Заказал</dt>
+                  <dd className="text-right">{selected.creatorName}</dd>
+                </div>
+              )}
+              <div className="flex justify-between gap-4">
+                <dt className="text-[var(--muted)] shrink-0">Дата визита</dt>
+                <dd className="text-right">{selected.visitDate} {selected.visitTimeFrom && `${selected.visitTimeFrom}–${selected.visitTimeTo}`}</dd>
               </div>
-              <div className="flex justify-between">
-                <dt className="text-[var(--muted)]">Адрес</dt>
-                <dd>кв. {selected.apartment}{selected.building && `, ${selected.building}`}</dd>
+              <div className="flex justify-between gap-4">
+                <dt className="text-[var(--muted)] shrink-0">Адрес</dt>
+                <dd className="text-right">кв. {selected.apartment}{selected.building && `, ${selected.building}`}</dd>
               </div>
               {selected.vehiclePlate && (
-                <div className="flex justify-between">
-                  <dt className="text-[var(--muted)]">Автомобиль</dt>
-                  <dd className="font-mono">{selected.vehiclePlate} {selected.vehicleModel}</dd>
+                <div className="flex justify-between gap-4">
+                  <dt className="text-[var(--muted)] shrink-0">Автомобиль</dt>
+                  <dd className="font-mono text-right">{selected.vehiclePlate} {selected.vehicleModel}</dd>
                 </div>
               )}
               {selected.comment && (
@@ -145,65 +178,72 @@ export default function PassesPage() {
                 </div>
               )}
               {selected.checkedInAt && (
-                <div className="flex justify-between">
-                  <dt className="text-[var(--muted)]">Въезд</dt>
-                  <dd>{new Date(selected.checkedInAt).toLocaleString('ru')}</dd>
+                <div className="flex justify-between gap-4">
+                  <dt className="text-[var(--muted)] shrink-0">Въезд</dt>
+                  <dd className="text-right">{new Date(selected.checkedInAt).toLocaleString('ru-RU')}</dd>
                 </div>
               )}
               {selected.checkedOutAt && (
-                <div className="flex justify-between">
-                  <dt className="text-[var(--muted)]">Выезд</dt>
-                  <dd>{new Date(selected.checkedOutAt).toLocaleString('ru')}</dd>
+                <div className="flex justify-between gap-4">
+                  <dt className="text-[var(--muted)] shrink-0">Выезд</dt>
+                  <dd className="text-right">{new Date(selected.checkedOutAt).toLocaleString('ru-RU')}</dd>
                 </div>
               )}
             </dl>
 
-            {isSecurity && (
-              <div className="mt-5 pt-4 border-t border-[var(--border)] space-y-3">
-                {selected.status === 'pending' && (
-                  <>
-                    <button
-                      className="btn btn-success w-full"
-                      disabled={actionLoading}
-                      onClick={() => handleAction(selected.id, 'approve')}
-                    >
-                      Одобрить
-                    </button>
-                    <input
-                      className="input"
-                      placeholder="Причина отклонения"
-                      value={rejectReason}
-                      onChange={(e) => setRejectReason(e.target.value)}
-                    />
-                    <button
-                      className="btn btn-danger w-full"
-                      disabled={actionLoading || !rejectReason}
-                      onClick={() => handleAction(selected.id, 'reject', rejectReason)}
-                    >
-                      Отклонить
-                    </button>
-                  </>
-                )}
-                {selected.status === 'approved' && (
+            <div className="mt-5 pt-4 border-t border-[var(--border)] space-y-3">
+              {isSecurity && selected.status === 'pending' && (
+                <>
                   <button
                     className="btn btn-success w-full"
                     disabled={actionLoading}
-                    onClick={() => handleAction(selected.id, 'checkin')}
+                    onClick={() => handleAction(selected.id, 'approve')}
                   >
-                    Пропустить на территорию
+                    Одобрить
                   </button>
-                )}
-                {selected.status === 'active' && (
+                  <input
+                    className="input"
+                    placeholder="Причина отклонения"
+                    value={rejectReason}
+                    onChange={(e) => setRejectReason(e.target.value)}
+                  />
                   <button
-                    className="btn btn-primary w-full"
-                    disabled={actionLoading}
-                    onClick={() => handleAction(selected.id, 'checkout')}
+                    className="btn btn-danger w-full"
+                    disabled={actionLoading || !rejectReason.trim()}
+                    onClick={() => handleAction(selected.id, 'reject', rejectReason)}
                   >
-                    Зафиксировать выезд
+                    Отклонить
                   </button>
-                )}
-              </div>
-            )}
+                </>
+              )}
+              {isSecurity && selected.status === 'approved' && (
+                <button
+                  className="btn btn-success w-full"
+                  disabled={actionLoading}
+                  onClick={() => handleAction(selected.id, 'checkin')}
+                >
+                  Пропустить на территорию
+                </button>
+              )}
+              {isSecurity && selected.status === 'active' && (
+                <button
+                  className="btn btn-primary w-full"
+                  disabled={actionLoading}
+                  onClick={() => handleAction(selected.id, 'checkout')}
+                >
+                  Зафиксировать выезд
+                </button>
+              )}
+              {isOwner && selected.status === 'pending' && (
+                <button
+                  className="btn btn-secondary w-full"
+                  disabled={actionLoading}
+                  onClick={() => handleAction(selected.id, 'cancel')}
+                >
+                  Отменить заявку
+                </button>
+              )}
+            </div>
           </div>
         )}
       </div>

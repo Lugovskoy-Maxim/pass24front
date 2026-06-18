@@ -5,11 +5,23 @@ const { auth, requireRole } = require('../middleware/auth');
 
 const router = express.Router();
 
+const PASS_TYPES = ['guest', 'vehicle', 'delivery', 'service'];
+const STATUS_TRANSITIONS = {
+  approved: ['pending'],
+  rejected: ['pending'],
+  cancelled: ['pending', 'approved'],
+  expired: ['approved', 'active'],
+};
+
 function generatePassNumber() {
   const date = new Date();
   const prefix = `${date.getFullYear()}${String(date.getMonth() + 1).padStart(2, '0')}${String(date.getDate()).padStart(2, '0')}`;
-  const count = db.prepare('SELECT COUNT(*) as c FROM passes WHERE pass_number LIKE ?').get(`${prefix}%`).c;
-  return `${prefix}-${String(count + 1).padStart(4, '0')}`;
+  const row = db.prepare(`
+    SELECT MAX(CAST(SUBSTR(pass_number, LENGTH(?) + 2) AS INTEGER)) as max_num
+    FROM passes WHERE pass_number LIKE ?
+  `).get(prefix, `${prefix}-%`);
+  const next = (row?.max_num || 0) + 1;
+  return `${prefix}-${String(next).padStart(4, '0')}`;
 }
 
 function mapPass(row) {
@@ -44,6 +56,13 @@ function mapPass(row) {
     createdAt: row.created_at,
     updatedAt: row.updated_at,
   };
+}
+
+function assertTransition(currentStatus, targetStatus) {
+  const allowed = STATUS_TRANSITIONS[targetStatus];
+  if (!allowed || !allowed.includes(currentStatus)) {
+    throw new Error(`Нельзя перевести заявку из «${currentStatus}» в «${targetStatus}»`);
+  }
 }
 
 const passSelect = `
@@ -81,7 +100,7 @@ router.get('/', auth(), (req, res) => {
 
   if (search) {
     sql += ' AND (p.guest_name LIKE ? OR p.pass_number LIKE ? OR p.vehicle_plate LIKE ? OR p.apartment LIKE ?)';
-    const q = `%${search}%`;
+    const q = `%${String(search).trim()}%`;
     params.push(q, q, q, q);
   }
 
@@ -97,12 +116,22 @@ router.get('/journal', auth(), requireRole('security', 'admin'), (req, res) => {
 
   const rows = db.prepare(`
     ${passSelect}
-    WHERE p.visit_date = ? AND p.status IN ('approved', 'active', 'completed')
-    ORDER BY p.visit_time_from ASC, p.created_at ASC
+    WHERE p.visit_date = ? AND p.status IN ('pending', 'approved', 'active', 'completed')
+    ORDER BY
+      CASE p.status
+        WHEN 'pending' THEN 0
+        WHEN 'approved' THEN 1
+        WHEN 'active' THEN 2
+        WHEN 'completed' THEN 3
+        ELSE 4
+      END,
+      p.visit_time_from ASC,
+      p.created_at ASC
   `).all(today);
 
   const stats = {
     total: rows.length,
+    pending: rows.filter((r) => r.status === 'pending').length,
     active: rows.filter((r) => r.status === 'active').length,
     completed: rows.filter((r) => r.status === 'completed').length,
     approved: rows.filter((r) => r.status === 'approved').length,
@@ -128,34 +157,57 @@ router.post('/', auth(), requireRole('resident', 'admin'), (req, res) => {
     visitDate, visitTimeFrom, visitTimeTo, apartment, building, comment,
   } = req.body;
 
-  if (!guestName || !visitDate || !passType) {
+  const name = String(guestName || '').trim();
+  if (!name || !visitDate || !passType) {
     return res.status(400).json({ error: 'Имя гостя, дата и тип пропуска обязательны' });
   }
 
-  const apt = apartment || req.user.apartment;
+  if (!PASS_TYPES.includes(passType)) {
+    return res.status(400).json({ error: 'Недопустимый тип пропуска' });
+  }
+
+  if (passType === 'vehicle' && !String(vehiclePlate || '').trim()) {
+    return res.status(400).json({ error: 'Для автомобильного пропуска укажите гос. номер' });
+  }
+
+  if (visitTimeFrom && visitTimeTo && visitTimeFrom >= visitTimeTo) {
+    return res.status(400).json({ error: 'Время «С» должно быть раньше времени «До»' });
+  }
+
+  const apt = String(apartment || req.user.apartment || '').trim();
   if (!apt) return res.status(400).json({ error: 'Укажите номер квартиры' });
 
   const id = uuid();
   const passNumber = generatePassNumber();
   const bld = building || req.user.building;
 
-  db.prepare(`
-    INSERT INTO passes (
-      id, pass_number, created_by, guest_name, guest_phone, pass_type,
-      vehicle_plate, vehicle_model, visit_date, visit_time_from, visit_time_to,
-      apartment, building, comment, status
-    ) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, 'pending')
-  `).run(
-    id, passNumber, req.user.id, guestName, guestPhone || null, passType,
-    vehiclePlate || null, vehicleModel || null, visitDate,
-    visitTimeFrom || null, visitTimeTo || null, apt, bld || null, comment || null,
-  );
+  try {
+    db.prepare(`
+      INSERT INTO passes (
+        id, pass_number, created_by, guest_name, guest_phone, pass_type,
+        vehicle_plate, vehicle_model, visit_date, visit_time_from, visit_time_to,
+        apartment, building, comment, status
+      ) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, 'pending')
+    `).run(
+      id, passNumber, req.user.id, name, guestPhone || null, passType,
+      vehiclePlate ? String(vehiclePlate).trim().toUpperCase() : null,
+      vehicleModel ? String(vehicleModel).trim() : null,
+      visitDate,
+      visitTimeFrom || null, visitTimeTo || null, apt, bld || null,
+      comment ? String(comment).trim() : null,
+    );
+  } catch (err) {
+    if (err.code === 'SQLITE_CONSTRAINT_UNIQUE') {
+      return res.status(409).json({ error: 'Конфликт номера пропуска, повторите попытку' });
+    }
+    throw err;
+  }
 
   const row = db.prepare(`${passSelect} WHERE p.id = ?`).get(id);
   res.status(201).json({ pass: mapPass(row) });
 });
 
-router.patch('/:id/status', auth(), requireRole('security', 'admin'), (req, res) => {
+router.patch('/:id/status', auth(), (req, res) => {
   const { status, rejectionReason } = req.body;
   const allowed = ['approved', 'rejected', 'cancelled', 'expired'];
   if (!allowed.includes(status)) {
@@ -165,8 +217,25 @@ router.patch('/:id/status', auth(), requireRole('security', 'admin'), (req, res)
   const existing = db.prepare('SELECT * FROM passes WHERE id = ?').get(req.params.id);
   if (!existing) return res.status(404).json({ error: 'Заявка не найдена' });
 
-  if (status === 'rejected' && !rejectionReason) {
+  const isOwner = existing.created_by === req.user.id;
+  const isStaff = req.user.role === 'security' || req.user.role === 'admin';
+
+  if (status === 'cancelled') {
+    if (!isOwner && req.user.role !== 'admin') {
+      return res.status(403).json({ error: 'Отменить заявку может только её автор' });
+    }
+  } else if (!isStaff) {
+    return res.status(403).json({ error: 'Недостаточно прав' });
+  }
+
+  if (status === 'rejected' && !String(rejectionReason || '').trim()) {
     return res.status(400).json({ error: 'Укажите причину отклонения' });
+  }
+
+  try {
+    assertTransition(existing.status, status);
+  } catch (err) {
+    return res.status(400).json({ error: err.message });
   }
 
   const now = new Date().toISOString();
@@ -180,7 +249,7 @@ router.patch('/:id/status', auth(), requireRole('security', 'admin'), (req, res)
     db.prepare(`
       UPDATE passes SET status = 'rejected', rejection_reason = ?, approved_by = ?, approved_at = ?, updated_at = ?
       WHERE id = ?
-    `).run(rejectionReason, req.user.id, now, now, req.params.id);
+    `).run(String(rejectionReason).trim(), req.user.id, now, now, req.params.id);
   } else {
     db.prepare('UPDATE passes SET status = ?, updated_at = ? WHERE id = ?').run(status, now, req.params.id);
   }
@@ -193,8 +262,8 @@ router.post('/:id/check-in', auth(), requireRole('security', 'admin'), (req, res
   const existing = db.prepare('SELECT * FROM passes WHERE id = ?').get(req.params.id);
   if (!existing) return res.status(404).json({ error: 'Заявка не найдена' });
 
-  if (!['approved', 'active'].includes(existing.status)) {
-    return res.status(400).json({ error: 'Пропуск нельзя активировать в текущем статусе' });
+  if (existing.status !== 'approved') {
+    return res.status(400).json({ error: 'Пропустить можно только одобренную заявку' });
   }
 
   const now = new Date().toISOString();

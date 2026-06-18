@@ -63,6 +63,12 @@ async function request<T>(path: string, options: RequestInit = {}): Promise<T> {
   const data = await res.json().catch(() => ({}));
 
   if (!res.ok) {
+    if (res.status === 401 && typeof window !== 'undefined') {
+      localStorage.removeItem('pass24_token');
+      if (!window.location.pathname.startsWith('/login')) {
+        window.location.href = '/login';
+      }
+    }
     throw new Error(data.error || 'Ошибка запроса');
   }
   return data as T;
@@ -93,13 +99,25 @@ export const api = {
   },
 
   getJournal: (date?: string) =>
-    request<{ date: string; stats: { total: number; active: number; completed: number; approved: number }; passes: Pass[] }>(
+    request<{ date: string; stats: { total: number; pending: number; active: number; completed: number; approved: number }; passes: Pass[] }>(
       `/passes/journal${date ? `?date=${date}` : ''}`,
     ),
 
   getPass: (id: string) => request<{ pass: Pass }>(`/passes/${id}`),
 
-  createPass: (data: Partial<Pass>) =>
+  createPass: (data: {
+    guestName: string;
+    guestPhone?: string;
+    passType: PassType;
+    vehiclePlate?: string;
+    vehicleModel?: string;
+    visitDate: string;
+    visitTimeFrom?: string;
+    visitTimeTo?: string;
+    apartment: string;
+    building?: string;
+    comment?: string;
+  }) =>
     request<{ pass: Pass }>('/passes', { method: 'POST', body: JSON.stringify(data) }),
 
   updateStatus: (id: string, status: string, rejectionReason?: string) =>

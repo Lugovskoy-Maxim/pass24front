@@ -1,6 +1,6 @@
 'use client';
 
-import { useState, FormEvent } from 'react';
+import { useState, useEffect, FormEvent } from 'react';
 import { useRouter } from 'next/navigation';
 import { ProtectedLayout } from '@/components/ProtectedLayout';
 import { useAuth } from '@/lib/auth';
@@ -20,27 +20,45 @@ export default function NewPassPage() {
   const [visitDate, setVisitDate] = useState(new Date().toISOString().slice(0, 10));
   const [visitTimeFrom, setVisitTimeFrom] = useState('10:00');
   const [visitTimeTo, setVisitTimeTo] = useState('20:00');
-  const [apartment, setApartment] = useState(user?.apartment || '');
-  const [building, setBuilding] = useState(user?.building || '');
+  const [apartment, setApartment] = useState('');
+  const [building, setBuilding] = useState('');
   const [comment, setComment] = useState('');
+
+  useEffect(() => {
+    if (user) {
+      if (!apartment && user.apartment) setApartment(user.apartment);
+      if (!building && user.building) setBuilding(user.building);
+    }
+  }, [user, apartment, building]);
 
   const handleSubmit = async (e: FormEvent) => {
     e.preventDefault();
     setError('');
+
+    if (visitTimeFrom && visitTimeTo && visitTimeFrom >= visitTimeTo) {
+      setError('Время «С» должно быть раньше времени «До»');
+      return;
+    }
+
+    if (passType === 'vehicle' && !vehiclePlate.trim()) {
+      setError('Укажите гос. номер автомобиля');
+      return;
+    }
+
     setLoading(true);
     try {
       await api.createPass({
-        guestName,
-        guestPhone,
+        guestName: guestName.trim(),
+        guestPhone: guestPhone.trim() || undefined,
         passType,
-        vehiclePlate: passType === 'vehicle' ? vehiclePlate : undefined,
-        vehicleModel: passType === 'vehicle' ? vehicleModel : undefined,
+        vehiclePlate: passType === 'vehicle' ? vehiclePlate.trim().toUpperCase() : undefined,
+        vehicleModel: passType === 'vehicle' ? vehicleModel.trim() || undefined : undefined,
         visitDate,
         visitTimeFrom,
         visitTimeTo,
-        apartment,
-        building,
-        comment,
+        apartment: apartment.trim(),
+        building: building.trim() || undefined,
+        comment: comment.trim() || undefined,
       });
       router.push('/passes');
     } catch (err) {
@@ -51,7 +69,7 @@ export default function NewPassPage() {
   };
 
   return (
-    <ProtectedLayout>
+    <ProtectedLayout roles={['resident', 'admin']}>
       <h1 className="text-2xl font-bold mb-6">Заказ пропуска</h1>
 
       <form onSubmit={handleSubmit} className="card p-6 max-w-xl space-y-5">
@@ -101,7 +119,7 @@ export default function NewPassPage() {
         <div className="grid grid-cols-3 gap-3">
           <div>
             <label className="label">Дата визита *</label>
-            <input className="input" type="date" value={visitDate} onChange={(e) => setVisitDate(e.target.value)} required />
+            <input className="input" type="date" value={visitDate} min={new Date().toISOString().slice(0, 10)} onChange={(e) => setVisitDate(e.target.value)} required />
           </div>
           <div>
             <label className="label">С</label>

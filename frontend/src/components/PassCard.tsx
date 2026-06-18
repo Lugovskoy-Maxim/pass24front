@@ -25,6 +25,8 @@ export function PassCard({ pass, actions, onClick }: PassCardProps) {
       className={`card p-4 ${onClick ? 'cursor-pointer hover:border-[var(--accent)] transition-colors' : ''}`}
       onClick={onClick}
       role={onClick ? 'button' : undefined}
+      tabIndex={onClick ? 0 : undefined}
+      onKeyDown={onClick ? (e) => { if (e.key === 'Enter' || e.key === ' ') { e.preventDefault(); onClick(); } } : undefined}
     >
       <div className="flex items-start justify-between gap-3 mb-3">
         <div className="flex items-center gap-2">
@@ -41,15 +43,19 @@ export function PassCard({ pass, actions, onClick }: PassCardProps) {
 
       <div className="grid grid-cols-2 gap-2 text-sm text-[var(--muted)] mb-3">
         <div className="flex items-center gap-1.5">
-          <Clock className="w-3.5 h-3.5" />
-          {pass.visitDate}
-          {pass.visitTimeFrom && ` ${pass.visitTimeFrom}`}
-          {pass.visitTimeTo && `–${pass.visitTimeTo}`}
+          <Clock className="w-3.5 h-3.5 shrink-0" />
+          <span>
+            {pass.visitDate}
+            {pass.visitTimeFrom && ` ${pass.visitTimeFrom}`}
+            {pass.visitTimeTo && `–${pass.visitTimeTo}`}
+          </span>
         </div>
         <div className="flex items-center gap-1.5">
-          <MapPin className="w-3.5 h-3.5" />
-          кв. {pass.apartment}
-          {pass.building && `, ${pass.building}`}
+          <MapPin className="w-3.5 h-3.5 shrink-0" />
+          <span>
+            кв. {pass.apartment}
+            {pass.building && `, ${pass.building}`}
+          </span>
         </div>
       </div>
 
@@ -60,7 +66,15 @@ export function PassCard({ pass, actions, onClick }: PassCardProps) {
         )}
       </div>
 
-      {actions && <div className="mt-3 pt-3 border-t border-[var(--border)] flex gap-2 flex-wrap">{actions}</div>}
+      {actions && (
+        <div
+          className="mt-3 pt-3 border-t border-[var(--border)] flex gap-2 flex-wrap"
+          onClick={(e) => e.stopPropagation()}
+          onKeyDown={(e) => e.stopPropagation()}
+        >
+          {actions}
+        </div>
+      )}
     </div>
   );
 }
