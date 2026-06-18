@@ -12,8 +12,9 @@ function auth(required = true) {
     try {
       const token = header.slice(7);
       const payload = jwt.verify(token, process.env.JWT_SECRET || 'dev-secret');
-      const user = db.prepare('SELECT id, email, full_name, phone, role, apartment, building FROM users WHERE id = ?').get(payload.userId);
+      const user = db.prepare('SELECT id, email, full_name, phone, role, apartment, building, is_active FROM users WHERE id = ?').get(payload.userId);
       if (!user) return res.status(401).json({ error: 'Пользователь не найден' });
+      if (!user.is_active) return res.status(403).json({ error: 'Аккаунт деактивирован' });
       req.user = user;
       next();
     } catch {

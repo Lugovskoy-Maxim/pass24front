@@ -2,6 +2,8 @@ const express = require('express');
 const { v4: uuid } = require('uuid');
 const db = require('../db');
 const { auth, requireRole } = require('../middleware/auth');
+const audit = require('../services/audit');
+const settings = require('../services/settings');
 
 const router = express.Router();
 
@@ -177,17 +179,28 @@ router.post('/', auth(), requireRole('resident', 'admin'), (req, res) => {
   const apt = String(apartment || req.user.apartment || '').trim();
   if (!apt) return res.status(400).json({ error: 'Укажите номер квартиры' });
 
+  const limit = settings.checkPassLimit(req.user.id, visitDate);
+  if (!limit.allowed) {
+    return res.status(429).json({
+      error: `Превышен лимит: ${limit.max} пропусков в день (сейчас ${limit.current})`,
+    });
+  }
+
+  const autoApprove = settings.get('auto_approve_delivery') === 'true' && passType === 'delivery';
+  const initialStatus = autoApprove ? 'approved' : 'pending';
+
   const id = uuid();
   const passNumber = generatePassNumber();
   const bld = building || req.user.building;
+  const now = new Date().toISOString();
 
   try {
     db.prepare(`
       INSERT INTO passes (
         id, pass_number, created_by, guest_name, guest_phone, pass_type,
         vehicle_plate, vehicle_model, visit_date, visit_time_from, visit_time_to,
-        apartment, building, comment, status
-      ) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, 'pending')
+        apartment, building, comment, status, approved_by, approved_at
+      ) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
     `).run(
       id, passNumber, req.user.id, name, guestPhone || null, passType,
       vehiclePlate ? String(vehiclePlate).trim().toUpperCase() : null,
@@ -195,6 +208,7 @@ router.post('/', auth(), requireRole('resident', 'admin'), (req, res) => {
       visitDate,
       visitTimeFrom || null, visitTimeTo || null, apt, bld || null,
       comment ? String(comment).trim() : null,
+      initialStatus, autoApprove ? req.user.id : null, autoApprove ? now : null,
     );
   } catch (err) {
     if (err.code === 'SQLITE_CONSTRAINT_UNIQUE') {
@@ -203,6 +217,7 @@ router.post('/', auth(), requireRole('resident', 'admin'), (req, res) => {
     throw err;
   }
 
+  audit.log(req.user.id, 'pass.create', 'pass', id, { passNumber, passType, visitDate });
   const row = db.prepare(`${passSelect} WHERE p.id = ?`).get(id);
   res.status(201).json({ pass: mapPass(row) });
 });
@@ -254,6 +269,7 @@ router.patch('/:id/status', auth(), (req, res) => {
     db.prepare('UPDATE passes SET status = ?, updated_at = ? WHERE id = ?').run(status, now, req.params.id);
   }
 
+  audit.log(req.user.id, `pass.${status}`, 'pass', req.params.id);
   const row = db.prepare(`${passSelect} WHERE p.id = ?`).get(req.params.id);
   res.json({ pass: mapPass(row) });
 });
@@ -272,6 +288,7 @@ router.post('/:id/check-in', auth(), requireRole('security', 'admin'), (req, res
     WHERE id = ?
   `).run(now, req.user.id, now, req.params.id);
 
+  audit.log(req.user.id, 'pass.check_in', 'pass', req.params.id);
   const row = db.prepare(`${passSelect} WHERE p.id = ?`).get(req.params.id);
   res.json({ pass: mapPass(row) });
 });
@@ -290,6 +307,7 @@ router.post('/:id/check-out', auth(), requireRole('security', 'admin'), (req, re
     WHERE id = ?
   `).run(now, req.user.id, now, req.params.id);
 
+  audit.log(req.user.id, 'pass.check_out', 'pass', req.params.id);
   const row = db.prepare(`${passSelect} WHERE p.id = ?`).get(req.params.id);
   res.json({ pass: mapPass(row) });
 });

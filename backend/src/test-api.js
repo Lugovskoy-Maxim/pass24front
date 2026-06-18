@@ -83,6 +83,19 @@ async function run() {
   const residentJournal = await req('GET', '/passes/journal', null, residentToken);
   assert('resident cannot access journal', residentJournal.status === 403);
 
+  const adminLogin = await req('POST', '/auth/login', { email: 'admin@pass24.local', password: 'admin123' });
+  assert('admin login', adminLogin.status === 200);
+  const adminToken = adminLogin.data.token;
+
+  const dashboard = await req('GET', '/admin/dashboard', null, adminToken);
+  assert('admin dashboard', dashboard.status === 200 && dashboard.data.stats);
+
+  const pricing = await req('GET', '/admin/pricing', null, adminToken);
+  assert('admin pricing', pricing.status === 200 && pricing.data.plans?.length >= 3);
+
+  const residentAdmin = await req('GET', '/admin/dashboard', null, residentToken);
+  assert('resident cannot access admin', residentAdmin.status === 403);
+
   console.log(`\n${passed} passed, ${failed} failed`);
   process.exit(failed > 0 ? 1 : 0);
 }

@@ -2,7 +2,7 @@
 
 import Link from 'next/link';
 import { usePathname } from 'next/navigation';
-import { Shield, LogOut, Plus, List, ClipboardList } from 'lucide-react';
+import { Shield, LogOut, Plus, List, ClipboardList, Settings } from 'lucide-react';
 import { useAuth } from '@/lib/auth';
 import { ROLE_LABELS } from '@/lib/api';
 
@@ -21,6 +21,7 @@ export function Header() {
       ? [{ href: '/passes/new', label: 'Новый пропуск', icon: Plus }]
       : []),
     ...(isSecurity ? [{ href: '/control', label: 'Контроль КПП', icon: ClipboardList }] : []),
+    ...(user.role === 'admin' ? [{ href: '/admin', label: 'Админ', icon: Settings }] : []),
   ];
 
   return (

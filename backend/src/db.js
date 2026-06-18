@@ -21,6 +21,7 @@ db.exec(`
     role TEXT NOT NULL CHECK(role IN ('resident', 'security', 'admin')),
     apartment TEXT,
     building TEXT,
+    is_active INTEGER NOT NULL DEFAULT 1,
     created_at TEXT NOT NULL DEFAULT (datetime('now'))
   );
 
@@ -51,9 +52,54 @@ db.exec(`
     updated_at TEXT NOT NULL DEFAULT (datetime('now'))
   );
 
+  CREATE TABLE IF NOT EXISTS audit_log (
+    id TEXT PRIMARY KEY,
+    user_id TEXT REFERENCES users(id),
+    action TEXT NOT NULL,
+    entity_type TEXT NOT NULL,
+    entity_id TEXT,
+    details TEXT,
+    created_at TEXT NOT NULL DEFAULT (datetime('now'))
+  );
+
+  CREATE TABLE IF NOT EXISTS settings (
+    key TEXT PRIMARY KEY,
+    value TEXT NOT NULL,
+    updated_at TEXT NOT NULL DEFAULT (datetime('now'))
+  );
+
+  CREATE TABLE IF NOT EXISTS pricing_plans (
+    id TEXT PRIMARY KEY,
+    name TEXT NOT NULL,
+    description TEXT,
+    price_monthly INTEGER NOT NULL,
+    max_apartments INTEGER NOT NULL,
+    features TEXT NOT NULL DEFAULT '[]',
+    is_active INTEGER NOT NULL DEFAULT 1,
+    created_at TEXT NOT NULL DEFAULT (datetime('now')),
+    updated_at TEXT NOT NULL DEFAULT (datetime('now'))
+  );
+
+  CREATE TABLE IF NOT EXISTS complexes (
+    id TEXT PRIMARY KEY,
+    name TEXT NOT NULL,
+    address TEXT,
+    apartments_count INTEGER NOT NULL DEFAULT 0,
+    plan_id TEXT NOT NULL REFERENCES pricing_plans(id),
+    is_active INTEGER NOT NULL DEFAULT 1,
+    created_at TEXT NOT NULL DEFAULT (datetime('now'))
+  );
+
   CREATE INDEX IF NOT EXISTS idx_passes_status ON passes(status);
   CREATE INDEX IF NOT EXISTS idx_passes_visit_date ON passes(visit_date);
   CREATE INDEX IF NOT EXISTS idx_passes_created_by ON passes(created_by);
+  CREATE INDEX IF NOT EXISTS idx_audit_created ON audit_log(created_at);
 `);
+
+try {
+  db.exec('ALTER TABLE users ADD COLUMN is_active INTEGER NOT NULL DEFAULT 1');
+} catch {
+  // column already exists
+}
 
 module.exports = db;

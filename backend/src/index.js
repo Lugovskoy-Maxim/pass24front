@@ -6,6 +6,7 @@ const fs = require('fs');
 
 const authRoutes = require('./routes/auth');
 const passRoutes = require('./routes/passes');
+const adminRoutes = require('./routes/admin');
 
 const dataDir = path.join(__dirname, '..', 'data');
 if (!fs.existsSync(dataDir)) fs.mkdirSync(dataDir, { recursive: true });
@@ -24,6 +25,7 @@ app.get('/api/health', (_req, res) => {
 
 app.use('/api/auth', authRoutes);
 app.use('/api/passes', passRoutes);
+app.use('/api/admin', adminRoutes);
 
 app.use((err, _req, res, _next) => {
   console.error(err);
