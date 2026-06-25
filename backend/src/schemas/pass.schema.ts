@@ -5,7 +5,7 @@ export type PassDocument = Pass & Document;
 
 @Schema({ timestamps: true, collection: 'passes' })
 export class Pass {
-  @Prop({ required: true, unique: true, index: true })
+  @Prop({ required: true, unique: true })
   passNumber: string;
 
   @Prop({ type: Types.ObjectId, ref: 'User' })
@@ -49,6 +49,15 @@ export class Pass {
 
   @Prop()
   visitTimeTo?: string;
+
+  @Prop({ type: Types.ObjectId, ref: 'Property', index: true })
+  property?: Types.ObjectId;
+
+  @Prop({ type: Types.ObjectId, ref: 'Office' })
+  officeId?: Types.ObjectId;
+
+  @Prop()
+  businessCenterName?: string;
 
   @Prop({ required: true })
   office: string;
@@ -99,4 +108,6 @@ export const PassSchema = SchemaFactory.createForClass(Pass);
 PassSchema.index({ status: 1, visitDate: -1 });
 PassSchema.index({ visitorName: 'text', vehiclePlate: 'text', companyName: 'text' });
 PassSchema.index({ office: 1 });
-PassSchema.index({ passNumber: 1 });
+PassSchema.index({ property: 1, visitDate: -1 });
+PassSchema.index({ officeId: 1 });
+PassSchema.index({ createdBy: 1 });

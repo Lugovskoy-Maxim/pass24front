@@ -1,63 +1,66 @@
 import { Body, Controller, Get, Param, Patch, Post, Query, Req, UseGuards } from '@nestjs/common';
 import { AuthGuard } from '@nestjs/passport';
+import { RequirePermissions } from '../auth/permissions.decorator';
+import { PermissionsGuard } from '../auth/permissions.guard';
 import { PassesService } from './passes.service';
 import { CreatePassDto } from './dto/create-pass.dto';
 import { UpdateStatusDto } from './dto/update-status.dto';
 
 @Controller('passes')
+@UseGuards(AuthGuard('jwt'), PermissionsGuard)
 export class PassesController {
   constructor(private readonly passesService: PassesService) {}
 
-  @UseGuards(AuthGuard('jwt'))
   @Get()
-  findAll(@Query() query: { status?: string; date?: string; search?: string }) {
-    return this.passesService.findAll(query);
+  @RequirePermissions('passes.view_own', 'passes.view_all')
+  findAll(@Query() query: { status?: string; date?: string; search?: string }, @Req() req: any) {
+    return this.passesService.findAll(query, req.user);
   }
 
-  @UseGuards(AuthGuard('jwt'))
   @Get('journal')
-  getJournal(@Query('date') date?: string) {
-    return this.passesService.getJournal(date);
+  @RequirePermissions('passes.reception', 'passes.view_all')
+  getJournal(@Query('date') date?: string, @Req() req?: any) {
+    return this.passesService.getJournal(date, req?.user);
   }
 
-  @UseGuards(AuthGuard('jwt'))
   @Get('stats')
-  getStats() {
-    return this.passesService.getStats();
+  @RequirePermissions('passes.view_own', 'passes.view_all')
+  getStats(@Req() req: any) {
+    return this.passesService.getStats(req.user);
   }
 
-  @UseGuards(AuthGuard('jwt'))
   @Get('lookup/:passNumber')
+  @RequirePermissions('passes.lookup', 'passes.reception')
   lookup(@Param('passNumber') passNumber: string) {
-    return this.passesService.lookup(decodeURIComponent(passNumber));
+    return this.passesService.lookup(passNumber);
   }
 
-  @UseGuards(AuthGuard('jwt'))
   @Get(':id')
-  findOne(@Param('id') id: string) {
-    return this.passesService.findOne(id);
+  @RequirePermissions('passes.view_own', 'passes.view_all')
+  findOne(@Param('id') id: string, @Req() req: any) {
+    return this.passesService.findOne(id, req.user);
   }
 
-  @UseGuards(AuthGuard('jwt'))
   @Post()
+  @RequirePermissions('passes.create')
   create(@Body() dto: CreatePassDto, @Req() req: any) {
     return this.passesService.create(dto, req.user);
   }
 
-  @UseGuards(AuthGuard('jwt'))
   @Patch(':id/status')
+  @RequirePermissions('passes.approve')
   updateStatus(@Param('id') id: string, @Body() dto: UpdateStatusDto, @Req() req: any) {
     return this.passesService.updateStatus(id, dto, req.user);
   }
 
-  @UseGuards(AuthGuard('jwt'))
   @Post(':id/check-in')
+  @RequirePermissions('passes.reception')
   checkIn(@Param('id') id: string) {
     return this.passesService.checkIn(id);
   }
 
-  @UseGuards(AuthGuard('jwt'))
   @Post(':id/check-out')
+  @RequirePermissions('passes.reception')
   checkOut(@Param('id') id: string) {
     return this.passesService.checkOut(id);
   }

@@ -108,7 +108,8 @@ export default function LoginPage() {
 
           <div className="mt-6 pt-4 border-t border-[var(--border)] text-xs text-[var(--muted)] space-y-1">
             <p className="font-medium text-[var(--text)]">Тестовые аккаунты:</p>
-            <p>Арендатор: tenant@pass24.local / tenant123</p>
+            <p>Арендатор (2 БЦ): tenant@pass24.local / tenant123</p>
+            <p>Арендатор 2: tenant2@pass24.local / tenant123</p>
             <p>Ресепшн: security@pass24.local / security123</p>
             <p>Админ: admin@pass24.local / admin123</p>
           </div>

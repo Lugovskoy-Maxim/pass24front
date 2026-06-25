@@ -9,7 +9,7 @@ export type AuthorizationDocument = Authorization & Document;
  */
 @Schema({ timestamps: true, collection: 'authorizations' })
 export class Authorization {
-  @Prop({ type: Types.ObjectId, ref: 'User', required: true, index: true })
+  @Prop({ type: Types.ObjectId, ref: 'User', required: true })
   principal: Types.ObjectId; // Владелец права (кому дали доверенность)
 
   @Prop({ type: Types.ObjectId, ref: 'User', required: true, index: true })

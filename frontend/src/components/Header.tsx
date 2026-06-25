@@ -2,10 +2,11 @@
 
 import Link from 'next/link';
 import { usePathname } from 'next/navigation';
-import { Building2, LogOut, Plus, List, ClipboardList, Settings } from 'lucide-react';
+import { Building2, LogOut, Plus, List, ClipboardList, Settings, Bookmark } from 'lucide-react';
 import { useAuth } from '@/lib/auth';
 import { useConfig } from '@/hooks/useConfig';
-import { ROLE_LABELS } from '@/lib/api';
+import { ROLE_LABELS, formatTenantOffices } from '@/lib/api';
+import { hasAnyPermission, hasPermission } from '@/lib/permissions';
 
 export function Header() {
   const { user, logout } = useAuth();
@@ -14,17 +15,19 @@ export function Header() {
 
   if (!user) return null;
 
-  const isSecurity = user.role === 'security' || user.role === 'admin';
-
   const links = [
-    { href: '/dashboard', label: 'Главная', icon: Building2 },
-    { href: '/passes', label: 'Пропуска', icon: List },
-    ...(user.role === 'tenant' || user.role === 'admin'
-      ? [{ href: '/passes/new', label: 'Заказать', icon: Plus }]
-      : []),
-    ...(isSecurity ? [{ href: '/control', label: 'Ресепшн', icon: ClipboardList }] : []),
-    ...(user.role === 'admin' ? [{ href: '/admin', label: 'Админ', icon: Settings }] : []),
-  ];
+    { href: '/dashboard', label: 'Главная', icon: Building2, show: true },
+    { href: '/templates', label: 'Шаблоны', icon: Bookmark, show: hasPermission(user, 'passes.templates') },
+    { href: '/passes', label: 'Пропуска', icon: List, show: hasAnyPermission(user, 'passes.view_own', 'passes.view_all') },
+    {
+      href: '/passes/new',
+      label: 'Заказать',
+      icon: Plus,
+      show: hasPermission(user, 'passes.create') && !hasPermission(user, 'passes.templates'),
+    },
+    { href: '/control', label: 'Ресепшн', icon: ClipboardList, show: hasAnyPermission(user, 'passes.reception', 'passes.lookup') },
+    { href: '/admin', label: 'Админ', icon: Settings, show: hasPermission(user, 'admin.panel') },
+  ].filter((l) => l.show);
 
   return (
     <header className="bg-white border-b border-[var(--border)] sticky top-0 z-50">
@@ -59,7 +62,9 @@ export function Header() {
             <div className="text-xs text-[var(--muted)]">
               {ROLE_LABELS[user.role]}
               {user.company && ` · ${user.company}`}
-              {user.office && ` · оф. ${user.office}`}
+              {user.offices?.length
+                ? ` · ${formatTenantOffices(user.offices)}`
+                : user.office && ` · оф. ${user.office}`}
             </div>
           </div>
           <button onClick={logout} className="btn btn-secondary p-2" title="Выйти">

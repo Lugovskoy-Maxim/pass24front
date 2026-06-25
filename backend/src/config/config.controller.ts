@@ -1,7 +1,11 @@
-import { Controller, Get } from '@nestjs/common';
+import { Controller, Get, Req, UseGuards } from '@nestjs/common';
+import { AuthGuard } from '@nestjs/passport';
+import { AccessConfigService } from '../access/access-config.service';
 
 @Controller('config')
 export class ConfigController {
+  constructor(private readonly accessConfigService: AccessConfigService) {}
+
   @Get()
   getConfig() {
     return {
@@ -12,6 +16,19 @@ export class ConfigController {
       contactEmail: 'info@pass24.local',
       receptionFloor: '1',
       maxPassesPerDay: 200,
+    };
+  }
+
+  @UseGuards(AuthGuard('jwt'))
+  @Get('access')
+  async getAccessConfig(@Req() req: any) {
+    const config = await this.accessConfigService.getConfig();
+    const permissions = await this.accessConfigService.getPermissionsForRole(req.user.role);
+    return {
+      enabledPassTypes: config.enabledPassTypes,
+      passTypeLabels: config.passTypeLabels,
+      permissions,
+      rolePermissions: config.rolePermissions,
     };
   }
 }

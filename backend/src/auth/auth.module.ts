@@ -6,11 +6,16 @@ import { MongooseModule } from '@nestjs/mongoose';
 import { AuthController } from './auth.controller';
 import { AuthService } from './auth.service';
 import { JwtStrategy } from './jwt.strategy';
-import { User, UserSchema } from '../schemas';
+import { PermissionsGuard } from './permissions.guard';
+import { Office, OfficeSchema, Property, PropertySchema, User, UserSchema } from '../schemas';
 
 @Module({
   imports: [
-    MongooseModule.forFeature([{ name: User.name, schema: UserSchema }]),
+    MongooseModule.forFeature([
+      { name: User.name, schema: UserSchema },
+      { name: Office.name, schema: OfficeSchema },
+      { name: Property.name, schema: PropertySchema },
+    ]),
     PassportModule.register({ defaultStrategy: 'jwt' }),
     JwtModule.registerAsync({
       imports: [ConfigModule],
@@ -22,7 +27,7 @@ import { User, UserSchema } from '../schemas';
     }),
   ],
   controllers: [AuthController],
-  providers: [AuthService, JwtStrategy],
-  exports: [AuthService, JwtModule],
+  providers: [AuthService, JwtStrategy, PermissionsGuard],
+  exports: [AuthService, JwtModule, PermissionsGuard],
 })
 export class AuthModule {}

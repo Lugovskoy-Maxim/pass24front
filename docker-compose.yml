@@ -1,5 +1,3 @@
-version: '3.8'
-
 services:
   # MongoDB database
   mongo:
@@ -33,12 +31,16 @@ services:
     container_name: pass24-backend
     restart: unless-stopped
     ports:
-      - "4000:4000"
+      # Только IPv4: localhost на Windows уходит в ::1 и зависает
+      - "127.0.0.1:4000:4000"
     environment:
       - PORT=4000
       - MONGODB_URI=mongodb://mongo:27017/pass24
       - JWT_SECRET=pass24-super-secret-key-2026
       - JWT_EXPIRES_IN=7d
+      - ADMIN_EMAIL=admin@pass24.local
+      - ADMIN_PASSWORD=admin123
+      - ADMIN_FULL_NAME=Администратор БЦ
     depends_on:
       mongo:
         condition: service_healthy
@@ -53,14 +55,16 @@ services:
     build:
       context: ./frontend
       dockerfile: Dockerfile
+      args:
+        NEXT_PUBLIC_API_URL: http://127.0.0.1:4000/api
     container_name: pass24-frontend
     restart: unless-stopped
     ports:
-      - "3000:3000"
+      # Только IPv4: на Windows localhost → ::1, а Docker IPv6-проброс часто зависает
+      - "127.0.0.1:3000:3000"
     environment:
-      - NEXT_PUBLIC_API_URL=http://localhost:4000/api
-      # When accessing from browser, always use localhost:4000
-      # (not "backend" hostname, because browser runs outside Docker network)
+      - HOSTNAME=0.0.0.0
+      - NEXT_PUBLIC_API_URL=http://127.0.0.1:4000/api
     depends_on:
       - backend
     # For development hot-reload (uncomment if needed):

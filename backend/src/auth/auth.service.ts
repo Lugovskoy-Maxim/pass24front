@@ -1,9 +1,10 @@
 import { Injectable, UnauthorizedException, ConflictException } from '@nestjs/common';
 import { InjectModel } from '@nestjs/mongoose';
-import { Model } from 'mongoose';
+import { Model, Types } from 'mongoose';
 import * as bcrypt from 'bcryptjs';
 import { JwtService } from '@nestjs/jwt';
-import { User, UserDocument } from '../schemas';
+import { AccessConfigService } from '../access/access-config.service';
+import { Office, OfficeDocument, Property, PropertyDocument, User, UserDocument } from '../schemas';
 import { LoginDto } from './dto/login.dto';
 import { RegisterDto } from './dto/register.dto';
 
@@ -11,7 +12,10 @@ import { RegisterDto } from './dto/register.dto';
 export class AuthService {
   constructor(
     @InjectModel(User.name) private userModel: Model<UserDocument>,
+    @InjectModel(Office.name) private officeModel: Model<OfficeDocument>,
+    @InjectModel(Property.name) private propertyModel: Model<PropertyDocument>,
     private jwtService: JwtService,
+    private accessConfigService: AccessConfigService,
   ) {}
 
   async register(dto: RegisterDto) {
@@ -33,8 +37,9 @@ export class AuthService {
       password: hashed, // Note: we need to add password field to schema temporarily
     } as any);
 
+    const offices = await this.getUserOffices(user._id.toString());
     const token = this.generateToken(user);
-    return { user: this.toUserDto(user), token };
+    return { user: await this.toUserDto(user, offices), token };
   }
 
   async login(dto: LoginDto) {
@@ -53,14 +58,34 @@ export class AuthService {
       throw new UnauthorizedException('Неверные учетные данные');
     }
 
+    const offices = await this.getUserOffices(user._id.toString());
     const token = this.generateToken(user);
-    return { user: this.toUserDto(user), token };
+    return { user: await this.toUserDto(user, offices), token };
   }
 
   async me(userId: string) {
     const user = await this.userModel.findById(userId);
     if (!user) throw new UnauthorizedException();
-    return { user: this.toUserDto(user) };
+    const offices = await this.getUserOffices(userId);
+    return { user: await this.toUserDto(user, offices) };
+  }
+
+  async getUserOffices(userId: string) {
+    const offices = await this.officeModel.find({ tenantId: new Types.ObjectId(userId), isActive: true }).lean();
+    if (!offices.length) return [];
+
+    const propertyIds = [...new Set(offices.map((o) => o.property.toString()))];
+    const properties = await this.propertyModel.find({ _id: { $in: propertyIds } }).lean();
+    const propertyMap = new Map(properties.map((p) => [p._id.toString(), p]));
+
+    return offices.map((o) => ({
+      id: o._id.toString(),
+      propertyId: o.property.toString(),
+      businessCenterName: propertyMap.get(o.property.toString())?.name,
+      number: o.number,
+      floor: o.floor,
+      company: o.company,
+    }));
   }
 
   private generateToken(user: any) {
@@ -71,7 +96,9 @@ export class AuthService {
     });
   }
 
-  private toUserDto(user: any) {
+  private async toUserDto(user: any, offices: any[] = []) {
+    const permissions = await this.accessConfigService.getPermissionsForRole(user.role || 'tenant');
+    const { enabledPassTypes } = await this.accessConfigService.getConfig();
     return {
       id: user._id.toString(),
       email: user.email,
@@ -81,6 +108,9 @@ export class AuthService {
       role: user.role || 'tenant',
       office: user.office,
       floor: user.floor,
+      offices,
+      permissions,
+      enabledPassTypes,
     };
   }
 
@@ -101,7 +131,8 @@ export class AuthService {
       } as any);
     }
 
+    const offices = await this.getUserOffices(user._id.toString());
     const token = this.generateToken(user);
-    return { user: this.toUserDto(user), token };
+    return { user: await this.toUserDto(user, offices), token };
   }
 }

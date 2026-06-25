@@ -3,7 +3,7 @@
 import Link from 'next/link';
 import { usePathname } from 'next/navigation';
 import {
-  LayoutDashboard, Users, CreditCard, ScrollText, Settings, ArrowLeft, Shield, DoorOpen,
+  LayoutDashboard, Users, ScrollText, Settings, ArrowLeft, Shield, DoorOpen, KeyRound,
 } from 'lucide-react';
 import { ProtectedLayout } from './ProtectedLayout';
 
@@ -11,7 +11,7 @@ const NAV = [
   { href: '/admin', label: 'Обзор', icon: LayoutDashboard, exact: true },
   { href: '/admin/users', label: 'Пользователи', icon: Users },
   { href: '/admin/offices', label: 'Офисы', icon: DoorOpen },
-  { href: '/admin/pricing', label: 'Тарифы', icon: CreditCard },
+  { href: '/admin/permissions', label: 'Права и пропуска', icon: KeyRound },
   { href: '/admin/audit', label: 'Журнал действий', icon: ScrollText },
   { href: '/admin/settings', label: 'Настройки', icon: Settings },
 ];
@@ -20,7 +20,7 @@ export function AdminLayout({ children, title }: { children: React.ReactNode; ti
   const pathname = usePathname();
 
   return (
-    <ProtectedLayout roles={['admin']}>
+    <ProtectedLayout permissions={['admin.panel']}>
       <div className="flex flex-col lg:flex-row gap-6">
         <aside className="lg:w-56 shrink-0">
           <div className="card p-4 sticky top-20">

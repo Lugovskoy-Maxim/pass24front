@@ -5,7 +5,7 @@ export type VehicleDocument = Vehicle & Document;
 
 @Schema({ timestamps: true, collection: 'vehicles' })
 export class Vehicle {
-  @Prop({ required: true, uppercase: true, trim: true, index: true })
+  @Prop({ required: true, uppercase: true, trim: true })
   plateNumber: string; // Нормализованный номер: "A123BC77"
 
   @Prop({ trim: true })

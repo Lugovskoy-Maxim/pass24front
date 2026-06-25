@@ -1,6 +1,7 @@
 'use client';
 
 import { useEffect, useState, useCallback } from 'react';
+import { useRouter } from 'next/navigation';
 import { Search, X } from 'lucide-react';
 import { ProtectedLayout } from '@/components/ProtectedLayout';
 import { PassCard } from '@/components/PassCard';
@@ -10,10 +11,12 @@ import { useDebounce } from '@/hooks/useDebounce';
 import { useConfig } from '@/hooks/useConfig';
 import { useToast } from '@/components/Toast';
 import { api, Pass, STATUS_LABELS } from '@/lib/api';
+import { hasAnyPermission, hasPermission } from '@/lib/permissions';
 import { StatusBadge } from '@/components/StatusBadge';
 
 export default function PassesPage() {
   const { user } = useAuth();
+  const router = useRouter();
   const config = useConfig();
   const { toast } = useToast();
   const [passes, setPasses] = useState<Pass[]>([]);
@@ -27,8 +30,16 @@ export default function PassesPage() {
   const [actionLoading, setActionLoading] = useState(false);
   const [rejectReason, setRejectReason] = useState('');
 
-  const isSecurity = user?.role === 'security' || user?.role === 'admin';
+  const canViewPasses = hasAnyPermission(user, 'passes.view_own', 'passes.view_all');
+  const canApprove = hasPermission(user, 'passes.approve');
+  const canReception = hasPermission(user, 'passes.reception');
   const isOwner = selected && user && (selected.createdBy === user.id || user.role === 'admin');
+
+  useEffect(() => {
+    if (user && !canViewPasses && hasPermission(user, 'passes.templates')) {
+      router.replace('/templates');
+    }
+  }, [user, canViewPasses, router]);
   const canPrint = selected && ['approved', 'active'].includes(selected.status);
 
   const load = useCallback(() => {
@@ -69,8 +80,10 @@ export default function PassesPage() {
     }
   };
 
+  if (user && !canViewPasses) return null;
+
   return (
-    <ProtectedLayout>
+    <ProtectedLayout anyPermissions={['passes.view_own', 'passes.view_all']}>
       <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-4 mb-6">
         <h1 className="text-2xl font-bold">Пропуска</h1>
         <div className="flex flex-wrap gap-2">
@@ -118,7 +131,7 @@ export default function PassesPage() {
 
             {canPrint && (
               <div className="mb-5 pb-5 border-b border-[var(--border)]">
-                <PassPrintCard pass={selected} businessCenterName={config?.businessCenterName} />
+                <PassPrintCard pass={selected} businessCenterName={selected.businessCenterName || config?.businessCenterName} />
               </div>
             )}
 
@@ -149,7 +162,7 @@ export default function PassesPage() {
                   <dd className="text-right">{selected.visitorPhone}</dd>
                 </div>
               )}
-              {selected.creatorName && isSecurity && (
+              {selected.creatorName && canApprove && (
                 <div className="flex justify-between gap-4">
                   <dt className="text-[var(--muted)] shrink-0">Заказал</dt>
                   <dd className="text-right">{selected.creatorName}{selected.creatorCompany && ` (${selected.creatorCompany})`}</dd>
@@ -159,6 +172,12 @@ export default function PassesPage() {
                 <dt className="text-[var(--muted)] shrink-0">Дата визита</dt>
                 <dd className="text-right">{selected.visitDate} {selected.visitTimeFrom && `${selected.visitTimeFrom}–${selected.visitTimeTo}`}</dd>
               </div>
+              {selected.businessCenterName && (
+                <div className="flex justify-between gap-4">
+                  <dt className="text-[var(--muted)] shrink-0">Бизнес-центр</dt>
+                  <dd className="text-right">{selected.businessCenterName}</dd>
+                </div>
+              )}
               <div className="flex justify-between gap-4">
                 <dt className="text-[var(--muted)] shrink-0">Офис</dt>
                 <dd className="text-right">оф. {selected.office}{selected.floor && `, ${selected.floor} эт.`}</dd>
@@ -196,17 +215,17 @@ export default function PassesPage() {
             </dl>
 
             <div className="mt-5 pt-4 border-t border-[var(--border)] space-y-3">
-              {isSecurity && selected.status === 'pending' && (
+              {canApprove && selected.status === 'pending' && (
                 <>
                   <button className="btn btn-success w-full" disabled={actionLoading} onClick={() => handleAction(selected.id, 'approve')}>Одобрить</button>
                   <input className="input" placeholder="Причина отклонения" value={rejectReason} onChange={(e) => setRejectReason(e.target.value)} />
                   <button className="btn btn-danger w-full" disabled={actionLoading || !rejectReason.trim()} onClick={() => handleAction(selected.id, 'reject', rejectReason)}>Отклонить</button>
                 </>
               )}
-              {isSecurity && selected.status === 'approved' && (
+              {canReception && selected.status === 'approved' && (
                 <button className="btn btn-success w-full" disabled={actionLoading} onClick={() => handleAction(selected.id, 'checkin')}>Впустить в здание</button>
               )}
-              {isSecurity && selected.status === 'active' && (
+              {canReception && selected.status === 'active' && (
                 <button className="btn btn-primary w-full" disabled={actionLoading} onClick={() => handleAction(selected.id, 'checkout')}>Зафиксировать выход</button>
               )}
               {isOwner && selected.status === 'pending' && (

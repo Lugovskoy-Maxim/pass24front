@@ -6,13 +6,13 @@ export type UserDocument = User & Document;
 
 @Schema({ timestamps: true, collection: 'users' })
 export class User {
-  @Prop({ unique: true, sparse: true, trim: true, index: true })
+  @Prop({ unique: true, sparse: true, trim: true })
   phone?: string;
 
   @Prop({ trim: true })
   fullName?: string;
 
-  @Prop({ trim: true, lowercase: true, unique: true, sparse: true, index: true })
+  @Prop({ trim: true, lowercase: true, unique: true, sparse: true })
   email?: string;
 
   @Prop({ select: false })
@@ -54,7 +54,6 @@ export class User {
 
 export const UserSchema = SchemaFactory.createForClass(User);
 
-UserSchema.index({ phone: 1 }, { unique: true });
 UserSchema.index({ properties: 1 });
 UserSchema.index({ role: 1, isActive: 1 });
 UserSchema.index({ fullName: 'text' });

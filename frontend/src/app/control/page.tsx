@@ -113,7 +113,7 @@ export default function ControlPage() {
   const completed = passes.filter((p) => p.status === 'completed');
 
   return (
-    <ProtectedLayout roles={['security', 'admin']}>
+    <ProtectedLayout anyPermissions={['passes.reception', 'passes.lookup']}>
       <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-4 mb-6">
         <div>
           <h1 className="text-2xl font-bold">Панель ресепшн</h1>

@@ -39,5 +39,4 @@ export const PropertySchema = SchemaFactory.createForClass(Property);
 
 // Индексы
 PropertySchema.index({ name: 'text', address: 'text' });
-PropertySchema.index({ code: 1 });
 PropertySchema.index({ isActive: 1 });

@@ -55,9 +55,10 @@ export function PassCard({ pass, actions, onClick }: PassCardProps) {
             {pass.visitTimeTo && `–${pass.visitTimeTo}`}
           </span>
         </div>
-        <div className="flex items-center gap-1.5">
+        <div className="flex items-center gap-1.5 col-span-2">
           <MapPin className="w-3.5 h-3.5 shrink-0" />
           <span>
+            {pass.businessCenterName && `${pass.businessCenterName} · `}
             оф. {pass.office}
             {pass.floor && `, ${pass.floor} эт.`}
           </span>

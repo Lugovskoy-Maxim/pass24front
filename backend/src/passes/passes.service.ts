@@ -1,13 +1,21 @@
-import { Injectable, NotFoundException } from '@nestjs/common';
+import { BadRequestException, ForbiddenException, Injectable, NotFoundException } from '@nestjs/common';
+import { AccessConfigService } from '../access/access-config.service';
 import { InjectModel } from '@nestjs/mongoose';
-import { Model } from 'mongoose';
-import { Pass, PassDocument } from '../schemas';
+import { Model, Types } from 'mongoose';
+import { Office, OfficeDocument, Pass, PassDocument, Property, PropertyDocument } from '../schemas';
 import { CreatePassDto } from './dto/create-pass.dto';
 import { UpdateStatusDto } from './dto/update-status.dto';
+import { PassTemplatesService } from './pass-templates.service';
 
 @Injectable()
 export class PassesService {
-  constructor(@InjectModel(Pass.name) private passModel: Model<PassDocument>) {}
+  constructor(
+    @InjectModel(Pass.name) private passModel: Model<PassDocument>,
+    @InjectModel(Office.name) private officeModel: Model<OfficeDocument>,
+    @InjectModel(Property.name) private propertyModel: Model<PropertyDocument>,
+    private accessConfigService: AccessConfigService,
+    private passTemplatesService: PassTemplatesService,
+  ) {}
 
   private generatePassNumber() {
     const year = new Date().getFullYear();
@@ -15,42 +23,67 @@ export class PassesService {
     return `PS-${year}-${random}`;
   }
 
-  async findAll(params: { status?: string; date?: string; search?: string }) {
-    const filter: any = {};
+  private async buildAccessFilter(user?: any) {
+    if (!user || user.role === 'admin' || user.role === 'security') {
+      return {};
+    }
+
+    return { createdBy: new Types.ObjectId(user.userId) };
+  }
+
+  async findAll(params: { status?: string; date?: string; search?: string }, user?: any) {
+    const filter: any = { ...(await this.buildAccessFilter(user)) };
 
     if (params.status) filter.status = params.status;
     if (params.date) filter.visitDate = params.date;
 
     if (params.search) {
-      filter.$or = [
-        { visitorName: new RegExp(params.search, 'i') },
-        { vehiclePlate: new RegExp(params.search, 'i') },
-        { companyName: new RegExp(params.search, 'i') },
-      ];
+      filter.$and = filter.$and || [];
+      filter.$and.push({
+        $or: [
+          { visitorName: new RegExp(params.search, 'i') },
+          { vehiclePlate: new RegExp(params.search, 'i') },
+          { companyName: new RegExp(params.search, 'i') },
+          { businessCenterName: new RegExp(params.search, 'i') },
+        ],
+      });
     }
 
     const passes = await this.passModel.find(filter).sort({ createdAt: -1 }).lean();
-    return { passes: passes.map(this.mapToFrontend) };
+    return { passes: passes.map((p) => this.mapToFrontend(p, user)) };
   }
 
-  async findOne(id: string) {
+  async findOne(id: string, user?: any) {
     const pass = await this.passModel.findById(id).lean();
     if (!pass) throw new NotFoundException('Пропуск не найден');
-    return { pass: this.mapToFrontend(pass) };
+    await this.ensurePassAccess(pass, user);
+    return { pass: this.mapToFrontend(pass, user) };
   }
 
   async create(dto: CreatePassDto, user: any) {
-    const passNumber = this.generatePassNumber();
+    const enabled = await this.accessConfigService.isPassTypeEnabled(dto.passType);
+    if (!enabled) {
+      throw new BadRequestException('Этот тип пропуска отключён администратором');
+    }
 
+    const resolved = await this.resolveOfficeFields(dto, user);
+
+    const passNumber = this.generatePassNumber();
     const doc = await this.passModel.create({
       ...dto,
+      ...resolved,
       passNumber,
       status: 'pending',
       createdBy: user?.userId,
       creatorName: user?.email,
+      creatorCompany: resolved.companyName || dto.companyName,
     });
 
-    return { pass: this.mapToFrontend(doc) };
+    if (user?.role === 'tenant') {
+      await this.passTemplatesService.upsertFromPass(doc.toObject(), user.userId);
+    }
+
+    return { pass: this.mapToFrontend(doc, user) };
   }
 
   async updateStatus(id: string, dto: UpdateStatusDto, actor?: any) {
@@ -89,22 +122,22 @@ export class PassesService {
     return { pass: this.mapToFrontend(pass) };
   }
 
-  async getJournal(date?: string) {
+  async getJournal(date?: string, user?: any) {
     const targetDate = date || new Date().toISOString().slice(0, 10);
+    const accessFilter = await this.buildAccessFilter(user);
 
     const passes = await this.passModel
-      .find({ visitDate: targetDate })
+      .find({ visitDate: targetDate, ...accessFilter })
       .sort({ createdAt: -1 })
       .lean();
 
-    const mapped = passes.map(this.mapToFrontend);
-
+    const mapped = passes.map((p) => this.mapToFrontend(p, user));
     const stats = {
       total: mapped.length,
-      pending: mapped.filter(p => p.status === 'pending').length,
-      active: mapped.filter(p => p.status === 'active').length,
-      completed: mapped.filter(p => p.status === 'completed').length,
-      approved: mapped.filter(p => p.status === 'approved').length,
+      pending: mapped.filter((p) => p.status === 'pending').length,
+      active: mapped.filter((p) => p.status === 'active').length,
+      completed: mapped.filter((p) => p.status === 'completed').length,
+      approved: mapped.filter((p) => p.status === 'approved').length,
     };
 
     return { date: targetDate, stats, passes: mapped };
@@ -116,19 +149,63 @@ export class PassesService {
     return { pass: this.mapToFrontend(pass) };
   }
 
-  async getStats() {
+  async getStats(user?: any) {
     const today = new Date().toISOString().slice(0, 10);
-    const passes = await this.passModel.find().lean();
-
-    const todayPasses = passes.filter(p => p.visitDate === today);
+    const accessFilter = await this.buildAccessFilter(user);
+    const passes = await this.passModel.find(accessFilter).lean();
+    const todayPasses = passes.filter((p) => p.visitDate === today);
 
     return {
       today,
       todayCount: todayPasses.length,
-      weekCount: passes.length, // simplified
+      weekCount: passes.length,
       byStatus: this.countBy(passes, 'status'),
       todayByType: this.countBy(todayPasses, 'passType'),
     };
+  }
+
+  private async resolveOfficeFields(dto: CreatePassDto, user: any) {
+    if (dto.officeId) {
+      const office = await this.officeModel.findById(dto.officeId).lean();
+      if (!office || !office.isActive) {
+        throw new NotFoundException('Офис не найден');
+      }
+
+      if (user.role === 'tenant') {
+        const ownsOffice =
+          office.tenantId?.toString() === user.userId;
+        if (!ownsOffice) {
+          throw new ForbiddenException('Вы можете заказывать пропуска только в свои офисы');
+        }
+      }
+
+      const property = await this.propertyModel.findById(office.property).lean();
+      return {
+        officeId: office._id,
+        property: office.property,
+        businessCenterName: property?.name,
+        office: office.number,
+        floor: office.floor,
+        companyName: dto.companyName || office.company,
+      };
+    }
+
+    if (!dto.office?.trim()) {
+      throw new BadRequestException('Укажите офис из реестра');
+    }
+
+    return {
+      office: dto.office.trim(),
+      floor: dto.floor,
+    };
+  }
+
+  private async ensurePassAccess(pass: any, user?: any) {
+    if (!user || user.role === 'admin' || user.role === 'security') return;
+
+    if (pass.createdBy?.toString() === user.userId) return;
+
+    throw new ForbiddenException('Нет доступа к этому пропуску');
   }
 
   private countBy(arr: any[], key: string) {
@@ -139,13 +216,14 @@ export class PassesService {
     }, {} as Record<string, number>);
   }
 
-  private mapToFrontend(doc: any) {
+  private mapToFrontend(doc: any, user?: any) {
+    const isTenant = user?.role === 'tenant';
     return {
       id: doc._id.toString(),
       passNumber: doc.passNumber,
-      createdBy: doc.createdBy?.toString() || '',
-      creatorName: doc.creatorName,
-      creatorCompany: doc.creatorCompany,
+      createdBy: isTenant ? undefined : doc.createdBy?.toString() || '',
+      creatorName: isTenant ? undefined : doc.creatorName,
+      creatorCompany: isTenant ? undefined : doc.creatorCompany,
       visitorName: doc.visitorName,
       visitorPhone: doc.visitorPhone,
       companyName: doc.companyName,
@@ -156,6 +234,9 @@ export class PassesService {
       visitDate: doc.visitDate,
       visitTimeFrom: doc.visitTimeFrom,
       visitTimeTo: doc.visitTimeTo,
+      propertyId: doc.property?.toString(),
+      officeId: doc.officeId?.toString(),
+      businessCenterName: doc.businessCenterName,
       office: doc.office,
       floor: doc.floor,
       comment: doc.comment,

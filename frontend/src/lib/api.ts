@@ -1,6 +1,15 @@
-const API_URL = process.env.NEXT_PUBLIC_API_URL || 'http://localhost:4000/api';
+const API_URL = process.env.NEXT_PUBLIC_API_URL || 'http://127.0.0.1:4000/api';
 
 export type UserRole = 'tenant' | 'security' | 'admin';
+
+export interface TenantOffice {
+  id: string;
+  propertyId: string;
+  businessCenterName?: string;
+  number: string;
+  floor: string;
+  company?: string;
+}
 
 export interface User {
   id: string;
@@ -11,6 +20,23 @@ export interface User {
   role: UserRole;
   office?: string;
   floor?: string;
+  offices?: TenantOffice[];
+  permissions?: string[];
+  enabledPassTypes?: PassType[];
+}
+
+export interface PermissionMeta {
+  key: string;
+  label: string;
+  group: string;
+}
+
+export interface AccessConfig {
+  enabledPassTypes: PassType[];
+  rolePermissions: Record<string, string[]>;
+  permissions: PermissionMeta[];
+  passTypeLabels: Record<PassType, string>;
+  roles: string[];
 }
 
 export type PassStatus = 'pending' | 'approved' | 'rejected' | 'active' | 'completed' | 'expired' | 'cancelled';
@@ -19,7 +45,7 @@ export type PassType = 'visitor' | 'parking' | 'delivery' | 'contractor';
 export interface Pass {
   id: string;
   passNumber: string;
-  createdBy: string;
+  createdBy?: string;
   creatorName?: string;
   creatorCompany?: string;
   visitorName: string;
@@ -32,6 +58,9 @@ export interface Pass {
   visitDate: string;
   visitTimeFrom?: string;
   visitTimeTo?: string;
+  propertyId?: string;
+  officeId?: string;
+  businessCenterName?: string;
   office: string;
   floor?: string;
   comment?: string;
@@ -73,7 +102,7 @@ async function request<T>(path: string, options: RequestInit = {}): Promise<T> {
         window.location.href = '/login';
       }
     }
-    throw new Error(data.error || 'Ошибка запроса');
+    throw new Error(data.message || data.error || 'Ошибка запроса');
   }
   return data as T;
 }
@@ -120,7 +149,8 @@ export const api = {
     visitDate: string;
     visitTimeFrom?: string;
     visitTimeTo?: string;
-    office: string;
+    officeId?: string;
+    office?: string;
     floor?: string;
     comment?: string;
   }) =>
@@ -140,10 +170,33 @@ export const api = {
 
   getConfig: () => request<BcConfig>('/config'),
 
+  getAccessConfig: () => request<{
+    enabledPassTypes: PassType[];
+    passTypeLabels: Record<PassType, string>;
+    permissions: string[];
+    rolePermissions: Record<string, string[]>;
+  }>('/config/access'),
+
   getStats: () => request<PassStats>('/passes/stats'),
 
   lookupPass: (passNumber: string) =>
     request<{ pass: Pass }>(`/passes/lookup/${encodeURIComponent(passNumber)}`),
+
+  getPassTemplates: () => request<{ templates: PassTemplate[] }>('/pass-templates'),
+
+  getPassTemplate: (id: string) => request<{ template: PassTemplate }>(`/pass-templates/${id}`),
+
+  createPassTemplate: (data: CreatePassTemplateData) =>
+    request<{ template: PassTemplate }>('/pass-templates', { method: 'POST', body: JSON.stringify(data) }),
+
+  updatePassTemplate: (id: string, data: Partial<CreatePassTemplateData>) =>
+    request<{ template: PassTemplate }>(`/pass-templates/${id}`, { method: 'PATCH', body: JSON.stringify(data) }),
+
+  deletePassTemplate: (id: string) =>
+    request<{ ok: boolean }>(`/pass-templates/${id}`, { method: 'DELETE' }),
+
+  syncPassTemplates: () =>
+    request<{ templates: PassTemplate[]; imported: number }>('/pass-templates/sync-from-passes', { method: 'POST' }),
 
   admin: {
     dashboard: () => request<AdminDashboard>('/admin/dashboard'),
@@ -162,12 +215,21 @@ export const api = {
     updateUser: (id: string, data: Partial<CreateUserData & { isActive: boolean }>) =>
       request<{ user: AdminUser }>(`/admin/users/${id}`, { method: 'PATCH', body: JSON.stringify(data) }),
 
-    getPricing: () => request<{ plans: PricingPlan[] }>('/admin/pricing'),
-
-    updatePricing: (id: string, data: Partial<PricingPlan>) =>
-      request<{ plan: PricingPlan }>(`/admin/pricing/${id}`, { method: 'PATCH', body: JSON.stringify(data) }),
-
     getBusinessCenters: () => request<{ businessCenters: BusinessCenter[] }>('/admin/business-centers'),
+
+    createBusinessCenter: (data: { name: string; address: string; code?: string }) =>
+      request<{ businessCenter: BusinessCenter }>('/admin/business-centers', { method: 'POST', body: JSON.stringify(data) }),
+
+    seedTestData: () =>
+      request<{ message: string; businessCenters: number; offices: number; tenants: number; skipped: boolean }>(
+        '/admin/seed-test-data',
+        { method: 'POST' },
+      ),
+
+    getAccessConfig: () => request<AccessConfig>('/admin/access-config'),
+
+    updateAccessConfig: (data: Partial<Pick<AccessConfig, 'enabledPassTypes' | 'rolePermissions'>>) =>
+      request<{ config: AccessConfig }>('/admin/access-config', { method: 'PATCH', body: JSON.stringify(data) }),
 
     getAudit: (offset = 0) => request<{ entries: AuditEntry[]; total: number }>(`/admin/audit?offset=${offset}`),
 
@@ -217,6 +279,8 @@ export interface PassStats {
 
 export interface Office {
   id: string;
+  propertyId: string;
+  businessCenterName?: string;
   number: string;
   floor: string;
   areaSqm?: number;
@@ -228,6 +292,7 @@ export interface Office {
 }
 
 export interface CreateOfficeData {
+  propertyId: string;
   number: string;
   floor: string;
   areaSqm?: number;
@@ -276,6 +341,9 @@ export interface AdminUser {
   isActive: boolean;
   createdAt: string;
   passesCount?: number;
+  offices?: TenantOffice[];
+  businessCenters?: { id: string; name: string }[];
+  propertyIds?: string[];
 }
 
 export interface CreateUserData {
@@ -287,16 +355,55 @@ export interface CreateUserData {
   role: UserRole;
   office?: string;
   floor?: string;
+  officeIds?: string[];
+  propertyIds?: string[];
 }
 
-export interface PricingPlan {
+export function formatTenantOffices(offices?: TenantOffice[]): string {
+  if (!offices?.length) return '';
+  return offices
+    .map((o) => `${o.businessCenterName ? `${o.businessCenterName}: ` : ''}оф. ${o.number}${o.floor ? ` (${o.floor} эт.)` : ''}`)
+    .join(' · ');
+}
+
+export interface PassTemplate {
   id: string;
   name: string;
-  description: string;
-  priceMonthly: number;
-  maxOffices: number;
-  features: string[];
-  isActive: boolean;
+  source: 'manual' | 'from_pass';
+  sourcePassId?: string;
+  visitorName: string;
+  visitorPhone?: string;
+  companyName?: string;
+  visitPurpose?: string;
+  passType: PassType;
+  vehiclePlate?: string;
+  vehicleModel?: string;
+  visitTimeFrom?: string;
+  visitTimeTo?: string;
+  officeId?: string;
+  businessCenterName?: string;
+  office?: string;
+  floor?: string;
+  comment?: string;
+  createdAt: string;
+  updatedAt: string;
+}
+
+export interface CreatePassTemplateData {
+  name: string;
+  visitorName: string;
+  visitorPhone?: string;
+  companyName?: string;
+  visitPurpose?: string;
+  passType: PassType;
+  vehiclePlate?: string;
+  vehicleModel?: string;
+  visitTimeFrom?: string;
+  visitTimeTo?: string;
+  officeId?: string;
+  office?: string;
+  floor?: string;
+  comment?: string;
 }
 
 export interface BusinessCenter {
@@ -305,9 +412,6 @@ export interface BusinessCenter {
   address: string;
   officesCount: number;
   totalAreaSqm?: number;
-  planId: string;
-  planName: string;
-  priceMonthly: number;
   isActive: boolean;
   createdAt: string;
 }
@@ -339,7 +443,7 @@ export interface AdminDashboard {
   stats: {
     users: { total: number; byRole: Record<string, number> };
     passes: { total: number; today: number; week: number; byStatus: Record<string, number> };
-    revenue: { monthlyTotal: number; businessCenters: number };
+    businessCenters: number;
   };
   recentActivity: AuditEntry[];
   settings: SystemSettings;
@@ -377,7 +481,6 @@ export const AUDIT_LABELS: Record<string, string> = {
   'pass.check_out': 'Выход из БЦ',
   'user.create': 'Создание пользователя',
   'user.update': 'Изменение пользователя',
-  'pricing.update': 'Изменение тарифа',
   'settings.update': 'Изменение настроек',
   'office.create': 'Добавление офиса',
 };

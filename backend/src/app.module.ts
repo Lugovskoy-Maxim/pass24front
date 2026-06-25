@@ -7,6 +7,7 @@ import { PassesModule } from './passes/passes.module';
 import { AuthModule } from './auth/auth.module';
 import { ConfigModule as AppConfigModule } from './config/config.module';
 import { AdminModule } from './admin/admin.module';
+import { AccessConfigModule } from './access/access-config.module';
 
 @Module({
   imports: [
@@ -21,6 +22,7 @@ import { AdminModule } from './admin/admin.module';
       },
     }),
     DatabaseModule,
+    AccessConfigModule,
     AuthModule,
     PassesModule,
     AppConfigModule,

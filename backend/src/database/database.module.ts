@@ -7,10 +7,14 @@ import {
   AccessEventSchema,
   Authorization,
   AuthorizationSchema,
+  Office,
+  OfficeSchema,
   Pass,
+  PassTemplate,
   PassRequest,
   PassRequestSchema,
   PassSchema,
+  PassTemplateSchema,
   Property,
   PropertySchema,
   User,
@@ -18,12 +22,15 @@ import {
   Vehicle,
   VehicleSchema,
 } from '../schemas';
+import { SeedService } from './seed.service';
 
 const ALL_FEATURES = [
   { name: Property.name, schema: PropertySchema },
+  { name: Office.name, schema: OfficeSchema },
   { name: User.name, schema: UserSchema },
   { name: Vehicle.name, schema: VehicleSchema },
   { name: Pass.name, schema: PassSchema },
+  { name: PassTemplate.name, schema: PassTemplateSchema },
   { name: PassRequest.name, schema: PassRequestSchema },
   { name: AccessEvent.name, schema: AccessEventSchema },
   { name: Authorization.name, schema: AuthorizationSchema },
@@ -44,7 +51,9 @@ const ALL_FEATURES = [
       },
       inject: [ConfigService],
     }),
+    MongooseModule.forFeature([{ name: User.name, schema: UserSchema }]),
   ],
+  providers: [SeedService],
   exports: [MongooseModule],
 })
 export class DatabaseModule {

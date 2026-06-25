@@ -1,20 +1,23 @@
 'use client';
 
 import { useEffect, useState, FormEvent } from 'react';
-import { Plus, Pencil, Check, X } from 'lucide-react';
+import { Plus, Pencil, Check, X, Link2 } from 'lucide-react';
 import { AdminLayout } from '@/components/AdminLayout';
 import { useToast } from '@/components/Toast';
-import { api, Office, AdminUser } from '@/lib/api';
+import { api, Office, AdminUser, BusinessCenter } from '@/lib/api';
 
 export default function AdminOfficesPage() {
   const { toast } = useToast();
   const [offices, setOffices] = useState<Office[]>([]);
   const [tenants, setTenants] = useState<AdminUser[]>([]);
+  const [businessCenters, setBusinessCenters] = useState<BusinessCenter[]>([]);
   const [loading, setLoading] = useState(true);
   const [showForm, setShowForm] = useState(false);
   const [editingId, setEditingId] = useState<string | null>(null);
   const [saving, setSaving] = useState(false);
+  const [bindingOfficeId, setBindingOfficeId] = useState<string | null>(null);
 
+  const [propertyId, setPropertyId] = useState('');
   const [number, setNumber] = useState('');
   const [floor, setFloor] = useState('');
   const [areaSqm, setAreaSqm] = useState('');
@@ -23,10 +26,16 @@ export default function AdminOfficesPage() {
 
   const load = () => {
     setLoading(true);
-    Promise.all([api.admin.getOffices(), api.admin.getUsers({ role: 'tenant' })])
-      .then(([{ offices: o }, { users: t }]) => {
+    Promise.all([
+      api.admin.getOffices(),
+      api.admin.getUsers({ role: 'tenant' }),
+      api.admin.getBusinessCenters(),
+    ])
+      .then(([{ offices: o }, { users: t }, { businessCenters: bc }]) => {
         setOffices(o);
-        setTenants(t);
+        setTenants(t.filter((u) => u.isActive));
+        setBusinessCenters(bc);
+        if (!propertyId && bc[0]) setPropertyId(bc[0].id);
       })
       .catch((err) => toast(err instanceof Error ? err.message : 'Ошибка загрузки', 'error'))
       .finally(() => setLoading(false));
@@ -42,10 +51,14 @@ export default function AdminOfficesPage() {
     setTenantId('');
     setShowForm(false);
     setEditingId(null);
+    setBindingOfficeId(null);
+    if (businessCenters[0]) setPropertyId(businessCenters[0].id);
   };
 
   const startEdit = (office: Office) => {
     setEditingId(office.id);
+    setBindingOfficeId(null);
+    setPropertyId(office.propertyId);
     setNumber(office.number);
     setFloor(office.floor);
     setAreaSqm(office.areaSqm?.toString() || '');
@@ -54,11 +67,31 @@ export default function AdminOfficesPage() {
     setShowForm(false);
   };
 
+  const startBinding = (office: Office) => {
+    setBindingOfficeId(office.id);
+    setEditingId(null);
+    setShowForm(false);
+    setTenantId(office.tenantId || '');
+    setCompany(office.company || '');
+  };
+
+  const handleTenantSelect = (id: string, forOffice?: Office) => {
+    setTenantId(id);
+    const tenant = tenants.find((t) => t.id === id);
+    if (tenant?.company && !company) setCompany(tenant.company);
+    if (forOffice && tenant?.company) setCompany(tenant.company);
+  };
+
   const handleCreate = async (e: FormEvent) => {
     e.preventDefault();
+    if (!propertyId) {
+      toast('Сначала создайте бизнес-центр', 'error');
+      return;
+    }
     setSaving(true);
     try {
       await api.admin.createOffice({
+        propertyId,
         number: number.trim(),
         floor: floor.trim(),
         areaSqm: areaSqm ? parseFloat(areaSqm) : undefined,
@@ -75,12 +108,29 @@ export default function AdminOfficesPage() {
     }
   };
 
+  const saveBinding = async (officeId: string) => {
+    setSaving(true);
+    try {
+      await api.admin.updateOffice(officeId, {
+        tenantId: tenantId || '',
+        company: company.trim() || undefined,
+      });
+      toast('Привязка сохранена', 'success');
+      resetForm();
+      load();
+    } catch (err) {
+      toast(err instanceof Error ? err.message : 'Ошибка', 'error');
+    } finally {
+      setSaving(false);
+    }
+  };
+
   const handleUpdate = async (id: string) => {
     setSaving(true);
     try {
       await api.admin.updateOffice(id, {
         company: company.trim() || undefined,
-        tenantId: tenantId || undefined,
+        tenantId: tenantId || '',
         areaSqm: areaSqm ? parseFloat(areaSqm) : undefined,
       });
       toast('Офис обновлён', 'success');
@@ -103,13 +153,49 @@ export default function AdminOfficesPage() {
     }
   };
 
+  const tenantLabel = (t: AdminUser) => {
+    const offices = t.offices?.length ? ` · ${t.offices.length} оф.` : '';
+    return `${t.fullName}${t.company ? ` (${t.company})` : ''}${offices}`;
+  };
+
+  const BindingSelect = ({ office }: { office?: Office }) => (
+    <div className="space-y-2">
+      <select
+        className="input text-sm"
+        value={tenantId}
+        onChange={(e) => handleTenantSelect(e.target.value, office)}
+      >
+        <option value="">Не назначен</option>
+        {tenants.map((t) => (
+          <option key={t.id} value={t.id}>{tenantLabel(t)}</option>
+        ))}
+      </select>
+      {tenantId && (
+        <input
+          className="input text-sm"
+          value={company}
+          onChange={(e) => setCompany(e.target.value)}
+          placeholder="Компания в офисе"
+        />
+      )}
+    </div>
+  );
+
   return (
     <AdminLayout title="Реестр офисов">
-      <p className="text-[var(--muted)] -mt-4 mb-6">Управление офисами и привязка арендаторов</p>
+      <p className="text-[var(--muted)] -mt-4 mb-6">
+        Привязка арендатора к офису доступна только администратору — при создании, редактировании или прямо в таблице.
+      </p>
+
+      {businessCenters.length === 0 && (
+        <div className="card p-4 mb-4 text-sm text-amber-800 bg-amber-50">
+          Нет бизнес-центров. Нажмите «Создать тестовые БЦ и арендаторов» на главной странице админки.
+        </div>
+      )}
 
       <div className="flex justify-between items-center mb-4">
         <div className="text-sm text-[var(--muted)]">{offices.length} офисов в реестре</div>
-        {!showForm && !editingId && (
+        {!showForm && !editingId && businessCenters.length > 0 && (
           <button className="btn btn-primary text-sm" onClick={() => setShowForm(true)}>
             <Plus className="w-4 h-4" />
             Добавить офис
@@ -120,6 +206,15 @@ export default function AdminOfficesPage() {
       {(showForm || editingId) && (
         <form onSubmit={editingId ? (e) => { e.preventDefault(); handleUpdate(editingId); } : handleCreate} className="card p-5 mb-6 space-y-4 max-w-lg">
           <h3 className="font-semibold">{editingId ? 'Редактирование офиса' : 'Новый офис'}</h3>
+          <div>
+            <label className="label">Бизнес-центр *</label>
+            <select className="input" value={propertyId} onChange={(e) => setPropertyId(e.target.value)} required disabled={!!editingId}>
+              <option value="">Выберите БЦ</option>
+              {businessCenters.map((bc) => (
+                <option key={bc.id} value={bc.id}>{bc.name}</option>
+              ))}
+            </select>
+          </div>
           <div className="grid grid-cols-2 gap-3">
             <div>
               <label className="label">Номер офиса *</label>
@@ -134,19 +229,15 @@ export default function AdminOfficesPage() {
             <label className="label">Площадь, м²</label>
             <input className="input" type="number" min={0} value={areaSqm} onChange={(e) => setAreaSqm(e.target.value)} />
           </div>
-          <div>
-            <label className="label">Компания</label>
-            <input className="input" value={company} onChange={(e) => setCompany(e.target.value)} placeholder="ООО «...»" />
+
+          <div className="border border-[var(--border)] rounded-lg p-4 bg-slate-50/50">
+            <div className="flex items-center gap-2 mb-3">
+              <Link2 className="w-4 h-4 text-[var(--primary)]" />
+              <span className="font-medium text-sm">Привязка арендатора</span>
+            </div>
+            <BindingSelect />
           </div>
-          <div>
-            <label className="label">Арендатор</label>
-            <select className="input" value={tenantId} onChange={(e) => setTenantId(e.target.value)}>
-              <option value="">Не назначен</option>
-              {tenants.map((t) => (
-                <option key={t.id} value={t.id}>{t.fullName} ({t.email})</option>
-              ))}
-            </select>
-          </div>
+
           <div className="flex gap-2">
             <button type="submit" className="btn btn-primary" disabled={saving}>
               {saving ? 'Сохранение...' : editingId ? 'Сохранить' : 'Добавить'}
@@ -165,23 +256,49 @@ export default function AdminOfficesPage() {
           <table className="w-full text-sm">
             <thead>
               <tr className="border-b border-[var(--border)] bg-slate-50">
+                <th className="text-left p-3 font-medium">БЦ</th>
                 <th className="text-left p-3 font-medium">Офис</th>
                 <th className="text-left p-3 font-medium">Этаж</th>
                 <th className="text-left p-3 font-medium hidden sm:table-cell">Площадь</th>
                 <th className="text-left p-3 font-medium">Компания</th>
-                <th className="text-left p-3 font-medium hidden md:table-cell">Арендатор</th>
+                <th className="text-left p-3 font-medium min-w-[200px]">Привязка</th>
                 <th className="text-left p-3 font-medium">Статус</th>
-                <th className="p-3 w-20"></th>
+                <th className="p-3 w-24"></th>
               </tr>
             </thead>
             <tbody>
               {offices.map((office) => (
                 <tr key={office.id} className={`border-b border-[var(--border)] last:border-0 ${!office.isActive ? 'opacity-50' : ''}`}>
+                  <td className="p-3">{office.businessCenterName || '—'}</td>
                   <td className="p-3 font-mono font-medium">{office.number}</td>
                   <td className="p-3">{office.floor}</td>
                   <td className="p-3 hidden sm:table-cell">{office.areaSqm ? `${office.areaSqm} м²` : '—'}</td>
                   <td className="p-3">{office.company || '—'}</td>
-                  <td className="p-3 hidden md:table-cell">{office.tenantName || '—'}</td>
+                  <td className="p-3">
+                    {bindingOfficeId === office.id ? (
+                      <div className="space-y-2 min-w-[220px]">
+                        <BindingSelect office={office} />
+                        <div className="flex gap-1">
+                          <button className="btn btn-primary text-xs py-1 px-2" disabled={saving} onClick={() => saveBinding(office.id)}>
+                            {saving ? '...' : 'Сохранить'}
+                          </button>
+                          <button className="btn btn-secondary text-xs py-1 px-2" onClick={resetForm}>Отмена</button>
+                        </div>
+                      </div>
+                    ) : (
+                      <div className="flex items-center gap-2">
+                        <span className={office.tenantName ? '' : 'text-[var(--muted)]'}>
+                          {office.tenantName || 'Не назначен'}
+                        </span>
+                        <button
+                          className="text-xs text-[var(--primary)] hover:underline"
+                          onClick={() => startBinding(office)}
+                        >
+                          Изменить
+                        </button>
+                      </div>
+                    )}
+                  </td>
                   <td className="p-3">
                     <span className={`text-xs px-2 py-0.5 rounded-full ${office.isActive ? 'bg-emerald-50 text-emerald-700' : 'bg-slate-100 text-slate-500'}`}>
                       {office.isActive ? 'Активен' : 'Неактивен'}
