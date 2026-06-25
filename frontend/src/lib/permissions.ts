@@ -1,0 +1,31 @@
+import { User } from './api';
+
+export function hasPermission(user: User | null | undefined, permission: string): boolean {
+  return !!user?.permissions?.includes(permission);
+}
+
+export function hasAnyPermission(user: User | null | undefined, ...permissions: string[]): boolean {
+  if (!user?.permissions) return false;
+  return permissions.some((p) => user.permissions!.includes(p));
+}
+
+export function hasAllPermissions(user: User | null | undefined, ...permissions: string[]): boolean {
+  if (!user?.permissions) return false;
+  return permissions.every((p) => user.permissions!.includes(p));
+}
+
+export function isAdminPanelUser(user: User | null | undefined): boolean {
+  return hasPermission(user, 'admin.panel');
+}
+
+export function canViewPasses(user: User | null | undefined): boolean {
+  return hasAnyPermission(user, 'passes.view_own', 'passes.view_all') || isAdminPanelUser(user);
+}
+
+export function canViewAllPasses(user: User | null | undefined): boolean {
+  return hasPermission(user, 'passes.view_all') || isAdminPanelUser(user);
+}
+
+export function canUseReception(user: User | null | undefined): boolean {
+  return hasAnyPermission(user, 'passes.reception', 'passes.lookup') || isAdminPanelUser(user);
+}

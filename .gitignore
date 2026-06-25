@@ -4,3 +4,7 @@ node_modules/
 *.db
 .DS_Store
 pass365/
+
+# MongoDB data (mounted in Docker)
+data/
+

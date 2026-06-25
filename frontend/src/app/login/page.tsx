@@ -2,8 +2,10 @@
 
 import { useState, useEffect, FormEvent } from 'react';
 import { useRouter } from 'next/navigation';
-import { Building2 } from 'lucide-react';
+import { Mail, Phone } from 'lucide-react';
 import { useAuth } from '@/lib/auth';
+import { useConfig } from '@/hooks/useConfig';
+import { SiteBrand } from '@/components/SiteBrand';
 
 export default function LoginPage() {
   const { user, loading: authLoading } = useAuth();
@@ -23,6 +25,7 @@ export default function LoginPage() {
   const [error, setError] = useState('');
   const [loading, setLoading] = useState(false);
   const { login, register } = useAuth();
+  const config = useConfig();
 
   if (authLoading || user) {
     return (
@@ -54,11 +57,25 @@ export default function LoginPage() {
     <div className="min-h-screen flex items-center justify-center p-4">
       <div className="w-full max-w-md">
         <div className="text-center mb-8">
-          <div className="inline-flex items-center justify-center w-14 h-14 rounded-2xl bg-[var(--primary)] text-white mb-4">
-            <Building2 className="w-7 h-7" />
+          <div className="flex justify-center mb-4">
+            <SiteBrand config={config} size="lg" showTagline layout="column" />
           </div>
-          <h1 className="text-2xl font-bold">PASS24 БЦ</h1>
-          <p className="text-[var(--muted)] mt-1">Пропуска для арендаторов бизнес-центра</p>
+          {(config?.sitePhone || config?.siteEmail) && (
+            <div className="flex flex-wrap items-center justify-center gap-4 text-sm text-[var(--muted)]">
+              {config.sitePhone && (
+                <a href={`tel:${config.sitePhone}`} className="inline-flex items-center gap-1.5 hover:text-[var(--primary)]">
+                  <Phone className="w-4 h-4" />
+                  {config.sitePhone}
+                </a>
+              )}
+              {config.siteEmail && (
+                <a href={`mailto:${config.siteEmail}`} className="inline-flex items-center gap-1.5 hover:text-[var(--primary)]">
+                  <Mail className="w-4 h-4" />
+                  {config.siteEmail}
+                </a>
+              )}
+            </div>
+          )}
         </div>
 
         <div className="card p-6">
@@ -108,7 +125,8 @@ export default function LoginPage() {
 
           <div className="mt-6 pt-4 border-t border-[var(--border)] text-xs text-[var(--muted)] space-y-1">
             <p className="font-medium text-[var(--text)]">Тестовые аккаунты:</p>
-            <p>Арендатор: tenant@pass24.local / tenant123</p>
+            <p>Арендатор (2 БЦ): tenant@pass24.local / tenant123</p>
+            <p>Арендатор 2: tenant2@pass24.local / tenant123</p>
             <p>Ресепшн: security@pass24.local / security123</p>
             <p>Админ: admin@pass24.local / admin123</p>
           </div>

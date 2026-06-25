@@ -1,27 +1,43 @@
 'use client';
 
 import { useEffect, useState } from 'react';
-import { Users, FileText, Building2, TrendingUp } from 'lucide-react';
+import Link from 'next/link';
+import { Users, FileText, Building2, Sparkles, List, ScrollText } from 'lucide-react';
 import { AdminLayout } from '@/components/AdminLayout';
-import { api, AdminDashboard, AUDIT_LABELS, STATUS_LABELS } from '@/lib/api';
-
-function formatPrice(n: number) {
-  return new Intl.NumberFormat('ru-RU', { style: 'currency', currency: 'RUB', maximumFractionDigits: 0 }).format(n);
-}
+import { useToast } from '@/components/Toast';
+import { api, AdminDashboard, AUDIT_LABELS, STATUS_LABELS, formatAuditEntity } from '@/lib/api';
 
 const ROLE_NAMES: Record<string, string> = {
   tenant: 'Арендаторы',
   security: 'Ресепшн',
-  admin: 'Админы',
+  bc_admin: 'Админы БЦ',
+  admin: 'Супер-админы',
 };
 
 export default function AdminDashboardPage() {
+  const { toast } = useToast();
   const [data, setData] = useState<AdminDashboard | null>(null);
   const [error, setError] = useState('');
+  const [seeding, setSeeding] = useState(false);
 
-  useEffect(() => {
+  const load = () => {
     api.admin.dashboard().then(setData).catch((e) => setError(e instanceof Error ? e.message : 'Ошибка'));
-  }, []);
+  };
+
+  useEffect(() => { load(); }, []);
+
+  const handleSeed = async () => {
+    setSeeding(true);
+    try {
+      const result = await api.admin.seedTestData();
+      toast(result.message, 'success');
+      load();
+    } catch (e) {
+      toast(e instanceof Error ? e.message : 'Ошибка', 'error');
+    } finally {
+      setSeeding(false);
+    }
+  };
 
   if (error) {
     return <AdminLayout title="Обзор БЦ"><div className="text-red-600 bg-red-50 p-4 rounded-md">{error}</div></AdminLayout>;
@@ -34,9 +50,26 @@ export default function AdminDashboardPage() {
 
   return (
     <AdminLayout title="Обзор БЦ">
-      <p className="text-[var(--muted)] -mt-4 mb-6">{settings.business_center_name}</p>
+      <div className="flex flex-col sm:flex-row sm:items-center sm:justify-between gap-3 -mt-4 mb-6">
+        <p className="text-[var(--muted)]">{settings.business_center_name}</p>
+        <button className="btn btn-secondary text-sm" onClick={handleSeed} disabled={seeding}>
+          <Sparkles className="w-4 h-4" />
+          {seeding ? 'Создание...' : 'Создать тестовые БЦ и арендаторов'}
+        </button>
+      </div>
 
-      <div className="grid grid-cols-2 lg:grid-cols-4 gap-4 mb-8">
+      <div className="flex flex-wrap gap-3 mb-6">
+        <Link href="/passes" className="btn btn-secondary text-sm">
+          <List className="w-4 h-4" />
+          Все пропуска
+        </Link>
+        <Link href="/admin/audit" className="btn btn-secondary text-sm">
+          <ScrollText className="w-4 h-4" />
+          Журнал действий
+        </Link>
+      </div>
+
+      <div className="grid grid-cols-2 lg:grid-cols-3 gap-4 mb-8">
         <div className="card p-4">
           <Users className="w-5 h-5 text-[var(--primary)] mb-2" />
           <div className="text-2xl font-bold">{stats.users.total}</div>
@@ -49,13 +82,8 @@ export default function AdminDashboardPage() {
         </div>
         <div className="card p-4">
           <Building2 className="w-5 h-5 text-emerald-600 mb-2" />
-          <div className="text-2xl font-bold">{stats.revenue.businessCenters}</div>
+          <div className="text-2xl font-bold">{stats.businessCenters}</div>
           <div className="text-sm text-[var(--muted)]">Бизнес-центров</div>
-        </div>
-        <div className="card p-4">
-          <TrendingUp className="w-5 h-5 text-amber-600 mb-2" />
-          <div className="text-2xl font-bold">{formatPrice(stats.revenue.monthlyTotal)}</div>
-          <div className="text-sm text-[var(--muted)]">MRR (аренда ПО)</div>
         </div>
       </div>
 
@@ -89,7 +117,10 @@ export default function AdminDashboardPage() {
         </div>
 
         <div className="card p-5 lg:col-span-2">
-          <h2 className="font-semibold mb-4">Последние действия</h2>
+          <div className="flex items-center justify-between mb-4">
+            <h2 className="font-semibold">Последние действия пользователей</h2>
+            <Link href="/admin/audit" className="text-sm text-[var(--primary)] hover:underline">Весь журнал</Link>
+          </div>
           {recentActivity.length === 0 ? (
             <p className="text-sm text-[var(--muted)]">Действий пока нет</p>
           ) : (
@@ -99,6 +130,9 @@ export default function AdminDashboardPage() {
                   <div>
                     <span className="font-medium">{AUDIT_LABELS[entry.action] || entry.action}</span>
                     <span className="text-[var(--muted)]"> · {entry.userName || 'Система'}</span>
+                    <span className="text-[var(--muted)] text-xs block sm:inline sm:ml-1">
+                      — {formatAuditEntity(entry)}
+                    </span>
                   </div>
                   <span className="text-xs text-[var(--muted)]">{new Date(entry.createdAt).toLocaleString('ru-RU')}</span>
                 </div>
