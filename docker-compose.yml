@@ -1,0 +1,72 @@
+version: '3.8'
+
+services:
+  # MongoDB database
+  mongo:
+    image: mongo:7-jammy
+    container_name: pass24-mongo
+    restart: unless-stopped
+    ports:
+      - "27017:27017"
+    environment:
+      MONGO_INITDB_DATABASE: pass24
+    volumes:
+      # Bind mount для данных MongoDB (можно переопределить через .env: MONGO_DATA_PATH=./my-mongo-data)
+      - ${MONGO_DATA_PATH:-./data/mongo}:/data/db
+      # Custom MongoDB configuration
+      - ./docker/mongo/mongod.conf:/etc/mongod.conf:ro
+      # Initialization script (runs only on first container start)
+      - ./docker/mongo/init-mongo.js:/docker-entrypoint-initdb.d/init-mongo.js:ro
+    command: ["mongod", "--config", "/etc/mongod.conf"]
+    healthcheck:
+      test: echo 'db.runCommand("ping").ok' | mongosh localhost:27017/test --quiet
+      interval: 10s
+      timeout: 5s
+      retries: 5
+      start_period: 40s
+
+  # NestJS Backend
+  backend:
+    build:
+      context: ./backend
+      dockerfile: Dockerfile
+    container_name: pass24-backend
+    restart: unless-stopped
+    ports:
+      - "4000:4000"
+    environment:
+      - PORT=4000
+      - MONGODB_URI=mongodb://mongo:27017/pass24
+      - JWT_SECRET=pass24-super-secret-key-2026
+      - JWT_EXPIRES_IN=7d
+    depends_on:
+      mongo:
+        condition: service_healthy
+    # For development hot-reload (uncomment if needed):
+    # command: npm run start:dev
+    # volumes:
+    #   - ./backend:/app
+    #   - /app/node_modules
+
+  # Next.js Frontend
+  frontend:
+    build:
+      context: ./frontend
+      dockerfile: Dockerfile
+    container_name: pass24-frontend
+    restart: unless-stopped
+    ports:
+      - "3000:3000"
+    environment:
+      - NEXT_PUBLIC_API_URL=http://localhost:4000/api
+      # When accessing from browser, always use localhost:4000
+      # (not "backend" hostname, because browser runs outside Docker network)
+    depends_on:
+      - backend
+    # For development hot-reload (uncomment if needed):
+    # command: npm run dev
+    # volumes:
+    #   - ./frontend:/app
+    #   - /app/node_modules
+    #   - /app/.next
+
