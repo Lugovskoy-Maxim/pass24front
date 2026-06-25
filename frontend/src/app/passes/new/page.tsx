@@ -6,9 +6,7 @@ import { ProtectedLayout } from '@/components/ProtectedLayout';
 import { useAuth } from '@/lib/auth';
 import { useConfig } from '@/hooks/useConfig';
 import { useToast } from '@/components/Toast';
-import { api, PassType, TYPE_LABELS } from '@/lib/api';
-
-const PURPOSES = ['Встреча', 'Переговоры', 'Собеседование', 'Доставка', 'Техобслуживание', 'Презентация', 'Другое'];
+import { api, PassType, TYPE_LABELS, VISIT_PURPOSES } from '@/lib/api';
 
 function NewPassForm() {
   const { user } = useAuth();
@@ -23,7 +21,8 @@ function NewPassForm() {
   const [visitorName, setVisitorName] = useState('');
   const [visitorPhone, setVisitorPhone] = useState('');
   const [companyName, setCompanyName] = useState('');
-  const [visitPurpose, setVisitPurpose] = useState('Встреча');
+  const [visitPurpose, setVisitPurpose] = useState('Гость');
+  const [propertyId, setPropertyId] = useState('');
   const enabledTypes = (Object.keys(TYPE_LABELS) as PassType[]).filter(
     (key) => !user?.enabledPassTypes?.length || user.enabledPassTypes.includes(key),
   );
@@ -37,8 +36,16 @@ function NewPassForm() {
   const [office, setOffice] = useState('');
   const [floor, setFloor] = useState('');
   const [comment, setComment] = useState('');
+  const [sendEmail, setSendEmail] = useState(false);
+  const [recipientEmail, setRecipientEmail] = useState('');
 
   const tenantOffices = user?.offices || [];
+  const bcOptions = [...new Map(
+    tenantOffices.map((o) => [o.propertyId, o.businessCenterName || 'Бизнес-центр']),
+  ).entries()].map(([id, name]) => ({ id, name }));
+  const officesInBc = propertyId
+    ? tenantOffices.filter((o) => o.propertyId === propertyId)
+    : tenantOffices;
 
   useEffect(() => {
     if (enabledTypes.length && !enabledTypes.includes(passType)) {
@@ -49,8 +56,12 @@ function NewPassForm() {
   useEffect(() => {
     if (!user) return;
     if (!companyName && user.company) setCompanyName(user.company);
+    if (bcOptions.length === 1 && !propertyId) {
+      setPropertyId(bcOptions[0].id);
+    }
     if (tenantOffices.length === 1 && !officeId) {
       const o = tenantOffices[0];
+      setPropertyId(o.propertyId);
       setOfficeId(o.id);
       setOffice(o.number);
       setFloor(o.floor);
@@ -58,7 +69,7 @@ function NewPassForm() {
       setOffice(user.office);
       setFloor(user.floor || '');
     }
-  }, [user, tenantOffices, officeId, companyName]);
+  }, [user, tenantOffices, officeId, companyName, bcOptions, propertyId]);
 
   useEffect(() => {
     if (!templateId) return;
@@ -67,7 +78,7 @@ function NewPassForm() {
         setVisitorName(template.visitorName);
         setVisitorPhone(template.visitorPhone || '');
         setCompanyName(template.companyName || user?.company || '');
-        setVisitPurpose(template.visitPurpose || 'Встреча');
+        setVisitPurpose(template.visitPurpose || 'Гость');
         if (enabledTypes.includes(template.passType)) setPassType(template.passType);
         setVehiclePlate(template.vehiclePlate || '');
         setVehicleModel(template.vehicleModel || '');
@@ -75,6 +86,8 @@ function NewPassForm() {
         setVisitTimeTo(template.visitTimeTo || '18:00');
         setComment(template.comment || '');
         if (template.officeId) {
+          const matched = tenantOffices.find((o) => o.id === template.officeId);
+          if (matched) setPropertyId(matched.propertyId);
           setOfficeId(template.officeId);
           setOffice(template.office || '');
           setFloor(template.floor || '');
@@ -86,10 +99,20 @@ function NewPassForm() {
       .catch((err) => toast(err instanceof Error ? err.message : 'Шаблон не найден', 'error'));
   }, [templateId]);
 
+  const handleBcSelect = (id: string) => {
+    setPropertyId(id);
+    setOfficeId('');
+    setOffice('');
+    setFloor('');
+    const inBc = tenantOffices.filter((o) => o.propertyId === id);
+    if (inBc.length === 1) handleOfficeSelect(inBc[0].id);
+  };
+
   const handleOfficeSelect = (id: string) => {
     setOfficeId(id);
     const selected = tenantOffices.find((o) => o.id === id);
     if (selected) {
+      setPropertyId(selected.propertyId);
       setOffice(selected.number);
       setFloor(selected.floor);
       if (!companyName && selected.company) setCompanyName(selected.company);
@@ -108,18 +131,28 @@ function NewPassForm() {
       setError('Укажите гос. номер для парковочного пропуска');
       return;
     }
-    if (user?.role === 'tenant' && tenantOffices.length > 0 && !officeId) {
-      setError('Выберите офис из списка');
-      return;
+    if (user?.role === 'tenant' && tenantOffices.length > 0) {
+      if (!propertyId) {
+        setError('Выберите бизнес-центр');
+        return;
+      }
+      if (!officeId) {
+        setError('Выберите офис из списка');
+        return;
+      }
     }
     if (!officeId && !office.trim()) {
       setError('Укажите офис назначения');
       return;
     }
+    if (sendEmail && !recipientEmail.trim()) {
+      setError('Укажите email для отправки пропуска');
+      return;
+    }
 
     setLoading(true);
     try {
-      await api.createPass({
+      const { pass, emailSent } = await api.createPass({
         visitorName: visitorName.trim(),
         visitorPhone: visitorPhone.trim() || undefined,
         companyName: companyName.trim() || undefined,
@@ -134,9 +167,12 @@ function NewPassForm() {
         office: office.trim() || undefined,
         floor: floor.trim() || undefined,
         comment: comment.trim() || undefined,
+        sendEmail: sendEmail || undefined,
+        recipientEmail: sendEmail ? recipientEmail.trim() : undefined,
       });
-      toast('Заявка отправлена', 'success');
-      router.push(user?.role === 'tenant' ? '/templates' : '/passes');
+      toast(emailSent ? 'Заявка отправлена, пропуск выслан на почту' : 'Заявка отправлена', 'success');
+      window.location.assign(`/ticket/${encodeURIComponent(pass.passNumber)}`);
+      return;
     } catch (err) {
       const msg = err instanceof Error ? err.message : 'Ошибка';
       setError(msg);
@@ -196,7 +232,7 @@ function NewPassForm() {
         <div>
           <label className="label">Цель визита</label>
           <select className="input" value={visitPurpose} onChange={(e) => setVisitPurpose(e.target.value)}>
-            {PURPOSES.map((p) => <option key={p} value={p}>{p}</option>)}
+            {VISIT_PURPOSES.map((p) => <option key={p} value={p}>{p}</option>)}
           </select>
         </div>
 
@@ -228,36 +264,88 @@ function NewPassForm() {
           </div>
         </div>
 
-        <div className="grid grid-cols-2 gap-3">
-          <div className="col-span-2 sm:col-span-1">
-            <label className="label">Офис (куда) *</label>
-            {tenantOffices.length > 0 ? (
-              <select className="input" value={officeId} onChange={(e) => handleOfficeSelect(e.target.value)} required>
-                <option value="">Выберите офис</option>
-                {tenantOffices.map((o) => (
-                  <option key={o.id} value={o.id}>
-                    {o.businessCenterName ? `${o.businessCenterName} · ` : ''}офис {o.number}, эт. {o.floor}
-                  </option>
-                ))}
-              </select>
-            ) : (
-              <input className="input" value={office} onChange={(e) => setOffice(e.target.value)} required placeholder="401" />
+        {tenantOffices.length > 0 ? (
+          <div className="space-y-3">
+            {bcOptions.length > 1 && (
+              <div>
+                <label className="label">Бизнес-центр *</label>
+                <select className="input" value={propertyId} onChange={(e) => handleBcSelect(e.target.value)} required>
+                  <option value="">Выберите БЦ</option>
+                  {bcOptions.map((bc) => (
+                    <option key={bc.id} value={bc.id}>{bc.name}</option>
+                  ))}
+                </select>
+              </div>
+            )}
+            <div className="grid grid-cols-2 gap-3">
+              <div>
+                <label className="label">Офис (куда) *</label>
+                <select
+                  className="input"
+                  value={officeId}
+                  onChange={(e) => handleOfficeSelect(e.target.value)}
+                  required
+                  disabled={bcOptions.length > 1 && !propertyId}
+                >
+                  <option value="">Выберите офис</option>
+                  {officesInBc.map((o) => (
+                    <option key={o.id} value={o.id}>офис {o.number}</option>
+                  ))}
+                </select>
+              </div>
+              <div>
+                <label className="label">Этаж</label>
+                <input className="input" value={floor} readOnly placeholder="—" />
+              </div>
+            </div>
+            {bcOptions.length === 1 && (
+              <p className="text-xs text-[var(--muted)]">БЦ: {bcOptions[0].name}</p>
             )}
           </div>
-          <div>
-            <label className="label">Этаж</label>
-            <input className="input" value={floor} onChange={(e) => setFloor(e.target.value)} placeholder="4" readOnly={!!officeId} />
+        ) : (
+          <div className="grid grid-cols-2 gap-3">
+            <div>
+              <label className="label">Офис (куда) *</label>
+              <input className="input" value={office} onChange={(e) => setOffice(e.target.value)} required placeholder="401" />
+            </div>
+            <div>
+              <label className="label">Этаж</label>
+              <input className="input" value={floor} onChange={(e) => setFloor(e.target.value)} placeholder="4" />
+            </div>
           </div>
-        </div>
-        {tenantOffices.length > 1 && (
-          <p className="text-xs text-[var(--muted)] -mt-2">
-            У вас {tenantOffices.length} офиса в разных БЦ — выберите, куда направляется посетитель.
-          </p>
         )}
 
         <div>
           <label className="label">Комментарий для ресепшн</label>
           <textarea className="input min-h-[80px] resize-y" value={comment} onChange={(e) => setComment(e.target.value)} placeholder="Дополнительная информация" />
+        </div>
+
+        <div className="border border-[var(--border)] rounded-lg p-4 bg-slate-50/50 space-y-3">
+          <label className="flex items-center gap-2 cursor-pointer">
+            <input
+              type="checkbox"
+              className="w-4 h-4"
+              checked={sendEmail}
+              onChange={(e) => setSendEmail(e.target.checked)}
+            />
+            <span className="text-sm font-medium">Отправить пропуск на email</span>
+          </label>
+          {sendEmail && (
+            <div>
+              <label className="label">Email получателя *</label>
+              <input
+                className="input"
+                type="email"
+                value={recipientEmail}
+                onChange={(e) => setRecipientEmail(e.target.value)}
+                placeholder="visitor@example.com"
+                required
+              />
+              <p className="text-xs text-[var(--muted)] mt-1">
+                На почту придёт ссылка на пропуск с QR-кодом
+              </p>
+            </div>
+          )}
         </div>
 
         {error && <div className="text-sm text-red-600 bg-red-50 px-3 py-2 rounded-md">{error}</div>}

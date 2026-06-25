@@ -16,6 +16,10 @@ export default function AdminOfficesPage() {
   const [editingId, setEditingId] = useState<string | null>(null);
   const [saving, setSaving] = useState(false);
   const [bindingOfficeId, setBindingOfficeId] = useState<string | null>(null);
+  const [editingBcId, setEditingBcId] = useState<string | null>(null);
+  const [showBcForm, setShowBcForm] = useState(false);
+  const [bcName, setBcName] = useState('');
+  const [bcAddress, setBcAddress] = useState('');
 
   const [propertyId, setPropertyId] = useState('');
   const [number, setNumber] = useState('');
@@ -53,6 +57,72 @@ export default function AdminOfficesPage() {
     setEditingId(null);
     setBindingOfficeId(null);
     if (businessCenters[0]) setPropertyId(businessCenters[0].id);
+  };
+
+  const resetBcForm = () => {
+    setShowBcForm(false);
+    setEditingBcId(null);
+    setBcName('');
+    setBcAddress('');
+  };
+
+  const startBcCreate = () => {
+    resetBcForm();
+    setShowBcForm(true);
+    setShowForm(false);
+    setEditingId(null);
+    setBindingOfficeId(null);
+  };
+
+  const startBcEdit = (bc: BusinessCenter) => {
+    setEditingBcId(bc.id);
+    setBcName(bc.name);
+    setBcAddress(bc.address || '');
+    setShowBcForm(false);
+    setShowForm(false);
+    setEditingId(null);
+    setBindingOfficeId(null);
+  };
+
+  const handleCreateBc = async (e: FormEvent) => {
+    e.preventDefault();
+    if (!bcName.trim() || !bcAddress.trim()) return;
+    setSaving(true);
+    try {
+      const { businessCenter } = await api.admin.createBusinessCenter({
+        name: bcName.trim(),
+        address: bcAddress.trim(),
+      });
+      setBusinessCenters((prev) => [...prev, businessCenter].sort((a, b) => a.name.localeCompare(b.name, 'ru')));
+      setPropertyId(businessCenter.id);
+      resetBcForm();
+      toast('Бизнес-центр создан', 'success');
+    } catch (err) {
+      toast(err instanceof Error ? err.message : 'Ошибка', 'error');
+    } finally {
+      setSaving(false);
+    }
+  };
+
+  const saveBcEdit = async () => {
+    if (!editingBcId || !bcName.trim()) return;
+    setSaving(true);
+    try {
+      const { businessCenter } = await api.admin.updateBusinessCenter(editingBcId, {
+        name: bcName.trim(),
+        address: bcAddress.trim() || undefined,
+      });
+      setBusinessCenters((prev) => prev.map((bc) => (bc.id === editingBcId ? businessCenter : bc)));
+      setOffices((prev) => prev.map((o) => (
+        o.propertyId === editingBcId ? { ...o, businessCenterName: businessCenter.name } : o
+      )));
+      resetBcForm();
+      toast('Название БЦ обновлено', 'success');
+    } catch (err) {
+      toast(err instanceof Error ? err.message : 'Ошибка', 'error');
+    } finally {
+      setSaving(false);
+    }
   };
 
   const startEdit = (office: Office) => {
@@ -187,11 +257,82 @@ export default function AdminOfficesPage() {
         Привязка арендатора к офису доступна только администратору — при создании, редактировании или прямо в таблице.
       </p>
 
-      {businessCenters.length === 0 && (
-        <div className="card p-4 mb-4 text-sm text-amber-800 bg-amber-50">
-          Нет бизнес-центров. Нажмите «Создать тестовые БЦ и арендаторов» на главной странице админки.
+      <div className="card p-5 mb-6">
+        <div className="flex items-center justify-between gap-3 mb-4">
+          <h2 className="font-semibold">Бизнес-центры</h2>
+          {!showBcForm && !editingBcId && (
+            <button type="button" className="btn btn-primary text-sm" onClick={startBcCreate}>
+              <Plus className="w-4 h-4" />
+              Добавить БЦ
+            </button>
+          )}
         </div>
-      )}
+
+        {businessCenters.length === 0 && !showBcForm && (
+          <p className="text-sm text-[var(--muted)] mb-4">
+            Бизнес-центров пока нет. Создайте первый БЦ, затем добавьте офисы.
+          </p>
+        )}
+
+        {showBcForm && (
+          <form onSubmit={handleCreateBc} className="border border-[var(--border)] rounded-lg p-4 mb-4 space-y-3 max-w-lg">
+            <h3 className="font-medium text-sm">Новый бизнес-центр</h3>
+            <div>
+              <label className="label">Название БЦ *</label>
+              <input className="input" value={bcName} onChange={(e) => setBcName(e.target.value)} required placeholder="БЦ Атриум" />
+            </div>
+            <div>
+              <label className="label">Адрес *</label>
+              <input className="input" value={bcAddress} onChange={(e) => setBcAddress(e.target.value)} required placeholder="ул. Тверская, 12" />
+            </div>
+            <div className="flex gap-2">
+              <button type="submit" className="btn btn-primary text-sm" disabled={saving}>
+                {saving ? 'Создание...' : 'Создать БЦ'}
+              </button>
+              <button type="button" className="btn btn-secondary text-sm" onClick={resetBcForm}>Отмена</button>
+            </div>
+          </form>
+        )}
+
+        {businessCenters.length > 0 && (
+          <div className="space-y-3">
+            {businessCenters.map((bc) => (
+              <div key={bc.id} className="border border-[var(--border)] rounded-lg p-4">
+                {editingBcId === bc.id ? (
+                  <div className="space-y-3">
+                    <div>
+                      <label className="label">Название БЦ *</label>
+                      <input className="input" value={bcName} onChange={(e) => setBcName(e.target.value)} required />
+                    </div>
+                    <div>
+                      <label className="label">Адрес</label>
+                      <input className="input" value={bcAddress} onChange={(e) => setBcAddress(e.target.value)} />
+                    </div>
+                    <div className="flex gap-2">
+                      <button type="button" className="btn btn-primary text-sm" disabled={saving} onClick={saveBcEdit}>
+                        {saving ? 'Сохранение...' : 'Сохранить'}
+                      </button>
+                      <button type="button" className="btn btn-secondary text-sm" onClick={resetBcForm}>Отмена</button>
+                    </div>
+                  </div>
+                ) : (
+                  <div className="flex items-start justify-between gap-3">
+                    <div>
+                      <div className="font-medium">{bc.name}</div>
+                      <div className="text-sm text-[var(--muted)]">{bc.address}</div>
+                      <div className="text-xs text-[var(--muted)] mt-1">{bc.officesCount} офисов</div>
+                    </div>
+                    <button type="button" className="btn btn-secondary text-sm" onClick={() => startBcEdit(bc)}>
+                      <Pencil className="w-4 h-4" />
+                      Изменить
+                    </button>
+                  </div>
+                )}
+              </div>
+            ))}
+          </div>
+        )}
+      </div>
 
       <div className="flex justify-between items-center mb-4">
         <div className="text-sm text-[var(--muted)]">{offices.length} офисов в реестре</div>

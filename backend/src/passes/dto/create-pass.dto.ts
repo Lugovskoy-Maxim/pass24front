@@ -1,4 +1,5 @@
-import { IsMongoId, IsNotEmpty, IsOptional, IsString } from 'class-validator';
+import { Transform } from 'class-transformer';
+import { IsBoolean, IsEmail, IsMongoId, IsNotEmpty, IsOptional, IsString } from 'class-validator';
 
 export class CreatePassDto {
   @IsNotEmpty()
@@ -44,4 +45,13 @@ export class CreatePassDto {
 
   @IsOptional()
   comment?: string;
+
+  @IsOptional()
+  @Transform(({ value }) => value === true || value === 'true')
+  @IsBoolean()
+  sendEmail?: boolean;
+
+  @IsOptional()
+  @IsEmail()
+  recipientEmail?: string;
 }

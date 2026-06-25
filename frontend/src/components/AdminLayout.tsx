@@ -3,21 +3,27 @@
 import Link from 'next/link';
 import { usePathname } from 'next/navigation';
 import {
-  LayoutDashboard, Users, ScrollText, Settings, ArrowLeft, Shield, DoorOpen, KeyRound,
+  LayoutDashboard, Users, ScrollText, Settings, ArrowLeft, Shield, DoorOpen, KeyRound, Globe,
 } from 'lucide-react';
 import { ProtectedLayout } from './ProtectedLayout';
+import { useAuth } from '@/lib/auth';
+import { hasPermission } from '@/lib/permissions';
 
 const NAV = [
   { href: '/admin', label: 'Обзор', icon: LayoutDashboard, exact: true },
-  { href: '/admin/users', label: 'Пользователи', icon: Users },
-  { href: '/admin/offices', label: 'Офисы', icon: DoorOpen },
-  { href: '/admin/permissions', label: 'Права и пропуска', icon: KeyRound },
+  { href: '/admin/users', label: 'Пользователи', icon: Users, permission: 'admin.users' },
+  { href: '/admin/offices', label: 'Офисы', icon: DoorOpen, permission: 'admin.offices' },
+  { href: '/admin/permissions', label: 'Права и пропуска', icon: KeyRound, permission: 'admin.permissions' },
   { href: '/admin/audit', label: 'Журнал действий', icon: ScrollText },
-  { href: '/admin/settings', label: 'Настройки', icon: Settings },
+  { href: '/admin/site', label: 'Базовые настройки', icon: Globe, permission: 'admin.settings' },
+  { href: '/admin/settings', label: 'Настройки БЦ', icon: Settings, permission: 'admin.settings' },
 ];
 
 export function AdminLayout({ children, title }: { children: React.ReactNode; title: string }) {
   const pathname = usePathname();
+  const { user } = useAuth();
+
+  const links = NAV.filter((item) => !item.permission || hasPermission(user, item.permission));
 
   return (
     <ProtectedLayout permissions={['admin.panel']}>
@@ -29,7 +35,7 @@ export function AdminLayout({ children, title }: { children: React.ReactNode; ti
               <span className="font-semibold text-sm">Администрирование</span>
             </div>
             <nav className="space-y-1">
-              {NAV.map(({ href, label, icon: Icon, exact }) => {
+              {links.map(({ href, label, icon: Icon, exact }) => {
                 const active = exact ? pathname === href : pathname.startsWith(href);
                 return (
                   <Link

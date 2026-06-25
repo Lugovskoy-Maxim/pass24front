@@ -23,6 +23,15 @@ services:
       retries: 5
       start_period: 40s
 
+  # Local SMTP catcher (web UI: http://127.0.0.1:8025)
+  mailpit:
+    image: axllent/mailpit:latest
+    container_name: pass24-mailpit
+    restart: unless-stopped
+    ports:
+      - "127.0.0.1:8025:8025"
+      - "127.0.0.1:1025:1025"
+
   # NestJS Backend
   backend:
     build:
@@ -41,9 +50,15 @@ services:
       - ADMIN_EMAIL=admin@pass24.local
       - ADMIN_PASSWORD=admin123
       - ADMIN_FULL_NAME=Администратор БЦ
+      - SMTP_HOST=mailpit
+      - SMTP_PORT=1025
+      - SMTP_FROM=PASS24 <noreply@pass24.local>
+      - PUBLIC_APP_URL=http://127.0.0.1:3000
     depends_on:
       mongo:
         condition: service_healthy
+      mailpit:
+        condition: service_started
     # For development hot-reload (uncomment if needed):
     # command: npm run start:dev
     # volumes:

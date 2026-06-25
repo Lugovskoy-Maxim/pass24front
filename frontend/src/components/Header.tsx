@@ -2,11 +2,12 @@
 
 import Link from 'next/link';
 import { usePathname } from 'next/navigation';
-import { Building2, LogOut, Plus, List, ClipboardList, Settings, Bookmark } from 'lucide-react';
+import { Home, LogOut, Plus, List, ClipboardList, Settings, Bookmark } from 'lucide-react';
 import { useAuth } from '@/lib/auth';
 import { useConfig } from '@/hooks/useConfig';
+import { SiteBrand } from '@/components/SiteBrand';
 import { ROLE_LABELS, formatTenantOffices } from '@/lib/api';
-import { hasAnyPermission, hasPermission } from '@/lib/permissions';
+import { canUseReception, canViewPasses, hasPermission } from '@/lib/permissions';
 
 export function Header() {
   const { user, logout } = useAuth();
@@ -16,16 +17,16 @@ export function Header() {
   if (!user) return null;
 
   const links = [
-    { href: '/dashboard', label: 'Главная', icon: Building2, show: true },
+    { href: '/dashboard', label: 'Главная', icon: Home, show: true },
     { href: '/templates', label: 'Шаблоны', icon: Bookmark, show: hasPermission(user, 'passes.templates') },
-    { href: '/passes', label: 'Пропуска', icon: List, show: hasAnyPermission(user, 'passes.view_own', 'passes.view_all') },
+    { href: '/passes', label: 'Пропуска', icon: List, show: canViewPasses(user) },
     {
       href: '/passes/new',
       label: 'Заказать',
       icon: Plus,
       show: hasPermission(user, 'passes.create') && !hasPermission(user, 'passes.templates'),
     },
-    { href: '/control', label: 'Ресепшн', icon: ClipboardList, show: hasAnyPermission(user, 'passes.reception', 'passes.lookup') },
+    { href: '/control', label: 'Ресепшн', icon: ClipboardList, show: canUseReception(user) },
     { href: '/admin', label: 'Админ', icon: Settings, show: hasPermission(user, 'admin.panel') },
   ].filter((l) => l.show);
 
@@ -33,10 +34,8 @@ export function Header() {
     <header className="bg-white border-b border-[var(--border)] sticky top-0 z-50">
       <div className="max-w-6xl mx-auto px-4 py-3 flex items-center justify-between gap-4">
         <div className="flex items-center gap-6">
-          <Link href="/dashboard" className="flex items-center gap-2 font-bold text-[var(--primary)]">
-            <Building2 className="w-6 h-6" />
-            <span className="hidden sm:inline">{config?.businessCenterName || 'PASS24'}</span>
-            <span className="sm:hidden">PASS24</span>
+          <Link href="/dashboard" className="text-[var(--primary)]">
+            <SiteBrand config={config} size="sm" className="max-w-[200px] sm:max-w-none" />
           </Link>
           <nav className="hidden sm:flex items-center gap-1">
             {links.map(({ href, label, icon: Icon }) => (

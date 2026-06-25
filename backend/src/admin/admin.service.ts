@@ -2,11 +2,25 @@ import { ConflictException, Injectable, NotFoundException } from '@nestjs/common
 import { InjectModel } from '@nestjs/mongoose';
 import * as bcrypt from 'bcryptjs';
 import { Model, Types } from 'mongoose';
+import { AuditActor, AuditQuery, AuditService } from '../audit/audit.service';
 import { Office, OfficeDocument, Pass, PassDocument, Property, PropertyDocument, User, UserDocument } from '../schemas';
 import { PropertyType } from '../schemas/enums';
 import { CreateBusinessCenterDto } from './dto/create-business-center.dto';
 import { CreateOfficeDto } from './dto/create-office.dto';
 import { CreateUserDto } from './dto/create-user.dto';
+import { UpdateBusinessCenterDto } from './dto/update-business-center.dto';
+import { UpdateSettingsDto } from './dto/update-settings.dto';
+
+const STAFF_ROLES = ['security', 'bc_admin', 'admin'] as const;
+
+export interface UserQuery {
+  category?: 'tenants' | 'staff';
+  role?: string;
+  search?: string;
+  isActive?: string;
+  propertyId?: string;
+  officeId?: string;
+}
 
 @Injectable()
 export class AdminService {
@@ -15,6 +29,7 @@ export class AdminService {
     @InjectModel(Property.name) private propertyModel: Model<PropertyDocument>,
     @InjectModel(Office.name) private officeModel: Model<OfficeDocument>,
     @InjectModel(Pass.name) private passModel: Model<PassDocument>,
+    private auditService: AuditService,
   ) {}
 
   async dashboard() {
@@ -30,6 +45,8 @@ export class AdminService {
     const todayPasses = passes.filter((p) => p.visitDate === today);
     const weekPasses = passes.filter((p) => p.visitDate >= weekAgo);
 
+    const recentActivity = await this.auditService.getRecent(10);
+
     return {
       stats: {
         users: {
@@ -44,30 +61,33 @@ export class AdminService {
         },
         businessCenters: properties.length,
       },
-      recentActivity: [],
-      settings: {
-        business_center_name: properties[0]?.name || 'PASS24',
-        max_passes_per_day: '200',
-        auto_approve_delivery: 'false',
-        working_hours_from: '08:00',
-        working_hours_to: '20:00',
-        contact_phone: '+7 (495) 000-00-00',
-        contact_email: 'reception@pass24.local',
-        reception_floor: '1',
-      },
+      recentActivity,
+      settings: this.mapPropertySettings(properties[0]),
       officesCount: offices.length,
     };
   }
 
-  async getUsers(params: { role?: string; search?: string }) {
-    const filter: Record<string, unknown> = {};
-    if (params.role) filter.role = params.role;
-    if (params.search) {
-      const rx = new RegExp(params.search, 'i');
-      filter.$or = [{ fullName: rx }, { email: rx }, { company: rx }, { office: rx }];
-    }
+  getAudit(query: AuditQuery = {}) {
+    return this.auditService.getAudit(query);
+  }
 
-    const users = await this.userModel.find(filter).sort({ createdAt: -1 }).lean();
+  exportAuditCsv(query: AuditQuery = {}) {
+    return this.auditService.exportCsv(query);
+  }
+
+  async getUsers(params: UserQuery = {}) {
+    const filter = await this.buildUserFilter(params);
+    const tenantCountFilter = await this.buildUserFilter({ ...params, category: 'tenants', role: undefined });
+    const staffCountFilter = await this.buildUserFilter({ ...params, category: 'staff', role: undefined });
+
+    const [users, total, counts] = await Promise.all([
+      this.userModel.find(filter).sort({ createdAt: -1 }).lean(),
+      this.userModel.countDocuments(filter),
+      Promise.all([
+        this.userModel.countDocuments(tenantCountFilter),
+        this.userModel.countDocuments(staffCountFilter),
+      ]).then(([tenants, staff]) => ({ tenants, staff })),
+    ]);
     const passCounts = await this.passModel.aggregate([
       { $group: { _id: '$createdBy', count: { $sum: 1 } } },
     ]);
@@ -108,10 +128,62 @@ export class AdminService {
         }));
         return this.mapUser(u, countMap.get(u._id.toString()) || 0, tenantOffices, businessCenters);
       }),
+      total,
+      counts,
     };
   }
 
-  async createUser(dto: CreateUserDto) {
+  private async buildUserFilter(params: UserQuery) {
+    const filter: Record<string, unknown> = {};
+
+    if (params.category === 'tenants') {
+      filter.role = 'tenant';
+    } else if (params.category === 'staff') {
+      if (params.role && STAFF_ROLES.includes(params.role as (typeof STAFF_ROLES)[number])) {
+        filter.role = params.role;
+      } else {
+        filter.role = { $in: [...STAFF_ROLES] };
+      }
+    } else if (params.role) {
+      filter.role = params.role;
+    }
+
+    if (params.isActive === 'true') filter.isActive = true;
+    if (params.isActive === 'false') filter.isActive = false;
+
+    if (params.search?.trim()) {
+      const rx = new RegExp(params.search.trim().replace(/[.*+?^${}()|[\]\\]/g, '\\$&'), 'i');
+      filter.$or = [{ fullName: rx }, { email: rx }, { company: rx }, { office: rx }];
+    }
+
+    const isStaffCategory = params.category === 'staff' || (params.role && params.role !== 'tenant' && !params.category);
+
+    if (params.officeId?.trim()) {
+      const office = await this.officeModel.findById(params.officeId.trim()).lean();
+      if (office?.tenantId) {
+        filter._id = office.tenantId;
+        filter.role = 'tenant';
+      } else {
+        filter._id = { $in: [] };
+      }
+    } else if (params.propertyId?.trim()) {
+      const propertyObjectId = new Types.ObjectId(params.propertyId.trim());
+      if (isStaffCategory) {
+        filter.properties = propertyObjectId;
+      } else {
+        const tenantIds = await this.officeModel.distinct('tenantId', {
+          property: propertyObjectId,
+          tenantId: { $exists: true, $ne: null },
+        });
+        filter._id = { $in: tenantIds };
+        filter.role = 'tenant';
+      }
+    }
+
+    return filter;
+  }
+
+  async createUser(dto: CreateUserDto, actor?: AuditActor) {
     const email = dto.email.toLowerCase();
     const existing = await this.userModel.findOne({ email });
     if (existing) throw new ConflictException('Пользователь с таким email уже существует');
@@ -132,17 +204,26 @@ export class AdminService {
     if (dto.role === 'tenant' && dto.officeIds !== undefined) {
       await this.assignOfficesToTenant(user._id.toString(), dto.officeIds);
     }
-    if (dto.role === 'security' && dto.propertyIds !== undefined) {
+    if ((dto.role === 'security' || dto.role === 'bc_admin') && dto.propertyIds !== undefined) {
       user.properties = dto.propertyIds.map((pid) => new Types.ObjectId(pid));
       await user.save();
     }
 
     const offices = await this.getTenantOffices(user._id.toString());
     const businessCenters = await this.getUserBusinessCenters(user);
+
+    await this.auditService.log({
+      action: 'user.create',
+      entityType: 'user',
+      entityId: user._id,
+      actor,
+      details: { email: user.email, role: user.role, fullName: user.fullName },
+    });
+
     return { user: this.mapUser(user.toObject(), 0, offices, businessCenters) };
   }
 
-  async updateUser(id: string, dto: Partial<CreateUserDto & { isActive: boolean }>) {
+  async updateUser(id: string, dto: Partial<CreateUserDto & { isActive: boolean }>, actor?: AuditActor) {
     const user = await this.userModel.findById(id);
     if (!user) throw new NotFoundException('Пользователь не найден');
 
@@ -160,13 +241,13 @@ export class AdminService {
     if (dto.role && dto.role !== 'tenant' && prevRole === 'tenant') {
       await this.assignOfficesToTenant(id, []);
     }
-    if (dto.role && dto.role !== 'security' && prevRole === 'security') {
+    if (dto.role && !['security', 'bc_admin'].includes(dto.role) && ['security', 'bc_admin'].includes(prevRole)) {
       user.properties = [];
     }
     if (dto.role === 'tenant' && prevRole !== 'tenant') {
       user.properties = [];
     }
-    if (dto.propertyIds !== undefined && user.role === 'security') {
+    if (dto.propertyIds !== undefined && ['security', 'bc_admin'].includes(user.role)) {
       user.properties = dto.propertyIds.map((pid) => new Types.ObjectId(pid));
     }
 
@@ -179,12 +260,97 @@ export class AdminService {
     const offices = await this.getTenantOffices(id);
     const passesCount = await this.passModel.countDocuments({ createdBy: user._id });
     const businessCenters = await this.getUserBusinessCenters(user);
+
+    await this.auditService.log({
+      action: 'user.update',
+      entityType: 'user',
+      entityId: user._id,
+      actor,
+      details: { email: user.email, role: user.role, isActive: user.isActive },
+    });
+
     return { user: this.mapUser(user.toObject(), passesCount, offices, businessCenters) };
   }
 
-  async getBusinessCenters() {
+  async getSettings(actor?: any) {
+    const property = await this.getPrimaryProperty(actor);
+    return this.mapPropertySettings(property);
+  }
+
+  async updateSettings(dto: UpdateSettingsDto, actor?: any) {
+    const property = await this.getPrimaryProperty(actor);
+    if (!property) throw new NotFoundException('Бизнес-центр не найден');
+
+    if (dto.business_center_name?.trim()) {
+      property.name = dto.business_center_name.trim();
+    }
+
+    const settings = property.settings || {};
+    if (dto.max_passes_per_day !== undefined) settings.max_passes_per_day = dto.max_passes_per_day;
+    if (dto.auto_approve_delivery !== undefined) settings.auto_approve_delivery = dto.auto_approve_delivery;
+    if (dto.working_hours_from !== undefined) settings.working_hours_from = dto.working_hours_from;
+    if (dto.working_hours_to !== undefined) settings.working_hours_to = dto.working_hours_to;
+    if (dto.contact_phone !== undefined) settings.contact_phone = dto.contact_phone;
+    if (dto.contact_email !== undefined) settings.contact_email = dto.contact_email;
+    if (dto.reception_floor !== undefined) settings.reception_floor = dto.reception_floor;
+    property.settings = settings;
+    property.markModified('settings');
+
+    await property.save();
+
+    await this.auditService.log({
+      action: 'settings.update',
+      entityType: 'property',
+      entityId: property._id,
+      actor,
+      details: { name: property.name },
+    });
+
+    return { settings: this.mapPropertySettings(property.toObject()) };
+  }
+
+  async updateBusinessCenter(id: string, dto: UpdateBusinessCenterDto, actor?: AuditActor) {
+    const property = await this.propertyModel.findById(id);
+    if (!property) throw new NotFoundException('Бизнес-центр не найден');
+    await this.ensureBcAccess(property._id.toString(), actor);
+
+    if (dto.name?.trim()) property.name = dto.name.trim();
+    if (dto.address?.trim()) property.address = dto.address.trim();
+    await property.save();
+
+    const stats = await this.officeModel.aggregate([
+      { $match: { property: property._id, isActive: true } },
+      { $group: { _id: '$property', count: { $sum: 1 }, totalAreaSqm: { $sum: { $ifNull: ['$areaSqm', 0] } } } },
+    ]);
+
+    await this.auditService.log({
+      action: 'bc.update',
+      entityType: 'business_center',
+      entityId: property._id,
+      actor,
+      details: { name: property.name, address: property.address },
+    });
+
+    return {
+      businessCenter: {
+        id: property._id.toString(),
+        name: property.name,
+        address: property.address,
+        officesCount: stats[0]?.count || 0,
+        totalAreaSqm: stats[0]?.totalAreaSqm || 0,
+        isActive: property.isActive,
+        createdAt: (property as any).createdAt,
+      },
+    };
+  }
+
+  async getBusinessCenters(actor?: any) {
+    const filter: Record<string, unknown> = { type: PropertyType.BUSINESS_CENTER };
+    const scope = await this.getActorPropertyIds(actor);
+    if (scope?.length) filter._id = { $in: scope.map((id) => new Types.ObjectId(id)) };
+
     const properties = await this.propertyModel
-      .find({ type: PropertyType.BUSINESS_CENTER })
+      .find(filter)
       .sort({ name: 1 })
       .lean();
 
@@ -216,7 +382,7 @@ export class AdminService {
     };
   }
 
-  async createBusinessCenter(dto: CreateBusinessCenterDto) {
+  async createBusinessCenter(dto: CreateBusinessCenterDto, actor?: AuditActor) {
     const property = await this.propertyModel.create({
       name: dto.name.trim(),
       address: dto.address.trim(),
@@ -225,6 +391,14 @@ export class AdminService {
       isActive: true,
       settings: {},
       gates: ['Главный вход'],
+    });
+
+    await this.auditService.log({
+      action: 'bc.create',
+      entityType: 'business_center',
+      entityId: property._id,
+      actor,
+      details: { name: property.name, address: property.address },
     });
 
     return {
@@ -257,7 +431,7 @@ export class AdminService {
     };
   }
 
-  async createOffice(dto: CreateOfficeDto) {
+  async createOffice(dto: CreateOfficeDto, actor?: AuditActor) {
     const property = await this.propertyModel.findById(dto.propertyId);
     if (!property) throw new NotFoundException('Бизнес-центр не найден');
 
@@ -285,10 +459,18 @@ export class AdminService {
     const tenant = dto.tenantId ? await this.userModel.findById(dto.tenantId).lean() : null;
     const tenantMap = tenant ? new Map([[tenant._id.toString(), tenant]]) : new Map();
 
+    await this.auditService.log({
+      action: 'office.create',
+      entityType: 'office',
+      entityId: office._id,
+      actor,
+      details: { number: office.number, floor: office.floor, propertyId: dto.propertyId },
+    });
+
     return { office: this.mapOffice(office.toObject(), propertyMap, tenantMap) };
   }
 
-  async updateOffice(id: string, dto: Partial<CreateOfficeDto & { isActive: boolean }>) {
+  async updateOffice(id: string, dto: Partial<CreateOfficeDto & { isActive: boolean }>, actor?: AuditActor) {
     const office = await this.officeModel.findById(id);
     if (!office) throw new NotFoundException('Офис не найден');
 
@@ -310,6 +492,14 @@ export class AdminService {
     const tenant = office.tenantId ? await this.userModel.findById(office.tenantId).lean() : null;
     const propertyMap = property ? new Map([[property._id.toString(), property]]) : new Map();
     const tenantMap = tenant ? new Map([[tenant._id.toString(), tenant]]) : new Map();
+
+    await this.auditService.log({
+      action: 'office.update',
+      entityType: 'office',
+      entityId: office._id,
+      actor,
+      details: { number: office.number, isActive: office.isActive },
+    });
 
     return { office: this.mapOffice(office.toObject(), propertyMap, tenantMap) };
   }
@@ -520,6 +710,43 @@ export class AdminService {
       offices,
       businessCenters,
       propertyIds: businessCenters.map((bc) => bc.id),
+    };
+  }
+
+  private async getPrimaryProperty(actor?: any) {
+    const scope = await this.getActorPropertyIds(actor);
+    const filter: Record<string, unknown> = { type: PropertyType.BUSINESS_CENTER, isActive: true };
+    if (scope?.length) filter._id = { $in: scope.map((id) => new Types.ObjectId(id)) };
+    return this.propertyModel.findOne(filter).sort({ createdAt: 1 });
+  }
+
+  private async getActorPropertyIds(actor?: any): Promise<string[] | null> {
+    if (!actor || actor.role === 'admin') return null;
+    if (!['bc_admin', 'security'].includes(actor.role)) return null;
+    const user = await this.userModel.findById(actor.userId).lean();
+    return (user?.properties || []).map((p) => p.toString());
+  }
+
+  private async ensureBcAccess(propertyId: string, actor?: any) {
+    if (!actor || actor.role === 'admin') return;
+    if (actor.role !== 'bc_admin') return;
+    const allowed = await this.getActorPropertyIds(actor);
+    if (!allowed?.includes(propertyId)) {
+      throw new NotFoundException('Бизнес-центр не найден');
+    }
+  }
+
+  private mapPropertySettings(property?: any) {
+    const s = property?.settings || {};
+    return {
+      business_center_name: property?.name || 'PASS24',
+      max_passes_per_day: s.max_passes_per_day || '200',
+      auto_approve_delivery: s.auto_approve_delivery || 'false',
+      working_hours_from: s.working_hours_from || '08:00',
+      working_hours_to: s.working_hours_to || '20:00',
+      contact_phone: s.contact_phone || '+7 (495) 000-00-00',
+      contact_email: s.contact_email || 'reception@pass24.local',
+      reception_floor: s.reception_floor || '1',
     };
   }
 

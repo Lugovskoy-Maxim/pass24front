@@ -1,4 +1,4 @@
-import { IsArray, IsIn, IsObject, IsOptional, IsString } from 'class-validator';
+import { IsArray, IsIn, IsOptional } from 'class-validator';
 import { ALL_PASS_TYPES } from '../../access/access.constants';
 
 export class UpdateAccessConfigDto {
@@ -8,6 +8,5 @@ export class UpdateAccessConfigDto {
   enabledPassTypes?: string[];
 
   @IsOptional()
-  @IsObject()
   rolePermissions?: Record<string, string[]>;
 }

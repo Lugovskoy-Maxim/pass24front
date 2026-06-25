@@ -9,7 +9,7 @@ import { useAuth } from '@/lib/auth';
 import {
   api, Pass, PassStats, PassTemplate, TYPE_LABELS, PassType, formatTenantOffices,
 } from '@/lib/api';
-import { hasAnyPermission, hasPermission } from '@/lib/permissions';
+import { canUseReception, canViewAllPasses, canViewPasses, hasPermission } from '@/lib/permissions';
 
 const TYPE_ICONS: Record<PassType, typeof User> = {
   visitor: User,
@@ -25,7 +25,7 @@ export default function DashboardPage() {
   const [stats, setStats] = useState<PassStats | null>(null);
   const [loadError, setLoadError] = useState('');
 
-  const isTenantTemplates = hasPermission(user, 'passes.templates') && !hasAnyPermission(user, 'passes.view_own', 'passes.view_all');
+  const isTenantTemplates = hasPermission(user, 'passes.templates') && !canViewPasses(user);
 
   useEffect(() => {
     if (isTenantTemplates) {
@@ -44,7 +44,8 @@ export default function DashboardPage() {
   }, [isTenantTemplates]);
 
   const canCreate = hasPermission(user, 'passes.create');
-  const canReception = hasAnyPermission(user, 'passes.reception', 'passes.lookup');
+  const canReception = canUseReception(user);
+  const showAllPasses = canViewAllPasses(user);
   const canTemplates = hasPermission(user, 'passes.templates');
 
   return (
@@ -148,7 +149,12 @@ export default function DashboardPage() {
         </>
       ) : (
         <>
-          <h2 className="text-lg font-semibold mb-4">Последние пропуска</h2>
+          <div className="flex items-center justify-between mb-4">
+            <h2 className="text-lg font-semibold">{showAllPasses ? 'Последние пропуска всех пользователей' : 'Последние пропуска'}</h2>
+            {showAllPasses && (
+              <Link href="/passes" className="text-sm text-[var(--primary)] hover:underline">Все пропуска</Link>
+            )}
+          </div>
           {passes.length === 0 ? (
             <div className="card p-8 text-center text-[var(--muted)]">
               Пропусков пока нет. Закажите пропуск для посетителя или курьера.

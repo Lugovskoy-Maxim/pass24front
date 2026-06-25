@@ -19,6 +19,7 @@ async function bootstrap() {
     credentials: true,
     methods: 'GET,HEAD,PUT,PATCH,POST,DELETE,OPTIONS',
     allowedHeaders: 'Content-Type, Accept, Authorization',
+    exposedHeaders: 'Content-Disposition, Content-Type, Content-Length',
   });
 
   // Validation

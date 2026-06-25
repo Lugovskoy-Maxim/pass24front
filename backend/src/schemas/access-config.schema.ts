@@ -14,10 +14,21 @@ export class AccessConfig {
   @Prop({
     type: Object,
     default: {
-      tenant: ['passes.create', 'passes.view_own'],
+      tenant: ['passes.create', 'passes.templates', 'passes.view_own'],
       security: ['passes.view_all', 'passes.approve', 'passes.reception', 'passes.lookup'],
+      bc_admin: [
+        'passes.view_all',
+        'passes.approve',
+        'passes.reception',
+        'passes.lookup',
+        'admin.panel',
+        'admin.users',
+        'admin.offices',
+        'admin.settings',
+      ],
       admin: [
         'passes.create',
+        'passes.templates',
         'passes.view_own',
         'passes.view_all',
         'passes.approve',

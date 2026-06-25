@@ -5,14 +5,15 @@ import { AdminLayout } from '@/components/AdminLayout';
 import { useToast } from '@/components/Toast';
 import { useAuth } from '@/lib/auth';
 import { api, AccessConfig, PassType, ROLE_LABELS } from '@/lib/api';
+import { hasPermission } from '@/lib/permissions';
 
-const ROLE_LABELS_EXT: Record<string, string> = {
-  ...ROLE_LABELS,
-};
+function roleLabel(config: AccessConfig, role: string) {
+  return config.roleLabels?.[role] || ROLE_LABELS[role as keyof typeof ROLE_LABELS] || role;
+}
 
 export default function AdminPermissionsPage() {
   const { toast } = useToast();
-  const { refreshUser } = useAuth();
+  const { user, refreshUser } = useAuth();
   const [config, setConfig] = useState<AccessConfig | null>(null);
   const [saving, setSaving] = useState(false);
 
@@ -64,6 +65,10 @@ export default function AdminPermissionsPage() {
     }
   };
 
+  if (!hasPermission(user, 'admin.permissions')) {
+    return <AdminLayout title="Права и типы пропусков"><div className="text-[var(--muted)]">Нет доступа. Только супер-администратор может менять права.</div></AdminLayout>;
+  }
+
   if (!config) {
     return <AdminLayout title="Права и типы пропусков"><div className="animate-pulse text-[var(--muted)]">Загрузка...</div></AdminLayout>;
   }
@@ -104,7 +109,7 @@ export default function AdminPermissionsPage() {
                 <th className="text-left p-3 font-medium">Право</th>
                 {config.roles.map((role) => (
                   <th key={role} className="text-center p-3 font-medium whitespace-nowrap">
-                    {ROLE_LABELS_EXT[role] || role}
+                    {roleLabel(config, role)}
                   </th>
                 ))}
               </tr>

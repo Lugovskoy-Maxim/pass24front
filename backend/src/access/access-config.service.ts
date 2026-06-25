@@ -7,6 +7,7 @@ import {
   ALL_PERMISSIONS,
   DEFAULT_ROLE_PERMISSIONS,
   PASS_TYPE_LABELS,
+  ROLE_LABELS,
 } from './access.constants';
 
 @Injectable()
@@ -30,12 +31,39 @@ export class AccessConfigService implements OnModuleInit {
       return;
     }
 
-    const tenantPerms: string[] = existing.rolePermissions?.tenant || [];
-    if (tenantPerms.includes('passes.view_own') && !tenantPerms.includes('passes.templates')) {
-      existing.rolePermissions.tenant = [
-        ...tenantPerms.filter((p) => p !== 'passes.view_own'),
-        'passes.templates',
-      ];
+    let changed = false;
+    const validKeys = new Set<string>(ALL_PERMISSIONS.map((p) => p.key));
+
+    for (const [role, defaults] of Object.entries(DEFAULT_ROLE_PERMISSIONS)) {
+      if (!existing.rolePermissions[role]) {
+        existing.rolePermissions[role] = [...defaults];
+        changed = true;
+      }
+    }
+
+    for (const [role, perms] of Object.entries(existing.rolePermissions)) {
+      const sanitized = [...new Set((perms || []).filter((p) => validKeys.has(p)))];
+      const defaults = DEFAULT_ROLE_PERMISSIONS[role] || [];
+
+      for (const perm of defaults) {
+        if (!sanitized.includes(perm)) {
+          sanitized.push(perm);
+          changed = true;
+        }
+      }
+
+      if (role === 'admin' && !sanitized.includes('admin.permissions')) {
+        sanitized.push('admin.permissions');
+        changed = true;
+      }
+
+      if (sanitized.length !== perms.length || sanitized.some((p, i) => p !== perms[i])) {
+        existing.rolePermissions[role] = sanitized;
+        changed = true;
+      }
+    }
+
+    if (changed) {
       existing.markModified('rolePermissions');
       await existing.save();
     }
@@ -67,13 +95,23 @@ export class AccessConfigService implements OnModuleInit {
     }
 
     if (data.rolePermissions) {
-      const validKeys = new Set(ALL_PERMISSIONS.map((p) => p.key));
+      const validKeys = new Set<string>(ALL_PERMISSIONS.map((p) => p.key));
       for (const [role, perms] of Object.entries(data.rolePermissions)) {
-        const invalid = perms.filter((p) => !validKeys.has(p as any));
-        if (invalid.length) {
-          throw new BadRequestException(`Неизвестные права для роли ${role}: ${invalid.join(', ')}`);
+        doc.rolePermissions[role] = (perms || []).filter((p) => validKeys.has(p));
+      }
+      for (const [role, defaults] of Object.entries(DEFAULT_ROLE_PERMISSIONS)) {
+        const current = doc.rolePermissions[role] || [];
+        if (current.includes('admin.panel')) {
+          for (const perm of ['passes.view_all', 'passes.reception', 'passes.lookup', ...defaults]) {
+            if (!current.includes(perm)) current.push(perm);
+          }
+          doc.rolePermissions[role] = current;
         }
-        doc.rolePermissions[role] = perms;
+      }
+      if (!doc.rolePermissions.admin?.includes('admin.permissions')) {
+        doc.rolePermissions.admin = [
+          ...new Set([...(doc.rolePermissions.admin || []), 'admin.permissions']),
+        ];
       }
       doc.markModified('rolePermissions');
     }
@@ -97,13 +135,24 @@ export class AccessConfigService implements OnModuleInit {
     return perms.includes(permission);
   }
 
+  async canViewAllPasses(role: string): Promise<boolean> {
+    if (await this.hasPermission(role, 'passes.view_all')) return true;
+    return this.hasPermission(role, 'admin.panel');
+  }
+
   private mapConfig(doc: any) {
+    const mergedRoles = {
+      ...DEFAULT_ROLE_PERMISSIONS,
+      ...doc.rolePermissions,
+    };
+
     return {
       enabledPassTypes: doc.enabledPassTypes,
       rolePermissions: doc.rolePermissions,
       permissions: ALL_PERMISSIONS,
       passTypeLabels: PASS_TYPE_LABELS,
-      roles: Object.keys(doc.rolePermissions),
+      roleLabels: ROLE_LABELS,
+      roles: Object.keys(mergedRoles),
     };
   }
 }

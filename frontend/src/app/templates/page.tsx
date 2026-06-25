@@ -7,10 +7,8 @@ import { ProtectedLayout } from '@/components/ProtectedLayout';
 import { useAuth } from '@/lib/auth';
 import { useToast } from '@/components/Toast';
 import {
-  api, PassTemplate, PassType, TYPE_LABELS, CreatePassTemplateData, formatTenantOffices,
+  api, PassTemplate, PassType, TYPE_LABELS, CreatePassTemplateData, formatTenantOffices, VISIT_PURPOSES,
 } from '@/lib/api';
-
-const PURPOSES = ['Встреча', 'Переговоры', 'Собеседование', 'Доставка', 'Техобслуживание', 'Презентация', 'Другое'];
 
 const TYPE_ICONS: Record<PassType, typeof User> = {
   visitor: User,
@@ -24,7 +22,7 @@ const EMPTY_FORM: CreatePassTemplateData = {
   visitorName: '',
   visitorPhone: '',
   companyName: '',
-  visitPurpose: 'Встреча',
+  visitPurpose: 'Гость',
   passType: 'visitor',
   vehiclePlate: '',
   vehicleModel: '',
@@ -211,7 +209,7 @@ export default function TemplatesPage() {
           <div>
             <label className="label">Цель визита</label>
             <select className="input" value={form.visitPurpose} onChange={(e) => setForm({ ...form, visitPurpose: e.target.value })}>
-              {PURPOSES.map((p) => <option key={p} value={p}>{p}</option>)}
+              {VISIT_PURPOSES.map((p) => <option key={p} value={p}>{p}</option>)}
             </select>
           </div>
 

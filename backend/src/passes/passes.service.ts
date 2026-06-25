@@ -1,8 +1,11 @@
 import { BadRequestException, ForbiddenException, Injectable, NotFoundException } from '@nestjs/common';
+import { ConfigService } from '@nestjs/config';
 import { AccessConfigService } from '../access/access-config.service';
+import { AuditActor, AuditService } from '../audit/audit.service';
+import { MailService } from '../mail/mail.service';
 import { InjectModel } from '@nestjs/mongoose';
 import { Model, Types } from 'mongoose';
-import { Office, OfficeDocument, Pass, PassDocument, Property, PropertyDocument } from '../schemas';
+import { Office, OfficeDocument, Pass, PassDocument, Property, PropertyDocument, User, UserDocument } from '../schemas';
 import { CreatePassDto } from './dto/create-pass.dto';
 import { UpdateStatusDto } from './dto/update-status.dto';
 import { PassTemplatesService } from './pass-templates.service';
@@ -13,9 +16,20 @@ export class PassesService {
     @InjectModel(Pass.name) private passModel: Model<PassDocument>,
     @InjectModel(Office.name) private officeModel: Model<OfficeDocument>,
     @InjectModel(Property.name) private propertyModel: Model<PropertyDocument>,
+    @InjectModel(User.name) private userModel: Model<UserDocument>,
     private accessConfigService: AccessConfigService,
     private passTemplatesService: PassTemplatesService,
+    private auditService: AuditService,
+    private mailService: MailService,
+    private configService: ConfigService,
   ) {}
+
+  private readonly passTypeLabels: Record<string, string> = {
+    visitor: 'Посетитель',
+    parking: 'Парковка',
+    delivery: 'Доставка',
+    contractor: 'Подрядчик',
+  };
 
   private generatePassNumber() {
     const year = new Date().getFullYear();
@@ -24,11 +38,17 @@ export class PassesService {
   }
 
   private async buildAccessFilter(user?: any) {
-    if (!user || user.role === 'admin' || user.role === 'security') {
+    if (!user?.role) return { _id: null };
+
+    if (await this.accessConfigService.canViewAllPasses(user.role)) {
       return {};
     }
 
-    return { createdBy: new Types.ObjectId(user.userId) };
+    if (await this.accessConfigService.hasPermission(user.role, 'passes.view_own')) {
+      return { createdBy: new Types.ObjectId(user.userId) };
+    }
+
+    return { _id: null };
   }
 
   async findAll(params: { status?: string; date?: string; search?: string }, user?: any) {
@@ -66,29 +86,98 @@ export class PassesService {
       throw new BadRequestException('Этот тип пропуска отключён администратором');
     }
 
-    const resolved = await this.resolveOfficeFields(dto, user);
+    const { sendEmail, recipientEmail, ...passDto } = dto;
+    if (sendEmail && !recipientEmail?.trim()) {
+      throw new BadRequestException('Укажите email для отправки пропуска');
+    }
+
+    const resolved = await this.resolveOfficeFields(passDto, user);
 
     const passNumber = this.generatePassNumber();
     const doc = await this.passModel.create({
-      ...dto,
+      ...passDto,
       ...resolved,
       passNumber,
       status: 'pending',
       createdBy: user?.userId,
-      creatorName: user?.email,
-      creatorCompany: resolved.companyName || dto.companyName,
+      creatorName: user?.fullName || user?.email,
+      creatorCompany: resolved.companyName || passDto.companyName,
     });
 
     if (user?.role === 'tenant') {
       await this.passTemplatesService.upsertFromPass(doc.toObject(), user.userId);
     }
 
-    return { pass: this.mapToFrontend(doc, user) };
+    await this.auditService.log({
+      action: 'pass.create',
+      entityType: 'pass',
+      entityId: doc._id,
+      actor: user,
+      details: { passNumber: doc.passNumber, visitorName: doc.visitorName, status: doc.status },
+    });
+
+    let emailSent = false;
+    if (sendEmail && recipientEmail) {
+      await this.sendPassEmail(doc._id.toString(), recipientEmail.trim(), user);
+      emailSent = true;
+    }
+
+    return { pass: this.mapToFrontend(doc, user), emailSent };
   }
 
-  async updateStatus(id: string, dto: UpdateStatusDto, actor?: any) {
+  async sendPassEmail(idOrNumber: string, email: string, user?: any) {
+    const isObjectId = /^[a-f0-9]{24}$/i.test(idOrNumber);
+    let pass = isObjectId ? await this.passModel.findById(idOrNumber).lean() : null;
+    if (!pass) {
+      pass = await this.passModel.findOne({ passNumber: idOrNumber }).lean();
+    }
+    if (!pass) throw new NotFoundException('Пропуск не найден');
+    await this.ensurePassAccess(pass, user);
+
+    const ticketUrl = this.buildTicketUrl(pass.passNumber);
+    await this.mailService.sendPassTicket({
+      to: email.trim().toLowerCase(),
+      visitorName: pass.visitorName,
+      passNumber: pass.passNumber,
+      visitDate: pass.visitDate,
+      visitTimeFrom: pass.visitTimeFrom,
+      visitTimeTo: pass.visitTimeTo,
+      businessCenterName: pass.businessCenterName,
+      office: pass.office,
+      floor: pass.floor,
+      companyName: pass.companyName,
+      visitPurpose: pass.visitPurpose,
+      passTypeLabel: this.passTypeLabels[pass.passType] || pass.passType,
+      ticketUrl,
+    });
+
+    return { sent: true, email: email.trim().toLowerCase() };
+  }
+
+  private buildTicketUrl(passNumber: string) {
+    const base = (this.configService.get<string>('PUBLIC_APP_URL') || 'http://127.0.0.1:3000').replace(/\/$/, '');
+    return `${base}/ticket/${encodeURIComponent(passNumber)}`;
+  }
+
+  async updateStatus(id: string, dto: UpdateStatusDto, actor?: AuditActor) {
     const pass = await this.passModel.findById(id);
     if (!pass) throw new NotFoundException('Пропуск не найден');
+
+    const canApprove = actor?.role
+      ? await this.accessConfigService.hasPermission(actor.role, 'passes.approve')
+      : false;
+    const isCreator = actor?.userId && pass.createdBy?.toString() === actor.userId;
+
+    if (dto.status === 'cancelled') {
+      if (!canApprove && !isCreator) {
+        throw new ForbiddenException('Нельзя отменить этот пропуск');
+      }
+      if (!canApprove && pass.status !== 'pending') {
+        throw new BadRequestException('Можно отменить только заявку на рассмотрении');
+      }
+    } else if (!canApprove) {
+      throw new ForbiddenException('Недостаточно прав для изменения статуса');
+    }
 
     pass.status = dto.status;
     if (dto.rejectionReason) pass.rejectionReason = dto.rejectionReason;
@@ -99,26 +188,65 @@ export class PassesService {
     }
 
     await pass.save();
-    return { pass: this.mapToFrontend(pass) };
+
+    const statusActions: Record<string, string> = {
+      approved: 'pass.approved',
+      rejected: 'pass.rejected',
+      cancelled: 'pass.cancelled',
+    };
+    const action = statusActions[dto.status];
+    if (action) {
+      await this.auditService.log({
+        action,
+        entityType: 'pass',
+        entityId: pass._id,
+        actor,
+        details: {
+          passNumber: pass.passNumber,
+          status: dto.status,
+          rejectionReason: dto.rejectionReason,
+        },
+      });
+    }
+
+    return { pass: this.mapToFrontend(pass, actor) };
   }
 
-  async checkIn(id: string) {
+  async checkIn(id: string, actor?: AuditActor) {
     const pass = await this.passModel.findById(id);
     if (!pass) throw new NotFoundException('Пропуск не найден');
 
     pass.status = 'active';
     pass.checkedInAt = new Date().toISOString();
     await pass.save();
+
+    await this.auditService.log({
+      action: 'pass.check_in',
+      entityType: 'pass',
+      entityId: pass._id,
+      actor,
+      details: { passNumber: pass.passNumber, visitorName: pass.visitorName },
+    });
+
     return { pass: this.mapToFrontend(pass) };
   }
 
-  async checkOut(id: string) {
+  async checkOut(id: string, actor?: AuditActor) {
     const pass = await this.passModel.findById(id);
     if (!pass) throw new NotFoundException('Пропуск не найден');
 
     pass.status = 'completed';
     pass.checkedOutAt = new Date().toISOString();
     await pass.save();
+
+    await this.auditService.log({
+      action: 'pass.check_out',
+      entityType: 'pass',
+      entityId: pass._id,
+      actor,
+      details: { passNumber: pass.passNumber, visitorName: pass.visitorName },
+    });
+
     return { pass: this.mapToFrontend(pass) };
   }
 
@@ -147,6 +275,12 @@ export class PassesService {
     const pass = await this.passModel.findOne({ passNumber }).lean();
     if (!pass) throw new NotFoundException('Пропуск не найден');
     return { pass: this.mapToFrontend(pass) };
+  }
+
+  async getPublicTicket(passNumber: string) {
+    const pass = await this.passModel.findOne({ passNumber }).lean();
+    if (!pass) throw new NotFoundException('Пропуск не найден');
+    return { ticket: this.mapToPublicTicket(pass) };
   }
 
   async getStats(user?: any) {
@@ -201,9 +335,12 @@ export class PassesService {
   }
 
   private async ensurePassAccess(pass: any, user?: any) {
-    if (!user || user.role === 'admin' || user.role === 'security') return;
+    if (!user?.role) throw new ForbiddenException('Нет доступа к этому пропуску');
 
-    if (pass.createdBy?.toString() === user.userId) return;
+    if (await this.accessConfigService.canViewAllPasses(user.role)) return;
+
+    const isCreator = pass.createdBy?.toString() === user.userId;
+    if (isCreator && await this.accessConfigService.hasPermission(user.role, 'passes.view_own')) return;
 
     throw new ForbiddenException('Нет доступа к этому пропуску');
   }
@@ -216,12 +353,37 @@ export class PassesService {
     }, {} as Record<string, number>);
   }
 
+  private mapToPublicTicket(doc: any) {
+    return {
+      passNumber: doc.passNumber,
+      visitorName: doc.visitorName,
+      companyName: doc.companyName,
+      visitPurpose: doc.visitPurpose,
+      passType: doc.passType,
+      vehiclePlate: doc.vehiclePlate,
+      visitDate: doc.visitDate,
+      visitTimeFrom: doc.visitTimeFrom,
+      visitTimeTo: doc.visitTimeTo,
+      businessCenterName: doc.businessCenterName,
+      office: doc.office,
+      floor: doc.floor,
+      status: doc.status,
+      createdAt: doc.createdAt,
+      approvedAt: doc.approvedAt,
+      checkedInAt: doc.checkedInAt,
+      checkedOutAt: doc.checkedOutAt,
+      rejectionReason: doc.rejectionReason,
+    };
+  }
+
   private mapToFrontend(doc: any, user?: any) {
     const isTenant = user?.role === 'tenant';
+    const isOwner = !!user?.userId && doc.createdBy?.toString() === user.userId;
     return {
       id: doc._id.toString(),
       passNumber: doc.passNumber,
-      createdBy: isTenant ? undefined : doc.createdBy?.toString() || '',
+      isOwner,
+      createdBy: isOwner || !isTenant ? doc.createdBy?.toString() || '' : '',
       creatorName: isTenant ? undefined : doc.creatorName,
       creatorCompany: isTenant ? undefined : doc.creatorCompany,
       visitorName: doc.visitorName,

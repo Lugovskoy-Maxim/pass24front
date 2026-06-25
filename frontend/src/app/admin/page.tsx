@@ -1,15 +1,17 @@
 'use client';
 
 import { useEffect, useState } from 'react';
-import { Users, FileText, Building2, Sparkles } from 'lucide-react';
+import Link from 'next/link';
+import { Users, FileText, Building2, Sparkles, List, ScrollText } from 'lucide-react';
 import { AdminLayout } from '@/components/AdminLayout';
 import { useToast } from '@/components/Toast';
-import { api, AdminDashboard, AUDIT_LABELS, STATUS_LABELS } from '@/lib/api';
+import { api, AdminDashboard, AUDIT_LABELS, STATUS_LABELS, formatAuditEntity } from '@/lib/api';
 
 const ROLE_NAMES: Record<string, string> = {
   tenant: 'Арендаторы',
   security: 'Ресепшн',
-  admin: 'Админы',
+  bc_admin: 'Админы БЦ',
+  admin: 'Супер-админы',
 };
 
 export default function AdminDashboardPage() {
@@ -54,6 +56,17 @@ export default function AdminDashboardPage() {
           <Sparkles className="w-4 h-4" />
           {seeding ? 'Создание...' : 'Создать тестовые БЦ и арендаторов'}
         </button>
+      </div>
+
+      <div className="flex flex-wrap gap-3 mb-6">
+        <Link href="/passes" className="btn btn-secondary text-sm">
+          <List className="w-4 h-4" />
+          Все пропуска
+        </Link>
+        <Link href="/admin/audit" className="btn btn-secondary text-sm">
+          <ScrollText className="w-4 h-4" />
+          Журнал действий
+        </Link>
       </div>
 
       <div className="grid grid-cols-2 lg:grid-cols-3 gap-4 mb-8">
@@ -104,7 +117,10 @@ export default function AdminDashboardPage() {
         </div>
 
         <div className="card p-5 lg:col-span-2">
-          <h2 className="font-semibold mb-4">Последние действия</h2>
+          <div className="flex items-center justify-between mb-4">
+            <h2 className="font-semibold">Последние действия пользователей</h2>
+            <Link href="/admin/audit" className="text-sm text-[var(--primary)] hover:underline">Весь журнал</Link>
+          </div>
           {recentActivity.length === 0 ? (
             <p className="text-sm text-[var(--muted)]">Действий пока нет</p>
           ) : (
@@ -114,6 +130,9 @@ export default function AdminDashboardPage() {
                   <div>
                     <span className="font-medium">{AUDIT_LABELS[entry.action] || entry.action}</span>
                     <span className="text-[var(--muted)]"> · {entry.userName || 'Система'}</span>
+                    <span className="text-[var(--muted)] text-xs block sm:inline sm:ml-1">
+                      — {formatAuditEntity(entry)}
+                    </span>
                   </div>
                   <span className="text-xs text-[var(--muted)]">{new Date(entry.createdAt).toLocaleString('ru-RU')}</span>
                 </div>

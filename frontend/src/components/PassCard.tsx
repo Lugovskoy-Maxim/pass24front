@@ -15,9 +15,10 @@ interface PassCardProps {
   pass: Pass;
   actions?: React.ReactNode;
   onClick?: () => void;
+  showCreator?: boolean;
 }
 
-export function PassCard({ pass, actions, onClick }: PassCardProps) {
+export function PassCard({ pass, actions, onClick, showCreator }: PassCardProps) {
   const Icon = TYPE_ICONS[pass.passType];
 
   return (
@@ -39,6 +40,11 @@ export function PassCard({ pass, actions, onClick }: PassCardProps) {
             {pass.companyName && (
               <div className="text-xs text-[var(--muted)] flex items-center gap-1 mt-0.5">
                 <Building2 className="w-3 h-3" />{pass.companyName}
+              </div>
+            )}
+            {showCreator && pass.creatorName && (
+              <div className="text-xs text-[var(--muted)] mt-0.5">
+                Заказал: {pass.creatorName}{pass.creatorCompany ? ` · ${pass.creatorCompany}` : ''}
               </div>
             )}
           </div>

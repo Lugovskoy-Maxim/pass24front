@@ -5,6 +5,10 @@ import { MongooseModule } from '@nestjs/mongoose';
 import {
   AccessEvent,
   AccessEventSchema,
+  AppSettings,
+  AppSettingsSchema,
+  AuditLog,
+  AuditLogSchema,
   Authorization,
   AuthorizationSchema,
   Office,
@@ -34,6 +38,8 @@ const ALL_FEATURES = [
   { name: PassRequest.name, schema: PassRequestSchema },
   { name: AccessEvent.name, schema: AccessEventSchema },
   { name: Authorization.name, schema: AuthorizationSchema },
+  { name: AuditLog.name, schema: AuditLogSchema },
+  { name: AppSettings.name, schema: AppSettingsSchema },
 ];
 
 @Module({

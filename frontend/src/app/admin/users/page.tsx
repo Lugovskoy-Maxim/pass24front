@@ -1,22 +1,35 @@
 'use client';
 
 import { useEffect, useState, useCallback, FormEvent } from 'react';
-import { Plus, Search, Pencil, Link2 } from 'lucide-react';
+import { Plus, Search, Pencil, Link2, X, Users, Building2, UserCog } from 'lucide-react';
 import { AdminLayout } from '@/components/AdminLayout';
-import { api, AdminUser, BusinessCenter, CreateUserData, Office, ROLE_LABELS, UserRole, formatTenantOffices } from '@/lib/api';
+import { api, AdminUser, BusinessCenter, CreateUserData, Office, ROLE_LABELS, UserCategory, UserFilters, UserRole, formatTenantOffices } from '@/lib/api';
 import { useDebounce } from '@/hooks/useDebounce';
 
 const EMPTY: CreateUserData = {
   email: '', password: '', fullName: '', role: 'tenant', phone: '', company: '', office: '', floor: '', officeIds: [], propertyIds: [],
 };
 
+const STAFF_ROLES: UserRole[] = ['security', 'bc_admin', 'admin'];
+
+const EMPTY_FILTERS: Omit<UserFilters, 'category'> = {
+  search: '',
+  isActive: '',
+  propertyId: '',
+  officeId: '',
+  role: '',
+};
+
 export default function AdminUsersPage() {
+  const [category, setCategory] = useState<UserCategory>('tenants');
   const [users, setUsers] = useState<AdminUser[]>([]);
+  const [total, setTotal] = useState(0);
+  const [counts, setCounts] = useState({ tenants: 0, staff: 0 });
   const [allOffices, setAllOffices] = useState<Office[]>([]);
   const [businessCenters, setBusinessCenters] = useState<BusinessCenter[]>([]);
-  const [search, setSearch] = useState('');
-  const [roleFilter, setRoleFilter] = useState('');
-  const debouncedSearch = useDebounce(search);
+  const [filters, setFilters] = useState(EMPTY_FILTERS);
+  const [appliedFilters, setAppliedFilters] = useState(EMPTY_FILTERS);
+  const debouncedSearch = useDebounce(filters.search);
   const [loading, setLoading] = useState(true);
   const [showForm, setShowForm] = useState(false);
   const [editId, setEditId] = useState<string | null>(null);
@@ -27,26 +40,62 @@ export default function AdminUsersPage() {
   const [error, setError] = useState('');
   const [saving, setSaving] = useState(false);
 
+  const buildQuery = useCallback((cat: UserCategory, applied: typeof appliedFilters, search?: string): UserFilters => ({
+    category: cat,
+    search: search?.trim() || undefined,
+    isActive: applied.isActive || undefined,
+    propertyId: applied.propertyId || undefined,
+    officeId: cat === 'tenants' ? applied.officeId || undefined : undefined,
+    role: cat === 'staff' ? applied.role || undefined : undefined,
+  }), []);
+
   const load = useCallback(() => {
     setLoading(true);
     Promise.all([
-      api.admin.getUsers({ role: roleFilter || undefined, search: debouncedSearch || undefined }),
+      api.admin.getUsers(buildQuery(category, appliedFilters, debouncedSearch)),
       api.admin.getOffices(),
       api.admin.getBusinessCenters(),
     ])
-      .then(([{ users: data }, { offices }, { businessCenters: bc }]) => {
+      .then(([{ users: data, total: t, counts: c }, { offices }, { businessCenters: bc }]) => {
         setUsers(data);
+        setTotal(t);
+        setCounts(c);
         setAllOffices(offices.filter((o) => o.isActive));
         setBusinessCenters(bc.filter((b) => b.isActive));
       })
       .finally(() => setLoading(false));
-  }, [roleFilter, debouncedSearch]);
+  }, [category, appliedFilters, debouncedSearch, buildQuery]);
 
   useEffect(() => { load(); }, [load]);
 
+  const applyFilters = () => setAppliedFilters({ ...filters });
+
+  const resetFilters = () => {
+    setFilters(EMPTY_FILTERS);
+    setAppliedFilters(EMPTY_FILTERS);
+  };
+
+  const switchCategory = (cat: UserCategory) => {
+    setCategory(cat);
+    setFilters((prev) => ({ ...prev, role: '', officeId: cat === 'staff' ? '' : prev.officeId }));
+    setAppliedFilters((prev) => ({ ...prev, role: '', officeId: cat === 'staff' ? '' : prev.officeId }));
+  };
+
+  const hasActiveFilters = !!(
+    appliedFilters.isActive ||
+    appliedFilters.propertyId ||
+    appliedFilters.officeId ||
+    appliedFilters.role ||
+    debouncedSearch
+  );
+
+  const officesForFilter = filters.propertyId
+    ? allOffices.filter((o) => o.propertyId === filters.propertyId)
+    : allOffices;
+
   const openCreate = () => {
     setEditId(null);
-    setForm(EMPTY);
+    setForm({ ...EMPTY, role: category === 'tenants' ? 'tenant' : 'security' });
     setOfficeIds([]);
     setPropertyIds([]);
     setIsActive(true);
@@ -90,7 +139,7 @@ export default function AdminUsersPage() {
 
   const formatBindings = (u: AdminUser) => {
     if (u.role === 'tenant' && u.offices?.length) return formatTenantOffices(u.offices);
-    if (u.role === 'security' && u.businessCenters?.length) {
+    if ((u.role === 'security' || u.role === 'bc_admin') && u.businessCenters?.length) {
       return u.businessCenters.map((bc) => bc.name).join(' · ');
     }
     if (u.office) return `оф. ${u.office}`;
@@ -110,7 +159,7 @@ export default function AdminUsersPage() {
         office: form.role !== 'tenant' && form.role !== 'security' ? form.office || undefined : undefined,
         floor: form.role !== 'tenant' && form.role !== 'security' ? form.floor || undefined : undefined,
         officeIds: form.role === 'tenant' ? officeIds : [],
-        propertyIds: form.role === 'security' ? propertyIds : [],
+        propertyIds: form.role === 'security' || form.role === 'bc_admin' ? propertyIds : [],
       };
       if (editId) {
         await api.admin.updateUser(editId, {
@@ -131,21 +180,125 @@ export default function AdminUsersPage() {
   };
 
   return (
-    <AdminLayout title="Арендаторы и сотрудники">
+    <AdminLayout title="Пользователи">
       <p className="text-[var(--muted)] -mt-4 mb-6">
-        Привязка доступна только администратору: арендаторы — к офисам, ресепшн — к бизнес-центрам.
+        Арендаторы привязаны к офисам, сотрудники — к бизнес-центрам
       </p>
 
-      <div className="flex flex-col sm:flex-row gap-3 mb-6">
-        <div className="relative flex-1">
-          <Search className="absolute left-3 top-1/2 -translate-y-1/2 w-4 h-4 text-[var(--muted)]" />
-          <input className="input pl-9" placeholder="Поиск по ФИО, компании, офису..." value={search} onChange={(e) => setSearch(e.target.value)} />
+      <div className="flex flex-wrap gap-2 mb-6">
+        <button
+          type="button"
+          onClick={() => switchCategory('tenants')}
+          className={`btn text-sm ${category === 'tenants' ? 'btn-primary' : 'btn-secondary'}`}
+        >
+          <Building2 className="w-4 h-4" />
+          Арендаторы
+          <span className="ml-1 opacity-80">({counts.tenants})</span>
+        </button>
+        <button
+          type="button"
+          onClick={() => switchCategory('staff')}
+          className={`btn text-sm ${category === 'staff' ? 'btn-primary' : 'btn-secondary'}`}
+        >
+          <UserCog className="w-4 h-4" />
+          Сотрудники
+          <span className="ml-1 opacity-80">({counts.staff})</span>
+        </button>
+      </div>
+
+      <div className="card p-4 mb-6 space-y-4">
+        <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-4 gap-3">
+          <div className="relative sm:col-span-2 lg:col-span-1">
+            <Search className="absolute left-3 top-1/2 -translate-y-1/2 w-4 h-4 text-[var(--muted)]" />
+            <input
+              className="input pl-9"
+              placeholder="ФИО, email, компания..."
+              value={filters.search}
+              onChange={(e) => setFilters((prev) => ({ ...prev, search: e.target.value }))}
+              onKeyDown={(e) => { if (e.key === 'Enter') applyFilters(); }}
+            />
+          </div>
+
+          <div>
+            <select
+              className="input"
+              value={filters.isActive}
+              onChange={(e) => setFilters((prev) => ({ ...prev, isActive: e.target.value as UserFilters['isActive'] }))}
+            >
+              <option value="">Все статусы</option>
+              <option value="true">Активные</option>
+              <option value="false">Отключённые</option>
+            </select>
+          </div>
+
+          <div>
+            <select
+              className="input"
+              value={filters.propertyId}
+              onChange={(e) => setFilters((prev) => ({
+                ...prev,
+                propertyId: e.target.value,
+                officeId: e.target.value ? prev.officeId : '',
+              }))}
+            >
+              <option value="">Все бизнес-центры</option>
+              {businessCenters.map((bc) => (
+                <option key={bc.id} value={bc.id}>{bc.name}</option>
+              ))}
+            </select>
+          </div>
+
+          {category === 'tenants' ? (
+            <div>
+              <select
+                className="input"
+                value={filters.officeId}
+                onChange={(e) => setFilters((prev) => ({ ...prev, officeId: e.target.value }))}
+              >
+                <option value="">Все офисы</option>
+                {officesForFilter.map((office) => (
+                  <option key={office.id} value={office.id}>
+                    {office.businessCenterName ? `${office.businessCenterName}: ` : ''}оф. {office.number}
+                  </option>
+                ))}
+              </select>
+            </div>
+          ) : (
+            <div>
+              <select
+                className="input"
+                value={filters.role}
+                onChange={(e) => setFilters((prev) => ({ ...prev, role: e.target.value }))}
+              >
+                <option value="">Все роли</option>
+                {STAFF_ROLES.map((role) => (
+                  <option key={role} value={role}>{ROLE_LABELS[role]}</option>
+                ))}
+              </select>
+            </div>
+          )}
         </div>
-        <select className="input w-auto" value={roleFilter} onChange={(e) => setRoleFilter(e.target.value)}>
-          <option value="">Все роли</option>
-          {Object.entries(ROLE_LABELS).map(([k, v]) => <option key={k} value={k}>{v}</option>)}
-        </select>
-        <button className="btn btn-primary" onClick={openCreate}><Plus className="w-4 h-4" /> Добавить</button>
+
+        <div className="flex flex-wrap items-center gap-2">
+          <button type="button" className="btn btn-primary text-sm" onClick={applyFilters}>Применить</button>
+          {hasActiveFilters && (
+            <button type="button" className="btn btn-secondary text-sm" onClick={resetFilters}>
+              <X className="w-4 h-4" />
+              Сбросить
+            </button>
+          )}
+          <button type="button" className="btn btn-primary text-sm ml-auto" onClick={openCreate}>
+            <Plus className="w-4 h-4" />
+            {category === 'tenants' ? 'Добавить арендатора' : 'Добавить сотрудника'}
+          </button>
+        </div>
+
+        {hasActiveFilters && (
+          <p className="text-xs text-[var(--muted)] flex items-center gap-1.5">
+            <Users className="w-3.5 h-3.5" />
+            Найдено: {total}
+          </p>
+        )}
       </div>
 
       {showForm && (
@@ -158,7 +311,10 @@ export default function AdminUsersPage() {
             <div>
               <label className="label">Роль *</label>
               <select className="input" value={form.role} onChange={(e) => setForm({ ...form, role: e.target.value as UserRole })}>
-                {Object.entries(ROLE_LABELS).map(([k, v]) => <option key={k} value={k}>{v}</option>)}
+                {category === 'tenants'
+                  ? <option value="tenant">{ROLE_LABELS.tenant}</option>
+                  : STAFF_ROLES.map((role) => <option key={role} value={role}>{ROLE_LABELS[role]}</option>)}
+                {category === 'staff' && <option value="tenant">{ROLE_LABELS.tenant}</option>}
               </select>
             </div>
             <div><label className="label">Компания</label><input className="input" value={form.company} onChange={(e) => setForm({ ...form, company: e.target.value })} /></div>
@@ -208,11 +364,13 @@ export default function AdminUsersPage() {
             </div>
           )}
 
-          {form.role === 'security' && (
+          {(form.role === 'security' || form.role === 'bc_admin') && (
             <div className="border border-[var(--border)] rounded-lg p-4 bg-slate-50/50">
               <div className="flex items-center gap-2 mb-3">
                 <Link2 className="w-4 h-4 text-[var(--primary)]" />
-                <span className="font-medium text-sm">Привязка к бизнес-центрам</span>
+                <span className="font-medium text-sm">
+                  {form.role === 'bc_admin' ? 'Бизнес-центры под управлением' : 'Привязка к бизнес-центрам'}
+                </span>
               </div>
               {businessCenters.length === 0 ? (
                 <p className="text-sm text-amber-700 bg-amber-50 p-3 rounded-md">Сначала создайте бизнес-центры.</p>
@@ -250,9 +408,16 @@ export default function AdminUsersPage() {
           <thead className="bg-slate-50 text-[var(--muted)]">
             <tr>
               <th className="text-left p-3 font-medium">ФИО</th>
-              <th className="text-left p-3 font-medium hidden md:table-cell">Компания</th>
-              <th className="text-left p-3 font-medium">Роль</th>
-              <th className="text-left p-3 font-medium hidden sm:table-cell">Привязка</th>
+              <th className="text-left p-3 font-medium hidden lg:table-cell">Email</th>
+              {category === 'tenants' && (
+                <th className="text-left p-3 font-medium hidden md:table-cell">Компания</th>
+              )}
+              {category === 'staff' && (
+                <th className="text-left p-3 font-medium">Роль</th>
+              )}
+              <th className="text-left p-3 font-medium hidden sm:table-cell">
+                {category === 'tenants' ? 'Офисы' : 'Бизнес-центры'}
+              </th>
               <th className="text-left p-3 font-medium">Статус</th>
               <th className="p-3 w-10" />
             </tr>
@@ -261,12 +426,24 @@ export default function AdminUsersPage() {
             {loading ? (
               <tr><td colSpan={6} className="p-8 text-center text-[var(--muted)]">Загрузка...</td></tr>
             ) : users.length === 0 ? (
-              <tr><td colSpan={6} className="p-8 text-center text-[var(--muted)]">Не найдены</td></tr>
+              <tr>
+                <td colSpan={6} className="p-8 text-center text-[var(--muted)]">
+                  {category === 'tenants' ? 'Арендаторы не найдены' : 'Сотрудники не найдены'}
+                </td>
+              </tr>
             ) : users.map((u) => (
               <tr key={u.id} className="border-t border-[var(--border)] hover:bg-slate-50">
-                <td className="p-3 font-medium">{u.fullName}</td>
-                <td className="p-3 hidden md:table-cell text-[var(--muted)]">{u.company || '—'}</td>
-                <td className="p-3">{ROLE_LABELS[u.role]}</td>
+                <td className="p-3">
+                  <div className="font-medium">{u.fullName}</div>
+                  <div className="text-xs text-[var(--muted)] lg:hidden">{u.email}</div>
+                </td>
+                <td className="p-3 hidden lg:table-cell text-[var(--muted)]">{u.email}</td>
+                {category === 'tenants' && (
+                  <td className="p-3 hidden md:table-cell text-[var(--muted)]">{u.company || '—'}</td>
+                )}
+                {category === 'staff' && (
+                  <td className="p-3">{ROLE_LABELS[u.role]}</td>
+                )}
                 <td className="p-3 hidden sm:table-cell text-[var(--muted)] max-w-xs text-xs">
                   {formatBindings(u)}
                 </td>
@@ -275,7 +452,11 @@ export default function AdminUsersPage() {
                     {u.isActive ? 'Активен' : 'Отключён'}
                   </span>
                 </td>
-                <td className="p-3"><button className="p-1 hover:text-[var(--primary)]" onClick={() => openEdit(u)} title="Редактировать"><Pencil className="w-4 h-4" /></button></td>
+                <td className="p-3">
+                  <button className="p-1 hover:text-[var(--primary)]" onClick={() => openEdit(u)} title="Редактировать">
+                    <Pencil className="w-4 h-4" />
+                  </button>
+                </td>
               </tr>
             ))}
           </tbody>

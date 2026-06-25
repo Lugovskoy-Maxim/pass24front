@@ -11,14 +11,31 @@ export const ALL_PERMISSIONS = [
   { key: 'admin.panel', label: 'Панель администратора', group: 'Администрирование' },
   { key: 'admin.users', label: 'Управление пользователями', group: 'Администрирование' },
   { key: 'admin.offices', label: 'Управление офисами', group: 'Администрирование' },
-  { key: 'admin.settings', label: 'Настройки БЦ', group: 'Администрирование' },
+  { key: 'admin.settings', label: 'Настройки сайта и БЦ', group: 'Администрирование' },
   { key: 'admin.permissions', label: 'Права и типы пропусков', group: 'Администрирование' },
 ] as const;
 
 export const DEFAULT_ROLE_PERMISSIONS: Record<string, string[]> = {
-  tenant: ['passes.create', 'passes.templates'],
+  tenant: ['passes.create', 'passes.templates', 'passes.view_own'],
   security: ['passes.view_all', 'passes.approve', 'passes.reception', 'passes.lookup'],
+  bc_admin: [
+    'passes.view_all',
+    'passes.approve',
+    'passes.reception',
+    'passes.lookup',
+    'admin.panel',
+    'admin.users',
+    'admin.offices',
+    'admin.settings',
+  ],
   admin: ALL_PERMISSIONS.map((p) => p.key),
+};
+
+export const ROLE_LABELS: Record<string, string> = {
+  tenant: 'Арендатор',
+  security: 'Ресепшн / Охрана',
+  bc_admin: 'Администратор БЦ',
+  admin: 'Супер-администратор',
 };
 
 export const PASS_TYPE_LABELS: Record<string, string> = {

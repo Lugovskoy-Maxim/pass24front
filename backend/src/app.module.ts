@@ -8,6 +8,9 @@ import { AuthModule } from './auth/auth.module';
 import { ConfigModule as AppConfigModule } from './config/config.module';
 import { AdminModule } from './admin/admin.module';
 import { AccessConfigModule } from './access/access-config.module';
+import { AuditModule } from './audit/audit.module';
+import { MailModule } from './mail/mail.module';
+import { SiteSettingsModule } from './site-settings/site-settings.module';
 
 @Module({
   imports: [
@@ -23,6 +26,9 @@ import { AccessConfigModule } from './access/access-config.module';
     }),
     DatabaseModule,
     AccessConfigModule,
+    AuditModule,
+    MailModule,
+    SiteSettingsModule,
     AuthModule,
     PassesModule,
     AppConfigModule,

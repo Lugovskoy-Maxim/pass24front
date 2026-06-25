@@ -20,7 +20,7 @@ export class CreateUserDto {
   @IsString()
   company?: string;
 
-  @IsIn(['tenant', 'security', 'admin'])
+  @IsIn(['tenant', 'security', 'bc_admin', 'admin'])
   role: string;
 
   @IsOptional()

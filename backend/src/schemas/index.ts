@@ -11,3 +11,5 @@ export * from './pass-template.schema';
 export * from './pass-request.schema';
 export * from './access-event.schema';
 export * from './authorization.schema';
+export * from './audit-log.schema';
+export * from './app-settings.schema';

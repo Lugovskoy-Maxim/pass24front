@@ -1,6 +1,13 @@
 const API_URL = process.env.NEXT_PUBLIC_API_URL || 'http://127.0.0.1:4000/api';
 
-export type UserRole = 'tenant' | 'security' | 'admin';
+export type UserRole = 'tenant' | 'security' | 'bc_admin' | 'admin';
+
+export const VISIT_PURPOSES = ['Гость', 'Встреча', 'Доставка', 'Рабочий', 'Сотрудник'] as const;
+
+export function getPassTicketUrl(passNumber: string) {
+  if (typeof window === 'undefined') return `/ticket/${encodeURIComponent(passNumber)}`;
+  return `${window.location.origin}/ticket/${encodeURIComponent(passNumber)}`;
+}
 
 export interface TenantOffice {
   id: string;
@@ -36,15 +43,41 @@ export interface AccessConfig {
   rolePermissions: Record<string, string[]>;
   permissions: PermissionMeta[];
   passTypeLabels: Record<PassType, string>;
+  roleLabels?: Record<string, string>;
   roles: string[];
 }
 
 export type PassStatus = 'pending' | 'approved' | 'rejected' | 'active' | 'completed' | 'expired' | 'cancelled';
 export type PassType = 'visitor' | 'parking' | 'delivery' | 'contractor';
 
+export interface PassTimelineData {
+  status: PassStatus;
+  createdAt?: string;
+  approvedAt?: string;
+  checkedInAt?: string;
+  checkedOutAt?: string;
+  rejectionReason?: string;
+}
+
+export interface PublicPassTicket extends PassTimelineData {
+  passNumber: string;
+  visitorName: string;
+  companyName?: string;
+  visitPurpose?: string;
+  passType: PassType;
+  vehiclePlate?: string;
+  visitDate: string;
+  visitTimeFrom?: string;
+  visitTimeTo?: string;
+  businessCenterName?: string;
+  office: string;
+  floor?: string;
+}
+
 export interface Pass {
   id: string;
   passNumber: string;
+  isOwner?: boolean;
   createdBy?: string;
   creatorName?: string;
   creatorCompany?: string;
@@ -82,6 +115,49 @@ export interface Pass {
 function getToken(): string | null {
   if (typeof window === 'undefined') return null;
   return localStorage.getItem('pass24_token');
+}
+
+function parseContentDispositionFilename(header: string | null, fallback: string) {
+  if (!header) return fallback;
+  const utf8Match = header.match(/filename\*=UTF-8''([^;]+)/i);
+  if (utf8Match?.[1]) {
+    try {
+      return decodeURIComponent(utf8Match[1].trim());
+    } catch {
+      return fallback;
+    }
+  }
+  const plainMatch = header.match(/filename="?([^";]+)"?/i);
+  return plainMatch?.[1]?.trim() || fallback;
+}
+
+async function downloadFileResponse(res: Response, fallbackName: string) {
+  if (!res.ok) {
+    const data = await res.json().catch(() => ({}));
+    throw new Error(data.message || data.error || 'Ошибка выгрузки');
+  }
+
+  const blob = await res.blob();
+  if (!blob.size) {
+    throw new Error('Получен пустой файл');
+  }
+
+  const filename = parseContentDispositionFilename(
+    res.headers.get('Content-Disposition'),
+    fallbackName,
+  );
+  const url = URL.createObjectURL(blob);
+  const link = document.createElement('a');
+  link.href = url;
+  link.download = filename;
+  link.style.display = 'none';
+  document.body.appendChild(link);
+  link.click();
+
+  window.setTimeout(() => {
+    link.remove();
+    URL.revokeObjectURL(url);
+  }, 1000);
 }
 
 async function request<T>(path: string, options: RequestInit = {}): Promise<T> {
@@ -153,8 +229,16 @@ export const api = {
     office?: string;
     floor?: string;
     comment?: string;
+    sendEmail?: boolean;
+    recipientEmail?: string;
   }) =>
-    request<{ pass: Pass }>('/passes', { method: 'POST', body: JSON.stringify(data) }),
+    request<{ pass: Pass; emailSent?: boolean }>('/passes', { method: 'POST', body: JSON.stringify(data) }),
+
+  sendPassEmail: (passIdOrNumber: string, email: string) =>
+    request<{ sent: boolean; email: string }>(`/passes/${encodeURIComponent(passIdOrNumber)}/send-email`, {
+      method: 'POST',
+      body: JSON.stringify({ email }),
+    }),
 
   updateStatus: (id: string, status: string, rejectionReason?: string) =>
     request<{ pass: Pass }>(`/passes/${id}/status`, {
@@ -182,6 +266,15 @@ export const api = {
   lookupPass: (passNumber: string) =>
     request<{ pass: Pass }>(`/passes/lookup/${encodeURIComponent(passNumber)}`),
 
+  getPublicTicket: async (passNumber: string) => {
+    const res = await fetch(`${API_URL}/passes/public/${encodeURIComponent(passNumber)}`);
+    const data = await res.json().catch(() => ({}));
+    if (!res.ok) {
+      throw new Error(data.message || data.error || 'Пропуск не найден');
+    }
+    return data as { ticket: PublicPassTicket };
+  },
+
   getPassTemplates: () => request<{ templates: PassTemplate[] }>('/pass-templates'),
 
   getPassTemplate: (id: string) => request<{ template: PassTemplate }>(`/pass-templates/${id}`),
@@ -201,12 +294,18 @@ export const api = {
   admin: {
     dashboard: () => request<AdminDashboard>('/admin/dashboard'),
 
-    getUsers: (params?: { role?: string; search?: string }) => {
+    getUsers: (params: UserFilters = {}) => {
       const q = new URLSearchParams();
-      if (params?.role) q.set('role', params.role);
-      if (params?.search) q.set('search', params.search);
+      if (params.category) q.set('category', params.category);
+      if (params.role) q.set('role', params.role);
+      if (params.search) q.set('search', params.search);
+      if (params.isActive) q.set('isActive', params.isActive);
+      if (params.propertyId) q.set('propertyId', params.propertyId);
+      if (params.officeId) q.set('officeId', params.officeId);
       const qs = q.toString();
-      return request<{ users: AdminUser[] }>(`/admin/users${qs ? `?${qs}` : ''}`);
+      return request<{ users: AdminUser[]; total: number; counts: { tenants: number; staff: number } }>(
+        `/admin/users${qs ? `?${qs}` : ''}`,
+      );
     },
 
     createUser: (data: CreateUserData) =>
@@ -220,6 +319,9 @@ export const api = {
     createBusinessCenter: (data: { name: string; address: string; code?: string }) =>
       request<{ businessCenter: BusinessCenter }>('/admin/business-centers', { method: 'POST', body: JSON.stringify(data) }),
 
+    updateBusinessCenter: (id: string, data: { name?: string; address?: string }) =>
+      request<{ businessCenter: BusinessCenter }>(`/admin/business-centers/${id}`, { method: 'PATCH', body: JSON.stringify(data) }),
+
     seedTestData: () =>
       request<{ message: string; businessCenters: number; offices: number; tenants: number; skipped: boolean }>(
         '/admin/seed-test-data',
@@ -231,7 +333,32 @@ export const api = {
     updateAccessConfig: (data: Partial<Pick<AccessConfig, 'enabledPassTypes' | 'rolePermissions'>>) =>
       request<{ config: AccessConfig }>('/admin/access-config', { method: 'PATCH', body: JSON.stringify(data) }),
 
-    getAudit: (offset = 0) => request<{ entries: AuditEntry[]; total: number }>(`/admin/audit?offset=${offset}`),
+    getAudit: (filters: AuditFilters = {}) => {
+      const qs = buildAuditQuery(filters);
+      return request<{ entries: AuditEntry[]; total: number; offset: number; limit: number }>(
+        `/admin/audit${qs ? `?${qs}` : ''}`,
+      );
+    },
+
+    exportAudit: async (filters: AuditFilters = {}) => {
+      const qs = buildAuditQuery({ ...filters, offset: undefined });
+      const token = getToken();
+      const datePart = filters.dateFrom && filters.dateTo
+        ? `${filters.dateFrom}_${filters.dateTo}`
+        : new Date().toISOString().slice(0, 10);
+      const res = await fetch(`${API_URL}/admin/audit/export${qs ? `?${qs}` : ''}`, {
+        headers: {
+          Accept: 'text/csv',
+          ...(token ? { Authorization: `Bearer ${token}` } : {}),
+        },
+      });
+      await downloadFileResponse(res, `audit-${datePart}.csv`);
+    },
+
+    getSiteSettings: () => request<{ settings: SiteSettings }>('/admin/site-settings'),
+
+    updateSiteSettings: (data: Partial<SiteSettings>) =>
+      request<{ settings: SiteSettings }>('/admin/site-settings', { method: 'PATCH', body: JSON.stringify(data) }),
 
     getSettings: () => request<{ settings: SystemSettings }>('/admin/settings'),
 
@@ -259,7 +386,15 @@ export const api = {
   },
 };
 
-export interface BcConfig {
+export interface SiteSettings {
+  siteName: string;
+  siteIcon: string;
+  siteTagline: string;
+  sitePhone: string;
+  siteEmail: string;
+}
+
+export interface BcConfig extends SiteSettings {
   businessCenterName: string;
   workingHoursFrom: string;
   workingHoursTo: string;
@@ -327,6 +462,17 @@ export interface DailyReport {
     visit_time_from?: string;
     pass_number: string;
   }>;
+}
+
+export type UserCategory = 'tenants' | 'staff';
+
+export interface UserFilters {
+  category?: UserCategory;
+  role?: string;
+  search?: string;
+  isActive?: '' | 'true' | 'false';
+  propertyId?: string;
+  officeId?: string;
 }
 
 export interface AdminUser {
@@ -409,7 +555,7 @@ export interface CreatePassTemplateData {
 export interface BusinessCenter {
   id: string;
   name: string;
-  address: string;
+  address?: string;
   officesCount: number;
   totalAreaSqm?: number;
   isActive: boolean;
@@ -424,8 +570,51 @@ export interface AuditEntry {
   action: string;
   entityType: string;
   entityId?: string;
+  entityLabel?: string;
   details?: Record<string, unknown>;
   createdAt: string;
+}
+
+export function formatAuditEntity(entry: AuditEntry): string {
+  if (entry.entityLabel) return entry.entityLabel;
+
+  const type = AUDIT_ENTITY_LABELS[entry.entityType] || entry.entityType;
+  const d = entry.details || {};
+
+  if (entry.entityType === 'pass') {
+    const passNumber = d.passNumber as string | undefined;
+    const visitorName = d.visitorName as string | undefined;
+    if (passNumber && visitorName) return `${type} ${passNumber} · ${visitorName}`;
+    if (passNumber) return `${type} ${passNumber}`;
+  }
+  if (entry.entityType === 'user') {
+    const fullName = d.fullName as string | undefined;
+    const email = d.email as string | undefined;
+    if (fullName) return `${type}: ${fullName}`;
+    if (email) return `${type}: ${email}`;
+  }
+
+  return type;
+}
+
+export interface AuditFilters {
+  offset?: number;
+  dateFrom?: string;
+  dateTo?: string;
+  action?: string;
+  entityType?: string;
+  search?: string;
+}
+
+function buildAuditQuery(filters: AuditFilters = {}) {
+  const q = new URLSearchParams();
+  if (filters.offset !== undefined) q.set('offset', String(filters.offset));
+  if (filters.dateFrom) q.set('dateFrom', filters.dateFrom);
+  if (filters.dateTo) q.set('dateTo', filters.dateTo);
+  if (filters.action) q.set('action', filters.action);
+  if (filters.entityType) q.set('entityType', filters.entityType);
+  if (filters.search) q.set('search', filters.search);
+  return q.toString();
 }
 
 export interface SystemSettings {
@@ -469,7 +658,8 @@ export const TYPE_LABELS: Record<PassType, string> = {
 export const ROLE_LABELS: Record<UserRole, string> = {
   tenant: 'Арендатор',
   security: 'Ресепшн / Охрана',
-  admin: 'Администратор',
+  bc_admin: 'Администратор БЦ',
+  admin: 'Супер-администратор',
 };
 
 export const AUDIT_LABELS: Record<string, string> = {
@@ -483,4 +673,19 @@ export const AUDIT_LABELS: Record<string, string> = {
   'user.update': 'Изменение пользователя',
   'settings.update': 'Изменение настроек',
   'office.create': 'Добавление офиса',
+  'office.update': 'Изменение офиса',
+  'bc.create': 'Создание БЦ',
+  'bc.update': 'Изменение БЦ',
+  'permissions.update': 'Изменение прав доступа',
+  'site_settings.update': 'Изменение настроек сайта',
+};
+
+export const AUDIT_ENTITY_LABELS: Record<string, string> = {
+  pass: 'Пропуск',
+  user: 'Пользователь',
+  office: 'Офис',
+  business_center: 'Бизнес-центр',
+  property: 'Бизнес-центр',
+  access_config: 'Права доступа',
+  app_settings: 'Настройки сайта',
 };

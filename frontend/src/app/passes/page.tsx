@@ -2,16 +2,17 @@
 
 import { useEffect, useState, useCallback } from 'react';
 import { useRouter } from 'next/navigation';
-import { Search, X } from 'lucide-react';
+import { Search, X, Ban } from 'lucide-react';
 import { ProtectedLayout } from '@/components/ProtectedLayout';
 import { PassCard } from '@/components/PassCard';
 import { PassPrintCard } from '@/components/PassPrintCard';
+import { SharePassActions } from '@/components/SharePassActions';
 import { useAuth } from '@/lib/auth';
 import { useDebounce } from '@/hooks/useDebounce';
 import { useConfig } from '@/hooks/useConfig';
 import { useToast } from '@/components/Toast';
 import { api, Pass, STATUS_LABELS } from '@/lib/api';
-import { hasAnyPermission, hasPermission } from '@/lib/permissions';
+import { canViewAllPasses, canViewPasses, hasPermission } from '@/lib/permissions';
 import { StatusBadge } from '@/components/StatusBadge';
 
 export default function PassesPage() {
@@ -30,16 +31,20 @@ export default function PassesPage() {
   const [actionLoading, setActionLoading] = useState(false);
   const [rejectReason, setRejectReason] = useState('');
 
-  const canViewPasses = hasAnyPermission(user, 'passes.view_own', 'passes.view_all');
+  const canViewPassesList = canViewPasses(user);
+  const canViewAll = canViewAllPasses(user);
   const canApprove = hasPermission(user, 'passes.approve');
   const canReception = hasPermission(user, 'passes.reception');
-  const isOwner = selected && user && (selected.createdBy === user.id || user.role === 'admin');
+  const canCancelPass = (pass: Pass) =>
+    pass.isOwner && ['pending', 'approved'].includes(pass.status);
+
+  const canSharePass = (pass: Pass) => !['cancelled', 'rejected', 'expired'].includes(pass.status);
 
   useEffect(() => {
-    if (user && !canViewPasses && hasPermission(user, 'passes.templates')) {
+    if (user && !canViewPassesList && hasPermission(user, 'passes.templates')) {
       router.replace('/templates');
     }
-  }, [user, canViewPasses, router]);
+  }, [user, canViewPassesList, router]);
   const canPrint = selected && ['approved', 'active'].includes(selected.status);
 
   const load = useCallback(() => {
@@ -80,12 +85,17 @@ export default function PassesPage() {
     }
   };
 
-  if (user && !canViewPasses) return null;
+  if (user && !canViewPassesList) return null;
 
   return (
-    <ProtectedLayout anyPermissions={['passes.view_own', 'passes.view_all']}>
+    <ProtectedLayout anyPermissions={['passes.view_own', 'passes.view_all', 'admin.panel']}>
       <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-4 mb-6">
-        <h1 className="text-2xl font-bold">Пропуска</h1>
+        <div>
+          <h1 className="text-2xl font-bold">Пропуска</h1>
+          {canViewAll && (
+            <p className="text-sm text-[var(--muted)] mt-1">Все заявки пользователей системы</p>
+          )}
+        </div>
         <div className="flex flex-wrap gap-2">
           <div className="relative flex-1 sm:w-56">
             <Search className="absolute left-3 top-1/2 -translate-y-1/2 w-4 h-4 text-[var(--muted)]" />
@@ -113,7 +123,32 @@ export default function PassesPage() {
           ) : passes.length === 0 ? (
             <div className="card p-8 text-center text-[var(--muted)]">Пропуска не найдены</div>
           ) : (
-            passes.map((pass) => <PassCard key={pass.id} pass={pass} onClick={() => setSelected(pass)} />)
+            passes.map((pass) => (
+              <PassCard
+                key={pass.id}
+                pass={pass}
+                showCreator={canViewAll}
+                onClick={() => setSelected(pass)}
+                actions={
+                  <div className="w-full space-y-2">
+                    {canSharePass(pass) && (
+                      <SharePassActions passIdOrNumber={pass.id} passNumber={pass.passNumber} compact />
+                    )}
+                    {canCancelPass(pass) && (
+                      <button
+                        type="button"
+                        className="btn btn-danger text-xs py-1.5"
+                        disabled={actionLoading}
+                        onClick={() => handleAction(pass.id, 'cancel')}
+                      >
+                        <Ban className="w-3.5 h-3.5" />
+                        Отменить
+                      </button>
+                    )}
+                  </div>
+                }
+              />
+            ))
           )}
         </div>
 
@@ -162,7 +197,7 @@ export default function PassesPage() {
                   <dd className="text-right">{selected.visitorPhone}</dd>
                 </div>
               )}
-              {selected.creatorName && canApprove && (
+              {selected.creatorName && canViewAll && (
                 <div className="flex justify-between gap-4">
                   <dt className="text-[var(--muted)] shrink-0">Заказал</dt>
                   <dd className="text-right">{selected.creatorName}{selected.creatorCompany && ` (${selected.creatorCompany})`}</dd>
@@ -228,8 +263,13 @@ export default function PassesPage() {
               {canReception && selected.status === 'active' && (
                 <button className="btn btn-primary w-full" disabled={actionLoading} onClick={() => handleAction(selected.id, 'checkout')}>Зафиксировать выход</button>
               )}
-              {isOwner && selected.status === 'pending' && (
-                <button className="btn btn-secondary w-full" disabled={actionLoading} onClick={() => handleAction(selected.id, 'cancel')}>Отменить заявку</button>
+              {canSharePass(selected) && (
+                <SharePassActions passIdOrNumber={selected.id} passNumber={selected.passNumber} />
+              )}
+              {canCancelPass(selected) && (
+                <button className="btn btn-danger w-full" disabled={actionLoading} onClick={() => handleAction(selected.id, 'cancel')}>
+                  Отменить заявку
+                </button>
               )}
             </div>
           </div>
