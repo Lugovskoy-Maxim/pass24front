@@ -1,0 +1,384 @@
+import type { Response } from 'express';
+import { AccessConfigService } from '../access/access-config.service';
+import { AuditService } from '../audit/audit.service';
+import { AdminService } from './admin.service';
+import { CreateBusinessCenterDto } from './dto/create-business-center.dto';
+import { CreateOfficeDto } from './dto/create-office.dto';
+import { CreateUserDto } from './dto/create-user.dto';
+import { UpdateAccessConfigDto } from './dto/update-access-config.dto';
+import { UpdateBusinessCenterDto } from './dto/update-business-center.dto';
+import { UpdateSettingsDto } from './dto/update-settings.dto';
+import { UpdateSiteSettingsDto } from './dto/update-site-settings.dto';
+import { SiteSettingsService } from '../site-settings/site-settings.service';
+export declare class AdminController {
+    private readonly adminService;
+    private readonly accessConfigService;
+    private readonly auditService;
+    private readonly siteSettingsService;
+    constructor(adminService: AdminService, accessConfigService: AccessConfigService, auditService: AuditService, siteSettingsService: SiteSettingsService);
+    dashboard(): Promise<{
+        stats: {
+            users: {
+                total: number;
+                byRole: any;
+            };
+            passes: {
+                total: number;
+                today: number;
+                week: number;
+                byStatus: any;
+            };
+            businessCenters: number;
+        };
+        recentActivity: {
+            id: any;
+            userId: any;
+            userName: any;
+            userEmail: any;
+            action: any;
+            entityType: any;
+            entityId: any;
+            entityLabel: string;
+            details: any;
+            createdAt: any;
+        }[];
+        settings: {
+            business_center_name: any;
+            max_passes_per_day: any;
+            auto_approve_delivery: any;
+            working_hours_from: any;
+            working_hours_to: any;
+            contact_phone: any;
+            contact_email: any;
+            reception_floor: any;
+        };
+        officesCount: number;
+    }>;
+    seedTestData(): Promise<{
+        businessCenters: number;
+        offices: number;
+        tenants: number;
+        skipped: boolean;
+        message: string;
+    }>;
+    getAccessConfig(): Promise<{
+        enabledPassTypes: any;
+        rolePermissions: any;
+        permissions: readonly [{
+            readonly key: "passes.create";
+            readonly label: "Заказ пропусков";
+            readonly group: "Пропуска";
+        }, {
+            readonly key: "passes.templates";
+            readonly label: "Шаблоны пропусков";
+            readonly group: "Пропуска";
+        }, {
+            readonly key: "passes.view_own";
+            readonly label: "Просмотр своих пропусков";
+            readonly group: "Пропуска";
+        }, {
+            readonly key: "passes.view_all";
+            readonly label: "Просмотр всех пропусков";
+            readonly group: "Пропуска";
+        }, {
+            readonly key: "passes.approve";
+            readonly label: "Одобрение и отклонение";
+            readonly group: "Пропуска";
+        }, {
+            readonly key: "passes.reception";
+            readonly label: "Вход / выход посетителей";
+            readonly group: "Ресепшн";
+        }, {
+            readonly key: "passes.lookup";
+            readonly label: "Поиск пропуска по номеру";
+            readonly group: "Ресепшн";
+        }, {
+            readonly key: "admin.panel";
+            readonly label: "Панель администратора";
+            readonly group: "Администрирование";
+        }, {
+            readonly key: "admin.users";
+            readonly label: "Управление пользователями";
+            readonly group: "Администрирование";
+        }, {
+            readonly key: "admin.offices";
+            readonly label: "Управление офисами";
+            readonly group: "Администрирование";
+        }, {
+            readonly key: "admin.settings";
+            readonly label: "Настройки сайта и БЦ";
+            readonly group: "Администрирование";
+        }, {
+            readonly key: "admin.permissions";
+            readonly label: "Права и типы пропусков";
+            readonly group: "Администрирование";
+        }];
+        passTypeLabels: Record<string, string>;
+        roleLabels: Record<string, string>;
+        roles: string[];
+    }>;
+    updateAccessConfig(dto: UpdateAccessConfigDto, req: any): Promise<{
+        config: {
+            enabledPassTypes: any;
+            rolePermissions: any;
+            permissions: readonly [{
+                readonly key: "passes.create";
+                readonly label: "Заказ пропусков";
+                readonly group: "Пропуска";
+            }, {
+                readonly key: "passes.templates";
+                readonly label: "Шаблоны пропусков";
+                readonly group: "Пропуска";
+            }, {
+                readonly key: "passes.view_own";
+                readonly label: "Просмотр своих пропусков";
+                readonly group: "Пропуска";
+            }, {
+                readonly key: "passes.view_all";
+                readonly label: "Просмотр всех пропусков";
+                readonly group: "Пропуска";
+            }, {
+                readonly key: "passes.approve";
+                readonly label: "Одобрение и отклонение";
+                readonly group: "Пропуска";
+            }, {
+                readonly key: "passes.reception";
+                readonly label: "Вход / выход посетителей";
+                readonly group: "Ресепшн";
+            }, {
+                readonly key: "passes.lookup";
+                readonly label: "Поиск пропуска по номеру";
+                readonly group: "Ресепшн";
+            }, {
+                readonly key: "admin.panel";
+                readonly label: "Панель администратора";
+                readonly group: "Администрирование";
+            }, {
+                readonly key: "admin.users";
+                readonly label: "Управление пользователями";
+                readonly group: "Администрирование";
+            }, {
+                readonly key: "admin.offices";
+                readonly label: "Управление офисами";
+                readonly group: "Администрирование";
+            }, {
+                readonly key: "admin.settings";
+                readonly label: "Настройки сайта и БЦ";
+                readonly group: "Администрирование";
+            }, {
+                readonly key: "admin.permissions";
+                readonly label: "Права и типы пропусков";
+                readonly group: "Администрирование";
+            }];
+            passTypeLabels: Record<string, string>;
+            roleLabels: Record<string, string>;
+            roles: string[];
+        };
+    }>;
+    getUsers(q: Record<string, string>): Promise<{
+        users: {
+            id: any;
+            email: any;
+            fullName: any;
+            phone: any;
+            company: any;
+            role: any;
+            office: any;
+            floor: any;
+            isActive: boolean;
+            createdAt: any;
+            passesCount: number;
+            offices: any[];
+            businessCenters: {
+                id: string;
+                name: string;
+            }[];
+            propertyIds: string[];
+        }[];
+        total: number;
+        counts: {
+            tenants: number;
+            staff: number;
+        };
+    }>;
+    createUser(dto: CreateUserDto, req: any): Promise<{
+        user: {
+            id: any;
+            email: any;
+            fullName: any;
+            phone: any;
+            company: any;
+            role: any;
+            office: any;
+            floor: any;
+            isActive: boolean;
+            createdAt: any;
+            passesCount: number;
+            offices: any[];
+            businessCenters: {
+                id: string;
+                name: string;
+            }[];
+            propertyIds: string[];
+        };
+    }>;
+    updateUser(id: string, dto: Partial<CreateUserDto & {
+        isActive: boolean;
+    }>, req: any): Promise<{
+        user: {
+            id: any;
+            email: any;
+            fullName: any;
+            phone: any;
+            company: any;
+            role: any;
+            office: any;
+            floor: any;
+            isActive: boolean;
+            createdAt: any;
+            passesCount: number;
+            offices: any[];
+            businessCenters: {
+                id: string;
+                name: string;
+            }[];
+            propertyIds: string[];
+        };
+    }>;
+    getBusinessCenters(req: any): Promise<{
+        businessCenters: {
+            id: string;
+            name: string;
+            address: string;
+            officesCount: any;
+            totalAreaSqm: any;
+            isActive: boolean;
+            createdAt: any;
+        }[];
+    }>;
+    updateBusinessCenter(id: string, dto: UpdateBusinessCenterDto, req: any): Promise<{
+        businessCenter: {
+            id: string;
+            name: string;
+            address: string;
+            officesCount: any;
+            totalAreaSqm: any;
+            isActive: boolean;
+            createdAt: any;
+        };
+    }>;
+    createBusinessCenter(dto: CreateBusinessCenterDto, req: any): Promise<{
+        businessCenter: {
+            id: string;
+            name: string;
+            address: string;
+            officesCount: number;
+            isActive: boolean;
+            createdAt: any;
+        };
+    }>;
+    getOffices(): Promise<{
+        offices: {
+            id: any;
+            propertyId: any;
+            businessCenterName: any;
+            number: any;
+            floor: any;
+            areaSqm: any;
+            company: any;
+            tenantId: any;
+            tenantName: any;
+            isActive: any;
+            createdAt: any;
+        }[];
+    }>;
+    createOffice(dto: CreateOfficeDto, req: any): Promise<{
+        office: {
+            id: any;
+            propertyId: any;
+            businessCenterName: any;
+            number: any;
+            floor: any;
+            areaSqm: any;
+            company: any;
+            tenantId: any;
+            tenantName: any;
+            isActive: any;
+            createdAt: any;
+        };
+    }>;
+    updateOffice(id: string, dto: Partial<CreateOfficeDto & {
+        isActive: boolean;
+    }>, req: any): Promise<{
+        office: {
+            id: any;
+            propertyId: any;
+            businessCenterName: any;
+            number: any;
+            floor: any;
+            areaSqm: any;
+            company: any;
+            tenantId: any;
+            tenantName: any;
+            isActive: any;
+            createdAt: any;
+        };
+    }>;
+    exportAudit(query: Record<string, string>, res: Response): Promise<void>;
+    getAudit(query: Record<string, string>): Promise<{
+        entries: {
+            id: any;
+            userId: any;
+            userName: any;
+            userEmail: any;
+            action: any;
+            entityType: any;
+            entityId: any;
+            entityLabel: string;
+            details: any;
+            createdAt: any;
+        }[];
+        total: number;
+        offset: number;
+        limit: number;
+    }>;
+    private parseAuditQuery;
+    getSiteSettings(): Promise<{
+        settings: import("../site-settings/site-settings.service").SiteSettingsDto;
+    }>;
+    updateSiteSettings(dto: UpdateSiteSettingsDto, req: any): Promise<{
+        settings: import("../site-settings/site-settings.service").SiteSettingsDto;
+    }>;
+    getSettings(req: any): Promise<{
+        settings: {
+            business_center_name: any;
+            max_passes_per_day: any;
+            auto_approve_delivery: any;
+            working_hours_from: any;
+            working_hours_to: any;
+            contact_phone: any;
+            contact_email: any;
+            reception_floor: any;
+        };
+    }>;
+    updateSettings(dto: UpdateSettingsDto, req: any): Promise<{
+        settings: {
+            business_center_name: any;
+            max_passes_per_day: any;
+            auto_approve_delivery: any;
+            working_hours_from: any;
+            working_hours_to: any;
+            contact_phone: any;
+            contact_email: any;
+            reception_floor: any;
+        };
+    }>;
+    getBlacklist(): {
+        entries: never[];
+    };
+    getDailyReport(date?: string): {
+        date: string;
+        summary: never[];
+        visitors: never[];
+    };
+}
