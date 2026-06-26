@@ -5,15 +5,18 @@ import { useRouter } from 'next/navigation';
 import { Search, X, Ban } from 'lucide-react';
 import { ProtectedLayout } from '@/components/ProtectedLayout';
 import { PassCard } from '@/components/PassCard';
+import { PassCardBase } from '@/components/PassCardBase';
 import { PassPrintCard } from '@/components/PassPrintCard';
 import { SharePassActions } from '@/components/SharePassActions';
 import { useAuth } from '@/lib/auth';
 import { useDebounce } from '@/hooks/useDebounce';
 import { useConfig } from '@/hooks/useConfig';
 import { useToast } from '@/components/Toast';
-import { api, Pass, STATUS_LABELS } from '@/lib/api';
+import { api, Pass, PassStatus } from '@/lib/api';
 import { canViewAllPasses, canViewPasses, hasPermission } from '@/lib/permissions';
-import { StatusBadge } from '@/components/StatusBadge';
+import { getStatusLabel, getUiLabels } from '@/lib/ui-labels';
+
+const ALL_STATUSES: PassStatus[] = ['pending', 'approved', 'active', 'completed', 'rejected', 'expired', 'cancelled'];
 
 export default function PassesPage() {
   const { user } = useAuth();
@@ -31,6 +34,7 @@ export default function PassesPage() {
   const [actionLoading, setActionLoading] = useState(false);
   const [rejectReason, setRejectReason] = useState('');
 
+  const labels = getUiLabels(config);
   const canViewPassesList = canViewPasses(user);
   const canViewAll = canViewAllPasses(user);
   const canApprove = hasPermission(user, 'passes.approve');
@@ -77,7 +81,12 @@ export default function PassesPage() {
       setPasses((prev) => prev.map((p) => (p.id === id ? updated : p)));
       setSelected(updated);
       setRejectReason('');
-      toast('Действие выполнено', 'success');
+      const toastMsg = action === 'approve' ? labels.toasts.approved
+        : action === 'reject' ? labels.toasts.rejected
+        : action === 'checkin' ? labels.toasts.checkedIn
+        : action === 'checkout' ? labels.toasts.checkedOut
+        : labels.toasts.actionDone;
+      toast(toastMsg, 'success');
     } catch (err) {
       toast(err instanceof Error ? err.message : 'Ошибка', 'error');
     } finally {
@@ -85,26 +94,76 @@ export default function PassesPage() {
     }
   };
 
+  const renderDetailActions = (pass: Pass) => (
+    <div className="w-full space-y-3">
+      {canApprove && pass.status === 'pending' && (
+        <>
+          <button className="btn btn-success w-full" disabled={actionLoading} onClick={() => handleAction(pass.id, 'approve')}>
+            {labels.buttons.approve}
+          </button>
+          <input
+            className="input"
+            placeholder={labels.reception.rejectPlaceholder}
+            value={rejectReason}
+            onChange={(e) => setRejectReason(e.target.value)}
+          />
+          <button
+            className="btn btn-danger w-full"
+            disabled={actionLoading || !rejectReason.trim()}
+            onClick={() => handleAction(pass.id, 'reject', rejectReason)}
+          >
+            {labels.buttons.reject}
+          </button>
+        </>
+      )}
+      {canReception && pass.status === 'approved' && (
+        <button className="btn btn-success w-full" disabled={actionLoading} onClick={() => handleAction(pass.id, 'checkin')}>
+          {labels.buttons.checkInBuilding}
+        </button>
+      )}
+      {canReception && pass.status === 'active' && (
+        <button className="btn btn-primary w-full" disabled={actionLoading} onClick={() => handleAction(pass.id, 'checkout')}>
+          {labels.buttons.checkOut}
+        </button>
+      )}
+      {canSharePass(pass) && (
+        <SharePassActions passIdOrNumber={pass.id} passNumber={pass.passNumber} />
+      )}
+      {canCancelPass(pass) && (
+        <button className="btn btn-danger w-full" disabled={actionLoading} onClick={() => handleAction(pass.id, 'cancel')}>
+          {labels.buttons.cancelRequest}
+        </button>
+      )}
+    </div>
+  );
+
   if (user && !canViewPassesList) return null;
 
   return (
     <ProtectedLayout anyPermissions={['passes.view_own', 'passes.view_all', 'admin.panel']}>
       <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-4 mb-6">
         <div>
-          <h1 className="text-2xl font-bold">Пропуска</h1>
-          {canViewAll && (
-            <p className="text-sm text-[var(--muted)] mt-1">Все заявки пользователей системы</p>
-          )}
+          <h1 className="text-2xl font-bold">{labels.pages.passesTitle}</h1>
+          <p className="text-sm text-[var(--muted)] mt-1">
+            {canViewAll ? labels.pages.passesSubtitleAll : labels.pages.passesSubtitleOwn}
+          </p>
         </div>
         <div className="flex flex-wrap gap-2">
           <div className="relative flex-1 sm:w-56">
             <Search className="absolute left-3 top-1/2 -translate-y-1/2 w-4 h-4 text-[var(--muted)]" />
-            <input className="input pl-9" placeholder="Поиск..." value={search} onChange={(e) => setSearch(e.target.value)} />
+            <input
+              className="input pl-9"
+              placeholder={labels.passes.searchPlaceholder}
+              value={search}
+              onChange={(e) => setSearch(e.target.value)}
+            />
           </div>
           <input className="input w-auto" type="date" value={dateFilter} onChange={(e) => setDateFilter(e.target.value)} />
           <select className="input w-auto" value={statusFilter} onChange={(e) => setStatusFilter(e.target.value)}>
-            <option value="">Все статусы</option>
-            {Object.entries(STATUS_LABELS).map(([k, v]) => <option key={k} value={k}>{v}</option>)}
+            <option value="">{labels.passes.allStatuses}</option>
+            {ALL_STATUSES.map((status) => (
+              <option key={status} value={status}>{getStatusLabel(status, labels)}</option>
+            ))}
           </select>
         </div>
       </div>
@@ -112,16 +171,16 @@ export default function PassesPage() {
       {loadError && (
         <div className="mb-4 text-sm text-red-600 bg-red-50 px-3 py-2 rounded-md flex items-center justify-between">
           {loadError}
-          <button className="btn btn-secondary text-xs" onClick={load}>Повторить</button>
+          <button className="btn btn-secondary text-xs" onClick={load}>{labels.buttons.retry}</button>
         </div>
       )}
 
       <div className="grid lg:grid-cols-2 gap-4">
         <div className="space-y-3">
           {loading ? (
-            <div className="card p-8 text-center text-[var(--muted)]">Загрузка...</div>
+            <div className="card p-8 text-center text-[var(--muted)]">{labels.passes.loading}</div>
           ) : passes.length === 0 ? (
-            <div className="card p-8 text-center text-[var(--muted)]">Пропуска не найдены</div>
+            <div className="card p-8 text-center text-[var(--muted)]">{labels.passes.notFound}</div>
           ) : (
             passes.map((pass) => (
               <PassCard
@@ -129,6 +188,7 @@ export default function PassesPage() {
                 pass={pass}
                 showCreator={canViewAll}
                 onClick={() => setSelected(pass)}
+                highlight={selected?.id === pass.id}
                 actions={
                   <div className="w-full space-y-2">
                     {canSharePass(pass) && (
@@ -142,7 +202,7 @@ export default function PassesPage() {
                         onClick={() => handleAction(pass.id, 'cancel')}
                       >
                         <Ban className="w-3.5 h-3.5" />
-                        Отменить
+                        {labels.buttons.cancel}
                       </button>
                     )}
                   </div>
@@ -153,125 +213,30 @@ export default function PassesPage() {
         </div>
 
         {selected && (
-          <div className="card p-5 lg:sticky lg:top-20 h-fit">
-            <div className="flex items-center justify-between mb-4">
-              <h2 className="text-lg font-semibold">Детали пропуска</h2>
-              <div className="flex items-center gap-2">
-                <StatusBadge status={selected.status} />
-                <button className="p-1 text-[var(--muted)] hover:text-[var(--text)]" onClick={() => setSelected(null)} aria-label="Закрыть">
-                  <X className="w-4 h-4" />
-                </button>
-              </div>
+          <div className="lg:sticky lg:top-20 h-fit space-y-3">
+            <div className="flex items-center justify-between">
+              <h2 className="text-lg font-semibold">{labels.passes.detailTitle}</h2>
+              <button
+                className="p-1.5 rounded-md text-[var(--muted)] hover:text-[var(--text)] hover:bg-slate-100"
+                onClick={() => setSelected(null)}
+                aria-label={labels.passes.close}
+              >
+                <X className="w-4 h-4" />
+              </button>
             </div>
 
             {canPrint && (
-              <div className="mb-5 pb-5 border-b border-[var(--border)]">
-                <PassPrintCard pass={selected} businessCenterName={selected.businessCenterName || config?.businessCenterName} />
-              </div>
+              <PassPrintCard pass={selected} businessCenterName={selected.businessCenterName || config?.businessCenterName} />
             )}
 
-            <dl className="space-y-3 text-sm">
-              <div className="flex justify-between gap-4">
-                <dt className="text-[var(--muted)] shrink-0">Номер</dt>
-                <dd className="font-mono font-medium text-right">{selected.passNumber}</dd>
-              </div>
-              <div className="flex justify-between gap-4">
-                <dt className="text-[var(--muted)] shrink-0">Посетитель</dt>
-                <dd className="text-right">{selected.visitorName}</dd>
-              </div>
-              {selected.companyName && (
-                <div className="flex justify-between gap-4">
-                  <dt className="text-[var(--muted)] shrink-0">Компания</dt>
-                  <dd className="text-right">{selected.companyName}</dd>
-                </div>
-              )}
-              {selected.visitPurpose && (
-                <div className="flex justify-between gap-4">
-                  <dt className="text-[var(--muted)] shrink-0">Цель визита</dt>
-                  <dd className="text-right">{selected.visitPurpose}</dd>
-                </div>
-              )}
-              {selected.visitorPhone && (
-                <div className="flex justify-between gap-4">
-                  <dt className="text-[var(--muted)] shrink-0">Телефон</dt>
-                  <dd className="text-right">{selected.visitorPhone}</dd>
-                </div>
-              )}
-              {selected.creatorName && canViewAll && (
-                <div className="flex justify-between gap-4">
-                  <dt className="text-[var(--muted)] shrink-0">Заказал</dt>
-                  <dd className="text-right">{selected.creatorName}{selected.creatorCompany && ` (${selected.creatorCompany})`}</dd>
-                </div>
-              )}
-              <div className="flex justify-between gap-4">
-                <dt className="text-[var(--muted)] shrink-0">Дата визита</dt>
-                <dd className="text-right">{selected.visitDate} {selected.visitTimeFrom && `${selected.visitTimeFrom}–${selected.visitTimeTo}`}</dd>
-              </div>
-              {selected.businessCenterName && (
-                <div className="flex justify-between gap-4">
-                  <dt className="text-[var(--muted)] shrink-0">Бизнес-центр</dt>
-                  <dd className="text-right">{selected.businessCenterName}</dd>
-                </div>
-              )}
-              <div className="flex justify-between gap-4">
-                <dt className="text-[var(--muted)] shrink-0">Офис</dt>
-                <dd className="text-right">оф. {selected.office}{selected.floor && `, ${selected.floor} эт.`}</dd>
-              </div>
-              {selected.vehiclePlate && (
-                <div className="flex justify-between gap-4">
-                  <dt className="text-[var(--muted)] shrink-0">Автомобиль</dt>
-                  <dd className="font-mono text-right">{selected.vehiclePlate} {selected.vehicleModel}</dd>
-                </div>
-              )}
-              {selected.comment && (
-                <div>
-                  <dt className="text-[var(--muted)] mb-1">Комментарий</dt>
-                  <dd className="bg-slate-50 p-2 rounded">{selected.comment}</dd>
-                </div>
-              )}
-              {selected.rejectionReason && (
-                <div>
-                  <dt className="text-[var(--muted)] mb-1">Причина отклонения</dt>
-                  <dd className="text-red-600">{selected.rejectionReason}</dd>
-                </div>
-              )}
-              {selected.checkedInAt && (
-                <div className="flex justify-between gap-4">
-                  <dt className="text-[var(--muted)] shrink-0">Вход</dt>
-                  <dd className="text-right">{new Date(selected.checkedInAt).toLocaleString('ru-RU')}</dd>
-                </div>
-              )}
-              {selected.checkedOutAt && (
-                <div className="flex justify-between gap-4">
-                  <dt className="text-[var(--muted)] shrink-0">Выход</dt>
-                  <dd className="text-right">{new Date(selected.checkedOutAt).toLocaleString('ru-RU')}</dd>
-                </div>
-              )}
-            </dl>
-
-            <div className="mt-5 pt-4 border-t border-[var(--border)] space-y-3">
-              {canApprove && selected.status === 'pending' && (
-                <>
-                  <button className="btn btn-success w-full" disabled={actionLoading} onClick={() => handleAction(selected.id, 'approve')}>Одобрить</button>
-                  <input className="input" placeholder="Причина отклонения" value={rejectReason} onChange={(e) => setRejectReason(e.target.value)} />
-                  <button className="btn btn-danger w-full" disabled={actionLoading || !rejectReason.trim()} onClick={() => handleAction(selected.id, 'reject', rejectReason)}>Отклонить</button>
-                </>
-              )}
-              {canReception && selected.status === 'approved' && (
-                <button className="btn btn-success w-full" disabled={actionLoading} onClick={() => handleAction(selected.id, 'checkin')}>Впустить в здание</button>
-              )}
-              {canReception && selected.status === 'active' && (
-                <button className="btn btn-primary w-full" disabled={actionLoading} onClick={() => handleAction(selected.id, 'checkout')}>Зафиксировать выход</button>
-              )}
-              {canSharePass(selected) && (
-                <SharePassActions passIdOrNumber={selected.id} passNumber={selected.passNumber} />
-              )}
-              {canCancelPass(selected) && (
-                <button className="btn btn-danger w-full" disabled={actionLoading} onClick={() => handleAction(selected.id, 'cancel')}>
-                  Отменить заявку
-                </button>
-              )}
-            </div>
+            <PassCardBase
+              pass={selected}
+              labels={labels}
+              variant="full"
+              showTimeline
+              showCreator={canViewAll}
+              actions={renderDetailActions(selected)}
+            />
           </div>
         )}
       </div>

@@ -4,6 +4,7 @@ export declare class PassesPublicController {
     constructor(passesService: PassesService);
     getTicket(passNumber: string): Promise<{
         ticket: {
+            businessCenterName: string | undefined;
             passNumber: any;
             visitorName: any;
             companyName: any;
@@ -13,10 +14,14 @@ export declare class PassesPublicController {
             visitDate: any;
             visitTimeFrom: any;
             visitTimeTo: any;
-            businessCenterName: any;
             office: any;
             floor: any;
             status: any;
+            createdAt: any;
+            approvedAt: any;
+            checkedInAt: any;
+            checkedOutAt: any;
+            rejectionReason: any;
         };
     }>;
 }

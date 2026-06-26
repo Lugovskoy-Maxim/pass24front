@@ -22,6 +22,9 @@ export class AppSettings {
 
   @Prop({ default: 'info@pass24.local' })
   siteEmail: string;
+
+  @Prop({ type: Object, default: {} })
+  uiLabels: Record<string, unknown>;
 }
 
 export const AppSettingsSchema = SchemaFactory.createForClass(AppSettings);

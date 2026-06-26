@@ -45,14 +45,17 @@ let AccessConfigService = class AccessConfigService {
             }
         }
         for (const [role, perms] of Object.entries(existing.rolePermissions)) {
-            const sanitized = (perms || []).filter((p) => validKeys.has(p));
-            if (role === 'tenant') {
-                for (const perm of ['passes.view_own', 'passes.templates']) {
-                    if (!sanitized.includes(perm)) {
-                        sanitized.push(perm);
-                        changed = true;
-                    }
+            const sanitized = [...new Set((perms || []).filter((p) => validKeys.has(p)))];
+            const defaults = access_constants_1.DEFAULT_ROLE_PERMISSIONS[role] || [];
+            for (const perm of defaults) {
+                if (!sanitized.includes(perm)) {
+                    sanitized.push(perm);
+                    changed = true;
                 }
+            }
+            if (role === 'admin' && !sanitized.includes('admin.permissions')) {
+                sanitized.push('admin.permissions');
+                changed = true;
             }
             if (sanitized.length !== perms.length || sanitized.some((p, i) => p !== perms[i])) {
                 existing.rolePermissions[role] = sanitized;
@@ -89,6 +92,16 @@ let AccessConfigService = class AccessConfigService {
             for (const [role, perms] of Object.entries(data.rolePermissions)) {
                 doc.rolePermissions[role] = (perms || []).filter((p) => validKeys.has(p));
             }
+            for (const [role, defaults] of Object.entries(access_constants_1.DEFAULT_ROLE_PERMISSIONS)) {
+                const current = doc.rolePermissions[role] || [];
+                if (current.includes('admin.panel')) {
+                    for (const perm of ['passes.view_all', 'passes.reception', 'passes.lookup', ...defaults]) {
+                        if (!current.includes(perm))
+                            current.push(perm);
+                    }
+                    doc.rolePermissions[role] = current;
+                }
+            }
             if (!doc.rolePermissions.admin?.includes('admin.permissions')) {
                 doc.rolePermissions.admin = [
                     ...new Set([...(doc.rolePermissions.admin || []), 'admin.permissions']),
@@ -110,6 +123,11 @@ let AccessConfigService = class AccessConfigService {
     async hasPermission(role, permission) {
         const perms = await this.getPermissionsForRole(role);
         return perms.includes(permission);
+    }
+    async canViewAllPasses(role) {
+        if (await this.hasPermission(role, 'passes.view_all'))
+            return true;
+        return this.hasPermission(role, 'admin.panel');
     }
     mapConfig(doc) {
         const mergedRoles = {

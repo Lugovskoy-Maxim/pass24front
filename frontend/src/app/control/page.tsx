@@ -4,12 +4,17 @@ import { Suspense, useEffect, useState, useCallback, FormEvent } from 'react';
 import { useSearchParams } from 'next/navigation';
 import { LogIn, LogOut, Users, CheckCircle, Clock, AlertCircle, Search } from 'lucide-react';
 import { ProtectedLayout } from '@/components/ProtectedLayout';
-import { RECEPTION_SECTIONS, ReceptionPassCard } from '@/components/ReceptionPassCard';
+import { getReceptionSections, ReceptionPassCard } from '@/components/ReceptionPassCard';
 import { useToast } from '@/components/Toast';
+import { useConfig } from '@/hooks/useConfig';
 import { api, Pass } from '@/lib/api';
+import { getUiLabels, isGuestStillInside } from '@/lib/ui-labels';
 
 function ControlPageContent() {
   const { toast } = useToast();
+  const config = useConfig();
+  const labels = getUiLabels(config);
+  const receptionSections = getReceptionSections(labels);
   const searchParams = useSearchParams();
   const [date, setDate] = useState(new Date().toISOString().slice(0, 10));
   const [passes, setPasses] = useState<Pass[]>([]);
@@ -45,13 +50,17 @@ function ControlPageContent() {
       const { pass } = await api.lookupPass(trimmed);
       setLookupResult(pass);
       setLookupQuery(trimmed);
-      toast(`Найден пропуск ${pass.passNumber}`, 'success');
+      if (isGuestStillInside(pass)) {
+        toast(labels.toasts.guestStillInside, 'warning');
+      } else {
+        toast(`${labels.toasts.passFound}: ${pass.passNumber}`, 'success');
+      }
     } catch (err) {
       toast(err instanceof Error ? err.message : 'Пропуск не найден', 'error');
     } finally {
       setLookupLoading(false);
     }
-  }, [toast]);
+  }, [toast, labels]);
 
   useEffect(() => {
     const passFromUrl = searchParams.get('pass');
@@ -69,7 +78,7 @@ function ControlPageContent() {
     setActionId(id);
     try {
       await api.updateStatus(id, 'approved');
-      toast('Пропуск одобрен', 'success');
+      toast(labels.toasts.approved, 'success');
       load();
     } catch (err) {
       toast(err instanceof Error ? err.message : 'Ошибка', 'error');
@@ -85,7 +94,7 @@ function ControlPageContent() {
     try {
       await api.updateStatus(id, 'rejected', reason);
       setRejectReason((prev) => ({ ...prev, [id]: '' }));
-      toast('Пропуск отклонён', 'success');
+      toast(labels.toasts.rejected, 'success');
       load();
     } catch (err) {
       toast(err instanceof Error ? err.message : 'Ошибка', 'error');
@@ -98,7 +107,7 @@ function ControlPageContent() {
     setActionId(id);
     try {
       await api.checkIn(id);
-      toast('Посетитель пропущен', 'success');
+      toast(labels.toasts.checkedIn, 'success');
       load();
     } catch (err) {
       toast(err instanceof Error ? err.message : 'Ошибка', 'error');
@@ -111,7 +120,7 @@ function ControlPageContent() {
     setActionId(id);
     try {
       await api.checkOut(id);
-      toast('Выход зафиксирован', 'success');
+      toast(labels.toasts.checkedOut, 'success');
       load();
     } catch (err) {
       toast(err instanceof Error ? err.message : 'Ошибка', 'error');
@@ -129,11 +138,11 @@ function ControlPageContent() {
             disabled={actionId === pass.id}
             onClick={() => handleApprove(pass.id)}
           >
-            Одобрить
+            {labels.buttons.approve}
           </button>
           <input
             className="input text-sm sm:max-w-xs"
-            placeholder="Причина отклонения"
+            placeholder={labels.reception.rejectPlaceholder}
             value={rejectReason[pass.id] || ''}
             onChange={(e) => setRejectReason((prev) => ({ ...prev, [pass.id]: e.target.value }))}
           />
@@ -142,7 +151,7 @@ function ControlPageContent() {
             disabled={actionId === pass.id || !rejectReason[pass.id]?.trim()}
             onClick={() => handleReject(pass.id)}
           >
-            Отклонить
+            {labels.buttons.reject}
           </button>
         </>
       );
@@ -155,7 +164,7 @@ function ControlPageContent() {
           onClick={() => handleCheckIn(pass.id)}
         >
           <LogIn className="w-4 h-4" />
-          Пропустить на вход
+          {labels.buttons.checkIn}
         </button>
       );
     }
@@ -167,7 +176,7 @@ function ControlPageContent() {
           onClick={() => handleCheckOut(pass.id)}
         >
           <LogOut className="w-4 h-4" />
-          Зафиксировать выход
+          {labels.buttons.checkOut}
         </button>
       );
     }
@@ -175,6 +184,7 @@ function ControlPageContent() {
   };
 
   const passesByStatus = (status: Pass['status']) => passes.filter((p) => p.status === status);
+  const stillInsidePasses = passes.filter(isGuestStillInside);
 
   const scrollToSection = (status: Pass['status']) => {
     const el = document.getElementById(`reception-section-${status}`);
@@ -184,19 +194,19 @@ function ControlPageContent() {
   };
 
   const statCards: { key: Pass['status'] | 'total'; label: string; value: number; icon: typeof Users; iconClass: string; borderClass: string; scrollTo?: Pass['status'] }[] = [
-    { key: 'total', label: 'Всего', value: stats.total, icon: Users, iconClass: 'text-[var(--primary)]', borderClass: '' },
-    { key: 'pending', label: 'Новые', value: stats.pending, icon: AlertCircle, iconClass: 'text-amber-600', borderClass: 'border-b-amber-500', scrollTo: 'pending' },
-    { key: 'approved', label: 'Ожидают', value: stats.approved, icon: Clock, iconClass: 'text-blue-600', borderClass: 'border-b-blue-500', scrollTo: 'approved' },
-    { key: 'active', label: 'В здании', value: stats.active, icon: LogIn, iconClass: 'text-emerald-600', borderClass: 'border-b-emerald-500', scrollTo: 'active' },
-    { key: 'completed', label: 'Выехали', value: stats.completed, icon: CheckCircle, iconClass: 'text-slate-500', borderClass: 'border-b-slate-400', scrollTo: 'completed' },
+    { key: 'total', label: labels.reception.statTotal, value: stats.total, icon: Users, iconClass: 'text-[var(--primary)]', borderClass: '' },
+    { key: 'pending', label: labels.reception.statPending, value: stats.pending, icon: AlertCircle, iconClass: 'text-amber-600', borderClass: 'border-b-amber-500', scrollTo: 'pending' },
+    { key: 'approved', label: labels.reception.statApproved, value: stats.approved, icon: Clock, iconClass: 'text-blue-600', borderClass: 'border-b-blue-500', scrollTo: 'approved' },
+    { key: 'active', label: labels.reception.statActive, value: stats.active, icon: LogIn, iconClass: 'text-emerald-600', borderClass: 'border-b-emerald-500', scrollTo: 'active' },
+    { key: 'completed', label: labels.reception.statCompleted, value: stats.completed, icon: CheckCircle, iconClass: 'text-slate-500', borderClass: 'border-b-slate-400', scrollTo: 'completed' },
   ];
 
   return (
     <ProtectedLayout anyPermissions={['passes.reception', 'passes.lookup', 'admin.panel']}>
       <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-4 mb-6">
         <div>
-          <h1 className="text-2xl font-bold">Панель ресепшн</h1>
-          <p className="text-[var(--muted)]">Журнал посетителей на выбранную дату</p>
+          <h1 className="text-2xl font-bold">{labels.pages.receptionTitle}</h1>
+          <p className="text-[var(--muted)]">{labels.pages.receptionSubtitle}</p>
         </div>
         <input
           className="input w-auto"
@@ -211,15 +221,32 @@ function ControlPageContent() {
           <Search className="absolute left-3 top-1/2 -translate-y-1/2 w-4 h-4 text-[var(--muted)]" />
           <input
             className="input pl-9 font-mono"
-            placeholder="Поиск по номеру пропуска (PS-2026-1234)"
+            placeholder={labels.reception.lookupPlaceholder}
             value={lookupQuery}
             onChange={(e) => setLookupQuery(e.target.value)}
           />
         </div>
         <button type="submit" className="btn btn-primary" disabled={lookupLoading || !lookupQuery.trim()}>
-          {lookupLoading ? 'Поиск...' : 'Найти'}
+          {lookupLoading ? '...' : labels.buttons.lookup}
         </button>
       </form>
+
+      {stillInsidePasses.length > 0 && (
+        <div className="mb-6 p-4 rounded-lg border border-amber-300 bg-amber-50 text-amber-900 text-sm flex flex-col sm:flex-row sm:items-center gap-2">
+          <AlertCircle className="w-5 h-5 shrink-0 text-amber-600" />
+          <div className="flex-1">
+            <span className="font-semibold">{labels.reception.overdueInsideBanner}</span>
+            <span className="text-amber-800 ml-1">({stillInsidePasses.length})</span>
+          </div>
+          <button
+            type="button"
+            className="btn btn-secondary text-xs shrink-0"
+            onClick={() => scrollToSection('active')}
+          >
+            {labels.reception.sectionActive}
+          </button>
+        </div>
+      )}
 
       {lookupResult && (
         <div className="mb-6 animate-slide-up">
@@ -229,7 +256,11 @@ function ControlPageContent() {
               Закрыть
             </button>
           </div>
-          <ReceptionPassCard pass={lookupResult} highlight actions={renderActions(lookupResult)} />
+          <ReceptionPassCard
+            pass={lookupResult}
+            highlight={isGuestStillInside(lookupResult)}
+            actions={renderActions(lookupResult)}
+          />
         </div>
       )}
 
@@ -259,7 +290,7 @@ function ControlPageContent() {
       {loadError && (
         <div className="mb-4 text-sm text-red-600 bg-red-50 px-3 py-2 rounded-md flex items-center justify-between">
           {loadError}
-          <button className="btn btn-secondary text-xs" onClick={load}>Повторить</button>
+          <button className="btn btn-secondary text-xs" onClick={load}>{labels.buttons.retry}</button>
         </div>
       )}
 
@@ -271,7 +302,7 @@ function ControlPageContent() {
         </div>
       ) : (
         <div className="space-y-8">
-          {RECEPTION_SECTIONS.map(({ key, title, icon: Icon, iconClass, dimmed }) => {
+          {receptionSections.map(({ key, title, icon: Icon, iconClass, dimmed }) => {
             const sectionPasses = passesByStatus(key);
             if (sectionPasses.length === 0) return null;
 
@@ -287,7 +318,8 @@ function ControlPageContent() {
                     <ReceptionPassCard
                       key={pass.id}
                       pass={pass}
-                      dimmed={dimmed}
+                      dimmed={dimmed && !isGuestStillInside(pass)}
+                      highlight={isGuestStillInside(pass)}
                       actions={renderActions(pass)}
                     />
                   ))}

@@ -1,4 +1,4 @@
-import { IsEmail, IsOptional, IsString, MaxLength } from 'class-validator';
+import { IsEmail, IsObject, IsOptional, IsString, MaxLength } from 'class-validator';
 
 export class UpdateSiteSettingsDto {
   @IsOptional()
@@ -25,4 +25,8 @@ export class UpdateSiteSettingsDto {
   @IsEmail()
   @MaxLength(120)
   siteEmail?: string;
+
+  @IsOptional()
+  @IsObject()
+  uiLabels?: Record<string, unknown>;
 }

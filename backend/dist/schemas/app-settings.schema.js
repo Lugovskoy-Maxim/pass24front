@@ -18,6 +18,7 @@ let AppSettings = class AppSettings {
     siteTagline;
     sitePhone;
     siteEmail;
+    uiLabels;
 };
 exports.AppSettings = AppSettings;
 __decorate([
@@ -44,6 +45,10 @@ __decorate([
     (0, mongoose_1.Prop)({ default: 'info@pass24.local' }),
     __metadata("design:type", String)
 ], AppSettings.prototype, "siteEmail", void 0);
+__decorate([
+    (0, mongoose_1.Prop)({ type: Object, default: {} }),
+    __metadata("design:type", Object)
+], AppSettings.prototype, "uiLabels", void 0);
 exports.AppSettings = AppSettings = __decorate([
     (0, mongoose_1.Schema)({ timestamps: true, collection: 'app_settings' })
 ], AppSettings);

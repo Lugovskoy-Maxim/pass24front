@@ -4,4 +4,5 @@ export declare class UpdateSiteSettingsDto {
     siteTagline?: string;
     sitePhone?: string;
     siteEmail?: string;
+    uiLabels?: Record<string, unknown>;
 }

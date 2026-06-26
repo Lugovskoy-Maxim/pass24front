@@ -29,6 +29,7 @@ const ACTION_LABELS: Record<string, string> = {
   'pass.cancelled': 'Отмена',
   'pass.check_in': 'Вход в БЦ',
   'pass.check_out': 'Выход из БЦ',
+  'pass.expired': 'Истечение пропуска',
   'user.create': 'Создание пользователя',
   'user.update': 'Изменение пользователя',
   'settings.update': 'Изменение настроек',

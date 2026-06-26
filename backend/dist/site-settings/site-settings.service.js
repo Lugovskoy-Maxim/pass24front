@@ -17,6 +17,7 @@ const common_1 = require("@nestjs/common");
 const mongoose_1 = require("@nestjs/mongoose");
 const mongoose_2 = require("mongoose");
 const app_settings_schema_1 = require("../schemas/app-settings.schema");
+const ui_labels_defaults_1 = require("./ui-labels.defaults");
 const SETTINGS_KEY = 'global';
 const MAX_ICON_LENGTH = 120_000;
 let SiteSettingsService = class SiteSettingsService {
@@ -52,6 +53,9 @@ let SiteSettingsService = class SiteSettingsService {
             update.sitePhone = data.sitePhone.trim();
         if (data.siteEmail !== undefined)
             update.siteEmail = data.siteEmail.trim();
+        if (data.uiLabels !== undefined) {
+            update.uiLabels = (0, ui_labels_defaults_1.deepMergeUiLabels)(data.uiLabels);
+        }
         const doc = await this.appSettingsModel
             .findOneAndUpdate({ key: SETTINGS_KEY }, { $set: update }, { new: true, upsert: true })
             .lean();
@@ -64,6 +68,7 @@ let SiteSettingsService = class SiteSettingsService {
             siteTagline: doc?.siteTagline || 'Пропуска для арендаторов бизнес-центра',
             sitePhone: doc?.sitePhone || '+7 (495) 123-45-67',
             siteEmail: doc?.siteEmail || 'info@pass24.local',
+            uiLabels: (0, ui_labels_defaults_1.deepMergeUiLabels)(doc?.uiLabels),
         };
     }
 };

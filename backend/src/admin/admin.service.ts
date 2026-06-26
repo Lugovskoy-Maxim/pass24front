@@ -3,6 +3,7 @@ import { InjectModel } from '@nestjs/mongoose';
 import * as bcrypt from 'bcryptjs';
 import { Model, Types } from 'mongoose';
 import { AuditActor, AuditQuery, AuditService } from '../audit/audit.service';
+import { PassesService } from '../passes/passes.service';
 import { Office, OfficeDocument, Pass, PassDocument, Property, PropertyDocument, User, UserDocument } from '../schemas';
 import { PropertyType } from '../schemas/enums';
 import { CreateBusinessCenterDto } from './dto/create-business-center.dto';
@@ -30,9 +31,11 @@ export class AdminService {
     @InjectModel(Office.name) private officeModel: Model<OfficeDocument>,
     @InjectModel(Pass.name) private passModel: Model<PassDocument>,
     private auditService: AuditService,
+    private passesService: PassesService,
   ) {}
 
   async dashboard() {
+    await this.passesService.expirePastPasses();
     const [users, passes, properties, offices] = await Promise.all([
       this.userModel.find().lean(),
       this.passModel.find().lean(),

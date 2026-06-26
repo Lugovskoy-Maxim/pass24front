@@ -6,10 +6,12 @@ import { Plus, ClipboardList, Bookmark, Car, Truck, Wrench, User } from 'lucide-
 import { ProtectedLayout } from '@/components/ProtectedLayout';
 import { PassCard } from '@/components/PassCard';
 import { useAuth } from '@/lib/auth';
+import { useConfig } from '@/hooks/useConfig';
 import {
   api, Pass, PassStats, PassTemplate, TYPE_LABELS, PassType, formatTenantOffices,
 } from '@/lib/api';
 import { canUseReception, canViewAllPasses, canViewPasses, hasPermission } from '@/lib/permissions';
+import { getUiLabels } from '@/lib/ui-labels';
 
 const TYPE_ICONS: Record<PassType, typeof User> = {
   visitor: User,
@@ -20,6 +22,8 @@ const TYPE_ICONS: Record<PassType, typeof User> = {
 
 export default function DashboardPage() {
   const { user } = useAuth();
+  const config = useConfig();
+  const labels = getUiLabels(config);
   const [passes, setPasses] = useState<Pass[]>([]);
   const [templates, setTemplates] = useState<PassTemplate[]>([]);
   const [stats, setStats] = useState<PassStats | null>(null);
@@ -51,12 +55,14 @@ export default function DashboardPage() {
   return (
     <ProtectedLayout>
       <div className="mb-6">
-        <h1 className="text-2xl font-bold">Добро пожаловать, {user?.full_name?.split(' ')[0]}</h1>
+        <h1 className="text-2xl font-bold">
+          {labels.pages.dashboardWelcome}, {user?.full_name?.split(' ')[0]}
+        </h1>
         <p className="text-[var(--muted)]">
-          {user?.company ? `${user.company}` : 'Управление пропусками'}
+          {user?.company ? `${user.company}` : labels.pages.dashboardManagePasses}
           {user?.offices?.length
             ? ` · ${formatTenantOffices(user.offices)}`
-            : user?.office && ` · офис ${user.office}`}
+            : user?.office && ` · ${labels.card.officePrefix} ${user.office}`}
         </p>
       </div>
 
@@ -65,15 +71,15 @@ export default function DashboardPage() {
           <div className="grid grid-cols-1 sm:grid-cols-3 gap-4 mb-6">
             <div className="card p-4 flex items-center gap-3">
               <div className="text-2xl font-bold">{stats?.byStatus.pending ?? '—'}</div>
-              <div className="text-sm text-[var(--muted)]">На рассмотрении</div>
+              <div className="text-sm text-[var(--muted)]">{labels.dashboard.statPending}</div>
             </div>
             <div className="card p-4 flex items-center gap-3">
               <div className="text-2xl font-bold">{stats?.byStatus.active ?? '—'}</div>
-              <div className="text-sm text-[var(--muted)]">Сейчас в здании</div>
+              <div className="text-sm text-[var(--muted)]">{labels.dashboard.statActive}</div>
             </div>
             <div className="card p-4 flex items-center gap-3">
               <div className="text-2xl font-bold">{stats?.todayCount ?? '—'}</div>
-              <div className="text-sm text-[var(--muted)]">Сегодня</div>
+              <div className="text-sm text-[var(--muted)]">{labels.dashboard.statToday}</div>
             </div>
           </div>
 
@@ -100,35 +106,35 @@ export default function DashboardPage() {
 
       {loadError && <div className="mb-4 text-sm text-red-600 bg-red-50 px-3 py-2 rounded-md">{loadError}</div>}
 
-      <div className="flex gap-3 mb-6">
+      <div className="flex gap-3 mb-6 flex-wrap">
         {canTemplates && (
           <Link href="/templates" className="btn btn-primary">
             <Bookmark className="w-4 h-4" />
-            Шаблоны пропусков
+            {labels.pages.templatesTitle}
           </Link>
         )}
         {canCreate && !isTenantTemplates && (
           <Link href="/passes/new" className="btn btn-primary">
             <Plus className="w-4 h-4" />
-            Заказать пропуск
+            {labels.buttons.order}
           </Link>
         )}
         {canReception && (
           <Link href="/control" className="btn btn-secondary">
             <ClipboardList className="w-4 h-4" />
-            Панель ресепшн
+            {labels.pages.receptionTitle}
           </Link>
         )}
       </div>
 
       {isTenantTemplates ? (
         <>
-          <h2 className="text-lg font-semibold mb-4">Быстрый заказ</h2>
+          <h2 className="text-lg font-semibold mb-4">{labels.dashboard.quickOrderTitle}</h2>
           {templates.length === 0 ? (
             <div className="card p-8 text-center text-[var(--muted)]">
-              Создайте шаблон посетителя или импортируйте из прошлых пропусков.
+              {labels.dashboard.quickOrderEmpty}
               <div className="mt-4">
-                <Link href="/templates" className="btn btn-secondary">Перейти к шаблонам</Link>
+                <Link href="/templates" className="btn btn-secondary">{labels.dashboard.goToTemplates}</Link>
               </div>
             </div>
           ) : (
@@ -140,7 +146,7 @@ export default function DashboardPage() {
                     <div className="text-sm text-[var(--muted)]">{template.visitorName} · {TYPE_LABELS[template.passType]}</div>
                   </div>
                   <Link href={`/passes/new?template=${template.id}`} className="btn btn-primary text-sm shrink-0">
-                    Заказать
+                    {labels.buttons.orderShort}
                   </Link>
                 </div>
               ))}
@@ -150,14 +156,16 @@ export default function DashboardPage() {
       ) : (
         <>
           <div className="flex items-center justify-between mb-4">
-            <h2 className="text-lg font-semibold">{showAllPasses ? 'Последние пропуска всех пользователей' : 'Последние пропуска'}</h2>
+            <h2 className="text-lg font-semibold">
+              {showAllPasses ? labels.pages.dashboardRecentAll : labels.pages.dashboardRecentOwn}
+            </h2>
             {showAllPasses && (
-              <Link href="/passes" className="text-sm text-[var(--primary)] hover:underline">Все пропуска</Link>
+              <Link href="/passes" className="text-sm text-[var(--primary)] hover:underline">{labels.buttons.allPasses}</Link>
             )}
           </div>
           {passes.length === 0 ? (
             <div className="card p-8 text-center text-[var(--muted)]">
-              Пропусков пока нет. Закажите пропуск для посетителя или курьера.
+              {labels.dashboard.emptyPasses}
             </div>
           ) : (
             <div className="grid gap-3">

@@ -1,3 +1,4 @@
+import { OnModuleInit } from '@nestjs/common';
 import { ConfigService } from '@nestjs/config';
 import { AccessConfigService } from '../access/access-config.service';
 import { AuditActor, AuditService } from '../audit/audit.service';
@@ -7,7 +8,7 @@ import { OfficeDocument, PassDocument, PropertyDocument, UserDocument } from '..
 import { CreatePassDto } from './dto/create-pass.dto';
 import { UpdateStatusDto } from './dto/update-status.dto';
 import { PassTemplatesService } from './pass-templates.service';
-export declare class PassesService {
+export declare class PassesService implements OnModuleInit {
     private passModel;
     private officeModel;
     private propertyModel;
@@ -20,6 +21,9 @@ export declare class PassesService {
     constructor(passModel: Model<PassDocument>, officeModel: Model<OfficeDocument>, propertyModel: Model<PropertyDocument>, userModel: Model<UserDocument>, accessConfigService: AccessConfigService, passTemplatesService: PassTemplatesService, auditService: AuditService, mailService: MailService, configService: ConfigService);
     private readonly passTypeLabels;
     private generatePassNumber;
+    onModuleInit(): Promise<void>;
+    private getTodayDate;
+    expirePastPasses(): Promise<number>;
     private buildAccessFilter;
     findAll(params: {
         status?: string;
@@ -353,6 +357,7 @@ export declare class PassesService {
     }>;
     getPublicTicket(passNumber: string): Promise<{
         ticket: {
+            businessCenterName: string | undefined;
             passNumber: any;
             visitorName: any;
             companyName: any;
@@ -362,10 +367,14 @@ export declare class PassesService {
             visitDate: any;
             visitTimeFrom: any;
             visitTimeTo: any;
-            businessCenterName: any;
             office: any;
             floor: any;
             status: any;
+            createdAt: any;
+            approvedAt: any;
+            checkedInAt: any;
+            checkedOutAt: any;
+            rejectionReason: any;
         };
     }>;
     getStats(user?: any): Promise<{
@@ -376,6 +385,8 @@ export declare class PassesService {
         todayByType: any;
     }>;
     private resolveOfficeFields;
+    private getDefaultBusinessCenter;
+    private resolveBusinessCenterName;
     private ensurePassAccess;
     private countBy;
     private mapToPublicTicket;

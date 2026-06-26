@@ -51,6 +51,7 @@ const mongoose_1 = require("@nestjs/mongoose");
 const bcrypt = __importStar(require("bcryptjs"));
 const mongoose_2 = require("mongoose");
 const audit_service_1 = require("../audit/audit.service");
+const passes_service_1 = require("../passes/passes.service");
 const schemas_1 = require("../schemas");
 const enums_1 = require("../schemas/enums");
 const STAFF_ROLES = ['security', 'bc_admin', 'admin'];
@@ -60,14 +61,17 @@ let AdminService = class AdminService {
     officeModel;
     passModel;
     auditService;
-    constructor(userModel, propertyModel, officeModel, passModel, auditService) {
+    passesService;
+    constructor(userModel, propertyModel, officeModel, passModel, auditService, passesService) {
         this.userModel = userModel;
         this.propertyModel = propertyModel;
         this.officeModel = officeModel;
         this.passModel = passModel;
         this.auditService = auditService;
+        this.passesService = passesService;
     }
     async dashboard() {
+        await this.passesService.expirePastPasses();
         const [users, passes, properties, offices] = await Promise.all([
             this.userModel.find().lean(),
             this.passModel.find().lean(),
@@ -746,6 +750,7 @@ exports.AdminService = AdminService = __decorate([
         mongoose_2.Model,
         mongoose_2.Model,
         mongoose_2.Model,
-        audit_service_1.AuditService])
+        audit_service_1.AuditService,
+        passes_service_1.PassesService])
 ], AdminService);
 //# sourceMappingURL=admin.service.js.map

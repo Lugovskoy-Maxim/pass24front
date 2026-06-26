@@ -126,5 +126,6 @@ export declare class AccessConfigService implements OnModuleInit {
     getPermissionsForRole(role: string): Promise<string[]>;
     isPassTypeEnabled(passType: string): Promise<boolean>;
     hasPermission(role: string, permission: string): Promise<boolean>;
+    canViewAllPasses(role: string): Promise<boolean>;
     private mapConfig;
 }

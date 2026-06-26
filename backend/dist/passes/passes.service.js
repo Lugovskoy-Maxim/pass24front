@@ -21,6 +21,7 @@ const mail_service_1 = require("../mail/mail.service");
 const mongoose_1 = require("@nestjs/mongoose");
 const mongoose_2 = require("mongoose");
 const schemas_1 = require("../schemas");
+const enums_1 = require("../schemas/enums");
 const pass_templates_service_1 = require("./pass-templates.service");
 let PassesService = class PassesService {
     passModel;
@@ -54,10 +55,33 @@ let PassesService = class PassesService {
         const random = Math.floor(1000 + Math.random() * 9000);
         return `PS-${year}-${random}`;
     }
+    async onModuleInit() {
+        await this.expirePastPasses();
+    }
+    getTodayDate() {
+        return new Date().toISOString().slice(0, 10);
+    }
+    async expirePastPasses() {
+        const today = this.getTodayDate();
+        const toExpire = await this.passModel
+            .find({ visitDate: { $lt: today }, status: { $in: ['pending', 'approved'] } })
+            .select('_id passNumber visitDate')
+            .lean();
+        if (toExpire.length) {
+            await this.passModel.updateMany({ _id: { $in: toExpire.map((p) => p._id) } }, { $set: { status: 'expired' } });
+            await Promise.all(toExpire.map((pass) => this.auditService.log({
+                action: 'pass.expired',
+                entityType: 'pass',
+                entityId: pass._id,
+                details: { passNumber: pass.passNumber, visitDate: pass.visitDate },
+            })));
+        }
+        return toExpire.length;
+    }
     async buildAccessFilter(user) {
         if (!user?.role)
             return { _id: null };
-        if (await this.accessConfigService.hasPermission(user.role, 'passes.view_all')) {
+        if (await this.accessConfigService.canViewAllPasses(user.role)) {
             return {};
         }
         if (await this.accessConfigService.hasPermission(user.role, 'passes.view_own')) {
@@ -66,6 +90,7 @@ let PassesService = class PassesService {
         return { _id: null };
     }
     async findAll(params, user) {
+        await this.expirePastPasses();
         const filter = { ...(await this.buildAccessFilter(user)) };
         if (params.status)
             filter.status = params.status;
@@ -86,6 +111,7 @@ let PassesService = class PassesService {
         return { passes: passes.map((p) => this.mapToFrontend(p, user)) };
     }
     async findOne(id, user) {
+        await this.expirePastPasses();
         const pass = await this.passModel.findById(id).lean();
         if (!pass)
             throw new common_1.NotFoundException('Пропуск не найден');
@@ -101,6 +127,10 @@ let PassesService = class PassesService {
         if (sendEmail && !recipientEmail?.trim()) {
             throw new common_1.BadRequestException('Укажите email для отправки пропуска');
         }
+        const today = this.getTodayDate();
+        if (passDto.visitDate < today) {
+            throw new common_1.BadRequestException('Нельзя заказать пропуск на прошедшую дату');
+        }
         const resolved = await this.resolveOfficeFields(passDto, user);
         const passNumber = this.generatePassNumber();
         const doc = await this.passModel.create({
@@ -109,7 +139,7 @@ let PassesService = class PassesService {
             passNumber,
             status: 'pending',
             createdBy: user?.userId,
-            creatorName: user?.email,
+            creatorName: user?.fullName || user?.email,
             creatorCompany: resolved.companyName || passDto.companyName,
         });
         if (user?.role === 'tenant') {
@@ -241,7 +271,8 @@ let PassesService = class PassesService {
         return { pass: this.mapToFrontend(pass) };
     }
     async getJournal(date, user) {
-        const targetDate = date || new Date().toISOString().slice(0, 10);
+        await this.expirePastPasses();
+        const targetDate = date || this.getTodayDate();
         const accessFilter = await this.buildAccessFilter(user);
         const passes = await this.passModel
             .find({ visitDate: targetDate, ...accessFilter })
@@ -258,19 +289,23 @@ let PassesService = class PassesService {
         return { date: targetDate, stats, passes: mapped };
     }
     async lookup(passNumber) {
+        await this.expirePastPasses();
         const pass = await this.passModel.findOne({ passNumber }).lean();
         if (!pass)
             throw new common_1.NotFoundException('Пропуск не найден');
         return { pass: this.mapToFrontend(pass) };
     }
     async getPublicTicket(passNumber) {
+        await this.expirePastPasses();
         const pass = await this.passModel.findOne({ passNumber }).lean();
         if (!pass)
             throw new common_1.NotFoundException('Пропуск не найден');
-        return { ticket: this.mapToPublicTicket(pass) };
+        const businessCenterName = await this.resolveBusinessCenterName(pass);
+        return { ticket: { ...this.mapToPublicTicket(pass), businessCenterName } };
     }
     async getStats(user) {
-        const today = new Date().toISOString().slice(0, 10);
+        await this.expirePastPasses();
+        const today = this.getTodayDate();
         const accessFilter = await this.buildAccessFilter(user);
         const passes = await this.passModel.find(accessFilter).lean();
         const todayPasses = passes.filter((p) => p.visitDate === today);
@@ -307,15 +342,64 @@ let PassesService = class PassesService {
         if (!dto.office?.trim()) {
             throw new common_1.BadRequestException('Укажите офис из реестра');
         }
+        const officeNumber = dto.office.trim();
+        const office = await this.officeModel.findOne({ number: officeNumber, isActive: true }).lean();
+        if (office) {
+            const property = await this.propertyModel.findById(office.property).lean();
+            return {
+                officeId: office._id,
+                property: office.property,
+                businessCenterName: property?.name,
+                office: office.number,
+                floor: dto.floor || office.floor,
+                companyName: dto.companyName || office.company,
+            };
+        }
+        const defaultProperty = await this.getDefaultBusinessCenter();
         return {
-            office: dto.office.trim(),
+            office: officeNumber,
             floor: dto.floor,
+            property: defaultProperty?._id,
+            businessCenterName: defaultProperty?.name,
         };
+    }
+    async getDefaultBusinessCenter() {
+        return this.propertyModel
+            .findOne({ type: enums_1.PropertyType.BUSINESS_CENTER, isActive: true })
+            .sort({ createdAt: 1 })
+            .lean();
+    }
+    async resolveBusinessCenterName(doc) {
+        if (doc.businessCenterName)
+            return doc.businessCenterName;
+        if (doc.property) {
+            const property = await this.propertyModel.findById(doc.property).lean();
+            if (property?.name)
+                return property.name;
+        }
+        if (doc.officeId) {
+            const office = await this.officeModel.findById(doc.officeId).lean();
+            if (office?.property) {
+                const property = await this.propertyModel.findById(office.property).lean();
+                if (property?.name)
+                    return property.name;
+            }
+        }
+        if (doc.office) {
+            const office = await this.officeModel.findOne({ number: String(doc.office), isActive: true }).lean();
+            if (office?.property) {
+                const property = await this.propertyModel.findById(office.property).lean();
+                if (property?.name)
+                    return property.name;
+            }
+        }
+        const defaultProperty = await this.getDefaultBusinessCenter();
+        return defaultProperty?.name;
     }
     async ensurePassAccess(pass, user) {
         if (!user?.role)
             throw new common_1.ForbiddenException('Нет доступа к этому пропуску');
-        if (await this.accessConfigService.hasPermission(user.role, 'passes.view_all'))
+        if (await this.accessConfigService.canViewAllPasses(user.role))
             return;
         const isCreator = pass.createdBy?.toString() === user.userId;
         if (isCreator && await this.accessConfigService.hasPermission(user.role, 'passes.view_own'))
@@ -344,6 +428,11 @@ let PassesService = class PassesService {
             office: doc.office,
             floor: doc.floor,
             status: doc.status,
+            createdAt: doc.createdAt,
+            approvedAt: doc.approvedAt,
+            checkedInAt: doc.checkedInAt,
+            checkedOutAt: doc.checkedOutAt,
+            rejectionReason: doc.rejectionReason,
         };
     }
     mapToFrontend(doc, user) {

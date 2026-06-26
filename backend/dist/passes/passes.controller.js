@@ -60,7 +60,7 @@ let PassesController = class PassesController {
 exports.PassesController = PassesController;
 __decorate([
     (0, common_1.Get)(),
-    (0, permissions_decorator_1.RequirePermissions)('passes.view_own', 'passes.view_all'),
+    (0, permissions_decorator_1.RequirePermissions)('passes.view_own', 'passes.view_all', 'admin.panel'),
     __param(0, (0, common_1.Query)()),
     __param(1, (0, common_1.Req)()),
     __metadata("design:type", Function),
@@ -69,7 +69,7 @@ __decorate([
 ], PassesController.prototype, "findAll", null);
 __decorate([
     (0, common_1.Get)('journal'),
-    (0, permissions_decorator_1.RequirePermissions)('passes.reception', 'passes.view_all'),
+    (0, permissions_decorator_1.RequirePermissions)('passes.reception', 'passes.view_all', 'admin.panel'),
     __param(0, (0, common_1.Query)('date')),
     __param(1, (0, common_1.Req)()),
     __metadata("design:type", Function),
@@ -78,7 +78,7 @@ __decorate([
 ], PassesController.prototype, "getJournal", null);
 __decorate([
     (0, common_1.Get)('stats'),
-    (0, permissions_decorator_1.RequirePermissions)('passes.view_own', 'passes.view_all'),
+    (0, permissions_decorator_1.RequirePermissions)('passes.view_own', 'passes.view_all', 'admin.panel'),
     __param(0, (0, common_1.Req)()),
     __metadata("design:type", Function),
     __metadata("design:paramtypes", [Object]),
@@ -86,7 +86,7 @@ __decorate([
 ], PassesController.prototype, "getStats", null);
 __decorate([
     (0, common_1.Get)('lookup/:passNumber'),
-    (0, permissions_decorator_1.RequirePermissions)('passes.lookup', 'passes.reception'),
+    (0, permissions_decorator_1.RequirePermissions)('passes.lookup', 'passes.reception', 'admin.panel'),
     __param(0, (0, common_1.Param)('passNumber')),
     __metadata("design:type", Function),
     __metadata("design:paramtypes", [String]),
@@ -94,7 +94,7 @@ __decorate([
 ], PassesController.prototype, "lookup", null);
 __decorate([
     (0, common_1.Get)(':id'),
-    (0, permissions_decorator_1.RequirePermissions)('passes.view_own', 'passes.view_all'),
+    (0, permissions_decorator_1.RequirePermissions)('passes.view_own', 'passes.view_all', 'admin.panel'),
     __param(0, (0, common_1.Param)('id')),
     __param(1, (0, common_1.Req)()),
     __metadata("design:type", Function),
@@ -132,7 +132,7 @@ __decorate([
 ], PassesController.prototype, "sendEmail", null);
 __decorate([
     (0, common_1.Post)(':id/check-in'),
-    (0, permissions_decorator_1.RequirePermissions)('passes.reception'),
+    (0, permissions_decorator_1.RequirePermissions)('passes.reception', 'admin.panel'),
     __param(0, (0, common_1.Param)('id')),
     __param(1, (0, common_1.Req)()),
     __metadata("design:type", Function),
@@ -141,7 +141,7 @@ __decorate([
 ], PassesController.prototype, "checkIn", null);
 __decorate([
     (0, common_1.Post)(':id/check-out'),
-    (0, permissions_decorator_1.RequirePermissions)('passes.reception'),
+    (0, permissions_decorator_1.RequirePermissions)('passes.reception', 'admin.panel'),
     __param(0, (0, common_1.Param)('id')),
     __param(1, (0, common_1.Req)()),
     __metadata("design:type", Function),

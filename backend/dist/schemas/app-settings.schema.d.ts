@@ -7,6 +7,7 @@ export declare class AppSettings {
     siteTagline: string;
     sitePhone: string;
     siteEmail: string;
+    uiLabels: Record<string, unknown>;
 }
 export declare const AppSettingsSchema: import("mongoose").Schema<AppSettings, import("mongoose").Model<AppSettings, any, any, any, any, any, AppSettings>, {}, {}, {}, {}, import("mongoose").DefaultSchemaOptions, AppSettings, import("mongoose").Document<unknown, {}, AppSettings, {
     id: string;
@@ -63,6 +64,15 @@ export declare const AppSettingsSchema: import("mongoose").Schema<AppSettings, i
         id: string;
     }> | undefined;
     siteEmail?: import("mongoose").SchemaDefinitionProperty<string, AppSettings, import("mongoose").Document<unknown, {}, AppSettings, {
+        id: string;
+    }, import("mongoose").DefaultSchemaOptions> & Omit<AppSettings & {
+        _id: import("mongoose").Types.ObjectId;
+    } & {
+        __v: number;
+    }, "id"> & {
+        id: string;
+    }> | undefined;
+    uiLabels?: import("mongoose").SchemaDefinitionProperty<Record<string, unknown>, AppSettings, import("mongoose").Document<unknown, {}, AppSettings, {
         id: string;
     }, import("mongoose").DefaultSchemaOptions> & Omit<AppSettings & {
         _id: import("mongoose").Types.ObjectId;

@@ -11,6 +11,7 @@ import {
   ShieldCheck,
 } from 'lucide-react';
 import { PassStatus, PassTimelineData } from '@/lib/api';
+import { mergeUiLabels, UiLabels } from '@/lib/ui-labels';
 
 type StepState = 'done' | 'current' | 'upcoming' | 'failed' | 'skipped';
 
@@ -37,23 +38,23 @@ function formatDuration(checkIn: string, checkOut?: string, now = Date.now()) {
   return m ? `${h} ч ${m} мин` : `${h} ч`;
 }
 
-function buildSteps(pass: PassTimelineData, now: number): TimelineStep[] {
+function buildSteps(pass: PassTimelineData, now: number, t: UiLabels['timeline']): TimelineStep[] {
   const fail = (label: string, sublabel?: string): TimelineStep[] => [
-    { key: 'request', label: 'Заявка', state: 'done', sublabel: formatTime(pass.createdAt) || undefined },
+    { key: 'request', label: t.request, state: 'done', sublabel: formatTime(pass.createdAt) || undefined },
     { key: 'approve', label, state: 'failed', sublabel },
-    { key: 'entry', label: 'Вход', state: 'skipped' },
-    { key: 'inside', label: 'В здании', state: 'skipped' },
-    { key: 'exit', label: 'Выход', state: 'skipped' },
+    { key: 'entry', label: t.entry, state: 'skipped' },
+    { key: 'inside', label: t.inside, state: 'skipped' },
+    { key: 'exit', label: t.exit, state: 'skipped' },
   ];
 
   if (pass.status === 'rejected') {
-    return fail('Отклонён', pass.rejectionReason || 'Без причины');
+    return fail(t.rejected, pass.rejectionReason || 'Без причины');
   }
   if (pass.status === 'cancelled') {
-    return fail('Отменён');
+    return fail(t.cancelled);
   }
   if (pass.status === 'expired') {
-    return fail('Истёк');
+    return fail(t.expired);
   }
 
   const currentIndex: Record<PassStatus, number> = {
@@ -85,44 +86,44 @@ function buildSteps(pass: PassTimelineData, now: number): TimelineStep[] {
   return [
     {
       key: 'request',
-      label: 'Заявка',
+      label: t.request,
       state: stepState(0),
       sublabel: formatTime(pass.createdAt) || undefined,
     },
     {
       key: 'approve',
-      label: 'Одобрение',
+      label: t.approve,
       state: stepState(1),
       sublabel: pass.approvedAt
         ? formatTime(pass.approvedAt) || undefined
         : pass.status === 'pending'
-          ? 'Ожидает'
+          ? t.waiting
           : undefined,
     },
     {
       key: 'entry',
-      label: 'Вход',
+      label: t.entry,
       state: stepState(2),
       sublabel: pass.checkedInAt
         ? formatTime(pass.checkedInAt) || undefined
         : pass.status === 'approved'
-          ? 'Ожидает'
+          ? t.waiting
           : undefined,
     },
     {
       key: 'inside',
-      label: 'В здании',
+      label: t.inside,
       state: stepState(3),
       sublabel: insideSublabel,
     },
     {
       key: 'exit',
-      label: 'Выход',
+      label: t.exit,
       state: stepState(4),
       sublabel: pass.checkedOutAt
         ? formatTime(pass.checkedOutAt) || undefined
         : pass.status === 'active'
-          ? 'Ожидает'
+          ? t.waiting
           : undefined,
     },
   ];
@@ -166,7 +167,16 @@ function NodeIcon({ step }: { step: TimelineStep }) {
   return <Circle className={cls} />;
 }
 
-export function PassVisitTimeline({ pass }: { pass: PassTimelineData }) {
+export function PassVisitTimeline({
+  pass,
+  labels,
+  compact,
+}: {
+  pass: PassTimelineData;
+  labels?: UiLabels;
+  compact?: boolean;
+}) {
+  const L = labels || mergeUiLabels();
   const [now, setNow] = useState(() => Date.now());
 
   useEffect(() => {
@@ -175,7 +185,9 @@ export function PassVisitTimeline({ pass }: { pass: PassTimelineData }) {
     return () => window.clearInterval(id);
   }, [pass.status, pass.checkedInAt]);
 
-  const steps = buildSteps(pass, now);
+  const steps = buildSteps(pass, now, L.timeline);
+  const nodeSize = compact ? 'w-6 h-6' : 'w-8 h-8';
+  const topOffset = compact ? 'top-3' : 'top-4';
 
   return (
     <div className="w-full">
@@ -195,14 +207,14 @@ export function PassVisitTimeline({ pass }: { pass: PassTimelineData }) {
             <div key={step.key} className="flex-1 min-w-0 flex flex-col items-center relative">
               {index > 0 && (
                 <div
-                  className={`absolute top-4 right-1/2 w-full h-0.5 -z-0 ${LINE_STYLES[lineState]}`}
+                  className={`absolute ${topOffset} right-1/2 w-full h-0.5 -z-0 ${LINE_STYLES[lineState]}`}
                   aria-hidden
                 />
               )}
 
               <div
                 className={[
-                  'relative z-10 w-8 h-8 rounded-full border-2 flex items-center justify-center shrink-0 transition-all',
+                  `relative z-10 ${nodeSize} rounded-full border-2 flex items-center justify-center shrink-0 transition-all`,
                   NODE_STYLES[step.state],
                   step.state === 'current' ? 'scale-110' : '',
                 ].join(' ')}

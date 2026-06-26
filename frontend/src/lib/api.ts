@@ -392,6 +392,7 @@ export interface SiteSettings {
   siteTagline: string;
   sitePhone: string;
   siteEmail: string;
+  uiLabels?: Record<string, unknown>;
 }
 
 export interface BcConfig extends SiteSettings {
@@ -669,6 +670,7 @@ export const AUDIT_LABELS: Record<string, string> = {
   'pass.cancelled': 'Отмена',
   'pass.check_in': 'Вход в БЦ',
   'pass.check_out': 'Выход из БЦ',
+  'pass.expired': 'Истечение пропуска',
   'user.create': 'Создание пользователя',
   'user.update': 'Изменение пользователя',
   'settings.update': 'Изменение настроек',

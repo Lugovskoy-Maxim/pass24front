@@ -1,4 +1,5 @@
-import { PassStatus, STATUS_LABELS } from '@/lib/api';
+import { PassStatus } from '@/lib/api';
+import { getStatusLabel, mergeUiLabels, UiLabels } from '@/lib/ui-labels';
 
 const STYLES: Record<PassStatus, string> = {
   pending: 'bg-amber-50 text-amber-700 border-amber-200',
@@ -10,10 +11,11 @@ const STYLES: Record<PassStatus, string> = {
   cancelled: 'bg-gray-50 text-gray-500 border-gray-200',
 };
 
-export function StatusBadge({ status }: { status: PassStatus }) {
+export function StatusBadge({ status, labels }: { status: PassStatus; labels?: UiLabels }) {
+  const L = labels || mergeUiLabels();
   return (
     <span className={`inline-flex px-2.5 py-0.5 text-xs font-medium rounded-full border ${STYLES[status]}`}>
-      {STATUS_LABELS[status]}
+      {getStatusLabel(status, L)}
     </span>
   );
 }

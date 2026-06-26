@@ -9,12 +9,14 @@ import { PassTicketView } from '@/components/PassTicketView';
 import { SiteBrand } from '@/components/SiteBrand';
 import { useAuth } from '@/lib/auth';
 import { useConfig } from '@/hooks/useConfig';
+import { getUiLabels } from '@/lib/ui-labels';
 
 export default function PassTicketPage() {
   const params = useParams();
   const passNumber = decodeURIComponent(params.passNumber as string);
   const { user } = useAuth();
   const config = useConfig();
+  const labels = getUiLabels(config);
   const [ticket, setTicket] = useState<PublicPassTicket | null>(null);
   const [error, setError] = useState('');
   const [loading, setLoading] = useState(true);
@@ -24,7 +26,7 @@ export default function PassTicketPage() {
     setError('');
     api.getPublicTicket(passNumber)
       .then(({ ticket: t }) => setTicket(t))
-      .catch((err) => setError(err instanceof Error ? err.message : 'Пропуск не найден'))
+      .catch((err) => setError(err instanceof Error ? err.message : labels.ticketPage.notFound))
       .finally(() => setLoading(false));
   }, [passNumber]);
 
@@ -41,11 +43,11 @@ export default function PassTicketPage() {
 
       <main className="max-w-md mx-auto px-4 py-8">
         {loading ? (
-          <div className="text-center text-[var(--muted)] animate-pulse">Загрузка пропуска...</div>
+          <div className="text-center text-[var(--muted)] animate-pulse">{labels.ticketPage.loading}</div>
         ) : error ? (
           <div className="card p-8 text-center">
             <p className="text-red-600 mb-4">{error}</p>
-            <Link href={backHref} className="btn btn-secondary">На главную</Link>
+            <Link href={backHref} className="btn btn-secondary">{labels.ticketPage.home}</Link>
           </div>
         ) : ticket ? (
           <>
@@ -57,7 +59,7 @@ export default function PassTicketPage() {
             {user && (
               <div className="mt-6 text-center">
                 <Link href={backHref} className="btn btn-primary">
-                  {user.role === 'tenant' ? 'К шаблонам' : 'К списку пропусков'}
+                  {user.role === 'tenant' ? labels.buttons.backToTemplates : labels.buttons.backToPasses}
                 </Link>
               </div>
             )}

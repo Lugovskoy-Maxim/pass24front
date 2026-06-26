@@ -8,6 +8,7 @@ import { useConfig } from '@/hooks/useConfig';
 import { SiteBrand } from '@/components/SiteBrand';
 import { ROLE_LABELS, formatTenantOffices } from '@/lib/api';
 import { canUseReception, canViewPasses, hasPermission } from '@/lib/permissions';
+import { getUiLabels } from '@/lib/ui-labels';
 
 export function Header() {
   const { user, logout } = useAuth();
@@ -16,18 +17,20 @@ export function Header() {
 
   if (!user) return null;
 
+  const L = getUiLabels(config);
+
   const links = [
-    { href: '/dashboard', label: 'Главная', icon: Home, show: true },
-    { href: '/templates', label: 'Шаблоны', icon: Bookmark, show: hasPermission(user, 'passes.templates') },
-    { href: '/passes', label: 'Пропуска', icon: List, show: canViewPasses(user) },
+    { href: '/dashboard', label: L.nav.dashboard, icon: Home, show: true },
+    { href: '/templates', label: L.nav.templates, icon: Bookmark, show: hasPermission(user, 'passes.templates') },
+    { href: '/passes', label: L.nav.passes, icon: List, show: canViewPasses(user) },
     {
       href: '/passes/new',
-      label: 'Заказать',
+      label: L.nav.orderPass,
       icon: Plus,
       show: hasPermission(user, 'passes.create') && !hasPermission(user, 'passes.templates'),
     },
-    { href: '/control', label: 'Ресепшн', icon: ClipboardList, show: canUseReception(user) },
-    { href: '/admin', label: 'Админ', icon: Settings, show: hasPermission(user, 'admin.panel') },
+    { href: '/control', label: L.nav.reception, icon: ClipboardList, show: canUseReception(user) },
+    { href: '/admin', label: L.nav.admin, icon: Settings, show: hasPermission(user, 'admin.panel') },
   ].filter((l) => l.show);
 
   return (
@@ -66,7 +69,7 @@ export function Header() {
                 : user.office && ` · оф. ${user.office}`}
             </div>
           </div>
-          <button onClick={logout} className="btn btn-secondary p-2" title="Выйти">
+          <button onClick={logout} className="btn btn-secondary p-2" title={L.nav.logout}>
             <LogOut className="w-4 h-4" />
           </button>
         </div>

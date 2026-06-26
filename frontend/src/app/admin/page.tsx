@@ -5,7 +5,9 @@ import Link from 'next/link';
 import { Users, FileText, Building2, Sparkles, List, ScrollText } from 'lucide-react';
 import { AdminLayout } from '@/components/AdminLayout';
 import { useToast } from '@/components/Toast';
-import { api, AdminDashboard, AUDIT_LABELS, STATUS_LABELS, formatAuditEntity } from '@/lib/api';
+import { useConfig } from '@/hooks/useConfig';
+import { api, AdminDashboard, AUDIT_LABELS, PassStatus, formatAuditEntity } from '@/lib/api';
+import { getStatusLabel, getUiLabels } from '@/lib/ui-labels';
 
 const ROLE_NAMES: Record<string, string> = {
   tenant: 'Арендаторы',
@@ -15,6 +17,8 @@ const ROLE_NAMES: Record<string, string> = {
 };
 
 export default function AdminDashboardPage() {
+  const config = useConfig();
+  const labels = getUiLabels(config);
   const { toast } = useToast();
   const [data, setData] = useState<AdminDashboard | null>(null);
   const [error, setError] = useState('');
@@ -61,11 +65,11 @@ export default function AdminDashboardPage() {
       <div className="flex flex-wrap gap-3 mb-6">
         <Link href="/passes" className="btn btn-secondary text-sm">
           <List className="w-4 h-4" />
-          Все пропуска
+          {labels.buttons.allPasses}
         </Link>
         <Link href="/admin/audit" className="btn btn-secondary text-sm">
           <ScrollText className="w-4 h-4" />
-          Журнал действий
+          {labels.buttons.auditLog}
         </Link>
       </div>
 
@@ -105,7 +109,7 @@ export default function AdminDashboardPage() {
           <div className="space-y-2">
             {Object.entries(stats.passes.byStatus).map(([status, count]) => (
               <div key={status} className="flex justify-between text-sm">
-                <span className="text-[var(--muted)]">{STATUS_LABELS[status as keyof typeof STATUS_LABELS] || status}</span>
+                <span className="text-[var(--muted)]">{getStatusLabel(status as PassStatus, labels)}</span>
                 <span className="font-medium">{count}</span>
               </div>
             ))}
@@ -119,7 +123,7 @@ export default function AdminDashboardPage() {
         <div className="card p-5 lg:col-span-2">
           <div className="flex items-center justify-between mb-4">
             <h2 className="font-semibold">Последние действия пользователей</h2>
-            <Link href="/admin/audit" className="text-sm text-[var(--primary)] hover:underline">Весь журнал</Link>
+            <Link href="/admin/audit" className="text-sm text-[var(--primary)] hover:underline">{labels.buttons.fullAudit}</Link>
           </div>
           {recentActivity.length === 0 ? (
             <p className="text-sm text-[var(--muted)]">Действий пока нет</p>

@@ -1,5 +1,6 @@
 import { Model } from 'mongoose';
 import { AuditActor, AuditQuery, AuditService } from '../audit/audit.service';
+import { PassesService } from '../passes/passes.service';
 import { OfficeDocument, PassDocument, PropertyDocument, UserDocument } from '../schemas';
 import { CreateBusinessCenterDto } from './dto/create-business-center.dto';
 import { CreateOfficeDto } from './dto/create-office.dto';
@@ -20,7 +21,8 @@ export declare class AdminService {
     private officeModel;
     private passModel;
     private auditService;
-    constructor(userModel: Model<UserDocument>, propertyModel: Model<PropertyDocument>, officeModel: Model<OfficeDocument>, passModel: Model<PassDocument>, auditService: AuditService);
+    private passesService;
+    constructor(userModel: Model<UserDocument>, propertyModel: Model<PropertyDocument>, officeModel: Model<OfficeDocument>, passModel: Model<PassDocument>, auditService: AuditService, passesService: PassesService);
     dashboard(): Promise<{
         stats: {
             users: {

@@ -17,6 +17,7 @@ class UpdateSiteSettingsDto {
     siteTagline;
     sitePhone;
     siteEmail;
+    uiLabels;
 }
 exports.UpdateSiteSettingsDto = UpdateSiteSettingsDto;
 __decorate([
@@ -49,4 +50,9 @@ __decorate([
     (0, class_validator_1.MaxLength)(120),
     __metadata("design:type", String)
 ], UpdateSiteSettingsDto.prototype, "siteEmail", void 0);
+__decorate([
+    (0, class_validator_1.IsOptional)(),
+    (0, class_validator_1.IsObject)(),
+    __metadata("design:type", Object)
+], UpdateSiteSettingsDto.prototype, "uiLabels", void 0);
 //# sourceMappingURL=update-site-settings.dto.js.map

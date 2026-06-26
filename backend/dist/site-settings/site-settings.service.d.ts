@@ -1,12 +1,14 @@
 import { OnModuleInit } from '@nestjs/common';
 import { Model } from 'mongoose';
 import { AppSettingsDocument } from '../schemas/app-settings.schema';
+import { UiLabels } from './ui-labels.defaults';
 export interface SiteSettingsDto {
     siteName: string;
     siteIcon: string;
     siteTagline: string;
     sitePhone: string;
     siteEmail: string;
+    uiLabels: UiLabels;
 }
 export declare class SiteSettingsService implements OnModuleInit {
     private appSettingsModel;
@@ -14,6 +16,8 @@ export declare class SiteSettingsService implements OnModuleInit {
     onModuleInit(): Promise<void>;
     ensureDefaults(): Promise<void>;
     get(): Promise<SiteSettingsDto>;
-    update(data: Partial<SiteSettingsDto>): Promise<SiteSettingsDto>;
+    update(data: Partial<Omit<SiteSettingsDto, 'uiLabels'>> & {
+        uiLabels?: Record<string, unknown>;
+    }): Promise<SiteSettingsDto>;
     private map;
 }

@@ -1,4 +1,4 @@
-import { BadRequestException, ForbiddenException, Injectable, NotFoundException } from '@nestjs/common';
+import { BadRequestException, ForbiddenException, Injectable, NotFoundException, OnModuleInit } from '@nestjs/common';
 import { ConfigService } from '@nestjs/config';
 import { AccessConfigService } from '../access/access-config.service';
 import { AuditActor, AuditService } from '../audit/audit.service';
@@ -12,7 +12,7 @@ import { UpdateStatusDto } from './dto/update-status.dto';
 import { PassTemplatesService } from './pass-templates.service';
 
 @Injectable()
-export class PassesService {
+export class PassesService implements OnModuleInit {
   constructor(
     @InjectModel(Pass.name) private passModel: Model<PassDocument>,
     @InjectModel(Office.name) private officeModel: Model<OfficeDocument>,
@@ -38,6 +38,41 @@ export class PassesService {
     return `PS-${year}-${random}`;
   }
 
+  async onModuleInit() {
+    await this.expirePastPasses();
+  }
+
+  private getTodayDate() {
+    return new Date().toISOString().slice(0, 10);
+  }
+
+  async expirePastPasses() {
+    const today = this.getTodayDate();
+    const toExpire = await this.passModel
+      .find({ visitDate: { $lt: today }, status: { $in: ['pending', 'approved'] } })
+      .select('_id passNumber visitDate')
+      .lean();
+
+    if (toExpire.length) {
+      await this.passModel.updateMany(
+        { _id: { $in: toExpire.map((p) => p._id) } },
+        { $set: { status: 'expired' } },
+      );
+      await Promise.all(
+        toExpire.map((pass) =>
+          this.auditService.log({
+            action: 'pass.expired',
+            entityType: 'pass',
+            entityId: pass._id,
+            details: { passNumber: pass.passNumber, visitDate: pass.visitDate },
+          }),
+        ),
+      );
+    }
+
+    return toExpire.length;
+  }
+
   private async buildAccessFilter(user?: any) {
     if (!user?.role) return { _id: null };
 
@@ -53,6 +88,7 @@ export class PassesService {
   }
 
   async findAll(params: { status?: string; date?: string; search?: string }, user?: any) {
+    await this.expirePastPasses();
     const filter: any = { ...(await this.buildAccessFilter(user)) };
 
     if (params.status) filter.status = params.status;
@@ -75,6 +111,7 @@ export class PassesService {
   }
 
   async findOne(id: string, user?: any) {
+    await this.expirePastPasses();
     const pass = await this.passModel.findById(id).lean();
     if (!pass) throw new NotFoundException('Пропуск не найден');
     await this.ensurePassAccess(pass, user);
@@ -90,6 +127,11 @@ export class PassesService {
     const { sendEmail, recipientEmail, ...passDto } = dto;
     if (sendEmail && !recipientEmail?.trim()) {
       throw new BadRequestException('Укажите email для отправки пропуска');
+    }
+
+    const today = this.getTodayDate();
+    if (passDto.visitDate < today) {
+      throw new BadRequestException('Нельзя заказать пропуск на прошедшую дату');
     }
 
     const resolved = await this.resolveOfficeFields(passDto, user);
@@ -252,7 +294,8 @@ export class PassesService {
   }
 
   async getJournal(date?: string, user?: any) {
-    const targetDate = date || new Date().toISOString().slice(0, 10);
+    await this.expirePastPasses();
+    const targetDate = date || this.getTodayDate();
     const accessFilter = await this.buildAccessFilter(user);
 
     const passes = await this.passModel
@@ -273,12 +316,14 @@ export class PassesService {
   }
 
   async lookup(passNumber: string) {
+    await this.expirePastPasses();
     const pass = await this.passModel.findOne({ passNumber }).lean();
     if (!pass) throw new NotFoundException('Пропуск не найден');
     return { pass: this.mapToFrontend(pass) };
   }
 
   async getPublicTicket(passNumber: string) {
+    await this.expirePastPasses();
     const pass = await this.passModel.findOne({ passNumber }).lean();
     if (!pass) throw new NotFoundException('Пропуск не найден');
     const businessCenterName = await this.resolveBusinessCenterName(pass);
@@ -286,7 +331,8 @@ export class PassesService {
   }
 
   async getStats(user?: any) {
-    const today = new Date().toISOString().slice(0, 10);
+    await this.expirePastPasses();
+    const today = this.getTodayDate();
     const accessFilter = await this.buildAccessFilter(user);
     const passes = await this.passModel.find(accessFilter).lean();
     const todayPasses = passes.filter((p) => p.visitDate === today);
