@@ -15,9 +15,9 @@ import { useToast } from '@/components/Toast';
 import { api, Pass, PassStatus, getErrorMessage } from '@/lib/api';
 import { PageError } from '@/components/PageError';
 import { canViewAllPasses, canViewPasses, hasPermission } from '@/lib/permissions';
-import { useOverdueGuests } from '@/hooks/useOverdueGuests';
-import { OverdueGuestsAlert } from '@/components/OverdueGuestsAlert';
-import { canSeeOverdueAlerts } from '@/lib/permissions';
+
+
+
 import { getStatusLabel, getUiLabels, UiLabels } from '@/lib/ui-labels';
 
 const ALL_STATUSES: PassStatus[] = ['pending', 'approved', 'active', 'completed', 'rejected', 'expired', 'cancelled'];
@@ -49,8 +49,7 @@ function PassesPageContent() {
   const [rejectReason, setRejectReason] = useState('');
 
   const labels = getUiLabels(config);
-  const showOverdueAlerts = canSeeOverdueAlerts(user);
-  const { passes: overduePasses } = useOverdueGuests(showOverdueAlerts);
+
   const canViewPassesList = canViewPasses(user);
   const canViewAll = canViewAllPasses(user);
   const canApprove = hasPermission(user, 'passes.approve');
@@ -192,14 +191,14 @@ function PassesPageContent() {
           <div className="relative flex-1 sm:w-56">
             <Search className="absolute left-3 top-1/2 -translate-y-1/2 w-4 h-4 text-[var(--muted)]" />
             <input
-              className="input pl-9"
+              className="input input--icon-left"
               placeholder={labels.passes.searchPlaceholder}
               value={search}
               onChange={(e) => setSearch(e.target.value)}
             />
           </div>
-          <input className="input w-auto" type="date" value={dateFilter} onChange={(e) => setDateFilter(e.target.value)} />
-          <select className="input w-auto" value={statusFilter} onChange={(e) => setStatusFilter(e.target.value)}>
+          <input className="input input--auto" type="date" value={dateFilter} onChange={(e) => setDateFilter(e.target.value)} />
+          <select className="input input--auto" value={statusFilter} onChange={(e) => setStatusFilter(e.target.value)}>
             <option value="">{labels.passes.allStatuses}</option>
             {ALL_STATUSES.map((status) => (
               <option key={status} value={status}>{getStatusLabel(status, labels)}</option>
@@ -207,16 +206,6 @@ function PassesPageContent() {
           </select>
         </div>
       </div>
-
-      {showOverdueAlerts && (
-        <OverdueGuestsAlert
-          passes={overduePasses}
-          labels={labels}
-          linkHref="/control"
-          linkLabel={labels.pages.receptionTitle}
-          className="mb-6"
-        />
-      )}
 
       {loadError && (
         <PageError

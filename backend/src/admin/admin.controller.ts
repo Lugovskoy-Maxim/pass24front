@@ -1,4 +1,4 @@
-import { Body, Controller, Get, Param, Patch, Post, Query, Req, Res, UseGuards } from '@nestjs/common';
+import { Body, Controller, Delete, Get, Param, Patch, Post, Query, Req, Res, UseGuards } from '@nestjs/common';
 import type { Response } from 'express';
 import { AuditQuery } from '../audit/audit.service';
 import { AuthGuard } from '@nestjs/passport';
@@ -84,6 +84,24 @@ export class AdminController {
     return this.adminService.updateUser(id, dto, req.user);
   }
 
+  @Get('registration-requests')
+  @RequireAllPermissions('admin.users')
+  getRegistrationRequests() {
+    return this.adminService.getRegistrationRequests();
+  }
+
+  @Post('users/:id/registration/approve')
+  @RequireAllPermissions('admin.users')
+  approveRegistration(@Param('id') id: string, @Req() req: any) {
+    return this.adminService.approveRegistration(id, req.user);
+  }
+
+  @Post('users/:id/registration/reject')
+  @RequireAllPermissions('admin.users')
+  rejectRegistration(@Param('id') id: string, @Req() req: any) {
+    return this.adminService.rejectRegistration(id, req.user);
+  }
+
   @Get('profile-change-requests')
   @RequireAllPermissions('admin.users')
   getProfileChangeRequests() {
@@ -120,6 +138,12 @@ export class AdminController {
     return this.adminService.createBusinessCenter(dto, req.user);
   }
 
+  @Delete('business-centers/:id')
+  @RequireAllPermissions('admin.offices')
+  deleteBusinessCenter(@Param('id') id: string, @Req() req: any) {
+    return this.adminService.deleteBusinessCenter(id, req.user);
+  }
+
   @Get('offices')
   @RequireAllPermissions('admin.offices')
   getOffices() {
@@ -136,6 +160,12 @@ export class AdminController {
   @RequireAllPermissions('admin.offices')
   updateOffice(@Param('id') id: string, @Body() dto: Partial<CreateOfficeDto & { isActive: boolean }>, @Req() req: any) {
     return this.adminService.updateOffice(id, dto, req.user);
+  }
+
+  @Delete('offices/:id')
+  @RequireAllPermissions('admin.offices')
+  deleteOffice(@Param('id') id: string, @Req() req: any) {
+    return this.adminService.deleteOffice(id, req.user);
   }
 
   @Get('audit/export')

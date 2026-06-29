@@ -11,6 +11,8 @@ import { SiteBrand } from '@/components/SiteBrand';
 import { useAuth } from '@/lib/auth';
 import { useConfig } from '@/hooks/useConfig';
 import { getUiLabels } from '@/lib/ui-labels';
+import { useTheme } from '@/components/ThemeProvider';
+import { ThemeToggle } from '@/components/ThemeToggle';
 
 export default function PassTicketPage() {
   const params = useParams();
@@ -18,6 +20,7 @@ export default function PassTicketPage() {
   const { user } = useAuth();
   const config = useConfig();
   const labels = getUiLabels(config);
+  const { theme } = useTheme();
   const [ticket, setTicket] = useState<PublicPassTicket | null>(null);
   const [error, setError] = useState('');
   const [errorCause, setErrorCause] = useState<unknown>(null);
@@ -44,9 +47,10 @@ export default function PassTicketPage() {
 
   return (
     <div className="min-h-screen bg-[var(--bg)]">
-      <header className="px-4 py-4" style={{ background: 'var(--header-bg)' }}>
-        <div className="max-w-md mx-auto">
-          <SiteBrand config={config} size="sm" variant="dark" />
+      <header className="px-4 py-4 border-b" style={{ background: 'var(--header-bg)', borderColor: 'var(--header-border)' }}>
+        <div className="max-w-md mx-auto flex items-center justify-between gap-3">
+          <SiteBrand config={config} size="sm" variant={theme === 'dark' ? 'dark' : 'light'} />
+          <ThemeToggle compact />
         </div>
       </header>
 

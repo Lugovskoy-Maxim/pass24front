@@ -3,22 +3,27 @@
 import { AlertCircle, CheckCircle, Clock, LogIn, XCircle } from 'lucide-react';
 import { Pass, PassStatus } from '@/lib/api';
 import { useConfig } from '@/hooks/useConfig';
+import { getReceptionSectionStyle } from '@/lib/pass-status';
 import { getUiLabels, UiLabels } from '@/lib/ui-labels';
 import { PassCardBase } from './PassCardBase';
 
 export function getReceptionSections(labels: UiLabels) {
   return [
-    { key: 'pending' as PassStatus, title: labels.reception.sectionPending, icon: AlertCircle, iconClass: 'text-amber-600' },
-    { key: 'approved' as PassStatus, title: labels.reception.sectionApproved, icon: Clock, iconClass: 'text-[var(--accent)]' },
-    { key: 'active' as PassStatus, title: labels.reception.sectionActive, icon: LogIn, iconClass: 'text-emerald-600' },
-    { key: 'completed' as PassStatus, title: labels.reception.sectionCompleted, icon: CheckCircle, iconClass: 'text-[var(--muted)]', dimmed: true },
-    { key: 'expired' as PassStatus, title: labels.reception.sectionExpired, icon: Clock, iconClass: 'text-[var(--muted)]', dimmed: true },
-    { key: 'rejected' as PassStatus, title: labels.reception.sectionRejected, icon: XCircle, iconClass: 'text-red-500', dimmed: true },
-    { key: 'cancelled' as PassStatus, title: labels.reception.sectionCancelled, icon: XCircle, iconClass: 'text-[var(--muted)]', dimmed: true },
+    { key: 'pending' as PassStatus, title: labels.reception.sectionPending, icon: AlertCircle },
+    { key: 'approved' as PassStatus, title: labels.reception.sectionApproved, icon: Clock },
+    { key: 'active' as PassStatus, title: labels.reception.sectionActive, icon: LogIn },
+    { key: 'completed' as PassStatus, title: labels.reception.sectionCompleted, icon: CheckCircle, dimmed: true },
+    { key: 'expired' as PassStatus, title: labels.reception.sectionExpired, icon: Clock, dimmed: true },
+    { key: 'rejected' as PassStatus, title: labels.reception.sectionRejected, icon: XCircle, dimmed: true },
+    { key: 'cancelled' as PassStatus, title: labels.reception.sectionCancelled, icon: XCircle, dimmed: true },
   ];
 }
 
 export const RECEPTION_SECTIONS = getReceptionSections(getUiLabels());
+
+export function getReceptionSectionIconStyle(key: PassStatus | 'overdue') {
+  return { color: getReceptionSectionStyle(key).iconColor };
+}
 
 interface ReceptionPassCardProps {
   pass: Pass;

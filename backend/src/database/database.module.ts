@@ -27,6 +27,7 @@ import {
   VehicleSchema,
 } from '../schemas';
 import { SeedService } from './seed.service';
+import { TestDataSeedService } from './test-data-seed.service';
 
 const ALL_FEATURES = [
   { name: Property.name, schema: PropertySchema },
@@ -57,10 +58,14 @@ const ALL_FEATURES = [
       },
       inject: [ConfigService],
     }),
-    MongooseModule.forFeature([{ name: User.name, schema: UserSchema }]),
+    MongooseModule.forFeature([
+      { name: User.name, schema: UserSchema },
+      { name: Property.name, schema: PropertySchema },
+      { name: Office.name, schema: OfficeSchema },
+    ]),
   ],
-  providers: [SeedService],
-  exports: [MongooseModule],
+  providers: [SeedService, TestDataSeedService],
+  exports: [MongooseModule, TestDataSeedService],
 })
 export class DatabaseModule {
   /**

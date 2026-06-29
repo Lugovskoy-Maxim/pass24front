@@ -1,7 +1,7 @@
 'use client';
 
 import { useEffect, useMemo, useState, FormEvent } from 'react';
-import { Plus, Pencil, Check, X, Link2, Search, Building2, Filter, Users } from 'lucide-react';
+import { Plus, Pencil, Check, X, Link2, Search, Building2, Filter, Users, Trash2 } from 'lucide-react';
 import { AdminLayout } from '@/components/AdminLayout';
 import { useToast } from '@/components/Toast';
 import { useDebounce } from '@/hooks/useDebounce';
@@ -36,6 +36,8 @@ export default function AdminOfficesPage() {
   const [saving, setSaving] = useState(false);
   const [bindingOfficeId, setBindingOfficeId] = useState<string | null>(null);
   const [editingBcId, setEditingBcId] = useState<string | null>(null);
+  const [deletingBcId, setDeletingBcId] = useState<string | null>(null);
+  const [deletingOfficeId, setDeletingOfficeId] = useState<string | null>(null);
   const [showBcForm, setShowBcForm] = useState(false);
   const [bcName, setBcName] = useState('');
   const [bcAddress, setBcAddress] = useState('');
@@ -131,6 +133,34 @@ export default function AdminOfficesPage() {
       toast(err instanceof Error ? err.message : 'Ошибка', 'error');
     } finally {
       setSaving(false);
+    }
+  };
+
+  const handleDeleteBc = async (bc: BusinessCenter) => {
+    if (bc.officesCount > 0) {
+      toast(`Нельзя удалить БЦ «${bc.name}»: в нём ${bc.officesCount} офис(ов). Сначала удалите офисы.`, 'error');
+      return;
+    }
+    if (!window.confirm(`Удалить бизнес-центр «${bc.name}»? Это действие нельзя отменить.`)) {
+      return;
+    }
+
+    setDeletingBcId(bc.id);
+    try {
+      await api.admin.deleteBusinessCenter(bc.id);
+      setBusinessCenters((prev) => {
+        const next = prev.filter((item) => item.id !== bc.id);
+        if (propertyId === bc.id) {
+          setPropertyId(next[0]?.id || '');
+        }
+        return next;
+      });
+      if (editingBcId === bc.id) resetBcForm();
+      toast('Бизнес-центр удалён', 'success');
+    } catch (err) {
+      toast(getErrorMessage(err, 'Ошибка удаления'), 'error');
+    } finally {
+      setDeletingBcId(null);
     }
   };
 
@@ -241,6 +271,27 @@ export default function AdminOfficesPage() {
       toast(err instanceof Error ? err.message : 'Ошибка', 'error');
     } finally {
       setSaving(false);
+    }
+  };
+
+  const handleDeleteOffice = async (office: Office) => {
+    const label = `офис ${office.number}${office.businessCenterName ? ` (${office.businessCenterName})` : ''}`;
+    if (!window.confirm(`Удалить ${label}? Это действие нельзя отменить.`)) {
+      return;
+    }
+
+    setDeletingOfficeId(office.id);
+    try {
+      await api.admin.deleteOffice(office.id);
+      if (editingId === office.id || bindingOfficeId === office.id) {
+        resetForm();
+      }
+      toast('Офис удалён', 'success');
+      load();
+    } catch (err) {
+      toast(getErrorMessage(err, 'Ошибка удаления'), 'error');
+    } finally {
+      setDeletingOfficeId(null);
     }
   };
 
@@ -511,10 +562,22 @@ export default function AdminOfficesPage() {
                         )}
                       </div>
                     </div>
-                    <button type="button" className="btn btn-secondary text-sm" onClick={() => startBcEdit(bc)}>
-                      <Pencil className="w-4 h-4" />
-                      Изменить
-                    </button>
+                    <div className="flex items-center gap-2 shrink-0">
+                      <button type="button" className="btn btn-secondary text-sm" onClick={() => startBcEdit(bc)}>
+                        <Pencil className="w-4 h-4" />
+                        Изменить
+                      </button>
+                      <button
+                        type="button"
+                        className="btn btn-danger text-sm"
+                        disabled={deletingBcId === bc.id || bc.officesCount > 0}
+                        title={bc.officesCount > 0 ? `Сначала удалите ${bc.officesCount} офис(ов)` : 'Удалить БЦ'}
+                        onClick={() => handleDeleteBc(bc)}
+                      >
+                        <Trash2 className="w-4 h-4" />
+                        {deletingBcId === bc.id ? '...' : 'Удалить'}
+                      </button>
+                    </div>
                   </div>
                 )}
               </div>
@@ -547,17 +610,17 @@ export default function AdminOfficesPage() {
             <div className="text-xs text-[var(--muted)]">Всего</div>
             <div className="text-lg font-semibold">{officeStats.total}</div>
           </div>
-          <div className="card px-3 py-2 bg-emerald-50/90">
+          <div className="card px-3 py-2 office-stat--active">
             <div className="text-xs text-[var(--muted)]">Активные</div>
-            <div className="text-lg font-semibold text-emerald-700">{officeStats.active}</div>
+            <div className="text-lg font-semibold office-stat__value">{officeStats.active}</div>
           </div>
-          <div className="card px-3 py-2 bg-[var(--accent-soft)]">
+          <div className="card px-3 py-2 office-stat--assigned">
             <div className="text-xs text-[var(--muted)]">С арендатором</div>
-            <div className="text-lg font-semibold text-[var(--accent)]">{officeStats.assigned}</div>
+            <div className="text-lg font-semibold office-stat__value">{officeStats.assigned}</div>
           </div>
-          <div className="card px-3 py-2 bg-amber-50/90">
+          <div className="card px-3 py-2 office-stat--free">
             <div className="text-xs text-[var(--muted)]">Свободные</div>
-            <div className="text-lg font-semibold text-amber-700">{officeStats.total - officeStats.assigned}</div>
+            <div className="text-lg font-semibold office-stat__value">{officeStats.total - officeStats.assigned}</div>
           </div>
         </div>
 
@@ -565,7 +628,7 @@ export default function AdminOfficesPage() {
           <div className="relative">
             <Search className="absolute left-3 top-1/2 -translate-y-1/2 w-4 h-4 text-[var(--muted)]" />
             <input
-              className="input pl-9"
+              className="input input--icon-left"
               placeholder="Офис, компания, арендатор, БЦ..."
               value={officeFilters.search}
               onChange={(e) => {
@@ -707,7 +770,7 @@ export default function AdminOfficesPage() {
                     <article
                       key={office.id}
                       className={`rounded-xl border p-4 transition-shadow hover:shadow-sm ${
-                        office.isActive ? 'border-[var(--border)] bg-white' : 'border-[var(--border)] bg-[var(--surface-muted)] opacity-70'
+                        office.isActive ? 'border-[var(--border)] bg-[var(--surface)]' : 'border-[var(--border)] bg-[var(--surface-muted)] opacity-70'
                       }`}
                     >
                       <div className="flex items-start justify-between gap-2 mb-3">
@@ -781,6 +844,15 @@ export default function AdminOfficesPage() {
                           onClick={() => toggleActive(office)}
                         >
                           {office.isActive ? <X className="w-4 h-4 text-red-500" /> : <Check className="w-4 h-4 text-emerald-600" />}
+                        </button>
+                        <button
+                          type="button"
+                          className="p-2 rounded-md border border-red-200 hover:bg-red-50 text-red-600"
+                          title="Удалить офис"
+                          disabled={deletingOfficeId === office.id}
+                          onClick={() => handleDeleteOffice(office)}
+                        >
+                          <Trash2 className="w-4 h-4" />
                         </button>
                       </div>
                     </article>

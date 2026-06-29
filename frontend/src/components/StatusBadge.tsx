@@ -1,21 +1,53 @@
 import { PassStatus } from '@/lib/api';
-import { getStatusLabel, mergeUiLabels, UiLabels } from '@/lib/ui-labels';
+import { getPassStatusBadgeClass } from '@/lib/pass-status';
+import { getOverdueBadgeLabel, getStatusLabel, mergeUiLabels, UiLabels } from '@/lib/ui-labels';
+import type { GuestOverdueKind } from '@/lib/pass-overdue';
 
-const STYLES: Record<PassStatus, string> = {
-  pending: 'bg-amber-50 text-amber-800 border-amber-200',
-  approved: 'bg-[var(--accent-soft)] text-[#b85a14] border-[var(--accent-border)]',
-  rejected: 'bg-red-50 text-red-700 border-red-200',
-  active: 'bg-emerald-50 text-emerald-800 border-emerald-200',
-  completed: 'bg-[var(--surface-muted)] text-[var(--muted)] border-[var(--border)]',
-  expired: 'bg-[var(--surface-muted)] text-[var(--muted)] border-[var(--border)]',
-  cancelled: 'bg-[var(--surface-muted)] text-[var(--muted)] border-[var(--border)]',
-};
+type BadgeSize = 'sm' | 'md';
 
-export function StatusBadge({ status, labels }: { status: PassStatus; labels?: UiLabels }) {
+function badgeSizeClass(size: BadgeSize): string {
+  return size === 'sm' ? 'pass-badge--sm' : '';
+}
+
+interface StatusBadgeProps {
+  status: PassStatus;
+  labels?: UiLabels;
+  size?: BadgeSize;
+  /** При просрочке — статус + отдельный бейдж просрочки */
+  overdueKind?: GuestOverdueKind | null;
+}
+
+export function StatusBadge({ status, labels, size = 'md', overdueKind }: StatusBadgeProps) {
+  const L = labels || mergeUiLabels();
+  const badge = (
+    <span className={[getPassStatusBadgeClass(status), badgeSizeClass(size)].filter(Boolean).join(' ')}>
+      <span className="pass-badge__dot" aria-hidden />
+      {getStatusLabel(status, L)}
+    </span>
+  );
+
+  if (!overdueKind) return badge;
+
+  return (
+    <span className="pass-badge-group">
+      {badge}
+      <OverdueBadge kind={overdueKind} labels={L} size={size} />
+    </span>
+  );
+}
+
+interface OverdueBadgeProps {
+  kind: GuestOverdueKind;
+  labels?: UiLabels;
+  size?: BadgeSize;
+}
+
+export function OverdueBadge({ kind, labels, size = 'md' }: OverdueBadgeProps) {
   const L = labels || mergeUiLabels();
   return (
-    <span className={`inline-flex px-2.5 py-0.5 text-xs font-medium rounded-full border ${STYLES[status]}`}>
-      {getStatusLabel(status, L)}
+    <span className={['pass-badge pass-badge--overdue', badgeSizeClass(size)].filter(Boolean).join(' ')}>
+      <span className="pass-badge__dot pass-badge__dot--pulse" aria-hidden />
+      {getOverdueBadgeLabel(kind, L)}
     </span>
   );
 }

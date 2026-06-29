@@ -14,6 +14,11 @@ export class AuthController {
     return this.authService.login(dto);
   }
 
+  @Get('dev-accounts')
+  getDevAccounts() {
+    return this.authService.getDevAccounts();
+  }
+
   @Post('register')
   async register(@Body() dto: RegisterDto) {
     return this.authService.register(dto);

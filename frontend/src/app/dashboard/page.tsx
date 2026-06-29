@@ -11,9 +11,10 @@ import {
   api, Pass, PassStats, PassTemplate, TYPE_LABELS, PassType, formatTenantOffices, getErrorMessage,
 } from '@/lib/api';
 import { PageError } from '@/components/PageError';
-import { useOverdueGuests } from '@/hooks/useOverdueGuests';
-import { OverdueGuestsAlert } from '@/components/OverdueGuestsAlert';
-import { canSeeOverdueAlerts, canUseReception, canViewAllPasses, canViewPasses, hasPermission } from '@/lib/permissions';
+
+
+import { canUseReception, canViewAllPasses, canViewPasses, hasPermission } from '@/lib/permissions';
+import { getAccentStatClass } from '@/lib/pass-status';
 import { getUiLabels } from '@/lib/ui-labels';
 
 const TYPE_ICONS: Record<PassType, typeof User> = {
@@ -62,8 +63,7 @@ export default function DashboardPage() {
     loadDashboard();
   }, [isTenantTemplates]);
 
-  const showOverdueAlerts = canSeeOverdueAlerts(user);
-  const { passes: overduePasses } = useOverdueGuests(showOverdueAlerts);
+
   const canCreate = hasPermission(user, 'passes.create');
   const canReception = canUseReception(user);
   const showAllPasses = canViewAllPasses(user);
@@ -86,18 +86,19 @@ export default function DashboardPage() {
       {!isTenantTemplates && (
         <>
           <div className="grid grid-cols-1 sm:grid-cols-3 gap-4 mb-6">
-            <div className="card p-4 flex items-center gap-3">
-              <div className="text-2xl font-bold">{stats?.byStatus.pending ?? '—'}</div>
-              <div className="text-sm text-[var(--muted)]">{labels.dashboard.statPending}</div>
-            </div>
-            <div className="card p-4 flex items-center gap-3">
-              <div className="text-2xl font-bold">{stats?.byStatus.active ?? '—'}</div>
-              <div className="text-sm text-[var(--muted)]">{labels.dashboard.statActive}</div>
-            </div>
-            <div className="card p-4 flex items-center gap-3">
-              <div className="text-2xl font-bold">{stats?.todayCount ?? '—'}</div>
-              <div className="text-sm text-[var(--muted)]">{labels.dashboard.statToday}</div>
-            </div>
+            {([
+              { key: 'pending' as const, value: stats?.byStatus.pending, label: labels.dashboard.statPending },
+              { key: 'active' as const, value: stats?.byStatus.active, label: labels.dashboard.statActive },
+              { key: 'total' as const, value: stats?.todayCount, label: labels.dashboard.statToday },
+            ]).map(({ key, value, label }) => (
+                <div
+                  key={key}
+                  className={`card p-4 flex items-center gap-3 ${getAccentStatClass(key)}`}
+                >
+                  <div className={`text-2xl font-bold accent-stat__value--${key}`}>{value ?? '—'}</div>
+                  <div className="text-sm text-[var(--muted)]">{label}</div>
+                </div>
+            ))}
           </div>
 
           {stats && Object.keys(stats.todayByType).length > 0 && (
@@ -108,7 +109,7 @@ export default function DashboardPage() {
                 const Icon = TYPE_ICONS[type];
                 return (
                   <div key={type} className="card p-3 flex items-center gap-2">
-                    <Icon className="w-4 h-4 text-[var(--primary)]" />
+                    <Icon className="w-4 h-4 text-[var(--muted)]" />
                     <div>
                       <div className="text-lg font-bold">{count}</div>
                       <div className="text-xs text-[var(--muted)]">{label}</div>
@@ -119,14 +120,6 @@ export default function DashboardPage() {
             </div>
           )}
         </>
-      )}
-
-      {showOverdueAlerts && (
-        <OverdueGuestsAlert
-          passes={overduePasses}
-          labels={labels}
-          className="mb-6"
-        />
       )}
 
       {loadError && (
@@ -193,7 +186,7 @@ export default function DashboardPage() {
               {showAllPasses ? labels.pages.dashboardRecentAll : labels.pages.dashboardRecentOwn}
             </h2>
             {showAllPasses && (
-              <Link href="/passes" className="text-sm text-[var(--primary)] hover:underline">{labels.buttons.allPasses}</Link>
+              <Link href="/passes" className="text-sm text-link hover:underline">{labels.buttons.allPasses}</Link>
             )}
           </div>
           {passes.length === 0 ? (

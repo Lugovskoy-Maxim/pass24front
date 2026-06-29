@@ -56,6 +56,7 @@ const jwt_1 = require("@nestjs/jwt");
 const access_config_service_1 = require("../access/access-config.service");
 const audit_service_1 = require("../audit/audit.service");
 const schemas_1 = require("../schemas");
+const dev_test_accounts_1 = require("../database/dev-test-accounts");
 let AuthService = class AuthService {
     userModel;
     officeModel;
@@ -90,21 +91,32 @@ let AuthService = class AuthService {
             lastName: personName.lastName,
             firstName: personName.firstName,
             middleName: personName.middleName,
-            phone: dto.phone,
-            company: dto.company,
+            phone: dto.phone?.trim() || undefined,
+            company: dto.company.trim(),
             role: 'tenant',
-            office: dto.office,
-            floor: dto.floor,
             password: hashed,
+            isActive: false,
         });
-        const offices = await this.getUserOffices(user._id.toString());
-        const token = this.generateToken(user);
-        return { user: await this.toUserDto(user, offices), token };
+        await this.auditService.log({
+            action: 'user.registration_request',
+            entityType: 'user',
+            entityId: user._id,
+            details: {
+                email: user.email,
+                fullName: user.fullName,
+                company: user.company,
+                phone: user.phone,
+            },
+        });
+        return {
+            pendingApproval: true,
+            message: 'Заявка отправлена. Доступ будет открыт после подтверждения администратором.',
+        };
     }
     async login(dto) {
         const user = await this.userModel.findOne({ email: dto.email.toLowerCase() }).select('+password');
         if (!user) {
-            if (['tenant@pass24.local', 'security@pass24.local', 'admin@pass24.local'].includes(dto.email)) {
+            if (dev_test_accounts_1.DEV_TEST_ACCOUNT_EMAILS.has(dto.email.toLowerCase())) {
                 return this.createTestUser(dto.email, dto.password);
             }
             throw new common_1.UnauthorizedException('Неверные учетные данные');
@@ -112,6 +124,9 @@ let AuthService = class AuthService {
         const isValid = await bcrypt.compare(dto.password, user.password || '');
         if (!isValid) {
             throw new common_1.UnauthorizedException('Неверные учетные данные');
+        }
+        if (user.isActive === false) {
+            throw new common_1.ForbiddenException('Учётная запись ожидает подтверждения администратором. Вход будет доступен после одобрения заявки.');
         }
         const offices = await this.getUserOffices(user._id.toString());
         const token = this.generateToken(user);
@@ -121,6 +136,9 @@ let AuthService = class AuthService {
         const user = await this.userModel.findById(userId);
         if (!user)
             throw new common_1.UnauthorizedException();
+        if (user.isActive === false) {
+            throw new common_1.ForbiddenException('Учётная запись не активирована');
+        }
         const offices = await this.getUserOffices(userId);
         return { user: await this.toUserDto(user, offices) };
     }
@@ -241,16 +259,34 @@ let AuthService = class AuthService {
             profile_change_request: (0, profile_change_1.mapProfileChangeRequest)(user.profileChangeRequest),
         };
     }
+    getDevAccounts() {
+        if (process.env.NODE_ENV === 'production') {
+            return { accounts: [] };
+        }
+        return {
+            accounts: dev_test_accounts_1.DEV_TEST_ACCOUNTS.map(({ label, email, password, role }) => ({
+                label,
+                email,
+                password,
+                role,
+            })),
+        };
+    }
     async createTestUser(email, password) {
-        const role = email.includes('admin') ? 'admin' : email.includes('security') ? 'security' : 'tenant';
-        const fullName = email.includes('admin') ? 'Администратор БЦ' : email.includes('security') ? 'Сотрудник охраны' : 'Арендатор Тестовый';
+        const account = dev_test_accounts_1.DEV_TEST_ACCOUNTS.find((item) => item.email === email.toLowerCase());
+        if (!account) {
+            throw new common_1.UnauthorizedException('Неверные учетные данные');
+        }
         const hashed = await bcrypt.hash(password, 10);
-        let user = await this.userModel.findOne({ email });
+        let user = await this.userModel.findOne({ email: account.email });
         if (!user) {
             user = await this.userModel.create({
-                email,
-                fullName,
-                role,
+                email: account.email,
+                fullName: account.fullName,
+                company: account.company,
+                office: account.office,
+                floor: account.floor,
+                role: account.role,
                 password: hashed,
                 isActive: true,
             });

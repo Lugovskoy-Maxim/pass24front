@@ -12,6 +12,7 @@ const config_1 = require("@nestjs/config");
 const mongoose_1 = require("@nestjs/mongoose");
 const schemas_1 = require("../schemas");
 const seed_service_1 = require("./seed.service");
+const test_data_seed_service_1 = require("./test-data-seed.service");
 const ALL_FEATURES = [
     { name: schemas_1.Property.name, schema: schemas_1.PropertySchema },
     { name: schemas_1.Office.name, schema: schemas_1.OfficeSchema },
@@ -50,10 +51,14 @@ exports.DatabaseModule = DatabaseModule = __decorate([
                 },
                 inject: [config_1.ConfigService],
             }),
-            mongoose_1.MongooseModule.forFeature([{ name: schemas_1.User.name, schema: schemas_1.UserSchema }]),
+            mongoose_1.MongooseModule.forFeature([
+                { name: schemas_1.User.name, schema: schemas_1.UserSchema },
+                { name: schemas_1.Property.name, schema: schemas_1.PropertySchema },
+                { name: schemas_1.Office.name, schema: schemas_1.OfficeSchema },
+            ]),
         ],
-        providers: [seed_service_1.SeedService],
-        exports: [mongoose_1.MongooseModule],
+        providers: [seed_service_1.SeedService, test_data_seed_service_1.TestDataSeedService],
+        exports: [mongoose_1.MongooseModule, test_data_seed_service_1.TestDataSeedService],
     })
 ], DatabaseModule);
 //# sourceMappingURL=database.module.js.map

@@ -18,7 +18,7 @@ let AdminModule = class AdminModule {
 exports.AdminModule = AdminModule;
 exports.AdminModule = AdminModule = __decorate([
     (0, common_1.Module)({
-        imports: [database_module_1.DatabaseModule.forFeature(), auth_module_1.AuthModule, passes_module_1.PassesModule],
+        imports: [database_module_1.DatabaseModule, database_module_1.DatabaseModule.forFeature(), auth_module_1.AuthModule, passes_module_1.PassesModule],
         controllers: [admin_controller_1.AdminController],
         providers: [admin_service_1.AdminService],
         exports: [admin_service_1.AdminService],

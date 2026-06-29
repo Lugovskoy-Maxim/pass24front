@@ -7,6 +7,8 @@ import { useAuth } from '@/lib/auth';
 import { useConfig } from '@/hooks/useConfig';
 import { useToast } from '@/components/Toast';
 import { api, PassType, TYPE_LABELS, VISIT_PURPOSES, getErrorMessage } from '@/lib/api';
+import { FormErrorBanner, FormField, FormInput, FormSelect, FormTextarea } from '@/components/FormField';
+import { FieldErrors, hasFieldErrors, validateNewPassForm } from '@/lib/form-validation';
 import { getVisitorNameLabel } from '@/lib/person-name';
 
 function NewPassForm() {
@@ -17,7 +19,8 @@ function NewPassForm() {
   const searchParams = useSearchParams();
   const templateId = searchParams.get('template');
   const [loading, setLoading] = useState(false);
-  const [error, setError] = useState('');
+  const [formError, setFormError] = useState('');
+  const [fieldErrors, setFieldErrors] = useState<FieldErrors>({});
 
   const [visitorName, setVisitorName] = useState('');
   const [visitorPhone, setVisitorPhone] = useState('');
@@ -120,36 +123,35 @@ function NewPassForm() {
     }
   };
 
+  const clearFieldError = (field: string) => {
+    setFieldErrors((prev) => {
+      if (!prev[field]) return prev;
+      const next = { ...prev };
+      delete next[field];
+      return next;
+    });
+  };
+
   const handleSubmit = async (e: FormEvent) => {
     e.preventDefault();
-    setError('');
+    setFormError('');
 
-    if (visitTimeFrom && visitTimeTo && visitTimeFrom >= visitTimeTo) {
-      setError('Время «С» должно быть раньше времени «До»');
-      return;
-    }
-    if (passType === 'parking' && !vehiclePlate.trim()) {
-      setError('Укажите гос. номер для парковочного пропуска');
-      return;
-    }
-    if (user?.role === 'tenant' && tenantOffices.length > 0) {
-      if (!propertyId) {
-        setError('Выберите бизнес-центр');
-        return;
-      }
-      if (!officeId) {
-        setError('Выберите офис из списка');
-        return;
-      }
-    }
-    if (!officeId && !office.trim()) {
-      setError('Укажите офис назначения');
-      return;
-    }
-    if (sendEmail && !recipientEmail.trim()) {
-      setError('Укажите email для отправки пропуска');
-      return;
-    }
+    const errors = validateNewPassForm({
+      visitorName,
+      passType,
+      vehiclePlate,
+      visitTimeFrom,
+      visitTimeTo,
+      propertyId,
+      officeId,
+      office,
+      sendEmail,
+      recipientEmail,
+      tenantHasOffices: tenantOffices.length > 0,
+      tenantMultiBc: bcOptions.length > 1,
+    });
+    setFieldErrors(errors);
+    if (hasFieldErrors(errors)) return;
 
     setLoading(true);
     try {
@@ -176,7 +178,7 @@ function NewPassForm() {
       return;
     } catch (err) {
       const msg = getErrorMessage(err, 'Ошибка');
-      setError(msg);
+      setFormError(msg);
       toast(msg, 'error');
     } finally {
       setLoading(false);
@@ -193,7 +195,7 @@ function NewPassForm() {
         </p>
       )}
 
-      <form onSubmit={handleSubmit} className="card p-6 max-w-xl space-y-5">
+      <form onSubmit={handleSubmit} className="card p-6 max-w-xl space-y-5" noValidate>
         <div>
           <label className="label">Тип пропуска</label>
           <div className="grid grid-cols-2 sm:grid-cols-4 gap-2">
@@ -204,7 +206,7 @@ function NewPassForm() {
                 key={key}
                 type="button"
                 className={`py-2 px-3 text-sm rounded-lg border transition-colors ${
-                  passType === key ? 'border-[var(--accent)] bg-[var(--accent-soft)] text-[var(--primary)] font-medium' : 'border-[var(--border)] hover:bg-[var(--surface-muted)]'
+                  passType === key ? 'border-[var(--status-approved-border)] bg-[var(--status-approved-soft)] text-[var(--status-approved)] font-medium' : 'border-[var(--border)] hover:bg-[var(--surface-muted)]'
                 }`}
                 onClick={() => setPassType(key)}
               >
@@ -214,142 +216,186 @@ function NewPassForm() {
           </div>
         </div>
 
-        <div>
-          <label className="label">{getVisitorNameLabel(passType)} *</label>
-          <input className="input" value={visitorName} onChange={(e) => setVisitorName(e.target.value)} required />
+        <FormField id="visitorName" label={getVisitorNameLabel(passType)} required error={fieldErrors.visitorName}>
+          <FormInput
+            id="visitorName"
+            value={visitorName}
+            onChange={(e) => { setVisitorName(e.target.value); clearFieldError('visitorName'); }}
+            invalid={!!fieldErrors.visitorName}
+          />
+        </FormField>
+
+        <div className="form-grid-2">
+          <FormField id="companyName" label="Компания посетителя">
+            <FormInput
+              id="companyName"
+              value={companyName}
+              onChange={(e) => setCompanyName(e.target.value)}
+              placeholder={user?.company || 'ООО «...»'}
+            />
+          </FormField>
+          <FormField id="visitorPhone" label="Телефон">
+            <FormInput
+              id="visitorPhone"
+              type="tel"
+              value={visitorPhone}
+              onChange={(e) => setVisitorPhone(e.target.value)}
+              placeholder="+7 900 000-00-00"
+            />
+          </FormField>
         </div>
 
-        <div className="grid grid-cols-2 gap-3">
-          <div>
-            <label className="label">Компания посетителя</label>
-            <input className="input" value={companyName} onChange={(e) => setCompanyName(e.target.value)} placeholder={user?.company || 'ООО «...»'} />
-          </div>
-          <div>
-            <label className="label">Телефон</label>
-            <input className="input" type="tel" value={visitorPhone} onChange={(e) => setVisitorPhone(e.target.value)} placeholder="+7 900 000-00-00" />
-          </div>
-        </div>
-
-        <div>
-          <label className="label">Цель визита</label>
-          <select className="input" value={visitPurpose} onChange={(e) => setVisitPurpose(e.target.value)}>
+        <FormField id="visitPurpose" label="Цель визита">
+          <FormSelect id="visitPurpose" value={visitPurpose} onChange={(e) => setVisitPurpose(e.target.value)}>
             {VISIT_PURPOSES.map((p) => <option key={p} value={p}>{p}</option>)}
-          </select>
-        </div>
+          </FormSelect>
+        </FormField>
 
         {passType === 'parking' && (
-          <div className="grid grid-cols-2 gap-3">
-            <div>
-              <label className="label">Гос. номер *</label>
-              <input className="input font-mono" value={vehiclePlate} onChange={(e) => setVehiclePlate(e.target.value)} required placeholder="А123ВС777" />
-            </div>
-            <div>
-              <label className="label">Марка / модель</label>
-              <input className="input" value={vehicleModel} onChange={(e) => setVehicleModel(e.target.value)} />
-            </div>
+          <div className="form-grid-2">
+            <FormField id="vehiclePlate" label="Гос. номер" required error={fieldErrors.vehiclePlate}>
+              <FormInput
+                id="vehiclePlate"
+                mono
+                value={vehiclePlate}
+                onChange={(e) => { setVehiclePlate(e.target.value); clearFieldError('vehiclePlate'); }}
+                invalid={!!fieldErrors.vehiclePlate}
+                placeholder="А123ВС777"
+              />
+            </FormField>
+            <FormField id="vehicleModel" label="Марка / модель">
+              <FormInput id="vehicleModel" value={vehicleModel} onChange={(e) => setVehicleModel(e.target.value)} />
+            </FormField>
           </div>
         )}
 
-        <div className="grid grid-cols-3 gap-3">
-          <div>
-            <label className="label">Дата визита *</label>
-            <input className="input" type="date" value={visitDate} min={new Date().toISOString().slice(0, 10)} onChange={(e) => setVisitDate(e.target.value)} required />
-          </div>
-          <div>
-            <label className="label">С</label>
-            <input className="input" type="time" value={visitTimeFrom} onChange={(e) => setVisitTimeFrom(e.target.value)} />
-          </div>
-          <div>
-            <label className="label">До</label>
-            <input className="input" type="time" value={visitTimeTo} onChange={(e) => setVisitTimeTo(e.target.value)} />
-          </div>
+        <div className="form-grid-3">
+          <FormField id="visitDate" label="Дата визита" required>
+            <FormInput
+              id="visitDate"
+              type="date"
+              value={visitDate}
+              min={new Date().toISOString().slice(0, 10)}
+              onChange={(e) => setVisitDate(e.target.value)}
+            />
+          </FormField>
+          <FormField id="visitTimeFrom" label="С" error={fieldErrors.visitTimeFrom}>
+            <FormInput
+              id="visitTimeFrom"
+              type="time"
+              value={visitTimeFrom}
+              onChange={(e) => { setVisitTimeFrom(e.target.value); clearFieldError('visitTimeFrom'); clearFieldError('visitTimeTo'); }}
+              invalid={!!fieldErrors.visitTimeFrom}
+            />
+          </FormField>
+          <FormField id="visitTimeTo" label="До" error={fieldErrors.visitTimeTo}>
+            <FormInput
+              id="visitTimeTo"
+              type="time"
+              value={visitTimeTo}
+              onChange={(e) => { setVisitTimeTo(e.target.value); clearFieldError('visitTimeFrom'); clearFieldError('visitTimeTo'); }}
+              invalid={!!fieldErrors.visitTimeTo}
+            />
+          </FormField>
         </div>
 
         {tenantOffices.length > 0 ? (
           <div className="space-y-3">
             {bcOptions.length > 1 && (
-              <div>
-                <label className="label">Бизнес-центр *</label>
-                <select className="input" value={propertyId} onChange={(e) => handleBcSelect(e.target.value)} required>
+              <FormField id="propertyId" label="Бизнес-центр" required error={fieldErrors.propertyId}>
+                <FormSelect
+                  id="propertyId"
+                  value={propertyId}
+                  onChange={(e) => { handleBcSelect(e.target.value); clearFieldError('propertyId'); }}
+                  invalid={!!fieldErrors.propertyId}
+                >
                   <option value="">Выберите БЦ</option>
                   {bcOptions.map((bc) => (
                     <option key={bc.id} value={bc.id}>{bc.name}</option>
                   ))}
-                </select>
-              </div>
+                </FormSelect>
+              </FormField>
             )}
-            <div className="grid grid-cols-2 gap-3">
-              <div>
-                <label className="label">Офис (куда) *</label>
-                <select
-                  className="input"
+            <div className="form-grid-2">
+              <FormField id="officeId" label="Офис (куда)" required error={fieldErrors.officeId}>
+                <FormSelect
+                  id="officeId"
                   value={officeId}
-                  onChange={(e) => handleOfficeSelect(e.target.value)}
-                  required
+                  onChange={(e) => { handleOfficeSelect(e.target.value); clearFieldError('officeId'); }}
+                  invalid={!!fieldErrors.officeId}
                   disabled={bcOptions.length > 1 && !propertyId}
                 >
                   <option value="">Выберите офис</option>
                   {officesInBc.map((o) => (
                     <option key={o.id} value={o.id}>офис {o.number}</option>
                   ))}
-                </select>
-              </div>
-              <div>
-                <label className="label">Этаж</label>
-                <input className="input" value={floor} readOnly placeholder="—" />
-              </div>
+                </FormSelect>
+              </FormField>
+              <FormField id="floor" label="Этаж">
+                <FormInput id="floor" value={floor} readOnly placeholder="—" />
+              </FormField>
             </div>
             {bcOptions.length === 1 && (
               <p className="text-xs text-[var(--muted)]">БЦ: {bcOptions[0].name}</p>
             )}
           </div>
         ) : (
-          <div className="grid grid-cols-2 gap-3">
-            <div>
-              <label className="label">Офис (куда) *</label>
-              <input className="input" value={office} onChange={(e) => setOffice(e.target.value)} required placeholder="401" />
-            </div>
-            <div>
-              <label className="label">Этаж</label>
-              <input className="input" value={floor} onChange={(e) => setFloor(e.target.value)} placeholder="4" />
-            </div>
+          <div className="form-grid-2">
+            <FormField id="office" label="Офис (куда)" required error={fieldErrors.office}>
+              <FormInput
+                id="office"
+                value={office}
+                onChange={(e) => { setOffice(e.target.value); clearFieldError('office'); }}
+                invalid={!!fieldErrors.office}
+                placeholder="401"
+              />
+            </FormField>
+            <FormField id="floorManual" label="Этаж">
+              <FormInput id="floorManual" value={floor} onChange={(e) => setFloor(e.target.value)} placeholder="4" />
+            </FormField>
           </div>
         )}
 
-        <div>
-          <label className="label">Комментарий для ресепшн</label>
-          <textarea className="input min-h-[80px] resize-y" value={comment} onChange={(e) => setComment(e.target.value)} placeholder="Дополнительная информация" />
-        </div>
+        <FormField id="comment" label="Комментарий для ресепшн">
+          <FormTextarea
+            id="comment"
+            value={comment}
+            onChange={(e) => setComment(e.target.value)}
+            placeholder="Дополнительная информация"
+          />
+        </FormField>
 
         <div className="border border-[var(--border)] rounded-lg p-4 bg-[var(--surface-muted)] space-y-3">
           <label className="flex items-center gap-2 cursor-pointer">
             <input
               type="checkbox"
-              className="w-4 h-4"
+              className="checkbox"
               checked={sendEmail}
               onChange={(e) => setSendEmail(e.target.checked)}
             />
             <span className="text-sm font-medium">Отправить пропуск на email</span>
           </label>
           {sendEmail && (
-            <div>
-              <label className="label">Email получателя *</label>
-              <input
-                className="input"
+            <FormField
+              id="recipientEmail"
+              label="Email получателя"
+              required
+              error={fieldErrors.recipientEmail}
+              hint="На почту придёт ссылка на пропуск с QR-кодом"
+            >
+              <FormInput
+                id="recipientEmail"
                 type="email"
                 value={recipientEmail}
-                onChange={(e) => setRecipientEmail(e.target.value)}
+                onChange={(e) => { setRecipientEmail(e.target.value); clearFieldError('recipientEmail'); }}
+                invalid={!!fieldErrors.recipientEmail}
                 placeholder="visitor@example.com"
-                required
               />
-              <p className="text-xs text-[var(--muted)] mt-1">
-                На почту придёт ссылка на пропуск с QR-кодом
-              </p>
-            </div>
+            </FormField>
           )}
         </div>
 
-        {error && <div className="text-sm text-red-600 bg-red-50 px-3 py-2 rounded-md">{error}</div>}
+        <FormErrorBanner message={formError} />
 
         <div className="flex gap-3">
           <button type="submit" className="btn btn-primary" disabled={loading}>{loading ? 'Отправка...' : 'Отправить заявку'}</button>

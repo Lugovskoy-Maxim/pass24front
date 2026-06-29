@@ -20,15 +20,18 @@ import {
 import { PassType, TYPE_LABELS } from '@/lib/api';
 import {
   getGuestOverdueKind,
-  getOverdueBadgeLabel,
   getOverdueCardMessage,
-  getPassCardBorderClass,
   mergeUiLabels,
   PassCardData,
   UiLabels,
 } from '@/lib/ui-labels';
+import {
+  getPassCardShellClass,
+  getPassIconTileClass,
+  getPassStatusStripeClass,
+} from '@/lib/pass-status';
 import { PassVisitTimeline } from './PassVisitTimeline';
-import { StatusBadge } from './StatusBadge';
+import { OverdueBadge, StatusBadge } from './StatusBadge';
 
 const TYPE_ICONS: Record<PassType, typeof User> = {
   visitor: User,
@@ -54,7 +57,7 @@ function CopyPassNumber({ passNumber, title }: { passNumber: string; title: stri
     <button
       type="button"
       onClick={handleCopy}
-      className="p-1 rounded-md text-[var(--muted)] hover:text-[var(--primary)] hover:bg-[var(--surface-muted)] transition-colors"
+      className="p-1 rounded-md text-[var(--muted)] hover:text-[var(--link)] hover:bg-[var(--surface-muted)] transition-colors"
       title={title}
     >
       {copied ? <Check className="w-4 h-4 text-emerald-600" /> : <Copy className="w-4 h-4" />}
@@ -105,17 +108,21 @@ export function PassCardBase({
   const overdueKind = getGuestOverdueKind(pass);
   const stillInside = overdueKind !== null;
   const useTimeline = showTimeline ?? !isCompact;
-  const useBadge = showStatusBadge ?? isCompact;
+  const useBadge = showStatusBadge ?? true;
 
   const content = (
     <article
       className={[
-        bare ? 'overflow-hidden' : 'card overflow-hidden transition-shadow',
-        !bare && (highlight || stillInside) ? 'ring-2 ring-offset-2' : '',
-        !bare && stillInside ? 'ring-amber-400' : '',
-        !bare && highlight && !stillInside ? 'ring-[var(--primary)]' : '',
-        dimmed ? 'opacity-85' : onClick ? 'cursor-pointer hover:shadow-md hover:border-[var(--accent)]' : !bare ? 'hover:shadow-md' : '',
-        !bare ? getPassCardBorderClass(pass.status, stillInside) : '',
+        bare
+          ? 'overflow-hidden'
+          : getPassCardShellClass({
+              interactive: !!onClick || highlight,
+              selected: highlight || stillInside,
+              overdue: stillInside,
+              status: pass.status,
+              dimmed,
+            }),
+        onClick ? 'cursor-pointer' : '',
       ].filter(Boolean).join(' ')}
       onClick={onClick}
       role={onClick ? 'button' : undefined}
@@ -127,19 +134,21 @@ export function PassCardBase({
         }
       } : undefined}
     >
+      <div className="flex items-stretch">
+        {!bare && <div className={getPassStatusStripeClass(pass.status, stillInside)} aria-hidden />}
+
+        <div className="flex-1 min-w-0">
       {overdueKind && (
-        <div className="px-4 py-2 bg-amber-50 border-b border-amber-200 text-amber-900 text-xs sm:text-sm flex items-center gap-2">
-          <span className="inline-flex px-2 py-0.5 rounded-full bg-amber-200/80 font-semibold text-[10px] uppercase tracking-wide shrink-0">
-            {getOverdueBadgeLabel(overdueKind, labels)}
-          </span>
+        <div className="px-4 py-2 theme-alert-subtle border-b text-xs sm:text-sm flex items-center gap-2">
+          <OverdueBadge kind={overdueKind} labels={labels} size="sm" />
           <span>{getOverdueCardMessage(overdueKind, pass, labels)}</span>
         </div>
       )}
 
-      <div className={`border-b border-[var(--border)] bg-gradient-to-b from-slate-50/80 to-white ${isCompact ? 'px-3 pt-3 pb-2' : 'px-4 pt-4 pb-3'}`}>
+      <div className={`border-b border-[var(--border)] bg-gradient-surface ${isCompact ? 'px-3 pt-3 pb-2' : 'px-4 pt-4 pb-3'}`}>
         <div className="flex items-start gap-3">
-          <div className={`rounded-xl bg-white border border-[var(--border)] flex items-center justify-center shrink-0 shadow-sm ${isCompact ? 'w-10 h-10' : 'w-12 h-12'}`}>
-            <Icon className={`text-[var(--primary)] ${isCompact ? 'w-5 h-5' : 'w-6 h-6'}`} />
+          <div className={`${getPassIconTileClass(pass.status, stillInside)} shadow-sm ${isCompact ? 'w-10 h-10' : 'w-12 h-12'}`}>
+            <Icon className={isCompact ? 'w-5 h-5' : 'w-6 h-6'} />
           </div>
 
           <div className="flex-1 min-w-0">
@@ -148,15 +157,15 @@ export function PassCardBase({
                 {pass.visitorName}
               </h3>
               <div className="flex items-center gap-1.5 shrink-0">
-                {useBadge && <StatusBadge status={pass.status} labels={labels} />}
-                <span className="text-xs px-2 py-0.5 rounded-full bg-white border border-[var(--border)] text-[var(--muted)]">
+                {useBadge && <StatusBadge status={pass.status} labels={labels} size={isCompact ? 'sm' : 'md'} overdueKind={overdueKind} />}
+                <span className="text-xs px-2 py-0.5 rounded-full bg-[var(--surface-elevated)] border border-[var(--border)] text-[var(--muted)]">
                   {TYPE_LABELS[pass.passType as PassType] || pass.passType}
                 </span>
               </div>
             </div>
 
             <div className="flex items-center gap-1 mt-1">
-              <span className={`font-mono font-bold text-[var(--primary)] ${isCompact ? 'text-sm' : 'text-lg'}`}>
+              <span className={`font-mono font-bold text-[var(--text)] ${isCompact ? 'text-sm' : 'text-lg'}`}>
                 {pass.passNumber}
               </span>
               <CopyPassNumber passNumber={pass.passNumber} title={labels.buttons.copyNumber} />
@@ -164,7 +173,7 @@ export function PassCardBase({
                 <Link
                   href={`/ticket/${encodeURIComponent(pass.passNumber)}`}
                   target="_blank"
-                  className="p-1 rounded-md text-[var(--muted)] hover:text-[var(--primary)] hover:bg-[var(--surface-muted)]"
+                  className="p-1 rounded-md text-[var(--muted)] hover:text-[var(--link)] hover:bg-[var(--surface-muted)]"
                   title={labels.buttons.qrPass}
                   onClick={(e) => e.stopPropagation()}
                 >
@@ -183,7 +192,7 @@ export function PassCardBase({
 
           <div className="text-right shrink-0">
             <div className="text-[10px] uppercase tracking-wide text-[var(--muted)]">{labels.card.office}</div>
-            <div className={`font-bold leading-none text-[var(--primary)] ${isCompact ? 'text-2xl' : 'text-3xl'}`}>
+            <div className={`font-bold leading-none text-[var(--text)] ${isCompact ? 'text-2xl' : 'text-3xl'}`}>
               {pass.office}
             </div>
             {pass.floor && (
@@ -215,8 +224,8 @@ export function PassCardBase({
       </div>
 
       {useTimeline && (
-        <div className={`${isCompact ? 'px-2 sm:px-3 py-3' : 'px-3 sm:px-5 py-4'} ${isTerminal ? 'bg-[var(--surface-muted)]' : 'bg-white'}`}>
-          <PassVisitTimeline pass={pass} labels={labels} compact={isCompact} />
+        <div className={`${isCompact ? 'px-2 sm:px-3 py-3' : 'px-3 sm:px-5 py-4'} ${isTerminal ? 'bg-[var(--surface-muted)]' : 'bg-[var(--surface)]'}`}>
+          <PassVisitTimeline pass={pass} labels={labels} compact={isCompact} overdue={stillInside} />
         </div>
       )}
 
@@ -231,7 +240,7 @@ export function PassCardBase({
           {pass.visitorPhone && (
             <a
               href={`tel:${pass.visitorPhone}`}
-              className="inline-flex items-center gap-1.5 text-[var(--primary)] hover:underline"
+              className="inline-flex items-center gap-1.5 text-link hover:underline"
               onClick={(e) => e.stopPropagation()}
             >
               <Phone className="w-3.5 h-3.5" />
@@ -278,13 +287,15 @@ export function PassCardBase({
 
       {actions && (
         <div
-          className="px-4 py-3 border-t border-[var(--border)] bg-white flex flex-col sm:flex-row gap-2"
+          className="px-4 py-3 border-t border-[var(--border)] bg-[var(--surface)] flex flex-col sm:flex-row gap-2"
           onClick={(e) => e.stopPropagation()}
           onKeyDown={(e) => e.stopPropagation()}
         >
           {actions}
         </div>
       )}
+        </div>
+      </div>
     </article>
   );
 

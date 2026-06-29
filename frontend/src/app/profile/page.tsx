@@ -4,13 +4,14 @@ import { FormEvent, useEffect, useState } from 'react';
 import { Clock, Mail, Building2 } from 'lucide-react';
 import { ProtectedLayout } from '@/components/ProtectedLayout';
 import { PersonNameFields } from '@/components/PersonNameFields';
+import { FormField, FormInput } from '@/components/FormField';
+import { FieldErrors, hasFieldErrors, validateProfileForm } from '@/lib/form-validation';
 import { useToast } from '@/components/Toast';
 import { useAuth } from '@/lib/auth';
 import { api, formatTenantOffices } from '@/lib/api';
 import {
   buildFullName,
   getUserNameLabels,
-  isPersonNameValid,
   PersonNameParts,
   splitFullName,
 } from '@/lib/person-name';
@@ -23,6 +24,7 @@ export default function ProfilePage() {
   const [company, setCompany] = useState('');
   const [saving, setSaving] = useState(false);
   const [cancelling, setCancelling] = useState(false);
+  const [fieldErrors, setFieldErrors] = useState<FieldErrors>({});
 
   const pending = user?.profile_change_request;
 
@@ -64,12 +66,20 @@ export default function ProfilePage() {
     ? { lastName: user.last_name || '', firstName: user.first_name || '', middleName: user.middle_name || '' }
     : splitFullName(user.full_name);
 
+  const clearFieldError = (field: string) => {
+    setFieldErrors((prev) => {
+      if (!prev[field]) return prev;
+      const next = { ...prev };
+      delete next[field];
+      return next;
+    });
+  };
+
   const handleSubmit = async (e: FormEvent) => {
     e.preventDefault();
-    if (!isPersonNameValid(nameParts)) {
-      toast('Укажите фамилию и имя', 'error');
-      return;
-    }
+    const errors = validateProfileForm(nameParts);
+    setFieldErrors(errors);
+    if (hasFieldErrors(errors)) return;
     setSaving(true);
     try {
       await api.updateProfile({
@@ -150,7 +160,7 @@ export default function ProfilePage() {
           ) : null}
         </div>
 
-        <form onSubmit={handleSubmit} className="card p-6 space-y-5">
+        <form onSubmit={handleSubmit} className="card p-6 space-y-5" noValidate>
           <div>
             <h2 className="font-semibold mb-1">Текущие данные</h2>
             <p className="text-sm text-[var(--muted)]">
@@ -164,17 +174,17 @@ export default function ProfilePage() {
             value={nameParts}
             labels={getUserNameLabels('tenant')}
             onChange={setNameParts}
+            errors={fieldErrors}
+            onClearError={clearFieldError}
           />
 
-          <div className="grid sm:grid-cols-2 gap-3">
-            <div>
-              <label className="label">Телефон</label>
-              <input className="input" value={phone} onChange={(e) => setPhone(e.target.value)} placeholder="+7 900 000-00-00" />
-            </div>
-            <div>
-              <label className="label">Компания</label>
-              <input className="input" value={company} onChange={(e) => setCompany(e.target.value)} placeholder="ООО «...»" />
-            </div>
+          <div className="form-grid-2">
+            <FormField id="phone" label="Телефон">
+              <FormInput id="phone" type="tel" value={phone} onChange={(e) => setPhone(e.target.value)} placeholder="+7 900 000-00-00" />
+            </FormField>
+            <FormField id="company" label="Компания">
+              <FormInput id="company" value={company} onChange={(e) => setCompany(e.target.value)} placeholder="ООО «...»" />
+            </FormField>
           </div>
 
           <button type="submit" className="btn btn-primary" disabled={saving}>

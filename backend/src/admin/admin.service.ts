@@ -6,13 +6,25 @@ import * as bcrypt from 'bcryptjs';
 import { Model, Types } from 'mongoose';
 import { AuditActor, AuditQuery, AuditService } from '../audit/audit.service';
 import { PassesService } from '../passes/passes.service';
-import { Office, OfficeDocument, Pass, PassDocument, Property, PropertyDocument, User, UserDocument } from '../schemas';
+import {
+  Office,
+  OfficeDocument,
+  Pass,
+  PassDocument,
+  PassTemplate,
+  PassTemplateDocument,
+  Property,
+  PropertyDocument,
+  User,
+  UserDocument,
+} from '../schemas';
 import { PropertyType } from '../schemas/enums';
 import { CreateBusinessCenterDto } from './dto/create-business-center.dto';
 import { CreateOfficeDto } from './dto/create-office.dto';
 import { CreateUserDto } from './dto/create-user.dto';
 import { UpdateBusinessCenterDto } from './dto/update-business-center.dto';
 import { BusinessCenterPassSettingsDto } from './dto/business-center-pass-settings.dto';
+import { TestDataSeedService } from '../database/test-data-seed.service';
 
 const STAFF_ROLES = ['security', 'bc_admin', 'admin'] as const;
 
@@ -32,8 +44,10 @@ export class AdminService {
     @InjectModel(Property.name) private propertyModel: Model<PropertyDocument>,
     @InjectModel(Office.name) private officeModel: Model<OfficeDocument>,
     @InjectModel(Pass.name) private passModel: Model<PassDocument>,
+    @InjectModel(PassTemplate.name) private passTemplateModel: Model<PassTemplateDocument>,
     private auditService: AuditService,
     private passesService: PassesService,
+    private testDataSeedService: TestDataSeedService,
   ) {}
 
   async dashboard() {
@@ -235,6 +249,64 @@ export class AdminService {
     });
 
     return { user: this.mapUser(user.toObject(), 0, offices, businessCenters) };
+  }
+
+  async getRegistrationRequests() {
+    const users = await this.userModel
+      .find({ role: 'tenant', isActive: false })
+      .sort({ createdAt: -1 })
+      .lean();
+
+    return {
+      requests: users.map((user) => this.mapUser(user, 0, [], [])),
+    };
+  }
+
+  async approveRegistration(id: string, actor?: AuditActor) {
+    const user = await this.userModel.findById(id);
+    if (!user) throw new NotFoundException('Пользователь не найден');
+    if (user.role !== 'tenant') {
+      throw new BadRequestException('Подтверждение доступно только для арендаторов');
+    }
+    if (user.isActive) {
+      throw new BadRequestException('Учётная запись уже активирована');
+    }
+
+    user.isActive = true;
+    await user.save();
+
+    await this.auditService.log({
+      action: 'user.registration_approved',
+      entityType: 'user',
+      entityId: user._id,
+      actor,
+      details: { email: user.email, fullName: user.fullName, company: user.company },
+    });
+
+    const offices = await this.getTenantOffices(id);
+    return { user: this.mapUser(user.toObject(), 0, offices, []) };
+  }
+
+  async rejectRegistration(id: string, actor?: AuditActor) {
+    const user = await this.userModel.findById(id);
+    if (!user) throw new NotFoundException('Пользователь не найден');
+    if (user.role !== 'tenant') {
+      throw new BadRequestException('Отклонение доступно только для арендаторов');
+    }
+    if (user.isActive) {
+      throw new BadRequestException('Нельзя отклонить уже активированную учётную запись');
+    }
+
+    await this.auditService.log({
+      action: 'user.registration_rejected',
+      entityType: 'user',
+      entityId: user._id,
+      actor,
+      details: { email: user.email, fullName: user.fullName, company: user.company },
+    });
+
+    await this.userModel.deleteOne({ _id: user._id });
+    return { message: 'Заявка на регистрацию отклонена' };
   }
 
   async getProfileChangeRequests() {
@@ -451,6 +523,49 @@ export class AdminService {
     };
   }
 
+  async deleteBusinessCenter(id: string, actor?: AuditActor) {
+    const property = await this.propertyModel.findById(id);
+    if (!property || property.type !== PropertyType.BUSINESS_CENTER) {
+      throw new NotFoundException('Бизнес-центр не найден');
+    }
+    await this.ensureBcAccess(property._id.toString(), actor);
+
+    const propertyId = property._id;
+    const [officesCount, passesCount, usersCount] = await Promise.all([
+      this.officeModel.countDocuments({ property: propertyId }),
+      this.passModel.countDocuments({ property: propertyId }),
+      this.userModel.countDocuments({ properties: propertyId }),
+    ]);
+
+    if (officesCount > 0) {
+      throw new BadRequestException(
+        `Нельзя удалить БЦ: в нём ${officesCount} офис(ов). Сначала удалите или перенесите офисы.`,
+      );
+    }
+    if (passesCount > 0) {
+      throw new BadRequestException(
+        `Нельзя удалить БЦ: есть ${passesCount} пропуск(ов), привязанных к этому объекту.`,
+      );
+    }
+    if (usersCount > 0) {
+      throw new BadRequestException(
+        `Нельзя удалить БЦ: ${usersCount} пользователь(ей) привязаны к этому объекту.`,
+      );
+    }
+
+    await this.propertyModel.deleteOne({ _id: propertyId });
+
+    await this.auditService.log({
+      action: 'bc.delete',
+      entityType: 'business_center',
+      entityId: propertyId,
+      actor,
+      details: { name: property.name, address: property.address },
+    });
+
+    return { message: 'Бизнес-центр удалён', id: property._id.toString() };
+  }
+
   async createBusinessCenter(dto: CreateBusinessCenterDto, actor?: AuditActor) {
     const property = await this.propertyModel.create({
       name: dto.name.trim(),
@@ -574,127 +689,57 @@ export class AdminService {
     return { office: this.mapOffice(office.toObject(), propertyMap, tenantMap) };
   }
 
+  async deleteOffice(id: string, actor?: AuditActor) {
+    const office = await this.officeModel.findById(id);
+    if (!office) throw new NotFoundException('Офис не найден');
+
+    const officeObjectId = office._id;
+    const [passesCount, templatesCount] = await Promise.all([
+      this.passModel.countDocuments({ officeId: officeObjectId }),
+      this.passTemplateModel.countDocuments({ officeId: officeObjectId }),
+    ]);
+
+    if (passesCount > 0) {
+      throw new BadRequestException(
+        `Нельзя удалить офис: есть ${passesCount} пропуск(ов), привязанных к этому офису.`,
+      );
+    }
+    if (templatesCount > 0) {
+      throw new BadRequestException(
+        `Нельзя удалить офис: есть ${templatesCount} шаблон(ов) пропусков для этого офиса.`,
+      );
+    }
+
+    const prevTenantId = office.tenantId?.toString();
+    const property = await this.propertyModel.findById(office.property).lean();
+
+    await this.officeModel.deleteOne({ _id: officeObjectId });
+
+    if (prevTenantId) {
+      await this.syncTenantProperties(prevTenantId);
+    }
+
+    await this.auditService.log({
+      action: 'office.delete',
+      entityType: 'office',
+      entityId: officeObjectId,
+      actor,
+      details: {
+        number: office.number,
+        floor: office.floor,
+        propertyId: office.property.toString(),
+        businessCenterName: property?.name,
+      },
+    });
+
+    return { message: 'Офис удалён', id: office._id.toString() };
+  }
+
   async seedTestData() {
-    const result = {
-      businessCenters: 0,
-      offices: 0,
-      tenants: 0,
-      skipped: true,
-    };
-
-    const bcData = [
-      { name: 'БЦ Атриум', address: 'ул. Тверская, 12', code: 'atrium' },
-      { name: 'БЦ Сити Плаза', address: 'Пресненская наб., 8', code: 'city-plaza' },
-    ];
-
-    const bcMap = new Map<string, PropertyDocument>();
-    for (const bc of bcData) {
-      let property = await this.propertyModel.findOne({ code: bc.code });
-      if (!property) {
-        property = await this.propertyModel.create({
-          ...bc,
-          type: PropertyType.BUSINESS_CENTER,
-          isActive: true,
-          settings: {},
-          gates: ['Главный вход', 'Парковка P1'],
-        });
-        result.businessCenters++;
-        result.skipped = false;
-      }
-      bcMap.set(bc.code, property);
-    }
-
-    const tenantSpecs = [
-      {
-        email: 'tenant@pass24.local',
-        password: 'tenant123',
-        fullName: 'Арендатор Тестовый',
-        company: 'ООО «Ромашка»',
-        offices: [
-          { bc: 'atrium', number: '401', floor: '4', areaSqm: 85 },
-          { bc: 'city-plaza', number: '1201', floor: '12', areaSqm: 120 },
-        ],
-      },
-      {
-        email: 'tenant2@pass24.local',
-        password: 'tenant123',
-        fullName: 'Петрова Анна',
-        company: 'ООО «ТехноСофт»',
-        offices: [{ bc: 'atrium', number: '402', floor: '4', areaSqm: 60 }],
-      },
-      {
-        email: 'tenant3@pass24.local',
-        password: 'tenant123',
-        fullName: 'Сидоров Игорь',
-        company: 'ИП Сидоров',
-        offices: [{ bc: 'city-plaza', number: '1502', floor: '15', areaSqm: 45 }],
-      },
-    ];
-
-    for (const spec of tenantSpecs) {
-      let user = await this.userModel.findOne({ email: spec.email });
-      if (!user) {
-        user = await this.userModel.create({
-          email: spec.email,
-          fullName: spec.fullName,
-          company: spec.company,
-          role: 'tenant',
-          password: await bcrypt.hash(spec.password, 10),
-          isActive: true,
-          office: spec.offices[0].number,
-          floor: spec.offices[0].floor,
-        } as any);
-        result.tenants++;
-        result.skipped = false;
-      }
-
-      for (const officeSpec of spec.offices) {
-        const property = bcMap.get(officeSpec.bc)!;
-        const exists = await this.officeModel.findOne({
-          property: property._id,
-          number: officeSpec.number,
-        });
-        if (!exists) {
-          await this.officeModel.create({
-            property: property._id,
-            number: officeSpec.number,
-            floor: officeSpec.floor,
-            areaSqm: officeSpec.areaSqm,
-            company: spec.company,
-            tenantId: user!._id,
-            isActive: true,
-          });
-          result.offices++;
-          result.skipped = false;
-        } else if (!exists.tenantId) {
-          exists.tenantId = user!._id;
-          exists.company = spec.company;
-          await exists.save();
-        }
-      }
-
-      await this.syncTenantProperties(user!._id.toString());
-    }
-
-    // Security user for reception
-    if (!(await this.userModel.findOne({ email: 'security@pass24.local' }))) {
-      await this.userModel.create({
-        email: 'security@pass24.local',
-        fullName: 'Сотрудник охраны',
-        role: 'security',
-        password: await bcrypt.hash('security123', 10),
-        isActive: true,
-        properties: [bcMap.get('atrium')!._id, bcMap.get('city-plaza')!._id],
-      } as any);
-      result.tenants++;
-      result.skipped = false;
-    }
-
+    const result = await this.testDataSeedService.seedTestData();
     return {
-      message: result.skipped
-        ? 'Тестовые данные уже существуют'
-        : 'Тестовые БЦ, офисы и арендаторы созданы',
       ...result,
+      tenants: result.users,
     };
   }
 

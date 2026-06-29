@@ -43,7 +43,12 @@ export function SiteBrand({
       {(showTitle || showTagline) && (
         <div className="min-w-0">
           {showTitle && (
-            <div className={`font-semibold leading-tight truncate tracking-tight ${s.title}`}>{brand.siteName}</div>
+            <div
+              className={`font-semibold leading-tight truncate tracking-tight ${s.title}`}
+              style={{ color: isDark ? 'var(--header-text)' : 'var(--foreground)' }}
+            >
+              {brand.siteName}
+            </div>
           )}
           {showTagline && (
             <div

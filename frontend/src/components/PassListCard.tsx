@@ -15,12 +15,14 @@ import {
 import { Pass, PassType, TYPE_LABELS } from '@/lib/api';
 import {
   getGuestOverdueKind,
-  getOverdueBadgeLabel,
-  getPassCardBorderClass,
   getUiLabels,
-  isGuestStillInside,
   UiLabels,
 } from '@/lib/ui-labels';
+import {
+  getPassCardShellClass,
+  getPassIconTileClass,
+  getPassStatusStripeClass,
+} from '@/lib/pass-status';
 import { useConfig } from '@/hooks/useConfig';
 import { StatusBadge } from './StatusBadge';
 
@@ -56,29 +58,22 @@ export function PassListCard({ pass, labels: labelsProp, selected, showCreator, 
   ].filter(Boolean);
 
   const className = [
-    'w-full text-left rounded-lg border bg-white transition-all block',
-    'hover:shadow-md hover:border-[var(--accent)]',
-    selected ? 'ring-2 ring-[var(--primary)] ring-offset-1 border-[var(--primary)] shadow-sm' : 'border-[var(--border)]',
-    stillInside ? 'border-amber-300 bg-amber-50/30' : getPassCardBorderClass(pass.status, stillInside),
-  ].filter(Boolean).join(' ');
+    'w-full text-left rounded-lg block',
+    getPassCardShellClass({
+      interactive: true,
+      selected,
+      overdue: stillInside,
+      status: pass.status,
+    }),
+  ].join(' ');
 
   const inner = (
     <div className="flex items-stretch gap-0 min-h-[4.5rem]">
-      <div
-        className={[
-          'w-1 shrink-0 rounded-l-lg',
-          pass.status === 'active' ? 'bg-emerald-500' : '',
-          pass.status === 'pending' ? 'bg-amber-400' : '',
-          pass.status === 'approved' ? 'bg-[var(--accent)]' : '',
-          pass.status === 'rejected' ? 'bg-red-500' : '',
-          ['completed', 'expired', 'cancelled'].includes(pass.status) ? 'bg-[var(--muted)]' : '',
-          stillInside ? 'bg-amber-500' : '',
-        ].filter(Boolean).join(' ') || 'bg-[var(--border)]'}
-      />
+      <div className={getPassStatusStripeClass(pass.status, stillInside)} aria-hidden />
 
       <div className="flex-1 min-w-0 px-3 py-2.5 flex items-start gap-2">
-        <div className="w-8 h-8 rounded surface-muted border border-[var(--border)] flex items-center justify-center shrink-0 mt-0.5">
-          <Icon className="w-4 h-4 text-[var(--primary)]" />
+        <div className={`w-8 h-8 rounded-lg ${getPassIconTileClass(pass.status, stillInside)} mt-0.5`}>
+          <Icon className="w-4 h-4" />
         </div>
 
         <div className="flex-1 min-w-0">
@@ -86,15 +81,10 @@ export function PassListCard({ pass, labels: labelsProp, selected, showCreator, 
             <span className="font-semibold text-sm leading-tight truncate max-w-[12rem] sm:max-w-none">
               {pass.visitorName}
             </span>
-            <StatusBadge status={pass.status} labels={labels} />
-                {overdueKind && (
-                  <span className="text-[10px] px-1.5 py-0.5 rounded bg-amber-200 text-amber-900 font-medium">
-                    {getOverdueBadgeLabel(overdueKind, labels)}
-                  </span>
-                )}
+            <StatusBadge status={pass.status} labels={labels} size="sm" overdueKind={overdueKind} />
           </div>
 
-          <div className="font-mono text-xs text-[var(--primary)] font-semibold mt-0.5">{pass.passNumber}</div>
+          <div className="font-mono text-xs text-[var(--text)] font-semibold mt-0.5 opacity-90">{pass.passNumber}</div>
 
           <p className="mt-1 text-[11px] text-[var(--muted)] leading-snug">
             {meta.join(' · ')}
@@ -149,7 +139,7 @@ export function PassListCard({ pass, labels: labelsProp, selected, showCreator, 
             <div className="text-[9px] uppercase tracking-wide text-[var(--muted)] leading-none mb-0.5">
               {labels.card.office}
             </div>
-            <div className="text-2xl font-bold leading-none text-[var(--primary)] tabular-nums">
+            <div className="text-2xl font-bold leading-none text-[var(--text)] tabular-nums">
               {pass.office}
             </div>
             {pass.floor && (
@@ -158,7 +148,7 @@ export function PassListCard({ pass, labels: labelsProp, selected, showCreator, 
               </div>
             )}
           </div>
-          <ChevronRight className={`w-4 h-4 transition-colors ${selected ? 'text-[var(--accent)]' : 'text-[var(--border-strong)]'}`} />
+          <ChevronRight className={`w-4 h-4 transition-colors ${selected ? 'text-[var(--text)]' : 'text-[var(--muted)]'}`} />
         </div>
       </div>
     </div>

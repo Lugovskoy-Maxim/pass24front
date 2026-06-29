@@ -236,16 +236,19 @@ export const api = {
     firstName?: string;
     middleName?: string;
     phone?: string;
-    company?: string;
-    office?: string;
-    floor?: string;
+    company: string;
   }) =>
-    request<{ user: User; token: string }>('/auth/register', {
+    request<{ pendingApproval: true; message: string }>('/auth/register', {
       method: 'POST',
       body: JSON.stringify(data),
     }),
 
   me: () => request<{ user: User }>('/auth/me'),
+
+  getDevAccounts: () =>
+    request<{ accounts: Array<{ label: string; email: string; password: string; role: UserRole }> }>(
+      '/auth/dev-accounts',
+    ),
 
   updateProfile: (data: {
     lastName: string;
@@ -391,6 +394,15 @@ export const api = {
     updateUser: (id: string, data: Partial<CreateUserData & { isActive: boolean }>) =>
       request<{ user: AdminUser }>(`/admin/users/${id}`, { method: 'PATCH', body: JSON.stringify(data) }),
 
+    getRegistrationRequests: () =>
+      request<{ requests: AdminUser[] }>('/admin/registration-requests'),
+
+    approveRegistration: (id: string) =>
+      request<{ user: AdminUser }>(`/admin/users/${id}/registration/approve`, { method: 'POST' }),
+
+    rejectRegistration: (id: string) =>
+      request<{ message: string }>(`/admin/users/${id}/registration/reject`, { method: 'POST' }),
+
     getProfileChangeRequests: () =>
       request<{ requests: Array<{ user: AdminUser; request: ProfileChangeRequest }> }>('/admin/profile-change-requests'),
 
@@ -407,6 +419,9 @@ export const api = {
 
     updateBusinessCenter: (id: string, data: { name?: string; address?: string; passSettings?: Partial<BcPassSettings> }) =>
       request<{ businessCenter: BusinessCenter }>(`/admin/business-centers/${id}`, { method: 'PATCH', body: JSON.stringify(data) }),
+
+    deleteBusinessCenter: (id: string) =>
+      request<{ message: string; id: string }>(`/admin/business-centers/${id}`, { method: 'DELETE' }),
 
     seedTestData: () =>
       request<{ message: string; businessCenters: number; offices: number; tenants: number; skipped: boolean }>(
@@ -461,6 +476,9 @@ export const api = {
 
     updateOffice: (id: string, data: Partial<CreateOfficeData & { isActive: boolean }>) =>
       request<{ office: Office }>(`/admin/offices/${id}`, { method: 'PATCH', body: JSON.stringify(data) }),
+
+    deleteOffice: (id: string) =>
+      request<{ message: string; id: string }>(`/admin/offices/${id}`, { method: 'DELETE' }),
 
     getDailyReport: (date?: string) =>
       request<DailyReport>(`/admin/reports/daily${date ? `?date=${date}` : ''}`),
@@ -766,11 +784,16 @@ export const AUDIT_LABELS: Record<string, string> = {
   'pass.expired': 'Истечение пропуска',
   'user.create': 'Создание пользователя',
   'user.update': 'Изменение пользователя',
+  'user.registration_request': 'Заявка на регистрацию',
+  'user.registration_approved': 'Подтверждение регистрации',
+  'user.registration_rejected': 'Отклонение регистрации',
   'settings.update': 'Изменение настроек',
   'office.create': 'Добавление офиса',
   'office.update': 'Изменение офиса',
+  'office.delete': 'Удаление офиса',
   'bc.create': 'Создание БЦ',
   'bc.update': 'Изменение БЦ',
+  'bc.delete': 'Удаление БЦ',
   'permissions.update': 'Изменение прав доступа',
   'site_settings.update': 'Изменение настроек сайта',
 };

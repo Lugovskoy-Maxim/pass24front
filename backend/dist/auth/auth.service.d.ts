@@ -15,32 +15,8 @@ export declare class AuthService {
     private auditService;
     constructor(userModel: Model<UserDocument>, officeModel: Model<OfficeDocument>, propertyModel: Model<PropertyDocument>, jwtService: JwtService, accessConfigService: AccessConfigService, auditService: AuditService);
     register(dto: RegisterDto): Promise<{
-        user: {
-            id: any;
-            email: any;
-            full_name: any;
-            last_name: any;
-            first_name: any;
-            middle_name: any;
-            phone: any;
-            company: any;
-            role: any;
-            office: any;
-            floor: any;
-            offices: any[];
-            permissions: string[];
-            enabledPassTypes: any;
-            profile_change_request: {
-                last_name: string;
-                first_name: string;
-                middle_name: string;
-                full_name: string;
-                phone: string | undefined;
-                company: string | undefined;
-                requested_at: string;
-            } | null;
-        };
-        token: string;
+        pendingApproval: boolean;
+        message: string;
     }>;
     login(dto: LoginDto): Promise<{
         user: {
@@ -161,5 +137,13 @@ export declare class AuthService {
     }[]>;
     private generateToken;
     private toUserDto;
+    getDevAccounts(): {
+        accounts: Array<{
+            label: string;
+            email: string;
+            password: string;
+            role: string;
+        }>;
+    };
     private createTestUser;
 }

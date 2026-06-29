@@ -33,33 +33,17 @@ export declare class AuthController {
         };
         token: string;
     }>;
+    getDevAccounts(): {
+        accounts: {
+            label: string;
+            email: string;
+            password: string;
+            role: string;
+        }[];
+    };
     register(dto: RegisterDto): Promise<{
-        user: {
-            id: any;
-            email: any;
-            full_name: any;
-            last_name: any;
-            first_name: any;
-            middle_name: any;
-            phone: any;
-            company: any;
-            role: any;
-            office: any;
-            floor: any;
-            offices: any[];
-            permissions: string[];
-            enabledPassTypes: any;
-            profile_change_request: {
-                last_name: string;
-                first_name: string;
-                middle_name: string;
-                full_name: string;
-                phone: string | undefined;
-                company: string | undefined;
-                requested_at: string;
-            } | null;
-        };
-        token: string;
+        pendingApproval: boolean;
+        message: string;
     }>;
     me(req: any): Promise<{
         user: {

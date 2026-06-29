@@ -10,6 +10,8 @@ import {
   api, PassTemplate, PassType, TYPE_LABELS, CreatePassTemplateData, formatTenantOffices, VISIT_PURPOSES, getErrorMessage,
 } from '@/lib/api';
 import { PageError } from '@/components/PageError';
+import { FormErrorBanner, FormField, FormInput, FormSelect, FormTextarea } from '@/components/FormField';
+import { FieldErrors, hasFieldErrors, validatePassTemplateForm } from '@/lib/form-validation';
 import { getVisitorNameLabel } from '@/lib/person-name';
 
 const TYPE_ICONS: Record<PassType, typeof User> = {
@@ -46,6 +48,8 @@ export default function TemplatesPage() {
   const [syncing, setSyncing] = useState(false);
   const [showForm, setShowForm] = useState(false);
   const [saving, setSaving] = useState(false);
+  const [formError, setFormError] = useState('');
+  const [fieldErrors, setFieldErrors] = useState<FieldErrors>({});
   const [form, setForm] = useState<CreatePassTemplateData>(EMPTY_FORM);
 
   const tenantOffices = user?.offices || [];
@@ -104,20 +108,31 @@ export default function TemplatesPage() {
     }));
   };
 
+  const clearFieldError = (field: string) => {
+    setFieldErrors((prev) => {
+      if (!prev[field]) return prev;
+      const next = { ...prev };
+      delete next[field];
+      return next;
+    });
+  };
+
   const handleSubmit = async (e: FormEvent) => {
     e.preventDefault();
-    if (!form.name.trim() || !form.visitorName.trim()) {
-      toast(`Укажите название и ${getVisitorNameLabel(form.passType).toLowerCase()}`, 'error');
-      return;
-    }
-    if (form.passType === 'parking' && !form.vehiclePlate?.trim()) {
-      toast('Укажите гос. номер для парковочного шаблона', 'error');
-      return;
-    }
-    if (tenantOffices.length > 0 && !form.officeId) {
-      toast('Выберите офис', 'error');
-      return;
-    }
+    setFormError('');
+    const visitorLabel = getVisitorNameLabel(form.passType);
+    const errors = validatePassTemplateForm({
+      name: form.name,
+      visitorName: form.visitorName,
+      passType: form.passType,
+      vehiclePlate: form.vehiclePlate,
+      officeId: form.officeId || '',
+      office: form.office || '',
+      tenantHasOffices: tenantOffices.length > 0,
+      visitorLabel,
+    });
+    setFieldErrors(errors);
+    if (hasFieldErrors(errors)) return;
 
     setSaving(true);
     try {
@@ -183,17 +198,26 @@ export default function TemplatesPage() {
       )}
 
       {showForm && (
-        <form onSubmit={handleSubmit} className="card p-6 mb-6 space-y-4">
+        <form onSubmit={handleSubmit} className="card p-6 mb-6 space-y-4" noValidate>
           <h2 className="font-semibold">Создать шаблон вручную</h2>
-          <div className="grid sm:grid-cols-2 gap-3">
-            <div>
-              <label className="label">Название шаблона *</label>
-              <input className="input" value={form.name} onChange={(e) => setForm({ ...form, name: e.target.value })} placeholder="Курьер СДЭК" required />
-            </div>
-            <div>
-              <label className="label">{getVisitorNameLabel(form.passType)} *</label>
-              <input className="input" value={form.visitorName} onChange={(e) => setForm({ ...form, visitorName: e.target.value })} required />
-            </div>
+          <div className="form-grid-2">
+            <FormField id="templateName" label="Название шаблона" required error={fieldErrors.name}>
+              <FormInput
+                id="templateName"
+                value={form.name}
+                onChange={(e) => { setForm({ ...form, name: e.target.value }); clearFieldError('name'); }}
+                invalid={!!fieldErrors.name}
+                placeholder="Курьер СДЭК"
+              />
+            </FormField>
+            <FormField id="templateVisitor" label={getVisitorNameLabel(form.passType)} required error={fieldErrors.visitorName}>
+              <FormInput
+                id="templateVisitor"
+                value={form.visitorName}
+                onChange={(e) => { setForm({ ...form, visitorName: e.target.value }); clearFieldError('visitorName'); }}
+                invalid={!!fieldErrors.visitorName}
+              />
+            </FormField>
           </div>
 
           <div>
@@ -204,7 +228,7 @@ export default function TemplatesPage() {
                   key={key}
                   type="button"
                   className={`py-2 px-3 text-sm rounded-lg border transition-colors ${
-                    form.passType === key ? 'border-[var(--accent)] bg-[var(--accent-soft)] text-[var(--primary)] font-medium' : 'border-[var(--border)] hover:bg-[var(--surface-muted)]'
+                    form.passType === key ? 'border-[var(--status-approved-border)] bg-[var(--status-approved-soft)] text-[var(--status-approved)] font-medium' : 'border-[var(--border)] hover:bg-[var(--surface-muted)]'
                   }`}
                   onClick={() => setForm({ ...form, passType: key })}
                 >
@@ -214,67 +238,76 @@ export default function TemplatesPage() {
             </div>
           </div>
 
-          <div className="grid sm:grid-cols-2 gap-3">
-            <div>
-              <label className="label">Компания посетителя</label>
-              <input className="input" value={form.companyName} onChange={(e) => setForm({ ...form, companyName: e.target.value })} />
-            </div>
-            <div>
-              <label className="label">Телефон</label>
-              <input className="input" type="tel" value={form.visitorPhone} onChange={(e) => setForm({ ...form, visitorPhone: e.target.value })} />
-            </div>
+          <div className="form-grid-2">
+            <FormField id="templateCompany" label="Компания посетителя">
+              <FormInput id="templateCompany" value={form.companyName} onChange={(e) => setForm({ ...form, companyName: e.target.value })} />
+            </FormField>
+            <FormField id="templatePhone" label="Телефон">
+              <FormInput id="templatePhone" type="tel" value={form.visitorPhone} onChange={(e) => setForm({ ...form, visitorPhone: e.target.value })} />
+            </FormField>
           </div>
 
-          <div>
-            <label className="label">Цель визита</label>
-            <select className="input" value={form.visitPurpose} onChange={(e) => setForm({ ...form, visitPurpose: e.target.value })}>
+          <FormField id="templatePurpose" label="Цель визита">
+            <FormSelect id="templatePurpose" value={form.visitPurpose} onChange={(e) => setForm({ ...form, visitPurpose: e.target.value })}>
               {VISIT_PURPOSES.map((p) => <option key={p} value={p}>{p}</option>)}
-            </select>
-          </div>
+            </FormSelect>
+          </FormField>
 
           {form.passType === 'parking' && (
-            <div className="grid sm:grid-cols-2 gap-3">
-              <div>
-                <label className="label">Гос. номер *</label>
-                <input className="input font-mono" value={form.vehiclePlate} onChange={(e) => setForm({ ...form, vehiclePlate: e.target.value })} required />
-              </div>
-              <div>
-                <label className="label">Марка / модель</label>
-                <input className="input" value={form.vehicleModel} onChange={(e) => setForm({ ...form, vehicleModel: e.target.value })} />
-              </div>
+            <div className="form-grid-2">
+              <FormField id="templatePlate" label="Гос. номер" required error={fieldErrors.vehiclePlate}>
+                <FormInput
+                  id="templatePlate"
+                  mono
+                  value={form.vehiclePlate}
+                  onChange={(e) => { setForm({ ...form, vehiclePlate: e.target.value }); clearFieldError('vehiclePlate'); }}
+                  invalid={!!fieldErrors.vehiclePlate}
+                />
+              </FormField>
+              <FormField id="templateModel" label="Марка / модель">
+                <FormInput id="templateModel" value={form.vehicleModel} onChange={(e) => setForm({ ...form, vehicleModel: e.target.value })} />
+              </FormField>
             </div>
           )}
 
-          <div className="grid sm:grid-cols-3 gap-3">
-            <div>
-              <label className="label">Офис *</label>
+          <div className="form-grid-3">
+            <FormField id="templateOffice" label="Офис" required error={fieldErrors.officeId || fieldErrors.office}>
               {tenantOffices.length > 0 ? (
-                <select className="input" value={form.officeId} onChange={(e) => handleOfficeSelect(e.target.value)} required>
+                <FormSelect
+                  id="templateOffice"
+                  value={form.officeId}
+                  onChange={(e) => { handleOfficeSelect(e.target.value); clearFieldError('officeId'); }}
+                  invalid={!!fieldErrors.officeId}
+                >
                   <option value="">Выберите офис</option>
                   {tenantOffices.map((o) => (
                     <option key={o.id} value={o.id}>
                       {o.businessCenterName ? `${o.businessCenterName} · ` : ''}офис {o.number}, эт. {o.floor}
                     </option>
                   ))}
-                </select>
+                </FormSelect>
               ) : (
-                <input className="input" value={form.office} onChange={(e) => setForm({ ...form, office: e.target.value })} required />
+                <FormInput
+                  id="templateOffice"
+                  value={form.office}
+                  onChange={(e) => { setForm({ ...form, office: e.target.value }); clearFieldError('office'); }}
+                  invalid={!!fieldErrors.office}
+                />
               )}
-            </div>
-            <div>
-              <label className="label">С</label>
-              <input className="input" type="time" value={form.visitTimeFrom} onChange={(e) => setForm({ ...form, visitTimeFrom: e.target.value })} />
-            </div>
-            <div>
-              <label className="label">До</label>
-              <input className="input" type="time" value={form.visitTimeTo} onChange={(e) => setForm({ ...form, visitTimeTo: e.target.value })} />
-            </div>
+            </FormField>
+            <FormField id="templateTimeFrom" label="С">
+              <FormInput id="templateTimeFrom" type="time" value={form.visitTimeFrom} onChange={(e) => setForm({ ...form, visitTimeFrom: e.target.value })} />
+            </FormField>
+            <FormField id="templateTimeTo" label="До">
+              <FormInput id="templateTimeTo" type="time" value={form.visitTimeTo} onChange={(e) => setForm({ ...form, visitTimeTo: e.target.value })} />
+            </FormField>
           </div>
 
-          <div>
-            <label className="label">Комментарий</label>
-            <textarea className="input min-h-[60px]" value={form.comment} onChange={(e) => setForm({ ...form, comment: e.target.value })} />
-          </div>
+          <FormField id="templateComment" label="Комментарий">
+            <FormTextarea id="templateComment" value={form.comment} onChange={(e) => setForm({ ...form, comment: e.target.value })} />
+          </FormField>
+
+          <FormErrorBanner message={formError} />
 
           <div className="flex gap-2">
             <button type="submit" className="btn btn-primary" disabled={saving}>{saving ? 'Сохранение...' : 'Сохранить шаблон'}</button>
@@ -298,8 +331,8 @@ export default function TemplatesPage() {
             return (
               <div key={template.id} className="card p-4 flex flex-col">
                 <div className="flex items-start gap-3 mb-3">
-                  <div className="w-9 h-9 rounded bg-[var(--accent-soft)] flex items-center justify-center shrink-0">
-                    <Icon className="w-4 h-4 text-[var(--primary)]" />
+                  <div className="w-9 h-9 rounded bg-[var(--status-approved-soft)] flex items-center justify-center shrink-0">
+                    <Icon className="w-4 h-4 text-[var(--status-approved)]" />
                   </div>
                   <div className="min-w-0 flex-1">
                     <div className="font-semibold truncate">{template.name}</div>

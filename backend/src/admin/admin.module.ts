@@ -6,7 +6,7 @@ import { AdminController } from './admin.controller';
 import { AdminService } from './admin.service';
 
 @Module({
-  imports: [DatabaseModule.forFeature(), AuthModule, PassesModule],
+  imports: [DatabaseModule, DatabaseModule.forFeature(), AuthModule, PassesModule],
   controllers: [AdminController],
   providers: [AdminService],
   exports: [AdminService],

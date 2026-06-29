@@ -13,7 +13,12 @@ import {
 } from 'lucide-react';
 import { PublicPassTicket, TYPE_LABELS, PassType } from '@/lib/api';
 import { useConfig } from '@/hooks/useConfig';
-import { getPassCardBorderClass, getUiLabels } from '@/lib/ui-labels';
+import { getUiLabels } from '@/lib/ui-labels';
+import {
+  getPassCardShellClass,
+  getPassIconTileClass,
+  getPassStatusTopStripeClass,
+} from '@/lib/pass-status';
 import { SharePassActions } from './SharePassActions';
 import { PassVisitTimeline } from './PassVisitTimeline';
 import { StatusBadge } from './StatusBadge';
@@ -60,10 +65,12 @@ export function PassTicketView({
 
   return (
     <div className="max-w-md mx-auto">
-      <article className={`card overflow-hidden border-2 ${getPassCardBorderClass(ticket.status)}`}>
+      <article className={getPassCardShellClass()}>
+        <div className={getPassStatusTopStripeClass(ticket.status)} aria-hidden />
+
         {/* Шапка БЦ */}
-        <header className="text-center px-5 pt-5 pb-4 border-b border-[var(--border)] bg-gradient-to-b from-slate-50/90 to-white">
-          <div className="inline-flex items-center justify-center gap-2 text-[var(--primary)]">
+        <header className="text-center px-5 pt-5 pb-4 border-b border-[var(--border)] bg-gradient-surface">
+          <div className="inline-flex items-center justify-center gap-2 text-[var(--text)]">
             <Building2 className="w-5 h-5 shrink-0" />
             <span className="font-bold text-lg leading-tight">{businessCenterName}</span>
           </div>
@@ -72,11 +79,11 @@ export function PassTicketView({
 
         {/* Гость */}
         <section className="px-5 pt-5 pb-4 text-center border-b border-[var(--border)]">
-          <div className="w-14 h-14 mx-auto mb-3 rounded-full surface-muted border border-[var(--border)] flex items-center justify-center">
-            <User className="w-7 h-7 text-[var(--primary)]" />
+          <div className={`w-14 h-14 mx-auto mb-3 rounded-full ${getPassIconTileClass(ticket.status)}`}>
+            <User className="w-7 h-7" />
           </div>
           <h1 className="text-xl font-bold leading-snug break-words">{ticket.visitorName}</h1>
-          <p className="font-mono text-sm text-[var(--primary)] font-semibold mt-1">{ticket.passNumber}</p>
+          <p className="font-mono text-sm text-[var(--text)] font-semibold mt-1">{ticket.passNumber}</p>
           <div className="flex flex-wrap items-center justify-center gap-2 mt-3">
             <StatusBadge status={ticket.status} labels={labels} />
             <span className="text-xs px-2.5 py-0.5 rounded-full surface-muted border border-[var(--border)] text-[var(--muted)]">
@@ -88,7 +95,7 @@ export function PassTicketView({
         {/* Ключевые данные */}
         <section className="px-5 py-4 grid grid-cols-2 gap-3 border-b border-[var(--border)] bg-[var(--surface-muted)]">
           <div className="col-span-2 flex items-center justify-center gap-4 text-sm flex-wrap">
-            <span className="inline-flex items-center gap-1.5 font-semibold text-[var(--primary)]">
+            <span className="inline-flex items-center gap-1.5 font-semibold text-[var(--text)]">
               <MapPin className="w-4 h-4 shrink-0" />
               {labels.card.office} {ticket.office}
               {ticket.floor && ` · ${ticket.floor} ${labels.card.floorSuffix}`}
@@ -133,7 +140,7 @@ export function PassTicketView({
           </p>
           {ticketUrl && (
             <div className="flex justify-center">
-              <div className="p-4 bg-white rounded-2xl border border-[var(--border)] shadow-sm">
+              <div className="p-4 bg-[var(--surface-elevated)] rounded-2xl border border-[var(--border)] shadow-sm">
                 <QRCode value={ticketUrl} size={180} level="M" />
               </div>
             </div>
@@ -141,12 +148,12 @@ export function PassTicketView({
         </section>
 
         {/* Timeline */}
-        <section className={`px-4 py-4 ${isTerminal ? 'bg-[var(--surface-muted)]' : 'bg-white'}`}>
+        <section className={`px-4 py-4 ${isTerminal ? 'bg-[var(--surface-muted)]' : 'bg-[var(--surface)]'}`}>
           <PassVisitTimeline pass={ticket} labels={labels} compact />
         </section>
 
         {/* Действия */}
-        <footer className="px-5 py-4 border-t border-[var(--border)] bg-white">
+        <footer className="px-5 py-4 border-t border-[var(--border)] bg-[var(--surface)]">
           {enableEmailShare ? (
             <SharePassActions passIdOrNumber={ticket.passNumber} showQrLink={false} ticketLayout />
           ) : ticketUrl ? (

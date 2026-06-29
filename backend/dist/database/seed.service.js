@@ -54,16 +54,20 @@ const bcrypt = __importStar(require("bcryptjs"));
 const mongoose_2 = require("mongoose");
 const schemas_1 = require("../schemas");
 const enums_1 = require("../schemas/enums");
+const test_data_seed_service_1 = require("./test-data-seed.service");
 let SeedService = SeedService_1 = class SeedService {
     userModel;
     configService;
+    testDataSeedService;
     logger = new common_1.Logger(SeedService_1.name);
-    constructor(userModel, configService) {
+    constructor(userModel, configService, testDataSeedService) {
         this.userModel = userModel;
         this.configService = configService;
+        this.testDataSeedService = testDataSeedService;
     }
     async onModuleInit() {
         await this.seedAdminUser();
+        await this.seedDevTestData();
     }
     async seedAdminUser() {
         const email = this.configService.get('ADMIN_EMAIL', 'admin@pass24.local').toLowerCase();
@@ -85,12 +89,20 @@ let SeedService = SeedService_1 = class SeedService {
         });
         this.logger.log(`Admin user created: ${email}`);
     }
+    async seedDevTestData() {
+        const seedEnabled = this.configService.get('SEED_DEV_DATA', process.env.NODE_ENV === 'production' ? 'false' : 'true');
+        if (seedEnabled === 'false') {
+            return;
+        }
+        await this.testDataSeedService.seedTestData();
+    }
 };
 exports.SeedService = SeedService;
 exports.SeedService = SeedService = SeedService_1 = __decorate([
     (0, common_1.Injectable)(),
     __param(0, (0, mongoose_1.InjectModel)(schemas_1.User.name)),
     __metadata("design:paramtypes", [mongoose_2.Model,
-        config_1.ConfigService])
+        config_1.ConfigService,
+        test_data_seed_service_1.TestDataSeedService])
 ], SeedService);
 //# sourceMappingURL=seed.service.js.map

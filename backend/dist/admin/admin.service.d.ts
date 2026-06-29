@@ -1,11 +1,12 @@
 import { Model } from 'mongoose';
 import { AuditActor, AuditQuery, AuditService } from '../audit/audit.service';
 import { PassesService } from '../passes/passes.service';
-import { OfficeDocument, PassDocument, PropertyDocument, UserDocument } from '../schemas';
+import { OfficeDocument, PassDocument, PassTemplateDocument, PropertyDocument, UserDocument } from '../schemas';
 import { CreateBusinessCenterDto } from './dto/create-business-center.dto';
 import { CreateOfficeDto } from './dto/create-office.dto';
 import { CreateUserDto } from './dto/create-user.dto';
 import { UpdateBusinessCenterDto } from './dto/update-business-center.dto';
+import { TestDataSeedService } from '../database/test-data-seed.service';
 export interface UserQuery {
     category?: 'tenants' | 'staff';
     role?: string;
@@ -19,9 +20,11 @@ export declare class AdminService {
     private propertyModel;
     private officeModel;
     private passModel;
+    private passTemplateModel;
     private auditService;
     private passesService;
-    constructor(userModel: Model<UserDocument>, propertyModel: Model<PropertyDocument>, officeModel: Model<OfficeDocument>, passModel: Model<PassDocument>, auditService: AuditService, passesService: PassesService);
+    private testDataSeedService;
+    constructor(userModel: Model<UserDocument>, propertyModel: Model<PropertyDocument>, officeModel: Model<OfficeDocument>, passModel: Model<PassDocument>, passTemplateModel: Model<PassTemplateDocument>, auditService: AuditService, passesService: PassesService, testDataSeedService: TestDataSeedService);
     dashboard(): Promise<{
         stats: {
             users: {
@@ -140,6 +143,75 @@ export declare class AdminService {
                 requested_at: string;
             } | null;
         };
+    }>;
+    getRegistrationRequests(): Promise<{
+        requests: {
+            id: any;
+            email: any;
+            fullName: any;
+            lastName: any;
+            firstName: any;
+            middleName: any;
+            phone: any;
+            company: any;
+            role: any;
+            office: any;
+            floor: any;
+            isActive: boolean;
+            createdAt: any;
+            passesCount: number;
+            offices: any[];
+            businessCenters: {
+                id: string;
+                name: string;
+            }[];
+            propertyIds: string[];
+            profileChangeRequest: {
+                last_name: string;
+                first_name: string;
+                middle_name: string;
+                full_name: string;
+                phone: string | undefined;
+                company: string | undefined;
+                requested_at: string;
+            } | null;
+        }[];
+    }>;
+    approveRegistration(id: string, actor?: AuditActor): Promise<{
+        user: {
+            id: any;
+            email: any;
+            fullName: any;
+            lastName: any;
+            firstName: any;
+            middleName: any;
+            phone: any;
+            company: any;
+            role: any;
+            office: any;
+            floor: any;
+            isActive: boolean;
+            createdAt: any;
+            passesCount: number;
+            offices: any[];
+            businessCenters: {
+                id: string;
+                name: string;
+            }[];
+            propertyIds: string[];
+            profileChangeRequest: {
+                last_name: string;
+                first_name: string;
+                middle_name: string;
+                full_name: string;
+                phone: string | undefined;
+                company: string | undefined;
+                requested_at: string;
+            } | null;
+        };
+    }>;
+    rejectRegistration(id: string, actor?: AuditActor): Promise<{
+        message: string;
     }>;
     getProfileChangeRequests(): Promise<{
         requests: {
@@ -326,6 +398,10 @@ export declare class AdminService {
             };
         }[];
     }>;
+    deleteBusinessCenter(id: string, actor?: AuditActor): Promise<{
+        message: string;
+        id: string;
+    }>;
     createBusinessCenter(dto: CreateBusinessCenterDto, actor?: AuditActor): Promise<{
         businessCenter: {
             id: string;
@@ -392,12 +468,17 @@ export declare class AdminService {
             createdAt: any;
         };
     }>;
+    deleteOffice(id: string, actor?: AuditActor): Promise<{
+        message: string;
+        id: string;
+    }>;
     seedTestData(): Promise<{
+        tenants: number;
+        message: string;
         businessCenters: number;
         offices: number;
-        tenants: number;
+        users: number;
         skipped: boolean;
-        message: string;
     }>;
     getTenantOffices(tenantId: string): Promise<{
         id: any;

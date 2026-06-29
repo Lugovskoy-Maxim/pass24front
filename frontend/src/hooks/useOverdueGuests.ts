@@ -8,12 +8,18 @@ export function useOverdueGuests(enabled: boolean) {
   const [loading, setLoading] = useState(false);
   const [timeTick, setTimeTick] = useState(0);
 
-  const refresh = useCallback(() => {
-    if (!enabled) return;
+  const refresh = useCallback((): Promise<Pass[]> => {
+    if (!enabled) return Promise.resolve([]);
     setLoading(true);
-    api.getOverdueActive()
-      .then(({ passes: data }) => setPasses(data))
-      .catch(() => setPasses([]))
+    return api.getOverdueActive()
+      .then(({ passes: data }) => {
+        setPasses(data);
+        return data;
+      })
+      .catch(() => {
+        setPasses([]);
+        return [] as Pass[];
+      })
       .finally(() => setLoading(false));
   }, [enabled]);
 

@@ -11,6 +11,7 @@ import { Office, OfficeDocument, Property, PropertyDocument, User, UserDocument 
 import { LoginDto } from './dto/login.dto';
 import { RegisterDto } from './dto/register.dto';
 import { UpdateProfileDto } from './dto/update-profile.dto';
+import { DEV_TEST_ACCOUNTS, DEV_TEST_ACCOUNT_EMAILS } from '../database/dev-test-accounts';
 
 @Injectable()
 export class AuthService {
@@ -44,25 +45,36 @@ export class AuthService {
       lastName: personName.lastName,
       firstName: personName.firstName,
       middleName: personName.middleName,
-      phone: dto.phone,
-      company: dto.company,
+      phone: dto.phone?.trim() || undefined,
+      company: dto.company.trim(),
       role: 'tenant',
-      office: dto.office,
-      floor: dto.floor,
-      password: hashed, // Note: we need to add password field to schema temporarily
+      password: hashed,
+      isActive: false,
     } as any);
 
-    const offices = await this.getUserOffices(user._id.toString());
-    const token = this.generateToken(user);
-    return { user: await this.toUserDto(user, offices), token };
+    await this.auditService.log({
+      action: 'user.registration_request',
+      entityType: 'user',
+      entityId: user._id,
+      details: {
+        email: user.email,
+        fullName: user.fullName,
+        company: user.company,
+        phone: user.phone,
+      },
+    });
+
+    return {
+      pendingApproval: true,
+      message: 'Заявка отправлена. Доступ будет открыт после подтверждения администратором.',
+    };
   }
 
   async login(dto: LoginDto) {
     const user = await this.userModel.findOne({ email: dto.email.toLowerCase() }).select('+password') as any;
 
     if (!user) {
-      // Auto-create test users on first login attempt for demo
-      if (['tenant@pass24.local', 'security@pass24.local', 'admin@pass24.local'].includes(dto.email)) {
+      if (DEV_TEST_ACCOUNT_EMAILS.has(dto.email.toLowerCase())) {
         return this.createTestUser(dto.email, dto.password);
       }
       throw new UnauthorizedException('Неверные учетные данные');
@@ -73,6 +85,12 @@ export class AuthService {
       throw new UnauthorizedException('Неверные учетные данные');
     }
 
+    if (user.isActive === false) {
+      throw new ForbiddenException(
+        'Учётная запись ожидает подтверждения администратором. Вход будет доступен после одобрения заявки.',
+      );
+    }
+
     const offices = await this.getUserOffices(user._id.toString());
     const token = this.generateToken(user);
     return { user: await this.toUserDto(user, offices), token };
@@ -81,6 +99,9 @@ export class AuthService {
   async me(userId: string) {
     const user = await this.userModel.findById(userId);
     if (!user) throw new UnauthorizedException();
+    if (user.isActive === false) {
+      throw new ForbiddenException('Учётная запись не активирована');
+    }
     const offices = await this.getUserOffices(userId);
     return { user: await this.toUserDto(user, offices) };
   }
@@ -215,18 +236,38 @@ export class AuthService {
     };
   }
 
+  getDevAccounts() {
+    if (process.env.NODE_ENV === 'production') {
+      return { accounts: [] as Array<{ label: string; email: string; password: string; role: string }> };
+    }
+
+    return {
+      accounts: DEV_TEST_ACCOUNTS.map(({ label, email, password, role }) => ({
+        label,
+        email,
+        password,
+        role,
+      })),
+    };
+  }
+
   private async createTestUser(email: string, password: string) {
-    const role = email.includes('admin') ? 'admin' : email.includes('security') ? 'security' : 'tenant';
-    const fullName = email.includes('admin') ? 'Администратор БЦ' : email.includes('security') ? 'Сотрудник охраны' : 'Арендатор Тестовый';
+    const account = DEV_TEST_ACCOUNTS.find((item) => item.email === email.toLowerCase());
+    if (!account) {
+      throw new UnauthorizedException('Неверные учетные данные');
+    }
 
     const hashed = await bcrypt.hash(password, 10);
 
-    let user = await this.userModel.findOne({ email });
+    let user = await this.userModel.findOne({ email: account.email });
     if (!user) {
       user = await this.userModel.create({
-        email,
-        fullName,
-        role,
+        email: account.email,
+        fullName: account.fullName,
+        company: account.company,
+        office: account.office,
+        floor: account.floor,
+        role: account.role,
         password: hashed,
         isActive: true,
       } as any);

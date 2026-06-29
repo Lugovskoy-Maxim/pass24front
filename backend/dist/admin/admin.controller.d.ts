@@ -45,11 +45,12 @@ export declare class AdminController {
         officesCount: number;
     }>;
     seedTestData(): Promise<{
+        tenants: number;
+        message: string;
         businessCenters: number;
         offices: number;
-        tenants: number;
+        users: number;
         skipped: boolean;
-        message: string;
     }>;
     getAccessConfig(): Promise<{
         enabledPassTypes: any;
@@ -271,6 +272,75 @@ export declare class AdminController {
             } | null;
         };
     }>;
+    getRegistrationRequests(): Promise<{
+        requests: {
+            id: any;
+            email: any;
+            fullName: any;
+            lastName: any;
+            firstName: any;
+            middleName: any;
+            phone: any;
+            company: any;
+            role: any;
+            office: any;
+            floor: any;
+            isActive: boolean;
+            createdAt: any;
+            passesCount: number;
+            offices: any[];
+            businessCenters: {
+                id: string;
+                name: string;
+            }[];
+            propertyIds: string[];
+            profileChangeRequest: {
+                last_name: string;
+                first_name: string;
+                middle_name: string;
+                full_name: string;
+                phone: string | undefined;
+                company: string | undefined;
+                requested_at: string;
+            } | null;
+        }[];
+    }>;
+    approveRegistration(id: string, req: any): Promise<{
+        user: {
+            id: any;
+            email: any;
+            fullName: any;
+            lastName: any;
+            firstName: any;
+            middleName: any;
+            phone: any;
+            company: any;
+            role: any;
+            office: any;
+            floor: any;
+            isActive: boolean;
+            createdAt: any;
+            passesCount: number;
+            offices: any[];
+            businessCenters: {
+                id: string;
+                name: string;
+            }[];
+            propertyIds: string[];
+            profileChangeRequest: {
+                last_name: string;
+                first_name: string;
+                middle_name: string;
+                full_name: string;
+                phone: string | undefined;
+                company: string | undefined;
+                requested_at: string;
+            } | null;
+        };
+    }>;
+    rejectRegistration(id: string, req: any): Promise<{
+        message: string;
+    }>;
     getProfileChangeRequests(): Promise<{
         requests: {
             user: {
@@ -440,6 +510,10 @@ export declare class AdminController {
             };
         };
     }>;
+    deleteBusinessCenter(id: string, req: any): Promise<{
+        message: string;
+        id: string;
+    }>;
     getOffices(): Promise<{
         offices: {
             id: any;
@@ -486,6 +560,10 @@ export declare class AdminController {
             isActive: any;
             createdAt: any;
         };
+    }>;
+    deleteOffice(id: string, req: any): Promise<{
+        message: string;
+        id: string;
     }>;
     exportAudit(query: Record<string, string>, res: Response): Promise<void>;
     getAudit(query: Record<string, string>): Promise<{

@@ -97,9 +97,11 @@ export const DEFAULT_UI_LABELS = {
     statApproved: 'Ожидают',
     statActive: 'В здании',
     statCompleted: 'Выехали',
+    statOverdue: 'Не вышли в срок',
     sectionPending: 'На рассмотрении',
     sectionApproved: 'Ожидают въезда',
     sectionActive: 'В здании',
+    sectionOverdue: 'Не вышли в срок — оформите выход',
     sectionCompleted: 'Завершённые',
     sectionExpired: 'Истёкшие',
     sectionRejected: 'Отклонённые',
@@ -208,13 +210,8 @@ export function getStatusLabel(status: PassStatus, labels: UiLabels): string {
   return labels.statuses[status] || DEFAULT_UI_LABELS.statuses[status];
 }
 
-export function getPassCardBorderClass(status: PassStatus, stillInside?: boolean): string {
-  if (stillInside) return 'border-amber-400 shadow-amber-100/60 ring-1 ring-amber-300';
-  if (status === 'active') return 'border-emerald-200 shadow-emerald-50/50';
-  if (status === 'pending') return 'border-amber-200';
-  if (status === 'approved') return 'border-[var(--accent-border)]';
-  if (status === 'rejected') return 'border-red-200';
-  if (status === 'expired' || status === 'cancelled') return 'border-[var(--border)]';
+/** @deprecated Use pass-card utilities from lib/pass-status.ts */
+export function getPassCardBorderClass(_status: PassStatus, _stillInside?: boolean): string {
   return '';
 }
 

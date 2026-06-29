@@ -76,6 +76,15 @@ let AdminController = class AdminController {
     updateUser(id, dto, req) {
         return this.adminService.updateUser(id, dto, req.user);
     }
+    getRegistrationRequests() {
+        return this.adminService.getRegistrationRequests();
+    }
+    approveRegistration(id, req) {
+        return this.adminService.approveRegistration(id, req.user);
+    }
+    rejectRegistration(id, req) {
+        return this.adminService.rejectRegistration(id, req.user);
+    }
     getProfileChangeRequests() {
         return this.adminService.getProfileChangeRequests();
     }
@@ -94,6 +103,9 @@ let AdminController = class AdminController {
     createBusinessCenter(dto, req) {
         return this.adminService.createBusinessCenter(dto, req.user);
     }
+    deleteBusinessCenter(id, req) {
+        return this.adminService.deleteBusinessCenter(id, req.user);
+    }
     getOffices() {
         return this.adminService.getOffices();
     }
@@ -102,6 +114,9 @@ let AdminController = class AdminController {
     }
     updateOffice(id, dto, req) {
         return this.adminService.updateOffice(id, dto, req.user);
+    }
+    deleteOffice(id, req) {
+        return this.adminService.deleteOffice(id, req.user);
     }
     async exportAudit(query, res) {
         const csv = await this.adminService.exportAuditCsv(this.parseAuditQuery(query));
@@ -200,6 +215,31 @@ __decorate([
     __metadata("design:returntype", void 0)
 ], AdminController.prototype, "updateUser", null);
 __decorate([
+    (0, common_1.Get)('registration-requests'),
+    (0, permissions_decorator_1.RequireAllPermissions)('admin.users'),
+    __metadata("design:type", Function),
+    __metadata("design:paramtypes", []),
+    __metadata("design:returntype", void 0)
+], AdminController.prototype, "getRegistrationRequests", null);
+__decorate([
+    (0, common_1.Post)('users/:id/registration/approve'),
+    (0, permissions_decorator_1.RequireAllPermissions)('admin.users'),
+    __param(0, (0, common_1.Param)('id')),
+    __param(1, (0, common_1.Req)()),
+    __metadata("design:type", Function),
+    __metadata("design:paramtypes", [String, Object]),
+    __metadata("design:returntype", void 0)
+], AdminController.prototype, "approveRegistration", null);
+__decorate([
+    (0, common_1.Post)('users/:id/registration/reject'),
+    (0, permissions_decorator_1.RequireAllPermissions)('admin.users'),
+    __param(0, (0, common_1.Param)('id')),
+    __param(1, (0, common_1.Req)()),
+    __metadata("design:type", Function),
+    __metadata("design:paramtypes", [String, Object]),
+    __metadata("design:returntype", void 0)
+], AdminController.prototype, "rejectRegistration", null);
+__decorate([
     (0, common_1.Get)('profile-change-requests'),
     (0, permissions_decorator_1.RequireAllPermissions)('admin.users'),
     __metadata("design:type", Function),
@@ -252,6 +292,15 @@ __decorate([
     __metadata("design:returntype", void 0)
 ], AdminController.prototype, "createBusinessCenter", null);
 __decorate([
+    (0, common_1.Delete)('business-centers/:id'),
+    (0, permissions_decorator_1.RequireAllPermissions)('admin.offices'),
+    __param(0, (0, common_1.Param)('id')),
+    __param(1, (0, common_1.Req)()),
+    __metadata("design:type", Function),
+    __metadata("design:paramtypes", [String, Object]),
+    __metadata("design:returntype", void 0)
+], AdminController.prototype, "deleteBusinessCenter", null);
+__decorate([
     (0, common_1.Get)('offices'),
     (0, permissions_decorator_1.RequireAllPermissions)('admin.offices'),
     __metadata("design:type", Function),
@@ -277,6 +326,15 @@ __decorate([
     __metadata("design:paramtypes", [String, Object, Object]),
     __metadata("design:returntype", void 0)
 ], AdminController.prototype, "updateOffice", null);
+__decorate([
+    (0, common_1.Delete)('offices/:id'),
+    (0, permissions_decorator_1.RequireAllPermissions)('admin.offices'),
+    __param(0, (0, common_1.Param)('id')),
+    __param(1, (0, common_1.Req)()),
+    __metadata("design:type", Function),
+    __metadata("design:paramtypes", [String, Object]),
+    __metadata("design:returntype", void 0)
+], AdminController.prototype, "deleteOffice", null);
 __decorate([
     (0, common_1.Get)('audit/export'),
     __param(0, (0, common_1.Query)()),

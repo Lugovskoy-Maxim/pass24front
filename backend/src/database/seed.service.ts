@@ -5,6 +5,7 @@ import * as bcrypt from 'bcryptjs';
 import { Model } from 'mongoose';
 import { User, UserDocument } from '../schemas';
 import { UserRole } from '../schemas/enums';
+import { TestDataSeedService } from './test-data-seed.service';
 
 @Injectable()
 export class SeedService implements OnModuleInit {
@@ -13,10 +14,12 @@ export class SeedService implements OnModuleInit {
   constructor(
     @InjectModel(User.name) private userModel: Model<UserDocument>,
     private configService: ConfigService,
+    private testDataSeedService: TestDataSeedService,
   ) {}
 
   async onModuleInit() {
     await this.seedAdminUser();
+    await this.seedDevTestData();
   }
 
   private async seedAdminUser() {
@@ -41,5 +44,18 @@ export class SeedService implements OnModuleInit {
     } as any);
 
     this.logger.log(`Admin user created: ${email}`);
+  }
+
+  private async seedDevTestData() {
+    const seedEnabled = this.configService.get<string>(
+      'SEED_DEV_DATA',
+      process.env.NODE_ENV === 'production' ? 'false' : 'true',
+    );
+
+    if (seedEnabled === 'false') {
+      return;
+    }
+
+    await this.testDataSeedService.seedTestData();
   }
 }

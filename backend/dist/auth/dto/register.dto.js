@@ -20,8 +20,6 @@ class RegisterDto {
     middleName;
     phone;
     company;
-    office;
-    floor;
 }
 exports.RegisterDto = RegisterDto;
 __decorate([
@@ -54,15 +52,7 @@ __decorate([
     __metadata("design:type", String)
 ], RegisterDto.prototype, "phone", void 0);
 __decorate([
-    (0, class_validator_1.IsOptional)(),
+    (0, class_validator_1.IsNotEmpty)({ message: 'Укажите название компании' }),
     __metadata("design:type", String)
 ], RegisterDto.prototype, "company", void 0);
-__decorate([
-    (0, class_validator_1.IsOptional)(),
-    __metadata("design:type", String)
-], RegisterDto.prototype, "office", void 0);
-__decorate([
-    (0, class_validator_1.IsOptional)(),
-    __metadata("design:type", String)
-], RegisterDto.prototype, "floor", void 0);
 //# sourceMappingURL=register.dto.js.map

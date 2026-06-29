@@ -2,8 +2,10 @@
 
 import { Pass, TYPE_LABELS } from '@/lib/api';
 import { useConfig } from '@/hooks/useConfig';
-import { getStatusLabel, getUiLabels } from '@/lib/ui-labels';
+import { getUiLabels } from '@/lib/ui-labels';
+import { getPassCardShellClass, getPassStatusTopStripeClass } from '@/lib/pass-status';
 import { Building2, Printer } from 'lucide-react';
+import { StatusBadge } from './StatusBadge';
 
 interface PassPrintCardProps {
   pass: Pass;
@@ -19,9 +21,11 @@ export function PassPrintCard({ pass, businessCenterName }: PassPrintCardProps) 
 
   return (
     <div>
-      <div className="print-pass card p-6 border-2 border-[var(--primary)] max-w-md mx-auto overflow-hidden">
+      <div className={`print-pass ${getPassCardShellClass()} p-6 max-w-md mx-auto`}>
+        <div className={getPassStatusTopStripeClass(pass.status)} aria-hidden />
+
         <div className="text-center border-b border-[var(--border)] pb-4 mb-4">
-          <div className="flex items-center justify-center gap-2 text-[var(--primary)] mb-1">
+          <div className="flex items-center justify-center gap-2 text-[var(--text)] mb-1">
             <Building2 className="w-5 h-5" />
             <span className="font-bold text-lg">{bcName}</span>
           </div>
@@ -29,8 +33,10 @@ export function PassPrintCard({ pass, businessCenterName }: PassPrintCardProps) 
         </div>
 
         <div className="text-center mb-4">
-          <div className="text-3xl font-mono font-bold tracking-wider text-[var(--primary)]">{pass.passNumber}</div>
-          <div className="text-xs text-[var(--muted)] mt-1">{getStatusLabel(pass.status, labels)}</div>
+          <div className="text-3xl font-mono font-bold tracking-wider text-[var(--text)]">{pass.passNumber}</div>
+          <div className="mt-2 flex justify-center">
+            <StatusBadge status={pass.status} labels={labels} />
+          </div>
         </div>
 
         <dl className="space-y-2 text-sm">

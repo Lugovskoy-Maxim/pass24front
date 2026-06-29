@@ -6,7 +6,5 @@ export declare class RegisterDto {
     firstName?: string;
     middleName?: string;
     phone?: string;
-    company?: string;
-    office?: string;
-    floor?: string;
+    company: string;
 }

@@ -27,6 +27,9 @@ let AuthController = class AuthController {
     async login(dto) {
         return this.authService.login(dto);
     }
+    getDevAccounts() {
+        return this.authService.getDevAccounts();
+    }
     async register(dto) {
         return this.authService.register(dto);
     }
@@ -48,6 +51,12 @@ __decorate([
     __metadata("design:paramtypes", [login_dto_1.LoginDto]),
     __metadata("design:returntype", Promise)
 ], AuthController.prototype, "login", null);
+__decorate([
+    (0, common_1.Get)('dev-accounts'),
+    __metadata("design:type", Function),
+    __metadata("design:paramtypes", []),
+    __metadata("design:returntype", void 0)
+], AuthController.prototype, "getDevAccounts", null);
 __decorate([
     (0, common_1.Post)('register'),
     __param(0, (0, common_1.Body)()),

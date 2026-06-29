@@ -30,6 +30,7 @@ export default function AdminUsersPage() {
   const { toast } = useToast();
   const [category, setCategory] = useState<UserCategory>('tenants');
   const [profileRequests, setProfileRequests] = useState<Array<{ user: AdminUser; request: ProfileChangeRequest }>>([]);
+  const [registrationRequests, setRegistrationRequests] = useState<AdminUser[]>([]);
   const [moderatingId, setModeratingId] = useState<string | null>(null);
   const [users, setUsers] = useState<AdminUser[]>([]);
   const [total, setTotal] = useState(0);
@@ -92,10 +93,52 @@ export default function AdminUsersPage() {
       .catch(() => setProfileRequests([]));
   };
 
+  const loadRegistrationRequests = () => {
+    api.admin.getRegistrationRequests()
+      .then(({ requests }) => setRegistrationRequests(requests))
+      .catch(() => setRegistrationRequests([]));
+  };
+
   useEffect(() => {
-    if (category === 'tenants') loadProfileRequests();
-    else setProfileRequests([]);
+    if (category === 'tenants') {
+      loadProfileRequests();
+      loadRegistrationRequests();
+    } else {
+      setProfileRequests([]);
+      setRegistrationRequests([]);
+    }
   }, [category]);
+
+  const handleApproveRegistration = async (id: string) => {
+    setModeratingId(id);
+    try {
+      await api.admin.approveRegistration(id);
+      toast('Регистрация подтверждена. Назначьте офис в карточке пользователя.', 'success');
+      load();
+      loadRegistrationRequests();
+    } catch (err) {
+      toast(getErrorMessage(err, 'Ошибка'), 'error');
+    } finally {
+      setModeratingId(null);
+    }
+  };
+
+  const handleRejectRegistration = async (id: string) => {
+    if (!window.confirm('Отклонить заявку на регистрацию? Пользователь сможет подать заявку повторно.')) {
+      return;
+    }
+    setModeratingId(id);
+    try {
+      await api.admin.rejectRegistration(id);
+      toast('Заявка на регистрацию отклонена', 'success');
+      load();
+      loadRegistrationRequests();
+    } catch (err) {
+      toast(getErrorMessage(err, 'Ошибка'), 'error');
+    } finally {
+      setModeratingId(null);
+    }
+  };
 
   const handleApproveProfile = async (id: string) => {
     setModeratingId(id);
@@ -290,7 +333,7 @@ export default function AdminUsersPage() {
           <div className="relative sm:col-span-2 lg:col-span-1">
             <Search className="absolute left-3 top-1/2 -translate-y-1/2 w-4 h-4 text-[var(--muted)]" />
             <input
-              className="input pl-9"
+              className="input input--icon-left"
               placeholder="ФИО, email, компания..."
               value={filters.search}
               onChange={(e) => setFilters((prev) => ({ ...prev, search: e.target.value }))}
@@ -306,7 +349,7 @@ export default function AdminUsersPage() {
             >
               <option value="">Все статусы</option>
               <option value="true">Активные</option>
-              <option value="false">Отключённые</option>
+              <option value="false">Неактивные / ожидают подтверждения</option>
             </select>
           </div>
 
@@ -380,14 +423,68 @@ export default function AdminUsersPage() {
         )}
       </div>
 
+      {category === 'tenants' && registrationRequests.length > 0 && (
+        <div className="card p-5 mb-6 border theme-alert-subtle space-y-3">
+          <div className="flex items-center gap-2 font-semibold text-amber-900">
+            <Clock className="w-4 h-4" />
+            Заявки на регистрацию ({registrationRequests.length})
+          </div>
+          <p className="text-sm text-amber-900/80">
+            После подтверждения назначьте офис арендатору в карточке пользователя.
+          </p>
+          {registrationRequests.map((u) => (
+            <div key={u.id} className="rounded-lg border border-[var(--alert-border)] bg-[var(--surface)] p-4 flex flex-col lg:flex-row lg:items-center justify-between gap-4">
+              <div className="text-sm">
+                <div className="font-medium">{u.fullName}</div>
+                <div className="text-[var(--muted)] mt-1">{u.email}</div>
+                <div className="text-[var(--muted)] mt-1">
+                  {u.company && `Компания: ${u.company}`}
+                  {u.phone ? ` · Тел.: ${u.phone}` : ''}
+                  {u.createdAt ? ` · ${new Date(u.createdAt).toLocaleString('ru-RU')}` : ''}
+                </div>
+              </div>
+              <div className="flex flex-wrap gap-2 shrink-0">
+                <button
+                  type="button"
+                  className="btn btn-success text-sm"
+                  disabled={moderatingId === u.id}
+                  onClick={() => handleApproveRegistration(u.id)}
+                >
+                  <Check className="w-4 h-4" />
+                  Подтвердить
+                </button>
+                <button
+                  type="button"
+                  className="btn btn-secondary text-sm"
+                  disabled={moderatingId === u.id}
+                  onClick={() => openEdit(u)}
+                >
+                  <Pencil className="w-4 h-4" />
+                  Назначить офис
+                </button>
+                <button
+                  type="button"
+                  className="btn btn-danger text-sm"
+                  disabled={moderatingId === u.id}
+                  onClick={() => handleRejectRegistration(u.id)}
+                >
+                  <X className="w-4 h-4" />
+                  Отклонить
+                </button>
+              </div>
+            </div>
+          ))}
+        </div>
+      )}
+
       {category === 'tenants' && profileRequests.length > 0 && (
-        <div className="card p-5 mb-6 border-amber-200 bg-amber-50/50 space-y-3">
+        <div className="card p-5 mb-6 border theme-alert-subtle space-y-3">
           <div className="flex items-center gap-2 font-semibold text-amber-900">
             <Clock className="w-4 h-4" />
             Заявки на изменение профиля ({profileRequests.length})
           </div>
           {profileRequests.map(({ user: u, request }) => (
-            <div key={u.id} className="rounded-lg border border-amber-200 bg-white p-4 flex flex-col lg:flex-row lg:items-center justify-between gap-4">
+            <div key={u.id} className="rounded-lg border border-[var(--alert-border)] bg-[var(--surface)] p-4 flex flex-col lg:flex-row lg:items-center justify-between gap-4">
               <div className="text-sm">
                 <div className="font-medium">{u.fullName} → <span className="text-[var(--primary)]">{request.full_name}</span></div>
                 <div className="text-[var(--muted)] mt-1">{u.email}</div>
@@ -463,7 +560,7 @@ export default function AdminUsersPage() {
                   Сначала добавьте офисы в реестре или создайте тестовые данные.
                 </p>
               ) : (
-                <div className="border border-[var(--border)] rounded-lg divide-y divide-[var(--border)] max-h-64 overflow-y-auto bg-white">
+                <div className="border border-[var(--border)] rounded-lg divide-y divide-[var(--border)] max-h-64 overflow-y-auto bg-[var(--surface)]">
                   {Object.entries(officesByBc).map(([bc, offices]) => (
                     <div key={bc} className="p-3">
                       <div className="text-xs font-semibold text-[var(--muted)] uppercase mb-2">{bc}</div>
@@ -506,7 +603,7 @@ export default function AdminUsersPage() {
               {businessCenters.length === 0 ? (
                 <p className="text-sm text-amber-700 bg-amber-50 p-3 rounded-md">Сначала создайте бизнес-центры.</p>
               ) : (
-                <div className="space-y-2 bg-white border border-[var(--border)] rounded-lg p-3 max-h-48 overflow-y-auto">
+                <div className="space-y-2 bg-[var(--surface)] border border-[var(--border)] rounded-lg p-3 max-h-48 overflow-y-auto">
                   {businessCenters.map((bc) => (
                     <label key={bc.id} className="flex items-center gap-2 text-sm cursor-pointer">
                       <input
@@ -586,8 +683,8 @@ export default function AdminUsersPage() {
                   {formatBindings(u)}
                 </td>
                 <td className="p-3">
-                  <span className={`text-xs px-2 py-0.5 rounded-full ${u.isActive ? 'bg-emerald-50 text-emerald-700' : 'bg-red-50 text-red-600'}`}>
-                    {u.isActive ? 'Активен' : 'Отключён'}
+                  <span className={`text-xs px-2 py-0.5 rounded-full ${u.isActive ? 'bg-emerald-50 text-emerald-700' : u.role === 'tenant' && !u.offices?.length ? 'bg-amber-50 text-amber-800' : 'bg-red-50 text-red-600'}`}>
+                    {u.isActive ? 'Активен' : u.role === 'tenant' && !u.offices?.length ? 'Ожидает подтверждения' : 'Отключён'}
                   </span>
                 </td>
                 <td className="p-3">

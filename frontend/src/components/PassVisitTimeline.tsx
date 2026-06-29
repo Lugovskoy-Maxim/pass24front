@@ -11,6 +11,7 @@ import {
   ShieldCheck,
 } from 'lucide-react';
 import { PassStatus, PassTimelineData } from '@/lib/api';
+import { getPassTimelineCurrentClasses } from '@/lib/pass-status';
 import { mergeUiLabels, UiLabels } from '@/lib/ui-labels';
 
 type StepState = 'done' | 'current' | 'upcoming' | 'failed' | 'skipped';
@@ -129,27 +130,24 @@ function buildSteps(pass: PassTimelineData, now: number, t: UiLabels['timeline']
   ];
 }
 
-const NODE_STYLES: Record<StepState, string> = {
-  done: 'bg-emerald-500 text-white border-emerald-500',
-  current: 'bg-[var(--accent)] text-white border-[var(--accent)] ring-4 ring-[var(--accent-soft)]',
-  upcoming: 'bg-white text-[var(--border-strong)] border-[var(--border)]',
-  failed: 'bg-red-500 text-white border-red-500',
+const NODE_STYLES: Record<Exclude<StepState, 'current'>, string> = {
+  done: 'bg-[var(--status-active)] text-white border-[var(--status-active)]',
+  upcoming: 'bg-[var(--surface-elevated)] text-[var(--border-strong)] border-[var(--border)]',
+  failed: 'bg-[var(--status-rejected)] text-white border-[var(--status-rejected)]',
   skipped: 'bg-[var(--surface-muted)] text-[var(--border-strong)] border-[var(--border)]',
 };
 
-const LABEL_STYLES: Record<StepState, string> = {
-  done: 'text-emerald-700 font-medium',
-  current: 'text-[var(--primary)] font-semibold',
+const LABEL_STYLES: Record<Exclude<StepState, 'current'>, string> = {
+  done: 'text-[var(--status-active)] font-medium',
   upcoming: 'text-[var(--muted)]',
-  failed: 'text-red-600 font-semibold',
+  failed: 'text-[var(--status-rejected)] font-semibold',
   skipped: 'text-[var(--border-strong)]',
 };
 
-const LINE_STYLES: Record<StepState, string> = {
-  done: 'bg-emerald-400',
-  current: 'bg-gradient-to-r from-emerald-400 to-[var(--border)]',
+const LINE_STYLES: Record<Exclude<StepState, 'current'>, string> = {
+  done: 'bg-[var(--status-active)]',
   upcoming: 'bg-[var(--border)]',
-  failed: 'bg-red-200',
+  failed: 'bg-[var(--status-rejected-soft)]',
   skipped: 'bg-[var(--surface-muted)]',
 };
 
@@ -171,10 +169,12 @@ export function PassVisitTimeline({
   pass,
   labels,
   compact,
+  overdue = false,
 }: {
   pass: PassTimelineData;
   labels?: UiLabels;
   compact?: boolean;
+  overdue?: boolean;
 }) {
   const L = labels || mergeUiLabels();
   const [now, setNow] = useState(() => Date.now());
@@ -186,6 +186,7 @@ export function PassVisitTimeline({
   }, [pass.status, pass.checkedInAt]);
 
   const steps = buildSteps(pass, now, L.timeline);
+  const currentStyles = getPassTimelineCurrentClasses(pass.status, overdue);
   const nodeSize = compact ? 'w-6 h-6' : 'w-8 h-8';
   const topOffset = compact ? 'top-3' : 'top-4';
 
@@ -207,7 +208,9 @@ export function PassVisitTimeline({
             <div key={step.key} className="flex-1 min-w-0 flex flex-col items-center relative">
               {index > 0 && (
                 <div
-                  className={`absolute ${topOffset} right-1/2 w-full h-0.5 -z-0 ${LINE_STYLES[lineState]}`}
+                  className={`absolute ${topOffset} right-1/2 w-full h-0.5 -z-0 ${
+                    lineState === 'current' ? currentStyles.line : LINE_STYLES[lineState]
+                  }`}
                   aria-hidden
                 />
               )}
@@ -215,19 +218,21 @@ export function PassVisitTimeline({
               <div
                 className={[
                   `relative z-10 ${nodeSize} rounded-full border-2 flex items-center justify-center shrink-0 transition-all`,
-                  NODE_STYLES[step.state],
+                  step.state === 'current' ? currentStyles.node : NODE_STYLES[step.state],
                   step.state === 'current' ? 'scale-110' : '',
                 ].join(' ')}
               >
                 <NodeIcon step={step} />
               </div>
 
-              <p className={`text-[11px] sm:text-xs mt-2 text-center leading-tight ${LABEL_STYLES[step.state]}`}>
+              <p className={`text-[11px] sm:text-xs mt-2 text-center leading-tight ${
+                step.state === 'current' ? currentStyles.label : LABEL_STYLES[step.state]
+              }`}>
                 {step.label}
               </p>
               {step.sublabel && (
                 <p className={`text-[10px] mt-0.5 text-center leading-tight truncate max-w-full px-0.5 ${
-                  step.state === 'current' ? 'text-[var(--primary)] font-medium' : 'text-[var(--muted)]'
+                  step.state === 'current' ? currentStyles.sublabel : 'text-[var(--muted)]'
                 }`}>
                   {step.sublabel}
                 </p>

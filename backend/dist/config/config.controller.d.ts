@@ -114,9 +114,11 @@ export declare class ConfigController {
                 readonly statApproved: "Ожидают";
                 readonly statActive: "В здании";
                 readonly statCompleted: "Выехали";
+                readonly statOverdue: "Не вышли в срок";
                 readonly sectionPending: "На рассмотрении";
                 readonly sectionApproved: "Ожидают въезда";
                 readonly sectionActive: "В здании";
+                readonly sectionOverdue: "Не вышли в срок — оформите выход";
                 readonly sectionCompleted: "Завершённые";
                 readonly sectionExpired: "Истёкшие";
                 readonly sectionRejected: "Отклонённые";

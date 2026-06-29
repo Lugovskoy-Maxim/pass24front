@@ -1,6 +1,8 @@
 'use client';
 
 import { PersonNameLabels, PersonNameParts } from '@/lib/person-name';
+import { FieldErrors } from '@/lib/form-validation';
+import { FormField, FormInput } from './FormField';
 
 interface PersonNameFieldsProps {
   value: PersonNameParts;
@@ -8,6 +10,8 @@ interface PersonNameFieldsProps {
   onChange: (value: PersonNameParts) => void;
   required?: boolean;
   className?: string;
+  errors?: FieldErrors;
+  onClearError?: (field: 'lastName' | 'firstName' | 'middleName') => void;
 }
 
 export function PersonNameFields({
@@ -16,9 +20,12 @@ export function PersonNameFields({
   onChange,
   required = true,
   className = '',
+  errors,
+  onClearError,
 }: PersonNameFieldsProps) {
   const set = (field: keyof PersonNameParts, next: string) => {
     onChange({ ...value, [field]: next });
+    onClearError?.(field);
   };
 
   return (
@@ -26,36 +33,33 @@ export function PersonNameFields({
       {labels.sectionTitle && (
         <p className="text-sm font-medium text-[var(--text)]">{labels.sectionTitle}</p>
       )}
-      <div className="grid sm:grid-cols-3 gap-3">
-        <div>
-          <label className="label">{labels.lastName}{required ? ' *' : ''}</label>
-          <input
-            className="input"
+      <div className="grid grid-cols-1 sm:grid-cols-3 gap-3">
+        <FormField id="person-lastName" label={labels.lastName} required={required} error={errors?.lastName}>
+          <FormInput
+            id="person-lastName"
             value={value.lastName}
             onChange={(e) => set('lastName', e.target.value)}
-            required={required}
+            invalid={!!errors?.lastName}
             autoComplete="family-name"
           />
-        </div>
-        <div>
-          <label className="label">{labels.firstName}{required ? ' *' : ''}</label>
-          <input
-            className="input"
+        </FormField>
+        <FormField id="person-firstName" label={labels.firstName} required={required} error={errors?.firstName}>
+          <FormInput
+            id="person-firstName"
             value={value.firstName}
             onChange={(e) => set('firstName', e.target.value)}
-            required={required}
+            invalid={!!errors?.firstName}
             autoComplete="given-name"
           />
-        </div>
-        <div>
-          <label className="label">{labels.middleName}</label>
-          <input
-            className="input"
+        </FormField>
+        <FormField id="person-middleName" label={labels.middleName}>
+          <FormInput
+            id="person-middleName"
             value={value.middleName}
             onChange={(e) => set('middleName', e.target.value)}
             autoComplete="additional-name"
           />
-        </div>
+        </FormField>
       </div>
     </div>
   );

@@ -127,6 +127,8 @@ const SECTIONS: Section[] = [
       { path: 'reception.sectionPending', label: 'Раздел: на рассмотрении' },
       { path: 'reception.sectionApproved', label: 'Раздел: ожидают въезда' },
       { path: 'reception.sectionActive', label: 'Раздел: в здании' },
+      { path: 'reception.sectionOverdue', label: 'Раздел: не вышли в срок' },
+      { path: 'reception.statOverdue', label: 'Счётчик: не вышли в срок' },
       { path: 'reception.sectionCompleted', label: 'Раздел: завершённые' },
       { path: 'reception.sectionExpired', label: 'Раздел: истёкшие' },
       { path: 'reception.rejectPlaceholder', label: 'Поле причины отклонения' },

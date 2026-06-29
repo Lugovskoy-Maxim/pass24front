@@ -15,10 +15,8 @@ interface AuthContextType {
     firstName?: string;
     middleName?: string;
     phone?: string;
-    company?: string;
-    office?: string;
-    floor?: string;
-  }) => Promise<void>;
+    company: string;
+  }) => Promise<string>;
   logout: () => void;
   refreshUser: () => Promise<void>;
 }
@@ -52,13 +50,10 @@ export function AuthProvider({ children }: { children: ReactNode }) {
     firstName?: string;
     middleName?: string;
     phone?: string;
-    company?: string;
-    office?: string;
-    floor?: string;
+    company: string;
   }) => {
-    const { user, token } = await api.register(data);
-    localStorage.setItem('pass24_token', token);
-    setUser(user);
+    const result = await api.register(data);
+    return result.message;
   };
 
   const logout = () => {

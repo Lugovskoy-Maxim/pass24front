@@ -2,7 +2,7 @@
 
 import Link from 'next/link';
 import { usePathname } from 'next/navigation';
-import { Home, LogOut, Plus, List, ClipboardList, Settings, Bookmark, User } from 'lucide-react';
+import { AlertCircle, Home, LogOut, Plus, List, ClipboardList, Settings, Bookmark, User } from 'lucide-react';
 import { useAuth } from '@/lib/auth';
 import { useConfig } from '@/hooks/useConfig';
 import { SiteBrand } from '@/components/SiteBrand';
@@ -11,6 +11,8 @@ import { canSeeOverdueAlerts, canUseReception, canViewPasses, hasPermission } fr
 import { getUiLabels } from '@/lib/ui-labels';
 import { useOverdueGuests } from '@/hooks/useOverdueGuests';
 import { OverdueGuestsAlert } from '@/components/OverdueGuestsAlert';
+import { ThemeToggle } from '@/components/ThemeToggle';
+import { useTheme } from '@/components/ThemeProvider';
 
 export function Header() {
   const { user, logout } = useAuth();
@@ -20,8 +22,16 @@ export function Header() {
   if (!user) return null;
 
   const L = getUiLabels(config);
+  const { theme } = useTheme();
   const showOverdueAlerts = canSeeOverdueAlerts(user);
   const { passes: overduePasses } = useOverdueGuests(showOverdueAlerts);
+
+  const onControlPage = pathname === '/control';
+  const showHeaderOverdueBanner = showOverdueAlerts && overduePasses.length > 0 && !onControlPage;
+
+  const scrollToOverdueSection = () => {
+    document.getElementById('reception-section-overdue')?.scrollIntoView({ behavior: 'smooth', block: 'start' });
+  };
 
   const links = [
     { href: '/dashboard', label: L.nav.dashboard, icon: Home, show: true },
@@ -46,7 +56,7 @@ export function Header() {
       <div className="max-w-6xl mx-auto px-4 py-3 flex items-center justify-between gap-4">
         <div className="flex items-center gap-6">
           <Link href="/dashboard" style={{ color: 'var(--header-text)' }}>
-            <SiteBrand config={config} size="sm" variant="dark" className="max-w-[200px] sm:max-w-none" />
+            <SiteBrand config={config} size="sm" variant={theme === 'dark' ? 'dark' : 'light'} className="max-w-[200px] sm:max-w-none" />
           </Link>
           <nav className="hidden sm:flex items-center gap-1">
             {links.map(({ href, label, icon: Icon }) => {
@@ -69,7 +79,18 @@ export function Header() {
         </div>
         <div className="flex items-center gap-3">
           {showOverdueAlerts && overduePasses.length > 0 && (
-            <OverdueGuestsAlert passes={overduePasses} labels={L} compact />
+            onControlPage ? (
+              <button
+                type="button"
+                onClick={scrollToOverdueSection}
+                className="flex items-center gap-2 px-3 py-1.5 rounded-md text-xs font-medium theme-alert border hover:opacity-90 transition-opacity"
+              >
+                <AlertCircle className="w-3.5 h-3.5 shrink-0" />
+                <span className="truncate">{overduePasses.length}</span>
+              </button>
+            ) : (
+              <OverdueGuestsAlert passes={overduePasses} labels={L} compact linkHref="/control#reception-section-overdue" />
+            )
           )}
           <div className="text-right hidden md:block" style={{ color: 'var(--header-text)' }}>
             <div className="text-sm font-medium">
@@ -87,13 +108,14 @@ export function Header() {
                 : user.office && ` · оф. ${user.office}`}
             </div>
           </div>
+          <ThemeToggle compact />
           <button
             onClick={logout}
             className="p-2 rounded transition-colors"
             style={{
               color: 'var(--header-muted)',
               border: '1px solid var(--header-border)',
-              background: 'rgba(255,255,255,0.04)',
+              background: 'var(--header-control-bg)',
             }}
             title={L.nav.logout}
           >
@@ -101,10 +123,15 @@ export function Header() {
           </button>
         </div>
       </div>
-      {showOverdueAlerts && overduePasses.length > 0 && (
-        <div className="border-t border-amber-700/30 bg-amber-950/40">
+      {showHeaderOverdueBanner && (
+        <div id="overdue-global-alert" className="border-t theme-alert">
           <div className="max-w-6xl mx-auto px-4 py-2">
-            <OverdueGuestsAlert passes={overduePasses} labels={L} className="!p-3 !mb-0 !border-amber-700/30" />
+            <OverdueGuestsAlert
+              passes={overduePasses}
+              labels={L}
+              linkHref="/control#reception-section-overdue"
+              className="!p-3 !mb-0 !border-[var(--alert-border)] !bg-transparent"
+            />
           </div>
         </div>
       )}

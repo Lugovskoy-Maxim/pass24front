@@ -23,12 +23,6 @@ export class RegisterDto {
   @IsOptional()
   phone?: string;
 
-  @IsOptional()
-  company?: string;
-
-  @IsOptional()
-  office?: string;
-
-  @IsOptional()
-  floor?: string;
+  @IsNotEmpty({ message: 'Укажите название компании' })
+  company: string;
 }
