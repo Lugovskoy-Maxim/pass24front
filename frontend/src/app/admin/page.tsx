@@ -6,7 +6,8 @@ import { Users, FileText, Building2, Sparkles, List, ScrollText } from 'lucide-r
 import { AdminLayout } from '@/components/AdminLayout';
 import { useToast } from '@/components/Toast';
 import { useConfig } from '@/hooks/useConfig';
-import { api, AdminDashboard, AUDIT_LABELS, PassStatus, formatAuditEntity } from '@/lib/api';
+import { api, AdminDashboard, AUDIT_LABELS, PassStatus, formatAuditEntity, getErrorMessage } from '@/lib/api';
+import { PageError } from '@/components/PageError';
 import { getStatusLabel, getUiLabels } from '@/lib/ui-labels';
 
 const ROLE_NAMES: Record<string, string> = {
@@ -22,10 +23,18 @@ export default function AdminDashboardPage() {
   const { toast } = useToast();
   const [data, setData] = useState<AdminDashboard | null>(null);
   const [error, setError] = useState('');
+  const [errorCause, setErrorCause] = useState<unknown>(null);
   const [seeding, setSeeding] = useState(false);
 
   const load = () => {
-    api.admin.dashboard().then(setData).catch((e) => setError(e instanceof Error ? e.message : 'Ошибка'));
+    setError('');
+    setErrorCause(null);
+    api.admin.dashboard()
+      .then(setData)
+      .catch((e) => {
+        setErrorCause(e);
+        setError(getErrorMessage(e, 'Ошибка загрузки'));
+      });
   };
 
   useEffect(() => { load(); }, []);
@@ -44,18 +53,26 @@ export default function AdminDashboardPage() {
   };
 
   if (error) {
-    return <AdminLayout title="Обзор БЦ"><div className="text-red-600 bg-red-50 p-4 rounded-md">{error}</div></AdminLayout>;
+    return (
+      <AdminLayout title="Обзор БЦ">
+        <PageError message={error} error={errorCause} onRetry={load} retryLabel={labels.buttons.retry} />
+      </AdminLayout>
+    );
   }
   if (!data) {
     return <AdminLayout title="Обзор БЦ"><div className="animate-pulse text-[var(--muted)]">Загрузка...</div></AdminLayout>;
   }
 
-  const { stats, recentActivity, settings } = data;
+  const { stats, recentActivity, businessCenterNames } = data;
 
   return (
     <AdminLayout title="Обзор БЦ">
       <div className="flex flex-col sm:flex-row sm:items-center sm:justify-between gap-3 -mt-4 mb-6">
-        <p className="text-[var(--muted)]">{settings.business_center_name}</p>
+        <p className="text-[var(--muted)]">
+          {businessCenterNames.length === 0
+            ? 'Бизнес-центры создаются в разделе «Офисы»'
+            : businessCenterNames.join(' · ')}
+        </p>
         <button className="btn btn-secondary text-sm" onClick={handleSeed} disabled={seeding}>
           <Sparkles className="w-4 h-4" />
           {seeding ? 'Создание...' : 'Создать тестовые БЦ и арендаторов'}
@@ -80,7 +97,7 @@ export default function AdminDashboardPage() {
           <div className="text-sm text-[var(--muted)]">Пользователей</div>
         </div>
         <div className="card p-4">
-          <FileText className="w-5 h-5 text-blue-600 mb-2" />
+          <FileText className="w-5 h-5 text-[var(--accent)] mb-2" />
           <div className="text-2xl font-bold">{stats.passes.total}</div>
           <div className="text-sm text-[var(--muted)]">Всего пропусков</div>
         </div>

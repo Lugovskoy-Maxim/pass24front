@@ -3,6 +3,9 @@ export type UserDocument = User & Document;
 export declare class User {
     phone?: string;
     fullName?: string;
+    lastName?: string;
+    firstName?: string;
+    middleName?: string;
     email?: string;
     password?: string;
     role: string;
@@ -16,6 +19,15 @@ export declare class User {
     isBlocked: boolean;
     lastLoginAt?: Date;
     pushTokens: string[];
+    profileChangeRequest?: {
+        lastName?: string;
+        firstName?: string;
+        middleName?: string;
+        fullName?: string;
+        phone?: string;
+        company?: string;
+        requestedAt?: Date;
+    } | null;
 }
 export declare const UserSchema: import("mongoose").Schema<User, import("mongoose").Model<User, any, any, any, any, any, User>, {}, {}, {}, {}, import("mongoose").DefaultSchemaOptions, User, Document<unknown, {}, User, {
     id: string;
@@ -36,6 +48,33 @@ export declare const UserSchema: import("mongoose").Schema<User, import("mongoos
         id: string;
     }> | undefined;
     fullName?: import("mongoose").SchemaDefinitionProperty<string | undefined, User, Document<unknown, {}, User, {
+        id: string;
+    }, import("mongoose").DefaultSchemaOptions> & Omit<User & {
+        _id: Types.ObjectId;
+    } & {
+        __v: number;
+    }, "id"> & {
+        id: string;
+    }> | undefined;
+    lastName?: import("mongoose").SchemaDefinitionProperty<string | undefined, User, Document<unknown, {}, User, {
+        id: string;
+    }, import("mongoose").DefaultSchemaOptions> & Omit<User & {
+        _id: Types.ObjectId;
+    } & {
+        __v: number;
+    }, "id"> & {
+        id: string;
+    }> | undefined;
+    firstName?: import("mongoose").SchemaDefinitionProperty<string | undefined, User, Document<unknown, {}, User, {
+        id: string;
+    }, import("mongoose").DefaultSchemaOptions> & Omit<User & {
+        _id: Types.ObjectId;
+    } & {
+        __v: number;
+    }, "id"> & {
+        id: string;
+    }> | undefined;
+    middleName?: import("mongoose").SchemaDefinitionProperty<string | undefined, User, Document<unknown, {}, User, {
         id: string;
     }, import("mongoose").DefaultSchemaOptions> & Omit<User & {
         _id: Types.ObjectId;
@@ -153,6 +192,23 @@ export declare const UserSchema: import("mongoose").Schema<User, import("mongoos
         id: string;
     }> | undefined;
     pushTokens?: import("mongoose").SchemaDefinitionProperty<string[], User, Document<unknown, {}, User, {
+        id: string;
+    }, import("mongoose").DefaultSchemaOptions> & Omit<User & {
+        _id: Types.ObjectId;
+    } & {
+        __v: number;
+    }, "id"> & {
+        id: string;
+    }> | undefined;
+    profileChangeRequest?: import("mongoose").SchemaDefinitionProperty<{
+        lastName?: string;
+        firstName?: string;
+        middleName?: string;
+        fullName?: string;
+        phone?: string;
+        company?: string;
+        requestedAt?: Date;
+    } | null | undefined, User, Document<unknown, {}, User, {
         id: string;
     }, import("mongoose").DefaultSchemaOptions> & Omit<User & {
         _id: Types.ObjectId;

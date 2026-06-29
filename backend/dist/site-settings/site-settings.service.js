@@ -17,6 +17,7 @@ const common_1 = require("@nestjs/common");
 const mongoose_1 = require("@nestjs/mongoose");
 const mongoose_2 = require("mongoose");
 const app_settings_schema_1 = require("../schemas/app-settings.schema");
+const brand_defaults_1 = require("../brand/brand-defaults");
 const ui_labels_defaults_1 = require("./ui-labels.defaults");
 const SETTINGS_KEY = 'global';
 const MAX_ICON_LENGTH = 120_000;
@@ -31,7 +32,14 @@ let SiteSettingsService = class SiteSettingsService {
     async ensureDefaults() {
         const existing = await this.appSettingsModel.findOne({ key: SETTINGS_KEY });
         if (!existing) {
-            await this.appSettingsModel.create({ key: SETTINGS_KEY });
+            await this.appSettingsModel.create({
+                key: SETTINGS_KEY,
+                ...brand_defaults_1.MSTYLE_BRAND_DEFAULTS,
+            });
+            return;
+        }
+        if ((0, brand_defaults_1.isLegacyBrandSettings)(existing)) {
+            await this.appSettingsModel.updateOne({ key: SETTINGS_KEY }, { $set: { ...brand_defaults_1.MSTYLE_BRAND_DEFAULTS } });
         }
     }
     async get() {
@@ -44,7 +52,7 @@ let SiteSettingsService = class SiteSettingsService {
         }
         const update = {};
         if (data.siteName !== undefined)
-            update.siteName = data.siteName.trim() || 'PASS24';
+            update.siteName = data.siteName.trim() || brand_defaults_1.MSTYLE_BRAND_DEFAULTS.siteName;
         if (data.siteIcon !== undefined)
             update.siteIcon = data.siteIcon.trim();
         if (data.siteTagline !== undefined)
@@ -63,11 +71,11 @@ let SiteSettingsService = class SiteSettingsService {
     }
     map(doc) {
         return {
-            siteName: doc?.siteName || 'PASS24',
-            siteIcon: doc?.siteIcon || '',
-            siteTagline: doc?.siteTagline || 'Пропуска для арендаторов бизнес-центра',
-            sitePhone: doc?.sitePhone || '+7 (495) 123-45-67',
-            siteEmail: doc?.siteEmail || 'info@pass24.local',
+            siteName: doc?.siteName?.trim() || brand_defaults_1.MSTYLE_BRAND_DEFAULTS.siteName,
+            siteIcon: doc?.siteIcon?.trim() || brand_defaults_1.MSTYLE_BRAND_DEFAULTS.siteIcon,
+            siteTagline: doc?.siteTagline?.trim() || brand_defaults_1.MSTYLE_BRAND_DEFAULTS.siteTagline,
+            sitePhone: doc?.sitePhone?.trim() || brand_defaults_1.MSTYLE_BRAND_DEFAULTS.sitePhone,
+            siteEmail: doc?.siteEmail?.trim() || brand_defaults_1.MSTYLE_BRAND_DEFAULTS.siteEmail,
             uiLabels: (0, ui_labels_defaults_1.deepMergeUiLabels)(doc?.uiLabels),
         };
     }

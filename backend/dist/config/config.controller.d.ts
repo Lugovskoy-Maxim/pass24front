@@ -42,11 +42,15 @@ export declare class ConfigController {
             };
             readonly passes: {
                 readonly detailTitle: "Детали пропуска";
+                readonly detailTimeline: "Ход визита";
                 readonly searchPlaceholder: "Поиск...";
                 readonly allStatuses: "Все статусы";
                 readonly notFound: "Пропуска не найдены";
                 readonly loading: "Загрузка...";
                 readonly close: "Закрыть";
+                readonly countOne: "пропуск";
+                readonly countFew: "пропуска";
+                readonly countMany: "пропусков";
             };
             readonly dashboard: {
                 readonly statPending: "На рассмотрении";
@@ -123,6 +127,14 @@ export declare class ConfigController {
                 readonly overdueInsideBanner: "Посетители всё ещё в здании после даты визита — оформите выход вручную";
                 readonly overdueInsideBadge: "Просрочен визит";
                 readonly overdueInsideCard: "Гость в здании после даты визита — пропуск сохранён, оформите выход";
+                readonly overdueEndTimeBanner: "Гости не вышли до назначенного времени — оформите выход вручную";
+                readonly overdueEndTimeBadge: "Просрочен выход";
+                readonly overdueEndTimeCard: "Гость в здании после {time} — пропуск сохранён, оформите выход";
+                readonly overdueMixedBanner: "Гости не вышли в срок (время или дата визита) — оформите выход вручную";
+                readonly lookupResult: "Результат поиска";
+                readonly journalLoading: "Загрузка журнала...";
+                readonly journalEmpty: "На выбранную дату пропусков нет";
+                readonly selectedPass: "Выбранный пропуск";
             };
             readonly timeline: {
                 readonly request: "Заявка";
@@ -169,6 +181,7 @@ export declare class ConfigController {
                 readonly actionDone: "Действие выполнено";
                 readonly passFound: "Найден пропуск";
                 readonly guestStillInside: "Посетитель всё ещё в здании. Пропуск не аннулирован — оформите выход.";
+                readonly guestPastEndTime: "Посетитель не вышел до {time}. Оформите выход вручную.";
             };
         };
     }>;

@@ -23,11 +23,15 @@ export const DEFAULT_UI_LABELS = {
   },
   passes: {
     detailTitle: 'Детали пропуска',
+    detailTimeline: 'Ход визита',
     searchPlaceholder: 'Поиск...',
     allStatuses: 'Все статусы',
     notFound: 'Пропуска не найдены',
     loading: 'Загрузка...',
     close: 'Закрыть',
+    countOne: 'пропуск',
+    countFew: 'пропуска',
+    countMany: 'пропусков',
   },
   dashboard: {
     statPending: 'На рассмотрении',
@@ -104,6 +108,14 @@ export const DEFAULT_UI_LABELS = {
     overdueInsideBanner: 'Посетители всё ещё в здании после даты визита — оформите выход вручную',
     overdueInsideBadge: 'Просрочен визит',
     overdueInsideCard: 'Гость в здании после даты визита — пропуск сохранён, оформите выход',
+    overdueEndTimeBanner: 'Гости не вышли до назначенного времени — оформите выход вручную',
+    overdueEndTimeBadge: 'Просрочен выход',
+    overdueEndTimeCard: 'Гость в здании после {time} — пропуск сохранён, оформите выход',
+    overdueMixedBanner: 'Гости не вышли в срок (время или дата визита) — оформите выход вручную',
+    lookupResult: 'Результат поиска',
+    journalLoading: 'Загрузка журнала...',
+    journalEmpty: 'На выбранную дату пропусков нет',
+    selectedPass: 'Выбранный пропуск',
   },
   timeline: {
     request: 'Заявка',
@@ -150,6 +162,7 @@ export const DEFAULT_UI_LABELS = {
     actionDone: 'Действие выполнено',
     passFound: 'Найден пропуск',
     guestStillInside: 'Посетитель всё ещё в здании. Пропуск не аннулирован — оформите выход.',
+    guestPastEndTime: 'Посетитель не вышел до {time}. Оформите выход вручную.',
   },
 } as const;
 

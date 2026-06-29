@@ -17,6 +17,9 @@ export class Pass {
   @Prop()
   creatorCompany?: string;
 
+  @Prop()
+  creatorPhone?: string;
+
   @Prop({ required: true, trim: true })
   visitorName: string;
 

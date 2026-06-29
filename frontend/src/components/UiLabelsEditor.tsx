@@ -50,6 +50,10 @@ const SECTIONS: Section[] = [
       { path: 'passes.notFound', label: 'Ничего не найдено' },
       { path: 'passes.loading', label: 'Загрузка' },
       { path: 'passes.close', label: 'Закрыть (aria)' },
+      { path: 'passes.detailTimeline', label: 'Заголовок timeline' },
+      { path: 'passes.countOne', label: 'Счётчик: 1 пропуск' },
+      { path: 'passes.countFew', label: 'Счётчик: 2–4' },
+      { path: 'passes.countMany', label: 'Счётчик: 5+' },
     ],
   },
   {
@@ -131,6 +135,13 @@ const SECTIONS: Section[] = [
       { path: 'reception.overdueInsideBanner', label: 'Баннер: гость в БЦ' },
       { path: 'reception.overdueInsideBadge', label: 'Бейдж просрочки' },
       { path: 'reception.overdueInsideCard', label: 'Текст на карточке' },
+      { path: 'reception.overdueEndTimeBanner', label: 'Баннер: просрочен выход' },
+      { path: 'reception.overdueEndTimeBadge', label: 'Бейдж: просрочен выход' },
+      { path: 'reception.overdueEndTimeCard', label: 'Карточка: после {time}' },
+      { path: 'reception.overdueMixedBanner', label: 'Баннер: смешанный' },
+      { path: 'reception.journalLoading', label: 'Загрузка журнала' },
+      { path: 'reception.journalEmpty', label: 'Журнал пуст' },
+      { path: 'reception.selectedPass', label: 'Выбранный пропуск' },
     ],
   },
   {
@@ -212,6 +223,7 @@ const SECTIONS: Section[] = [
       { path: 'toasts.actionDone', label: 'Действие выполнено' },
       { path: 'toasts.passFound', label: 'Найден пропуск' },
       { path: 'toasts.guestStillInside', label: 'Гость всё ещё в БЦ' },
+      { path: 'toasts.guestPastEndTime', label: 'Не вышел до {time}' },
     ],
   },
 ];
@@ -249,7 +261,7 @@ export function UiLabelsEditor({ labels, onChange }: UiLabelsEditorProps) {
     <div className="space-y-4">
       {SECTIONS.map((section) => (
         <details key={section.id} className="card overflow-hidden group" open={section.id === 'buttons'}>
-          <summary className="px-4 py-3 cursor-pointer font-semibold text-sm bg-slate-50/80 border-b border-[var(--border)] hover:bg-slate-100/80 transition-colors list-none flex items-center justify-between">
+          <summary className="px-4 py-3 cursor-pointer font-semibold text-sm surface-muted border-b border-[var(--border)] hover:bg-[var(--surface-elevated)] transition-colors list-none flex items-center justify-between">
             <span>{section.title}</span>
             <span className="text-xs text-[var(--muted)] font-normal">{section.fields.length} полей</span>
           </summary>

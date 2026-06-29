@@ -2,6 +2,7 @@ import { BadRequestException, Injectable, OnModuleInit } from '@nestjs/common';
 import { InjectModel } from '@nestjs/mongoose';
 import { Model } from 'mongoose';
 import { AppSettings, AppSettingsDocument } from '../schemas/app-settings.schema';
+import { MSTYLE_BRAND_DEFAULTS, isLegacyBrandSettings } from '../brand/brand-defaults';
 import { deepMergeUiLabels, UiLabels } from './ui-labels.defaults';
 
 const SETTINGS_KEY = 'global';
@@ -29,7 +30,18 @@ export class SiteSettingsService implements OnModuleInit {
   async ensureDefaults() {
     const existing = await this.appSettingsModel.findOne({ key: SETTINGS_KEY });
     if (!existing) {
-      await this.appSettingsModel.create({ key: SETTINGS_KEY });
+      await this.appSettingsModel.create({
+        key: SETTINGS_KEY,
+        ...MSTYLE_BRAND_DEFAULTS,
+      });
+      return;
+    }
+
+    if (isLegacyBrandSettings(existing)) {
+      await this.appSettingsModel.updateOne(
+        { key: SETTINGS_KEY },
+        { $set: { ...MSTYLE_BRAND_DEFAULTS } },
+      );
     }
   }
 
@@ -44,7 +56,7 @@ export class SiteSettingsService implements OnModuleInit {
     }
 
     const update: Partial<AppSettings> = {};
-    if (data.siteName !== undefined) update.siteName = data.siteName.trim() || 'PASS24';
+    if (data.siteName !== undefined) update.siteName = data.siteName.trim() || MSTYLE_BRAND_DEFAULTS.siteName;
     if (data.siteIcon !== undefined) update.siteIcon = data.siteIcon.trim();
     if (data.siteTagline !== undefined) update.siteTagline = data.siteTagline.trim();
     if (data.sitePhone !== undefined) update.sitePhone = data.sitePhone.trim();
@@ -62,11 +74,11 @@ export class SiteSettingsService implements OnModuleInit {
 
   private map(doc?: Partial<AppSettings> | null): SiteSettingsDto {
     return {
-      siteName: doc?.siteName || 'PASS24',
-      siteIcon: doc?.siteIcon || '',
-      siteTagline: doc?.siteTagline || 'Пропуска для арендаторов бизнес-центра',
-      sitePhone: doc?.sitePhone || '+7 (495) 123-45-67',
-      siteEmail: doc?.siteEmail || 'info@pass24.local',
+      siteName: doc?.siteName?.trim() || MSTYLE_BRAND_DEFAULTS.siteName,
+      siteIcon: doc?.siteIcon?.trim() || MSTYLE_BRAND_DEFAULTS.siteIcon,
+      siteTagline: doc?.siteTagline?.trim() || MSTYLE_BRAND_DEFAULTS.siteTagline,
+      sitePhone: doc?.sitePhone?.trim() || MSTYLE_BRAND_DEFAULTS.sitePhone,
+      siteEmail: doc?.siteEmail?.trim() || MSTYLE_BRAND_DEFAULTS.siteEmail,
       uiLabels: deepMergeUiLabels(doc?.uiLabels),
     };
   }

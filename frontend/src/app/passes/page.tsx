@@ -1,26 +1,39 @@
 'use client';
 
-import { useEffect, useState, useCallback } from 'react';
-import { useRouter } from 'next/navigation';
-import { Search, X, Ban } from 'lucide-react';
+import { Suspense, useEffect, useState, useCallback } from 'react';
+import { useRouter, useSearchParams } from 'next/navigation';
+import { Search, X } from 'lucide-react';
 import { ProtectedLayout } from '@/components/ProtectedLayout';
-import { PassCard } from '@/components/PassCard';
-import { PassCardBase } from '@/components/PassCardBase';
+import { PassListCard } from '@/components/PassListCard';
+import { PassDetailPanel } from '@/components/PassDetailPanel';
 import { PassPrintCard } from '@/components/PassPrintCard';
 import { SharePassActions } from '@/components/SharePassActions';
 import { useAuth } from '@/lib/auth';
 import { useDebounce } from '@/hooks/useDebounce';
 import { useConfig } from '@/hooks/useConfig';
 import { useToast } from '@/components/Toast';
-import { api, Pass, PassStatus } from '@/lib/api';
+import { api, Pass, PassStatus, getErrorMessage } from '@/lib/api';
+import { PageError } from '@/components/PageError';
 import { canViewAllPasses, canViewPasses, hasPermission } from '@/lib/permissions';
-import { getStatusLabel, getUiLabels } from '@/lib/ui-labels';
+import { useOverdueGuests } from '@/hooks/useOverdueGuests';
+import { OverdueGuestsAlert } from '@/components/OverdueGuestsAlert';
+import { canSeeOverdueAlerts } from '@/lib/permissions';
+import { getStatusLabel, getUiLabels, UiLabels } from '@/lib/ui-labels';
 
 const ALL_STATUSES: PassStatus[] = ['pending', 'approved', 'active', 'completed', 'rejected', 'expired', 'cancelled'];
 
-export default function PassesPage() {
+function formatPassCount(count: number, labels: UiLabels): string {
+  const mod10 = count % 10;
+  const mod100 = count % 100;
+  if (mod10 === 1 && mod100 !== 11) return `${count} ${labels.passes.countOne}`;
+  if (mod10 >= 2 && mod10 <= 4 && (mod100 < 10 || mod100 >= 20)) return `${count} ${labels.passes.countFew}`;
+  return `${count} ${labels.passes.countMany}`;
+}
+
+function PassesPageContent() {
   const { user } = useAuth();
   const router = useRouter();
+  const searchParams = useSearchParams();
   const config = useConfig();
   const { toast } = useToast();
   const [passes, setPasses] = useState<Pass[]>([]);
@@ -31,14 +44,18 @@ export default function PassesPage() {
   const [selected, setSelected] = useState<Pass | null>(null);
   const [loading, setLoading] = useState(true);
   const [loadError, setLoadError] = useState('');
+  const [loadErrorCause, setLoadErrorCause] = useState<unknown>(null);
   const [actionLoading, setActionLoading] = useState(false);
   const [rejectReason, setRejectReason] = useState('');
 
   const labels = getUiLabels(config);
+  const showOverdueAlerts = canSeeOverdueAlerts(user);
+  const { passes: overduePasses } = useOverdueGuests(showOverdueAlerts);
   const canViewPassesList = canViewPasses(user);
   const canViewAll = canViewAllPasses(user);
   const canApprove = hasPermission(user, 'passes.approve');
   const canReception = hasPermission(user, 'passes.reception');
+  const showCreatorInfo = canViewAll || canReception;
   const canCancelPass = (pass: Pass) =>
     pass.isOwner && ['pending', 'approved'].includes(pass.status);
 
@@ -49,25 +66,48 @@ export default function PassesPage() {
       router.replace('/templates');
     }
   }, [user, canViewPassesList, router]);
+
   const canPrint = selected && ['approved', 'active'].includes(selected.status);
 
   const load = useCallback(() => {
     setLoading(true);
     setLoadError('');
-    api.getPasses({
+    return api.getPasses({
       status: statusFilter || undefined,
       search: debouncedSearch || undefined,
       date: dateFilter || undefined,
     })
       .then(({ passes: data }) => {
         setPasses(data);
-        setSelected((prev) => (prev ? data.find((p) => p.id === prev.id) || prev : null));
+        return data;
       })
-      .catch((err) => setLoadError(err instanceof Error ? err.message : 'Ошибка загрузки'))
+      .catch((err) => {
+        setLoadErrorCause(err);
+        setLoadError(getErrorMessage(err, 'Ошибка загрузки'));
+        return [] as Pass[];
+      })
       .finally(() => setLoading(false));
   }, [statusFilter, debouncedSearch, dateFilter]);
 
   useEffect(() => { load(); }, [load]);
+
+  useEffect(() => {
+    if (loading) return;
+    const idFromUrl = searchParams.get('id');
+    const isTenant = user?.role === 'tenant';
+    setSelected((prev) => {
+      if (idFromUrl) {
+        const fromUrl = passes.find((p) => p.id === idFromUrl);
+        if (fromUrl && (!isTenant || fromUrl.isOwner)) return fromUrl;
+      }
+      if (prev) {
+        const updated = passes.find((p) => p.id === prev.id);
+        if (updated && (!isTenant || updated.isOwner)) return updated;
+      }
+      const firstOwn = isTenant ? passes.find((p) => p.isOwner) : passes[0];
+      return firstOwn || null;
+    });
+  }, [passes, loading, searchParams, user?.role]);
 
   const handleAction = async (id: string, action: 'approve' | 'reject' | 'checkin' | 'checkout' | 'cancel', reason?: string) => {
     setActionLoading(true);
@@ -88,14 +128,14 @@ export default function PassesPage() {
         : labels.toasts.actionDone;
       toast(toastMsg, 'success');
     } catch (err) {
-      toast(err instanceof Error ? err.message : 'Ошибка', 'error');
+      toast(getErrorMessage(err, 'Ошибка'), 'error');
     } finally {
       setActionLoading(false);
     }
   };
 
   const renderDetailActions = (pass: Pass) => (
-    <div className="w-full space-y-3">
+    <>
       {canApprove && pass.status === 'pending' && (
         <>
           <button className="btn btn-success w-full" disabled={actionLoading} onClick={() => handleAction(pass.id, 'approve')}>
@@ -134,7 +174,7 @@ export default function PassesPage() {
           {labels.buttons.cancelRequest}
         </button>
       )}
-    </div>
+    </>
   );
 
   if (user && !canViewPassesList) return null;
@@ -143,7 +183,7 @@ export default function PassesPage() {
     <ProtectedLayout anyPermissions={['passes.view_own', 'passes.view_all', 'admin.panel']}>
       <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-4 mb-6">
         <div>
-          <h1 className="text-2xl font-bold">{labels.pages.passesTitle}</h1>
+          <h1 className="page-title">{labels.pages.passesTitle}</h1>
           <p className="text-sm text-[var(--muted)] mt-1">
             {canViewAll ? labels.pages.passesSubtitleAll : labels.pages.passesSubtitleOwn}
           </p>
@@ -168,56 +208,57 @@ export default function PassesPage() {
         </div>
       </div>
 
-      {loadError && (
-        <div className="mb-4 text-sm text-red-600 bg-red-50 px-3 py-2 rounded-md flex items-center justify-between">
-          {loadError}
-          <button className="btn btn-secondary text-xs" onClick={load}>{labels.buttons.retry}</button>
-        </div>
+      {showOverdueAlerts && (
+        <OverdueGuestsAlert
+          passes={overduePasses}
+          labels={labels}
+          linkHref="/control"
+          linkLabel={labels.pages.receptionTitle}
+          className="mb-6"
+        />
       )}
 
-      <div className="grid lg:grid-cols-2 gap-4">
-        <div className="space-y-3">
+      {loadError && (
+        <PageError
+          className="mb-4"
+          message={loadError}
+          error={loadErrorCause}
+          onRetry={() => load()}
+          retryLabel={labels.buttons.retry}
+        />
+      )}
+
+      <div className="grid lg:grid-cols-[minmax(0,1fr)_minmax(320px,400px)] gap-5 items-start">
+        <div>
           {loading ? (
             <div className="card p-8 text-center text-[var(--muted)]">{labels.passes.loading}</div>
           ) : passes.length === 0 ? (
             <div className="card p-8 text-center text-[var(--muted)]">{labels.passes.notFound}</div>
           ) : (
-            passes.map((pass) => (
-              <PassCard
-                key={pass.id}
-                pass={pass}
-                showCreator={canViewAll}
-                onClick={() => setSelected(pass)}
-                highlight={selected?.id === pass.id}
-                actions={
-                  <div className="w-full space-y-2">
-                    {canSharePass(pass) && (
-                      <SharePassActions passIdOrNumber={pass.id} passNumber={pass.passNumber} compact />
-                    )}
-                    {canCancelPass(pass) && (
-                      <button
-                        type="button"
-                        className="btn btn-danger text-xs py-1.5"
-                        disabled={actionLoading}
-                        onClick={() => handleAction(pass.id, 'cancel')}
-                      >
-                        <Ban className="w-3.5 h-3.5" />
-                        {labels.buttons.cancel}
-                      </button>
-                    )}
-                  </div>
-                }
-              />
-            ))
+            <div className="flex flex-col gap-1.5">
+              <p className="text-xs text-[var(--muted)] mb-1 px-1">{formatPassCount(passes.length, labels)}</p>
+              {passes.map((pass) => (
+                <PassListCard
+                  key={pass.id}
+                  pass={pass}
+                  labels={labels}
+                  selected={selected?.id === pass.id}
+                  showCreator={showCreatorInfo}
+                  onClick={() => setSelected(pass)}
+                />
+              ))}
+            </div>
           )}
         </div>
 
         {selected && (
-          <div className="lg:sticky lg:top-20 h-fit space-y-3">
-            <div className="flex items-center justify-between">
-              <h2 className="text-lg font-semibold">{labels.passes.detailTitle}</h2>
+          <div className="lg:sticky lg:top-20 space-y-3">
+            <div className="flex items-center justify-between px-1">
+              <h2 className="text-base font-semibold text-[var(--muted)] uppercase tracking-wide text-[11px]">
+                {labels.passes.detailTitle}
+              </h2>
               <button
-                className="p-1.5 rounded-md text-[var(--muted)] hover:text-[var(--text)] hover:bg-slate-100"
+                className="p-1.5 rounded-md text-[var(--muted)] hover:text-[var(--foreground)] hover:bg-[var(--m-block)] lg:hidden"
                 onClick={() => setSelected(null)}
                 aria-label={labels.passes.close}
               >
@@ -229,17 +270,23 @@ export default function PassesPage() {
               <PassPrintCard pass={selected} businessCenterName={selected.businessCenterName || config?.businessCenterName} />
             )}
 
-            <PassCardBase
+            <PassDetailPanel
               pass={selected}
               labels={labels}
-              variant="full"
-              showTimeline
-              showCreator={canViewAll}
+              showCreator={showCreatorInfo}
               actions={renderDetailActions(selected)}
             />
           </div>
         )}
       </div>
     </ProtectedLayout>
+  );
+}
+
+export default function PassesPage() {
+  return (
+    <Suspense fallback={<ProtectedLayout anyPermissions={['passes.view_own', 'passes.view_all', 'admin.panel']}><div className="animate-pulse text-[var(--muted)] p-8">Загрузка...</div></ProtectedLayout>}>
+      <PassesPageContent />
+    </Suspense>
   );
 }

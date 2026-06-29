@@ -1,4 +1,6 @@
-import { ConflictException, Injectable, NotFoundException } from '@nestjs/common';
+import { BadRequestException, ConflictException, Injectable, NotFoundException } from '@nestjs/common';
+import { resolvePersonName, splitFullName } from '../common/person-name';
+import { mapProfileChangeRequest } from '../common/profile-change';
 import { InjectModel } from '@nestjs/mongoose';
 import * as bcrypt from 'bcryptjs';
 import { Model, Types } from 'mongoose';
@@ -10,7 +12,7 @@ import { CreateBusinessCenterDto } from './dto/create-business-center.dto';
 import { CreateOfficeDto } from './dto/create-office.dto';
 import { CreateUserDto } from './dto/create-user.dto';
 import { UpdateBusinessCenterDto } from './dto/update-business-center.dto';
-import { UpdateSettingsDto } from './dto/update-settings.dto';
+import { BusinessCenterPassSettingsDto } from './dto/business-center-pass-settings.dto';
 
 const STAFF_ROLES = ['security', 'bc_admin', 'admin'] as const;
 
@@ -65,7 +67,7 @@ export class AdminService {
         businessCenters: properties.length,
       },
       recentActivity,
-      settings: this.mapPropertySettings(properties[0]),
+      businessCenterNames: properties.map((p) => p.name),
       officesCount: offices.length,
     };
   }
@@ -192,9 +194,18 @@ export class AdminService {
     if (existing) throw new ConflictException('Пользователь с таким email уже существует');
 
     const hashed = await bcrypt.hash(dto.password, 10);
+    let personName;
+    try {
+      personName = resolvePersonName(dto);
+    } catch {
+      throw new BadRequestException('Укажите фамилию и имя');
+    }
     const user = await this.userModel.create({
       email,
-      fullName: dto.fullName,
+      fullName: personName.fullName,
+      lastName: personName.lastName,
+      firstName: personName.firstName,
+      middleName: personName.middleName,
       phone: dto.phone,
       company: dto.company,
       role: dto.role,
@@ -226,13 +237,99 @@ export class AdminService {
     return { user: this.mapUser(user.toObject(), 0, offices, businessCenters) };
   }
 
+  async getProfileChangeRequests() {
+    const users = await this.userModel
+      .find({ role: 'tenant', 'profileChangeRequest.requestedAt': { $exists: true, $ne: null } })
+      .sort({ 'profileChangeRequest.requestedAt': -1 })
+      .lean();
+
+    const items = await Promise.all(users.map(async (user) => {
+      const offices = await this.getTenantOffices(user._id.toString());
+      return {
+        user: this.mapUser(user, 0, offices, []),
+        request: mapProfileChangeRequest(user.profileChangeRequest),
+      };
+    }));
+
+    return { requests: items.filter((item) => item.request) };
+  }
+
+  async approveProfileChange(id: string, actor?: AuditActor) {
+    const user = await this.userModel.findById(id);
+    if (!user) throw new NotFoundException('Пользователь не найден');
+    if (!user.profileChangeRequest?.requestedAt) {
+      throw new BadRequestException('Нет заявки на изменение профиля');
+    }
+
+    const req = user.profileChangeRequest;
+    user.lastName = req.lastName;
+    user.firstName = req.firstName;
+    user.middleName = req.middleName;
+    user.fullName = req.fullName;
+    if (req.phone !== undefined) user.phone = req.phone;
+    if (req.company !== undefined) user.company = req.company;
+    user.profileChangeRequest = null;
+    user.markModified('profileChangeRequest');
+    await user.save();
+
+    await this.auditService.log({
+      action: 'profile.change_approved',
+      entityType: 'user',
+      entityId: user._id,
+      actor,
+      details: { fullName: user.fullName, email: user.email },
+    });
+
+    const offices = await this.getTenantOffices(id);
+    return { user: this.mapUser(user.toObject(), 0, offices, []) };
+  }
+
+  async rejectProfileChange(id: string, actor?: AuditActor) {
+    const user = await this.userModel.findById(id);
+    if (!user) throw new NotFoundException('Пользователь не найден');
+    if (!user.profileChangeRequest?.requestedAt) {
+      throw new BadRequestException('Нет заявки на изменение профиля');
+    }
+
+    const requestedName = user.profileChangeRequest.fullName;
+    user.profileChangeRequest = null;
+    user.markModified('profileChangeRequest');
+    await user.save();
+
+    await this.auditService.log({
+      action: 'profile.change_rejected',
+      entityType: 'user',
+      entityId: user._id,
+      actor,
+      details: { fullName: requestedName, email: user.email },
+    });
+
+    const offices = await this.getTenantOffices(id);
+    return { user: this.mapUser(user.toObject(), 0, offices, []) };
+  }
+
   async updateUser(id: string, dto: Partial<CreateUserDto & { isActive: boolean }>, actor?: AuditActor) {
     const user = await this.userModel.findById(id);
     if (!user) throw new NotFoundException('Пользователь не найден');
 
     const prevRole = user.role;
 
-    if (dto.fullName !== undefined) user.fullName = dto.fullName;
+    if (dto.fullName !== undefined || dto.lastName !== undefined || dto.firstName !== undefined || dto.middleName !== undefined) {
+      try {
+        const personName = resolvePersonName({
+          fullName: dto.fullName ?? user.fullName,
+          lastName: dto.lastName ?? user.lastName,
+          firstName: dto.firstName ?? user.firstName,
+          middleName: dto.middleName ?? user.middleName,
+        });
+        user.fullName = personName.fullName;
+        user.lastName = personName.lastName;
+        user.firstName = personName.firstName;
+        user.middleName = personName.middleName;
+      } catch {
+        throw new BadRequestException('Укажите фамилию и имя');
+      }
+    }
     if (dto.phone !== undefined) user.phone = dto.phone;
     if (dto.company !== undefined) user.company = dto.company;
     if (dto.role !== undefined) user.role = dto.role;
@@ -275,43 +372,6 @@ export class AdminService {
     return { user: this.mapUser(user.toObject(), passesCount, offices, businessCenters) };
   }
 
-  async getSettings(actor?: any) {
-    const property = await this.getPrimaryProperty(actor);
-    return this.mapPropertySettings(property);
-  }
-
-  async updateSettings(dto: UpdateSettingsDto, actor?: any) {
-    const property = await this.getPrimaryProperty(actor);
-    if (!property) throw new NotFoundException('Бизнес-центр не найден');
-
-    if (dto.business_center_name?.trim()) {
-      property.name = dto.business_center_name.trim();
-    }
-
-    const settings = property.settings || {};
-    if (dto.max_passes_per_day !== undefined) settings.max_passes_per_day = dto.max_passes_per_day;
-    if (dto.auto_approve_delivery !== undefined) settings.auto_approve_delivery = dto.auto_approve_delivery;
-    if (dto.working_hours_from !== undefined) settings.working_hours_from = dto.working_hours_from;
-    if (dto.working_hours_to !== undefined) settings.working_hours_to = dto.working_hours_to;
-    if (dto.contact_phone !== undefined) settings.contact_phone = dto.contact_phone;
-    if (dto.contact_email !== undefined) settings.contact_email = dto.contact_email;
-    if (dto.reception_floor !== undefined) settings.reception_floor = dto.reception_floor;
-    property.settings = settings;
-    property.markModified('settings');
-
-    await property.save();
-
-    await this.auditService.log({
-      action: 'settings.update',
-      entityType: 'property',
-      entityId: property._id,
-      actor,
-      details: { name: property.name },
-    });
-
-    return { settings: this.mapPropertySettings(property.toObject()) };
-  }
-
   async updateBusinessCenter(id: string, dto: UpdateBusinessCenterDto, actor?: AuditActor) {
     const property = await this.propertyModel.findById(id);
     if (!property) throw new NotFoundException('Бизнес-центр не найден');
@@ -319,6 +379,10 @@ export class AdminService {
 
     if (dto.name?.trim()) property.name = dto.name.trim();
     if (dto.address?.trim()) property.address = dto.address.trim();
+    if (dto.passSettings) {
+      property.settings = this.mergeBcPassSettings(property.settings, dto.passSettings);
+      property.markModified('settings');
+    }
     await property.save();
 
     const stats = await this.officeModel.aggregate([
@@ -343,6 +407,7 @@ export class AdminService {
         totalAreaSqm: stats[0]?.totalAreaSqm || 0,
         isActive: property.isActive,
         createdAt: (property as any).createdAt,
+        passSettings: this.mapBcPassSettings(property.toObject()),
       },
     };
   }
@@ -380,6 +445,7 @@ export class AdminService {
           totalAreaSqm: stats?.totalAreaSqm || 0,
           isActive: p.isActive,
           createdAt: (p as any).createdAt,
+          passSettings: this.mapBcPassSettings(p),
         };
       }),
     };
@@ -412,6 +478,7 @@ export class AdminService {
         officesCount: 0,
         isActive: true,
         createdAt: (property as any).createdAt,
+        passSettings: this.mapBcPassSettings(property.toObject()),
       },
     };
   }
@@ -698,10 +765,16 @@ export class AdminService {
   }
 
   private mapUser(user: any, passesCount: number, offices: any[] = [], businessCenters: { id: string; name: string }[] = []) {
+    const nameParts = user.lastName || user.firstName
+      ? { lastName: user.lastName || '', firstName: user.firstName || '', middleName: user.middleName || '' }
+      : splitFullName(user.fullName);
     return {
       id: user._id.toString(),
       email: user.email,
       fullName: user.fullName,
+      lastName: nameParts.lastName,
+      firstName: nameParts.firstName,
+      middleName: nameParts.middleName,
       phone: user.phone,
       company: user.company,
       role: user.role || 'tenant',
@@ -713,14 +786,8 @@ export class AdminService {
       offices,
       businessCenters,
       propertyIds: businessCenters.map((bc) => bc.id),
+      profileChangeRequest: mapProfileChangeRequest(user.profileChangeRequest),
     };
-  }
-
-  private async getPrimaryProperty(actor?: any) {
-    const scope = await this.getActorPropertyIds(actor);
-    const filter: Record<string, unknown> = { type: PropertyType.BUSINESS_CENTER, isActive: true };
-    if (scope?.length) filter._id = { $in: scope.map((id) => new Types.ObjectId(id)) };
-    return this.propertyModel.findOne(filter).sort({ createdAt: 1 });
   }
 
   private async getActorPropertyIds(actor?: any): Promise<string[] | null> {
@@ -739,10 +806,9 @@ export class AdminService {
     }
   }
 
-  private mapPropertySettings(property?: any) {
+  private mapBcPassSettings(property?: any) {
     const s = property?.settings || {};
     return {
-      business_center_name: property?.name || 'PASS24',
       max_passes_per_day: s.max_passes_per_day || '200',
       auto_approve_delivery: s.auto_approve_delivery || 'false',
       working_hours_from: s.working_hours_from || '08:00',
@@ -751,6 +817,21 @@ export class AdminService {
       contact_email: s.contact_email || 'reception@pass24.local',
       reception_floor: s.reception_floor || '1',
     };
+  }
+
+  private mergeBcPassSettings(
+    current: Record<string, unknown> | undefined,
+    dto: BusinessCenterPassSettingsDto,
+  ) {
+    const settings = { ...(current || {}) };
+    if (dto.max_passes_per_day !== undefined) settings.max_passes_per_day = dto.max_passes_per_day;
+    if (dto.auto_approve_delivery !== undefined) settings.auto_approve_delivery = dto.auto_approve_delivery;
+    if (dto.working_hours_from !== undefined) settings.working_hours_from = dto.working_hours_from;
+    if (dto.working_hours_to !== undefined) settings.working_hours_to = dto.working_hours_to;
+    if (dto.contact_phone !== undefined) settings.contact_phone = dto.contact_phone;
+    if (dto.contact_email !== undefined) settings.contact_email = dto.contact_email;
+    if (dto.reception_floor !== undefined) settings.reception_floor = dto.reception_floor;
+    return settings;
   }
 
   private countBy(arr: any[], key: string) {

@@ -4,13 +4,16 @@ import { useEffect, useState } from 'react';
 import Link from 'next/link';
 import { Plus, ClipboardList, Bookmark, Car, Truck, Wrench, User } from 'lucide-react';
 import { ProtectedLayout } from '@/components/ProtectedLayout';
-import { PassCard } from '@/components/PassCard';
+import { PassListCard } from '@/components/PassListCard';
 import { useAuth } from '@/lib/auth';
 import { useConfig } from '@/hooks/useConfig';
 import {
-  api, Pass, PassStats, PassTemplate, TYPE_LABELS, PassType, formatTenantOffices,
+  api, Pass, PassStats, PassTemplate, TYPE_LABELS, PassType, formatTenantOffices, getErrorMessage,
 } from '@/lib/api';
-import { canUseReception, canViewAllPasses, canViewPasses, hasPermission } from '@/lib/permissions';
+import { PageError } from '@/components/PageError';
+import { useOverdueGuests } from '@/hooks/useOverdueGuests';
+import { OverdueGuestsAlert } from '@/components/OverdueGuestsAlert';
+import { canSeeOverdueAlerts, canUseReception, canViewAllPasses, canViewPasses, hasPermission } from '@/lib/permissions';
 import { getUiLabels } from '@/lib/ui-labels';
 
 const TYPE_ICONS: Record<PassType, typeof User> = {
@@ -28,25 +31,39 @@ export default function DashboardPage() {
   const [templates, setTemplates] = useState<PassTemplate[]>([]);
   const [stats, setStats] = useState<PassStats | null>(null);
   const [loadError, setLoadError] = useState('');
+  const [loadErrorCause, setLoadErrorCause] = useState<unknown>(null);
 
   const isTenantTemplates = hasPermission(user, 'passes.templates') && !canViewPasses(user);
 
-  useEffect(() => {
+  const loadDashboard = () => {
+    setLoadError('');
+    setLoadErrorCause(null);
     if (isTenantTemplates) {
-      api.getPassTemplates()
+      return api.getPassTemplates()
         .then(({ templates: data }) => setTemplates(data.slice(0, 6)))
-        .catch((err) => setLoadError(err instanceof Error ? err.message : 'Ошибка загрузки'));
-      return;
+        .catch((err) => {
+          setLoadErrorCause(err);
+          setLoadError(getErrorMessage(err, 'Ошибка загрузки'));
+        });
     }
 
-    Promise.all([api.getPasses(), api.getStats()])
+    return Promise.all([api.getPasses(), api.getStats()])
       .then(([{ passes: data }, statsData]) => {
         setPasses(data.slice(0, 5));
         setStats(statsData);
       })
-      .catch((err) => setLoadError(err instanceof Error ? err.message : 'Ошибка загрузки'));
+      .catch((err) => {
+        setLoadErrorCause(err);
+        setLoadError(getErrorMessage(err, 'Ошибка загрузки'));
+      });
+  };
+
+  useEffect(() => {
+    loadDashboard();
   }, [isTenantTemplates]);
 
+  const showOverdueAlerts = canSeeOverdueAlerts(user);
+  const { passes: overduePasses } = useOverdueGuests(showOverdueAlerts);
   const canCreate = hasPermission(user, 'passes.create');
   const canReception = canUseReception(user);
   const showAllPasses = canViewAllPasses(user);
@@ -55,7 +72,7 @@ export default function DashboardPage() {
   return (
     <ProtectedLayout>
       <div className="mb-6">
-        <h1 className="text-2xl font-bold">
+        <h1 className="page-title">
           {labels.pages.dashboardWelcome}, {user?.full_name?.split(' ')[0]}
         </h1>
         <p className="text-[var(--muted)]">
@@ -104,7 +121,23 @@ export default function DashboardPage() {
         </>
       )}
 
-      {loadError && <div className="mb-4 text-sm text-red-600 bg-red-50 px-3 py-2 rounded-md">{loadError}</div>}
+      {showOverdueAlerts && (
+        <OverdueGuestsAlert
+          passes={overduePasses}
+          labels={labels}
+          className="mb-6"
+        />
+      )}
+
+      {loadError && (
+        <PageError
+          className="mb-6"
+          message={loadError}
+          error={loadErrorCause}
+          onRetry={loadDashboard}
+          retryLabel={labels.buttons.retry}
+        />
+      )}
 
       <div className="flex gap-3 mb-6 flex-wrap">
         {canTemplates && (
@@ -168,8 +201,16 @@ export default function DashboardPage() {
               {labels.dashboard.emptyPasses}
             </div>
           ) : (
-            <div className="grid gap-3">
-              {passes.map((pass) => <PassCard key={pass.id} pass={pass} />)}
+            <div className="flex flex-col gap-1.5">
+              {passes.map((pass) => (
+                <PassListCard
+                  key={pass.id}
+                  pass={pass}
+                  labels={labels}
+                  showCreator={showAllPasses}
+                  href={`/passes?id=${pass.id}`}
+                />
+              ))}
             </div>
           )}
         </>

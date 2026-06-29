@@ -6,7 +6,6 @@ import { CreateBusinessCenterDto } from './dto/create-business-center.dto';
 import { CreateOfficeDto } from './dto/create-office.dto';
 import { CreateUserDto } from './dto/create-user.dto';
 import { UpdateBusinessCenterDto } from './dto/update-business-center.dto';
-import { UpdateSettingsDto } from './dto/update-settings.dto';
 export interface UserQuery {
     category?: 'tenants' | 'staff';
     role?: string;
@@ -49,16 +48,7 @@ export declare class AdminService {
             details: any;
             createdAt: any;
         }[];
-        settings: {
-            business_center_name: any;
-            max_passes_per_day: any;
-            auto_approve_delivery: any;
-            working_hours_from: any;
-            working_hours_to: any;
-            contact_phone: any;
-            contact_email: any;
-            reception_floor: any;
-        };
+        businessCenterNames: string[];
         officesCount: number;
     }>;
     getAudit(query?: AuditQuery): Promise<{
@@ -84,6 +74,9 @@ export declare class AdminService {
             id: any;
             email: any;
             fullName: any;
+            lastName: any;
+            firstName: any;
+            middleName: any;
             phone: any;
             company: any;
             role: any;
@@ -98,6 +91,15 @@ export declare class AdminService {
                 name: string;
             }[];
             propertyIds: string[];
+            profileChangeRequest: {
+                last_name: string;
+                first_name: string;
+                middle_name: string;
+                full_name: string;
+                phone: string | undefined;
+                company: string | undefined;
+                requested_at: string;
+            } | null;
         }[];
         total: number;
         counts: {
@@ -111,6 +113,9 @@ export declare class AdminService {
             id: any;
             email: any;
             fullName: any;
+            lastName: any;
+            firstName: any;
+            middleName: any;
             phone: any;
             company: any;
             role: any;
@@ -125,6 +130,125 @@ export declare class AdminService {
                 name: string;
             }[];
             propertyIds: string[];
+            profileChangeRequest: {
+                last_name: string;
+                first_name: string;
+                middle_name: string;
+                full_name: string;
+                phone: string | undefined;
+                company: string | undefined;
+                requested_at: string;
+            } | null;
+        };
+    }>;
+    getProfileChangeRequests(): Promise<{
+        requests: {
+            user: {
+                id: any;
+                email: any;
+                fullName: any;
+                lastName: any;
+                firstName: any;
+                middleName: any;
+                phone: any;
+                company: any;
+                role: any;
+                office: any;
+                floor: any;
+                isActive: boolean;
+                createdAt: any;
+                passesCount: number;
+                offices: any[];
+                businessCenters: {
+                    id: string;
+                    name: string;
+                }[];
+                propertyIds: string[];
+                profileChangeRequest: {
+                    last_name: string;
+                    first_name: string;
+                    middle_name: string;
+                    full_name: string;
+                    phone: string | undefined;
+                    company: string | undefined;
+                    requested_at: string;
+                } | null;
+            };
+            request: {
+                last_name: string;
+                first_name: string;
+                middle_name: string;
+                full_name: string;
+                phone: string | undefined;
+                company: string | undefined;
+                requested_at: string;
+            } | null;
+        }[];
+    }>;
+    approveProfileChange(id: string, actor?: AuditActor): Promise<{
+        user: {
+            id: any;
+            email: any;
+            fullName: any;
+            lastName: any;
+            firstName: any;
+            middleName: any;
+            phone: any;
+            company: any;
+            role: any;
+            office: any;
+            floor: any;
+            isActive: boolean;
+            createdAt: any;
+            passesCount: number;
+            offices: any[];
+            businessCenters: {
+                id: string;
+                name: string;
+            }[];
+            propertyIds: string[];
+            profileChangeRequest: {
+                last_name: string;
+                first_name: string;
+                middle_name: string;
+                full_name: string;
+                phone: string | undefined;
+                company: string | undefined;
+                requested_at: string;
+            } | null;
+        };
+    }>;
+    rejectProfileChange(id: string, actor?: AuditActor): Promise<{
+        user: {
+            id: any;
+            email: any;
+            fullName: any;
+            lastName: any;
+            firstName: any;
+            middleName: any;
+            phone: any;
+            company: any;
+            role: any;
+            office: any;
+            floor: any;
+            isActive: boolean;
+            createdAt: any;
+            passesCount: number;
+            offices: any[];
+            businessCenters: {
+                id: string;
+                name: string;
+            }[];
+            propertyIds: string[];
+            profileChangeRequest: {
+                last_name: string;
+                first_name: string;
+                middle_name: string;
+                full_name: string;
+                phone: string | undefined;
+                company: string | undefined;
+                requested_at: string;
+            } | null;
         };
     }>;
     updateUser(id: string, dto: Partial<CreateUserDto & {
@@ -134,6 +258,9 @@ export declare class AdminService {
             id: any;
             email: any;
             fullName: any;
+            lastName: any;
+            firstName: any;
+            middleName: any;
             phone: any;
             company: any;
             role: any;
@@ -148,28 +275,15 @@ export declare class AdminService {
                 name: string;
             }[];
             propertyIds: string[];
-        };
-    }>;
-    getSettings(actor?: any): Promise<{
-        business_center_name: any;
-        max_passes_per_day: any;
-        auto_approve_delivery: any;
-        working_hours_from: any;
-        working_hours_to: any;
-        contact_phone: any;
-        contact_email: any;
-        reception_floor: any;
-    }>;
-    updateSettings(dto: UpdateSettingsDto, actor?: any): Promise<{
-        settings: {
-            business_center_name: any;
-            max_passes_per_day: any;
-            auto_approve_delivery: any;
-            working_hours_from: any;
-            working_hours_to: any;
-            contact_phone: any;
-            contact_email: any;
-            reception_floor: any;
+            profileChangeRequest: {
+                last_name: string;
+                first_name: string;
+                middle_name: string;
+                full_name: string;
+                phone: string | undefined;
+                company: string | undefined;
+                requested_at: string;
+            } | null;
         };
     }>;
     updateBusinessCenter(id: string, dto: UpdateBusinessCenterDto, actor?: AuditActor): Promise<{
@@ -181,6 +295,15 @@ export declare class AdminService {
             totalAreaSqm: any;
             isActive: boolean;
             createdAt: any;
+            passSettings: {
+                max_passes_per_day: any;
+                auto_approve_delivery: any;
+                working_hours_from: any;
+                working_hours_to: any;
+                contact_phone: any;
+                contact_email: any;
+                reception_floor: any;
+            };
         };
     }>;
     getBusinessCenters(actor?: any): Promise<{
@@ -192,6 +315,15 @@ export declare class AdminService {
             totalAreaSqm: any;
             isActive: boolean;
             createdAt: any;
+            passSettings: {
+                max_passes_per_day: any;
+                auto_approve_delivery: any;
+                working_hours_from: any;
+                working_hours_to: any;
+                contact_phone: any;
+                contact_email: any;
+                reception_floor: any;
+            };
         }[];
     }>;
     createBusinessCenter(dto: CreateBusinessCenterDto, actor?: AuditActor): Promise<{
@@ -202,6 +334,15 @@ export declare class AdminService {
             officesCount: number;
             isActive: boolean;
             createdAt: any;
+            passSettings: {
+                max_passes_per_day: any;
+                auto_approve_delivery: any;
+                working_hours_from: any;
+                working_hours_to: any;
+                contact_phone: any;
+                contact_email: any;
+                reception_floor: any;
+            };
         };
     }>;
     getOffices(): Promise<{
@@ -276,9 +417,9 @@ export declare class AdminService {
     private mapOffice;
     private getUserBusinessCenters;
     private mapUser;
-    private getPrimaryProperty;
     private getActorPropertyIds;
     private ensureBcAccess;
-    private mapPropertySettings;
+    private mapBcPassSettings;
+    private mergeBcPassSettings;
     private countBy;
 }

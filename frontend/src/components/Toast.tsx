@@ -31,7 +31,7 @@ export function ToastProvider({ children }: { children: ReactNode }) {
   const styles: Record<ToastType, string> = {
     success: 'bg-emerald-50 text-emerald-800 border-emerald-200',
     error: 'bg-red-50 text-red-800 border-red-200',
-    info: 'bg-blue-50 text-blue-800 border-blue-200',
+    info: 'bg-[var(--accent-soft)] text-[#9a4a12] border-[var(--accent-border)]',
     warning: 'bg-amber-50 text-amber-900 border-amber-200',
   };
 

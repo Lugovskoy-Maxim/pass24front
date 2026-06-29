@@ -8,8 +8,17 @@ export class RegisterDto {
   @MinLength(6)
   password: string;
 
-  @IsNotEmpty()
-  fullName: string;
+  @IsOptional()
+  fullName?: string;
+
+  @IsOptional()
+  lastName?: string;
+
+  @IsOptional()
+  firstName?: string;
+
+  @IsOptional()
+  middleName?: string;
 
   @IsOptional()
   phone?: string;

@@ -1,12 +1,16 @@
-import { Injectable, UnauthorizedException, ConflictException } from '@nestjs/common';
+import { BadRequestException, ForbiddenException, Injectable, UnauthorizedException, ConflictException } from '@nestjs/common';
+import { resolvePersonName, splitFullName } from '../common/person-name';
+import { mapProfileChangeRequest, profileFieldsEqual } from '../common/profile-change';
 import { InjectModel } from '@nestjs/mongoose';
 import { Model, Types } from 'mongoose';
 import * as bcrypt from 'bcryptjs';
 import { JwtService } from '@nestjs/jwt';
 import { AccessConfigService } from '../access/access-config.service';
+import { AuditService } from '../audit/audit.service';
 import { Office, OfficeDocument, Property, PropertyDocument, User, UserDocument } from '../schemas';
 import { LoginDto } from './dto/login.dto';
 import { RegisterDto } from './dto/register.dto';
+import { UpdateProfileDto } from './dto/update-profile.dto';
 
 @Injectable()
 export class AuthService {
@@ -16,6 +20,7 @@ export class AuthService {
     @InjectModel(Property.name) private propertyModel: Model<PropertyDocument>,
     private jwtService: JwtService,
     private accessConfigService: AccessConfigService,
+    private auditService: AuditService,
   ) {}
 
   async register(dto: RegisterDto) {
@@ -26,9 +31,19 @@ export class AuthService {
 
     const hashed = await bcrypt.hash(dto.password, 10);
 
+    let personName;
+    try {
+      personName = resolvePersonName(dto);
+    } catch {
+      throw new BadRequestException('Укажите фамилию и имя');
+    }
+
     const user = await this.userModel.create({
       email: dto.email.toLowerCase(),
-      fullName: dto.fullName,
+      fullName: personName.fullName,
+      lastName: personName.lastName,
+      firstName: personName.firstName,
+      middleName: personName.middleName,
       phone: dto.phone,
       company: dto.company,
       role: 'tenant',
@@ -70,6 +85,88 @@ export class AuthService {
     return { user: await this.toUserDto(user, offices) };
   }
 
+  async requestProfileChange(userId: string, dto: UpdateProfileDto) {
+    const user = await this.userModel.findById(userId);
+    if (!user) throw new UnauthorizedException();
+    if (user.role !== 'tenant') {
+      throw new ForbiddenException('Редактирование профиля доступно только арендаторам');
+    }
+
+    let personName;
+    try {
+      personName = resolvePersonName({
+        lastName: dto.lastName,
+        firstName: dto.firstName,
+        middleName: dto.middleName,
+      });
+    } catch {
+      throw new BadRequestException('Укажите фамилию и имя');
+    }
+
+    const current = user.lastName || user.firstName
+      ? {
+          lastName: user.lastName || '',
+          firstName: user.firstName || '',
+          middleName: user.middleName || '',
+        }
+      : splitFullName(user.fullName);
+
+    const requested = {
+      lastName: personName.lastName,
+      firstName: personName.firstName,
+      middleName: personName.middleName,
+      phone: dto.phone?.trim() || '',
+      company: dto.company?.trim() || '',
+    };
+
+    if (profileFieldsEqual(
+      { ...current, phone: user.phone || '', company: user.company || '' },
+      requested,
+    )) {
+      throw new BadRequestException('Нет изменений для отправки на подтверждение');
+    }
+
+    user.profileChangeRequest = {
+      lastName: requested.lastName,
+      firstName: requested.firstName,
+      middleName: requested.middleName,
+      fullName: personName.fullName,
+      phone: requested.phone || undefined,
+      company: requested.company || undefined,
+      requestedAt: new Date(),
+    };
+    user.markModified('profileChangeRequest');
+    await user.save();
+
+    await this.auditService.log({
+      action: 'profile.change_request',
+      entityType: 'user',
+      entityId: user._id,
+      actor: { userId, email: user.email, role: user.role },
+      details: {
+        fullName: personName.fullName,
+        phone: requested.phone || undefined,
+        company: requested.company || undefined,
+      },
+    });
+
+    const offices = await this.getUserOffices(userId);
+    return { user: await this.toUserDto(user, offices) };
+  }
+
+  async cancelProfileChange(userId: string) {
+    const user = await this.userModel.findById(userId);
+    if (!user) throw new UnauthorizedException();
+    if (!user.profileChangeRequest?.requestedAt) {
+      throw new BadRequestException('Нет заявки на изменение профиля');
+    }
+    user.profileChangeRequest = null;
+    user.markModified('profileChangeRequest');
+    await user.save();
+    const offices = await this.getUserOffices(userId);
+    return { user: await this.toUserDto(user, offices) };
+  }
+
   async getUserOffices(userId: string) {
     const offices = await this.officeModel.find({ tenantId: new Types.ObjectId(userId), isActive: true }).lean();
     if (!offices.length) return [];
@@ -103,6 +200,9 @@ export class AuthService {
       id: user._id.toString(),
       email: user.email,
       full_name: user.fullName,
+      last_name: user.lastName,
+      first_name: user.firstName,
+      middle_name: user.middleName,
       phone: user.phone,
       company: user.company,
       role: user.role || 'tenant',
@@ -111,6 +211,7 @@ export class AuthService {
       offices,
       permissions,
       enabledPassTypes,
+      profile_change_request: mapProfileChangeRequest(user.profileChangeRequest),
     };
   }
 

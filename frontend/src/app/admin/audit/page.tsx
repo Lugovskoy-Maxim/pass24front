@@ -4,7 +4,8 @@ import { useCallback, useEffect, useState } from 'react';
 import { Download, Search, X } from 'lucide-react';
 import { AdminLayout } from '@/components/AdminLayout';
 import { useToast } from '@/components/Toast';
-import { api, AuditEntry, AuditFilters, AUDIT_ENTITY_LABELS, AUDIT_LABELS, formatAuditEntity } from '@/lib/api';
+import { api, AuditEntry, AuditFilters, AUDIT_ENTITY_LABELS, AUDIT_LABELS, formatAuditEntity, getErrorMessage } from '@/lib/api';
+import { PageError } from '@/components/PageError';
 
 const PAGE_SIZE = 50;
 
@@ -22,21 +23,28 @@ export default function AdminAuditPage() {
   const [total, setTotal] = useState(0);
   const [offset, setOffset] = useState(0);
   const [loading, setLoading] = useState(true);
+  const [loadError, setLoadError] = useState('');
+  const [loadErrorCause, setLoadErrorCause] = useState<unknown>(null);
   const [exporting, setExporting] = useState(false);
   const [filters, setFilters] = useState<AuditFilters>(EMPTY_FILTERS);
   const [appliedFilters, setAppliedFilters] = useState<AuditFilters>(EMPTY_FILTERS);
 
   const fetchAudit = useCallback((off: number, nextFilters: AuditFilters) => {
     setLoading(true);
+    setLoadError('');
+    setLoadErrorCause(null);
     api.admin.getAudit({ ...nextFilters, offset: off })
       .then((data) => {
         setEntries(data.entries);
         setTotal(data.total);
         setOffset(off);
       })
-      .catch((err) => toast(err instanceof Error ? err.message : 'Ошибка загрузки', 'error'))
+      .catch((err) => {
+        setLoadErrorCause(err);
+        setLoadError(getErrorMessage(err, 'Ошибка загрузки'));
+      })
       .finally(() => setLoading(false));
-  }, [toast]);
+  }, []);
 
   useEffect(() => {
     fetchAudit(0, appliedFilters);
@@ -59,7 +67,7 @@ export default function AdminAuditPage() {
       await api.admin.exportAudit(appliedFilters);
       toast('Выгрузка сохранена', 'success');
     } catch (err) {
-      toast(err instanceof Error ? err.message : 'Ошибка выгрузки', 'error');
+      toast(getErrorMessage(err, 'Ошибка выгрузки'), 'error');
     } finally {
       setExporting(false);
     }
@@ -76,6 +84,16 @@ export default function AdminAuditPage() {
   return (
     <AdminLayout title="Журнал действий">
       <p className="text-[var(--muted)] -mt-4 mb-6">Официальный аудит всех операций в системе</p>
+
+      {loadError && (
+        <PageError
+          className="mb-4"
+          message={loadError}
+          error={loadErrorCause}
+          onRetry={() => fetchAudit(offset, appliedFilters)}
+          retryLabel="Повторить"
+        />
+      )}
 
       <div className="card p-4 mb-4 space-y-4">
         <div className="flex flex-col lg:flex-row lg:items-end gap-3">
@@ -162,7 +180,7 @@ export default function AdminAuditPage() {
 
       <div className="card overflow-hidden">
         <table className="w-full text-sm">
-          <thead className="bg-slate-50 text-[var(--muted)]">
+          <thead className="surface-muted text-[var(--muted)]">
             <tr>
               <th className="text-left p-3 font-medium">Время</th>
               <th className="text-left p-3 font-medium">Действие</th>

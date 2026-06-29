@@ -4,7 +4,8 @@ import { Fragment, useEffect, useState, FormEvent } from 'react';
 import { AdminLayout } from '@/components/AdminLayout';
 import { useToast } from '@/components/Toast';
 import { useAuth } from '@/lib/auth';
-import { api, AccessConfig, PassType, ROLE_LABELS } from '@/lib/api';
+import { api, AccessConfig, PassType, ROLE_LABELS, getErrorMessage } from '@/lib/api';
+import { PageError } from '@/components/PageError';
 import { hasPermission } from '@/lib/permissions';
 
 function roleLabel(config: AccessConfig, role: string) {
@@ -16,9 +17,22 @@ export default function AdminPermissionsPage() {
   const { user, refreshUser } = useAuth();
   const [config, setConfig] = useState<AccessConfig | null>(null);
   const [saving, setSaving] = useState(false);
+  const [loadError, setLoadError] = useState('');
+  const [loadErrorCause, setLoadErrorCause] = useState<unknown>(null);
+
+  const load = () => {
+    setLoadError('');
+    setLoadErrorCause(null);
+    api.admin.getAccessConfig()
+      .then(setConfig)
+      .catch((e) => {
+        setLoadErrorCause(e);
+        setLoadError(getErrorMessage(e, 'Ошибка загрузки'));
+      });
+  };
 
   useEffect(() => {
-    api.admin.getAccessConfig().then(setConfig).catch((e) => toast(e instanceof Error ? e.message : 'Ошибка', 'error'));
+    load();
   }, []);
 
   const togglePassType = (type: PassType) => {
@@ -69,6 +83,14 @@ export default function AdminPermissionsPage() {
     return <AdminLayout title="Права и типы пропусков"><div className="text-[var(--muted)]">Нет доступа. Только супер-администратор может менять права.</div></AdminLayout>;
   }
 
+  if (loadError) {
+    return (
+      <AdminLayout title="Права и типы пропусков">
+        <PageError message={loadError} error={loadErrorCause} onRetry={load} retryLabel="Повторить" />
+      </AdminLayout>
+    );
+  }
+
   if (!config) {
     return <AdminLayout title="Права и типы пропусков"><div className="animate-pulse text-[var(--muted)]">Загрузка...</div></AdminLayout>;
   }
@@ -87,7 +109,7 @@ export default function AdminPermissionsPage() {
           <p className="text-sm text-[var(--muted)] mb-4">Отключённые типы не появятся при заказе пропуска</p>
           <div className="grid sm:grid-cols-2 gap-3">
             {(Object.keys(config.passTypeLabels) as PassType[]).map((type) => (
-              <label key={type} className="flex items-center gap-3 p-3 rounded-lg border border-[var(--border)] cursor-pointer hover:bg-slate-50">
+              <label key={type} className="flex items-center gap-3 p-3 rounded-lg border border-[var(--border)] cursor-pointer hover:bg-[var(--surface-muted)]">
                 <input
                   type="checkbox"
                   checked={config.enabledPassTypes.includes(type)}
@@ -117,7 +139,7 @@ export default function AdminPermissionsPage() {
             <tbody>
               {groups.map((group) => (
                 <Fragment key={group}>
-                  <tr className="bg-slate-50">
+                  <tr className="surface-muted">
                     <td colSpan={config.roles.length + 1} className="p-2 px-3 text-xs font-semibold uppercase tracking-wide text-[var(--muted)]">
                       {group}
                     </td>

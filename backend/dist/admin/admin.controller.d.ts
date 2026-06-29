@@ -7,7 +7,6 @@ import { CreateOfficeDto } from './dto/create-office.dto';
 import { CreateUserDto } from './dto/create-user.dto';
 import { UpdateAccessConfigDto } from './dto/update-access-config.dto';
 import { UpdateBusinessCenterDto } from './dto/update-business-center.dto';
-import { UpdateSettingsDto } from './dto/update-settings.dto';
 import { UpdateSiteSettingsDto } from './dto/update-site-settings.dto';
 import { SiteSettingsService } from '../site-settings/site-settings.service';
 export declare class AdminController {
@@ -42,16 +41,7 @@ export declare class AdminController {
             details: any;
             createdAt: any;
         }[];
-        settings: {
-            business_center_name: any;
-            max_passes_per_day: any;
-            auto_approve_delivery: any;
-            working_hours_from: any;
-            working_hours_to: any;
-            contact_phone: any;
-            contact_email: any;
-            reception_floor: any;
-        };
+        businessCenterNames: string[];
         officesCount: number;
     }>;
     seedTestData(): Promise<{
@@ -106,7 +96,7 @@ export declare class AdminController {
             readonly group: "Администрирование";
         }, {
             readonly key: "admin.settings";
-            readonly label: "Настройки сайта и БЦ";
+            readonly label: "Базовые настройки сайта";
             readonly group: "Администрирование";
         }, {
             readonly key: "admin.permissions";
@@ -163,7 +153,7 @@ export declare class AdminController {
                 readonly group: "Администрирование";
             }, {
                 readonly key: "admin.settings";
-                readonly label: "Настройки сайта и БЦ";
+                readonly label: "Базовые настройки сайта";
                 readonly group: "Администрирование";
             }, {
                 readonly key: "admin.permissions";
@@ -180,6 +170,9 @@ export declare class AdminController {
             id: any;
             email: any;
             fullName: any;
+            lastName: any;
+            firstName: any;
+            middleName: any;
             phone: any;
             company: any;
             role: any;
@@ -194,6 +187,15 @@ export declare class AdminController {
                 name: string;
             }[];
             propertyIds: string[];
+            profileChangeRequest: {
+                last_name: string;
+                first_name: string;
+                middle_name: string;
+                full_name: string;
+                phone: string | undefined;
+                company: string | undefined;
+                requested_at: string;
+            } | null;
         }[];
         total: number;
         counts: {
@@ -206,6 +208,9 @@ export declare class AdminController {
             id: any;
             email: any;
             fullName: any;
+            lastName: any;
+            firstName: any;
+            middleName: any;
             phone: any;
             company: any;
             role: any;
@@ -220,6 +225,15 @@ export declare class AdminController {
                 name: string;
             }[];
             propertyIds: string[];
+            profileChangeRequest: {
+                last_name: string;
+                first_name: string;
+                middle_name: string;
+                full_name: string;
+                phone: string | undefined;
+                company: string | undefined;
+                requested_at: string;
+            } | null;
         };
     }>;
     updateUser(id: string, dto: Partial<CreateUserDto & {
@@ -229,6 +243,9 @@ export declare class AdminController {
             id: any;
             email: any;
             fullName: any;
+            lastName: any;
+            firstName: any;
+            middleName: any;
             phone: any;
             company: any;
             role: any;
@@ -243,6 +260,125 @@ export declare class AdminController {
                 name: string;
             }[];
             propertyIds: string[];
+            profileChangeRequest: {
+                last_name: string;
+                first_name: string;
+                middle_name: string;
+                full_name: string;
+                phone: string | undefined;
+                company: string | undefined;
+                requested_at: string;
+            } | null;
+        };
+    }>;
+    getProfileChangeRequests(): Promise<{
+        requests: {
+            user: {
+                id: any;
+                email: any;
+                fullName: any;
+                lastName: any;
+                firstName: any;
+                middleName: any;
+                phone: any;
+                company: any;
+                role: any;
+                office: any;
+                floor: any;
+                isActive: boolean;
+                createdAt: any;
+                passesCount: number;
+                offices: any[];
+                businessCenters: {
+                    id: string;
+                    name: string;
+                }[];
+                propertyIds: string[];
+                profileChangeRequest: {
+                    last_name: string;
+                    first_name: string;
+                    middle_name: string;
+                    full_name: string;
+                    phone: string | undefined;
+                    company: string | undefined;
+                    requested_at: string;
+                } | null;
+            };
+            request: {
+                last_name: string;
+                first_name: string;
+                middle_name: string;
+                full_name: string;
+                phone: string | undefined;
+                company: string | undefined;
+                requested_at: string;
+            } | null;
+        }[];
+    }>;
+    approveProfileChange(id: string, req: any): Promise<{
+        user: {
+            id: any;
+            email: any;
+            fullName: any;
+            lastName: any;
+            firstName: any;
+            middleName: any;
+            phone: any;
+            company: any;
+            role: any;
+            office: any;
+            floor: any;
+            isActive: boolean;
+            createdAt: any;
+            passesCount: number;
+            offices: any[];
+            businessCenters: {
+                id: string;
+                name: string;
+            }[];
+            propertyIds: string[];
+            profileChangeRequest: {
+                last_name: string;
+                first_name: string;
+                middle_name: string;
+                full_name: string;
+                phone: string | undefined;
+                company: string | undefined;
+                requested_at: string;
+            } | null;
+        };
+    }>;
+    rejectProfileChange(id: string, req: any): Promise<{
+        user: {
+            id: any;
+            email: any;
+            fullName: any;
+            lastName: any;
+            firstName: any;
+            middleName: any;
+            phone: any;
+            company: any;
+            role: any;
+            office: any;
+            floor: any;
+            isActive: boolean;
+            createdAt: any;
+            passesCount: number;
+            offices: any[];
+            businessCenters: {
+                id: string;
+                name: string;
+            }[];
+            propertyIds: string[];
+            profileChangeRequest: {
+                last_name: string;
+                first_name: string;
+                middle_name: string;
+                full_name: string;
+                phone: string | undefined;
+                company: string | undefined;
+                requested_at: string;
+            } | null;
         };
     }>;
     getBusinessCenters(req: any): Promise<{
@@ -254,6 +390,15 @@ export declare class AdminController {
             totalAreaSqm: any;
             isActive: boolean;
             createdAt: any;
+            passSettings: {
+                max_passes_per_day: any;
+                auto_approve_delivery: any;
+                working_hours_from: any;
+                working_hours_to: any;
+                contact_phone: any;
+                contact_email: any;
+                reception_floor: any;
+            };
         }[];
     }>;
     updateBusinessCenter(id: string, dto: UpdateBusinessCenterDto, req: any): Promise<{
@@ -265,6 +410,15 @@ export declare class AdminController {
             totalAreaSqm: any;
             isActive: boolean;
             createdAt: any;
+            passSettings: {
+                max_passes_per_day: any;
+                auto_approve_delivery: any;
+                working_hours_from: any;
+                working_hours_to: any;
+                contact_phone: any;
+                contact_email: any;
+                reception_floor: any;
+            };
         };
     }>;
     createBusinessCenter(dto: CreateBusinessCenterDto, req: any): Promise<{
@@ -275,6 +429,15 @@ export declare class AdminController {
             officesCount: number;
             isActive: boolean;
             createdAt: any;
+            passSettings: {
+                max_passes_per_day: any;
+                auto_approve_delivery: any;
+                working_hours_from: any;
+                working_hours_to: any;
+                contact_phone: any;
+                contact_email: any;
+                reception_floor: any;
+            };
         };
     }>;
     getOffices(): Promise<{
@@ -349,33 +512,6 @@ export declare class AdminController {
     updateSiteSettings(dto: UpdateSiteSettingsDto, req: any): Promise<{
         settings: import("../site-settings/site-settings.service").SiteSettingsDto;
     }>;
-    getSettings(req: any): Promise<{
-        settings: {
-            business_center_name: any;
-            max_passes_per_day: any;
-            auto_approve_delivery: any;
-            working_hours_from: any;
-            working_hours_to: any;
-            contact_phone: any;
-            contact_email: any;
-            reception_floor: any;
-        };
-    }>;
-    updateSettings(dto: UpdateSettingsDto, req: any): Promise<{
-        settings: {
-            business_center_name: any;
-            max_passes_per_day: any;
-            auto_approve_delivery: any;
-            working_hours_from: any;
-            working_hours_to: any;
-            contact_phone: any;
-            contact_email: any;
-            reception_floor: any;
-        };
-    }>;
-    getBlacklist(): {
-        entries: never[];
-    };
     getDailyReport(date?: string): {
         date: string;
         summary: never[];

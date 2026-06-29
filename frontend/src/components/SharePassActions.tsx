@@ -4,12 +4,15 @@ import { FormEvent, useState } from 'react';
 import Link from 'next/link';
 import { Copy, Check, Mail, QrCode } from 'lucide-react';
 import { api, getPassTicketUrl } from '@/lib/api';
+import { useConfig } from '@/hooks/useConfig';
+import { getUiLabels } from '@/lib/ui-labels';
 import { useToast } from './Toast';
 
 interface SharePassActionsProps {
   passIdOrNumber: string;
   passNumber?: string;
   compact?: boolean;
+  ticketLayout?: boolean;
   showQrLink?: boolean;
 }
 
@@ -17,8 +20,11 @@ export function SharePassActions({
   passIdOrNumber,
   passNumber,
   compact = false,
+  ticketLayout = false,
   showQrLink = true,
 }: SharePassActionsProps) {
+  const config = useConfig();
+  const labels = getUiLabels(config);
   const ticketNumber = passNumber || passIdOrNumber;
   const { toast } = useToast();
   const [copied, setCopied] = useState(false);
@@ -30,7 +36,7 @@ export function SharePassActions({
     try {
       await navigator.clipboard.writeText(getPassTicketUrl(ticketNumber));
       setCopied(true);
-      toast('Ссылка на пропуск скопирована', 'success');
+      toast(labels.buttons.linkCopied, 'success');
       setTimeout(() => setCopied(false), 2000);
     } catch {
       toast('Не удалось скопировать ссылку', 'error');
@@ -54,23 +60,23 @@ export function SharePassActions({
     }
   };
 
-  const btnClass = compact ? 'btn text-xs py-1.5' : 'btn text-sm';
+  const btnClass = compact ? 'btn text-xs py-1.5' : ticketLayout ? 'btn text-sm flex-1' : 'btn text-sm';
 
   return (
     <div className="space-y-2 w-full" onClick={(e) => e.stopPropagation()}>
-      <div className={`flex flex-wrap gap-2 ${compact ? '' : 'w-full'}`}>
+      <div className={`flex gap-2 ${ticketLayout ? 'w-full' : compact ? 'flex-wrap' : 'flex-wrap w-full'}`}>
         {showQrLink && (
           <Link
             href={`/ticket/${encodeURIComponent(ticketNumber)}`}
             className={`${btnClass} btn-primary`}
           >
             <QrCode className="w-3.5 h-3.5" />
-            QR-код
+            {labels.buttons.qrPass}
           </Link>
         )}
         <button type="button" className={`${btnClass} btn-secondary`} onClick={handleCopy}>
           {copied ? <Check className="w-3.5 h-3.5" /> : <Copy className="w-3.5 h-3.5" />}
-          {copied ? 'Скопировано' : 'Ссылка'}
+          {copied ? labels.buttons.linkCopied : labels.buttons.copyLink}
         </button>
         <button
           type="button"
@@ -78,7 +84,7 @@ export function SharePassActions({
           onClick={() => setShowEmailForm((v) => !v)}
         >
           <Mail className="w-3.5 h-3.5" />
-          На почту
+          {labels.buttons.share}
         </button>
       </div>
 
@@ -93,7 +99,7 @@ export function SharePassActions({
             required
           />
           <button type="submit" className={`${btnClass} btn-primary shrink-0`} disabled={sending}>
-            {sending ? 'Отправка...' : 'Отправить'}
+            {sending ? '...' : labels.buttons.apply}
           </button>
         </form>
       )}

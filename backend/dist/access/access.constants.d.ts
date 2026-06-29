@@ -41,7 +41,7 @@ export declare const ALL_PERMISSIONS: readonly [{
     readonly group: "Администрирование";
 }, {
     readonly key: "admin.settings";
-    readonly label: "Настройки сайта и БЦ";
+    readonly label: "Базовые настройки сайта";
     readonly group: "Администрирование";
 }, {
     readonly key: "admin.permissions";

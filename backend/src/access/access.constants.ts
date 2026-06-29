@@ -11,7 +11,7 @@ export const ALL_PERMISSIONS = [
   { key: 'admin.panel', label: 'Панель администратора', group: 'Администрирование' },
   { key: 'admin.users', label: 'Управление пользователями', group: 'Администрирование' },
   { key: 'admin.offices', label: 'Управление офисами', group: 'Администрирование' },
-  { key: 'admin.settings', label: 'Настройки сайта и БЦ', group: 'Администрирование' },
+  { key: 'admin.settings', label: 'Базовые настройки сайта', group: 'Администрирование' },
   { key: 'admin.permissions', label: 'Права и типы пропусков', group: 'Администрирование' },
 ] as const;
 

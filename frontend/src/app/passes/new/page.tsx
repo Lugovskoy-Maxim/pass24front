@@ -6,7 +6,8 @@ import { ProtectedLayout } from '@/components/ProtectedLayout';
 import { useAuth } from '@/lib/auth';
 import { useConfig } from '@/hooks/useConfig';
 import { useToast } from '@/components/Toast';
-import { api, PassType, TYPE_LABELS, VISIT_PURPOSES } from '@/lib/api';
+import { api, PassType, TYPE_LABELS, VISIT_PURPOSES, getErrorMessage } from '@/lib/api';
+import { getVisitorNameLabel } from '@/lib/person-name';
 
 function NewPassForm() {
   const { user } = useAuth();
@@ -96,7 +97,7 @@ function NewPassForm() {
           setFloor(template.floor || '');
         }
       })
-      .catch((err) => toast(err instanceof Error ? err.message : 'Шаблон не найден', 'error'));
+      .catch((err) => toast(getErrorMessage(err, 'Шаблон не найден'), 'error'));
   }, [templateId]);
 
   const handleBcSelect = (id: string) => {
@@ -174,7 +175,7 @@ function NewPassForm() {
       window.location.assign(`/ticket/${encodeURIComponent(pass.passNumber)}`);
       return;
     } catch (err) {
-      const msg = err instanceof Error ? err.message : 'Ошибка';
+      const msg = getErrorMessage(err, 'Ошибка');
       setError(msg);
       toast(msg, 'error');
     } finally {
@@ -184,7 +185,7 @@ function NewPassForm() {
 
   return (
     <ProtectedLayout permissions={['passes.create']}>
-      <h1 className="text-2xl font-bold mb-2">{templateId ? 'Заказ по шаблону' : 'Заказ пропуска'}</h1>
+      <h1 className="page-title mb-2">{templateId ? 'Заказ по шаблону' : 'Заказ пропуска'}</h1>
       {config && (
         <p className="text-sm text-[var(--muted)] mb-6">
           Рабочие часы БЦ: {config.workingHoursFrom}–{config.workingHoursTo}
@@ -203,7 +204,7 @@ function NewPassForm() {
                 key={key}
                 type="button"
                 className={`py-2 px-3 text-sm rounded-lg border transition-colors ${
-                  passType === key ? 'border-[var(--primary)] bg-blue-50 text-[var(--primary)] font-medium' : 'border-[var(--border)] hover:bg-slate-50'
+                  passType === key ? 'border-[var(--accent)] bg-[var(--accent-soft)] text-[var(--primary)] font-medium' : 'border-[var(--border)] hover:bg-[var(--surface-muted)]'
                 }`}
                 onClick={() => setPassType(key)}
               >
@@ -214,7 +215,7 @@ function NewPassForm() {
         </div>
 
         <div>
-          <label className="label">ФИО посетителя *</label>
+          <label className="label">{getVisitorNameLabel(passType)} *</label>
           <input className="input" value={visitorName} onChange={(e) => setVisitorName(e.target.value)} required />
         </div>
 
@@ -320,7 +321,7 @@ function NewPassForm() {
           <textarea className="input min-h-[80px] resize-y" value={comment} onChange={(e) => setComment(e.target.value)} placeholder="Дополнительная информация" />
         </div>
 
-        <div className="border border-[var(--border)] rounded-lg p-4 bg-slate-50/50 space-y-3">
+        <div className="border border-[var(--border)] rounded-lg p-4 bg-[var(--surface-muted)] space-y-3">
           <label className="flex items-center gap-2 cursor-pointer">
             <input
               type="checkbox"

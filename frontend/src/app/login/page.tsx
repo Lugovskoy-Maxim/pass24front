@@ -4,8 +4,11 @@ import { useState, useEffect, FormEvent } from 'react';
 import { useRouter } from 'next/navigation';
 import { Mail, Phone } from 'lucide-react';
 import { useAuth } from '@/lib/auth';
+import { getErrorMessage } from '@/lib/api';
 import { useConfig } from '@/hooks/useConfig';
 import { SiteBrand } from '@/components/SiteBrand';
+import { PersonNameFields } from '@/components/PersonNameFields';
+import { buildFullName, getUserNameLabels, isPersonNameValid, PersonNameParts } from '@/lib/person-name';
 
 export default function LoginPage() {
   const { user, loading: authLoading } = useAuth();
@@ -18,7 +21,7 @@ export default function LoginPage() {
   const [mode, setMode] = useState<'login' | 'register'>('login');
   const [email, setEmail] = useState('');
   const [password, setPassword] = useState('');
-  const [fullName, setFullName] = useState('');
+  const [nameParts, setNameParts] = useState<PersonNameParts>({ lastName: '', firstName: '', middleName: '' });
   const [company, setCompany] = useState('');
   const [office, setOffice] = useState('');
   const [floor, setFloor] = useState('');
@@ -43,33 +46,48 @@ export default function LoginPage() {
       if (mode === 'login') {
         await login(email, password);
       } else {
-        await register({ email, password, fullName, company, office, floor });
+        if (!isPersonNameValid(nameParts)) {
+          setError('Укажите фамилию и имя');
+          setLoading(false);
+          return;
+        }
+        await register({
+          email,
+          password,
+          lastName: nameParts.lastName.trim(),
+          firstName: nameParts.firstName.trim(),
+          middleName: nameParts.middleName.trim() || undefined,
+          fullName: buildFullName(nameParts),
+          company,
+          office,
+          floor,
+        });
       }
       router.push('/dashboard');
     } catch (err) {
-      setError(err instanceof Error ? err.message : 'Ошибка');
+      setError(getErrorMessage(err, 'Ошибка входа'));
     } finally {
       setLoading(false);
     }
   };
 
   return (
-    <div className="min-h-screen flex items-center justify-center p-4">
+    <div className="min-h-screen flex items-center justify-center p-4 bg-[var(--bg)]">
       <div className="w-full max-w-md">
         <div className="text-center mb-8">
           <div className="flex justify-center mb-4">
-            <SiteBrand config={config} size="lg" showTagline layout="column" />
+            <SiteBrand config={config} size="lg" showTagline layout="column" variant="dark" />
           </div>
           {(config?.sitePhone || config?.siteEmail) && (
-            <div className="flex flex-wrap items-center justify-center gap-4 text-sm text-[var(--muted)]">
+            <div className="flex flex-wrap items-center justify-center gap-4 text-sm" style={{ color: 'var(--header-muted)' }}>
               {config.sitePhone && (
-                <a href={`tel:${config.sitePhone}`} className="inline-flex items-center gap-1.5 hover:text-[var(--primary)]">
+                <a href={`tel:${config.sitePhone}`} className="inline-flex items-center gap-1.5 hover:text-white transition-colors">
                   <Phone className="w-4 h-4" />
                   {config.sitePhone}
                 </a>
               )}
               {config.siteEmail && (
-                <a href={`mailto:${config.siteEmail}`} className="inline-flex items-center gap-1.5 hover:text-[var(--primary)]">
+                <a href={`mailto:${config.siteEmail}`} className="inline-flex items-center gap-1.5 hover:text-white transition-colors">
                   <Mail className="w-4 h-4" />
                   {config.siteEmail}
                 </a>
@@ -79,18 +97,31 @@ export default function LoginPage() {
         </div>
 
         <div className="card p-6">
-          <div className="flex gap-2 mb-6 p-1 bg-slate-100 rounded-lg">
-            <button type="button" className={`flex-1 py-2 text-sm rounded-md transition-colors ${mode === 'login' ? 'bg-white shadow-sm font-medium' : 'text-[var(--muted)]'}`} onClick={() => setMode('login')}>Вход</button>
-            <button type="button" className={`flex-1 py-2 text-sm rounded-md transition-colors ${mode === 'register' ? 'bg-white shadow-sm font-medium' : 'text-[var(--muted)]'}`} onClick={() => setMode('register')}>Регистрация</button>
+          <div className="flex gap-1 mb-6 p-1 surface-muted rounded">
+            <button
+              type="button"
+              className={`flex-1 py-2 text-sm rounded transition-colors ${mode === 'login' ? 'bg-white shadow-sm font-medium text-[var(--text)]' : 'text-[var(--muted)]'}`}
+              onClick={() => setMode('login')}
+            >
+              Вход
+            </button>
+            <button
+              type="button"
+              className={`flex-1 py-2 text-sm rounded transition-colors ${mode === 'register' ? 'bg-white shadow-sm font-medium text-[var(--text)]' : 'text-[var(--muted)]'}`}
+              onClick={() => setMode('register')}
+            >
+              Регистрация
+            </button>
           </div>
 
           <form onSubmit={handleSubmit} className="space-y-4">
             {mode === 'register' && (
               <>
-                <div>
-                  <label className="label">ФИО контактного лица</label>
-                  <input className="input" value={fullName} onChange={(e) => setFullName(e.target.value)} required />
-                </div>
+                <PersonNameFields
+                  value={nameParts}
+                  labels={getUserNameLabels('tenant')}
+                  onChange={setNameParts}
+                />
                 <div>
                   <label className="label">Компания (арендатор)</label>
                   <input className="input" value={company} onChange={(e) => setCompany(e.target.value)} placeholder="ООО «Название»" />

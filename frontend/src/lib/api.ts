@@ -1,3 +1,13 @@
+import {
+  ApiError,
+  getErrorMessage,
+  messageForStatus,
+  parseErrorBody,
+  throwForResponse,
+} from './api-errors';
+
+export { ApiError, getErrorMessage, getErrorStatus, isNetworkError } from './api-errors';
+
 const API_URL = process.env.NEXT_PUBLIC_API_URL || 'http://127.0.0.1:4000/api';
 
 export type UserRole = 'tenant' | 'security' | 'bc_admin' | 'admin';
@@ -18,10 +28,24 @@ export interface TenantOffice {
   company?: string;
 }
 
+export interface ProfileChangeRequest {
+  last_name: string;
+  first_name: string;
+  middle_name?: string;
+  full_name: string;
+  phone?: string;
+  company?: string;
+  requested_at: string;
+}
+
 export interface User {
   id: string;
   email: string;
   full_name: string;
+  last_name?: string;
+  first_name?: string;
+  middle_name?: string;
+  profile_change_request?: ProfileChangeRequest | null;
   phone?: string;
   company?: string;
   role: UserRole;
@@ -81,6 +105,7 @@ export interface Pass {
   createdBy?: string;
   creatorName?: string;
   creatorCompany?: string;
+  creatorPhone?: string;
   visitorName: string;
   visitorPhone?: string;
   companyName?: string;
@@ -133,8 +158,7 @@ function parseContentDispositionFilename(header: string | null, fallback: string
 
 async function downloadFileResponse(res: Response, fallbackName: string) {
   if (!res.ok) {
-    const data = await res.json().catch(() => ({}));
-    throw new Error(data.message || data.error || 'Ошибка выгрузки');
+    await throwForResponse(res);
   }
 
   const blob = await res.blob();
@@ -168,9 +192,17 @@ async function request<T>(path: string, options: RequestInit = {}): Promise<T> {
   };
   if (token) headers.Authorization = `Bearer ${token}`;
 
-  const res = await fetch(`${API_URL}${path}`, { ...options, headers });
-  const data = await res.json().catch(() => ({}));
+  let res: Response;
+  try {
+    res = await fetch(`${API_URL}${path}`, { ...options, headers });
+  } catch (error) {
+    throw new ApiError(
+      getErrorMessage(error, 'Сервер недоступен. Проверьте подключение к сети и что backend запущен.'),
+      { isNetworkError: true },
+    );
+  }
 
+  const contentType = res.headers.get('content-type') || '';
   if (!res.ok) {
     if (res.status === 401 && typeof window !== 'undefined') {
       localStorage.removeItem('pass24_token');
@@ -178,8 +210,14 @@ async function request<T>(path: string, options: RequestInit = {}): Promise<T> {
         window.location.href = '/login';
       }
     }
-    throw new Error(data.message || data.error || 'Ошибка запроса');
+    await throwForResponse(res);
   }
+
+  if (res.status === 204 || !contentType.includes('application/json')) {
+    return {} as T;
+  }
+
+  const data = await res.json().catch(() => ({}));
   return data as T;
 }
 
@@ -190,13 +228,36 @@ export const api = {
       body: JSON.stringify({ email, password }),
     }),
 
-  register: (data: { email: string; password: string; fullName: string; phone?: string; company?: string; office?: string; floor?: string }) =>
+  register: (data: {
+    email: string;
+    password: string;
+    fullName?: string;
+    lastName?: string;
+    firstName?: string;
+    middleName?: string;
+    phone?: string;
+    company?: string;
+    office?: string;
+    floor?: string;
+  }) =>
     request<{ user: User; token: string }>('/auth/register', {
       method: 'POST',
       body: JSON.stringify(data),
     }),
 
   me: () => request<{ user: User }>('/auth/me'),
+
+  updateProfile: (data: {
+    lastName: string;
+    firstName: string;
+    middleName?: string;
+    phone?: string;
+    company?: string;
+  }) =>
+    request<{ user: User }>('/auth/profile', { method: 'PATCH', body: JSON.stringify(data) }),
+
+  cancelProfileRequest: () =>
+    request<{ user: User }>('/auth/profile/request', { method: 'DELETE' }),
 
   getPasses: (params?: { status?: string; date?: string; search?: string }) => {
     const q = new URLSearchParams();
@@ -263,15 +324,31 @@ export const api = {
 
   getStats: () => request<PassStats>('/passes/stats'),
 
+  getOverdueActive: () => request<{ count: number; passes: Pass[] }>('/passes/overdue-active'),
+
   lookupPass: (passNumber: string) =>
     request<{ pass: Pass }>(`/passes/lookup/${encodeURIComponent(passNumber)}`),
 
   getPublicTicket: async (passNumber: string) => {
-    const res = await fetch(`${API_URL}/passes/public/${encodeURIComponent(passNumber)}`);
-    const data = await res.json().catch(() => ({}));
-    if (!res.ok) {
-      throw new Error(data.message || data.error || 'Пропуск не найден');
+    let res: Response;
+    try {
+      res = await fetch(`${API_URL}/passes/public/${encodeURIComponent(passNumber)}`);
+    } catch (error) {
+      throw new ApiError(
+        getErrorMessage(error, 'Сервер недоступен. Проверьте подключение к сети и что backend запущен.'),
+        { isNetworkError: true },
+      );
     }
+
+    if (!res.ok) {
+      const data = await parseErrorBody(res);
+      const message = res.status === 404
+        ? (data.message || data.error || 'Пропуск не найден')
+        : messageForStatus(res.status, data);
+      throw new ApiError(message, { status: res.status });
+    }
+
+    const data = await res.json().catch(() => ({}));
     return data as { ticket: PublicPassTicket };
   },
 
@@ -314,12 +391,21 @@ export const api = {
     updateUser: (id: string, data: Partial<CreateUserData & { isActive: boolean }>) =>
       request<{ user: AdminUser }>(`/admin/users/${id}`, { method: 'PATCH', body: JSON.stringify(data) }),
 
+    getProfileChangeRequests: () =>
+      request<{ requests: Array<{ user: AdminUser; request: ProfileChangeRequest }> }>('/admin/profile-change-requests'),
+
+    approveProfileChange: (id: string) =>
+      request<{ user: AdminUser }>(`/admin/users/${id}/profile-change/approve`, { method: 'POST' }),
+
+    rejectProfileChange: (id: string) =>
+      request<{ user: AdminUser }>(`/admin/users/${id}/profile-change/reject`, { method: 'POST' }),
+
     getBusinessCenters: () => request<{ businessCenters: BusinessCenter[] }>('/admin/business-centers'),
 
     createBusinessCenter: (data: { name: string; address: string; code?: string }) =>
       request<{ businessCenter: BusinessCenter }>('/admin/business-centers', { method: 'POST', body: JSON.stringify(data) }),
 
-    updateBusinessCenter: (id: string, data: { name?: string; address?: string }) =>
+    updateBusinessCenter: (id: string, data: { name?: string; address?: string; passSettings?: Partial<BcPassSettings> }) =>
       request<{ businessCenter: BusinessCenter }>(`/admin/business-centers/${id}`, { method: 'PATCH', body: JSON.stringify(data) }),
 
     seedTestData: () =>
@@ -346,12 +432,20 @@ export const api = {
       const datePart = filters.dateFrom && filters.dateTo
         ? `${filters.dateFrom}_${filters.dateTo}`
         : new Date().toISOString().slice(0, 10);
-      const res = await fetch(`${API_URL}/admin/audit/export${qs ? `?${qs}` : ''}`, {
-        headers: {
-          Accept: 'text/csv',
-          ...(token ? { Authorization: `Bearer ${token}` } : {}),
-        },
-      });
+      let res: Response;
+      try {
+        res = await fetch(`${API_URL}/admin/audit/export${qs ? `?${qs}` : ''}`, {
+          headers: {
+            Accept: 'text/csv',
+            ...(token ? { Authorization: `Bearer ${token}` } : {}),
+          },
+        });
+      } catch (error) {
+        throw new ApiError(
+          getErrorMessage(error, 'Сервер недоступен. Проверьте подключение к сети и что backend запущен.'),
+          { isNetworkError: true },
+        );
+      }
       await downloadFileResponse(res, `audit-${datePart}.csv`);
     },
 
@@ -360,11 +454,6 @@ export const api = {
     updateSiteSettings: (data: Partial<SiteSettings>) =>
       request<{ settings: SiteSettings }>('/admin/site-settings', { method: 'PATCH', body: JSON.stringify(data) }),
 
-    getSettings: () => request<{ settings: SystemSettings }>('/admin/settings'),
-
-    updateSettings: (data: Partial<SystemSettings>) =>
-      request<{ settings: SystemSettings }>('/admin/settings', { method: 'PATCH', body: JSON.stringify(data) }),
-
     getOffices: () => request<{ offices: Office[] }>('/admin/offices'),
 
     createOffice: (data: CreateOfficeData) =>
@@ -372,14 +461,6 @@ export const api = {
 
     updateOffice: (id: string, data: Partial<CreateOfficeData & { isActive: boolean }>) =>
       request<{ office: Office }>(`/admin/offices/${id}`, { method: 'PATCH', body: JSON.stringify(data) }),
-
-    getBlacklist: () => request<{ entries: BlacklistEntry[] }>('/admin/blacklist'),
-
-    addBlacklist: (plate: string, reason?: string) =>
-      request<{ entry: BlacklistEntry }>('/admin/blacklist', { method: 'POST', body: JSON.stringify({ plate, reason }) }),
-
-    deleteBlacklist: (id: string) =>
-      request<{ ok: boolean }>(`/admin/blacklist/${id}`, { method: 'DELETE' }),
 
     getDailyReport: (date?: string) =>
       request<DailyReport>(`/admin/reports/daily${date ? `?date=${date}` : ''}`),
@@ -436,12 +517,7 @@ export interface CreateOfficeData {
   tenantId?: string;
 }
 
-export interface BlacklistEntry {
-  id: string;
-  plate: string;
-  reason?: string;
-  createdAt: string;
-}
+
 
 export interface DailyReport {
   date: string;
@@ -480,12 +556,16 @@ export interface AdminUser {
   id: string;
   email: string;
   fullName: string;
+  lastName?: string;
+  firstName?: string;
+  middleName?: string;
   phone?: string;
   company?: string;
   role: UserRole;
   office?: string;
   floor?: string;
   isActive: boolean;
+  profileChangeRequest?: ProfileChangeRequest | null;
   createdAt: string;
   passesCount?: number;
   offices?: TenantOffice[];
@@ -496,7 +576,10 @@ export interface AdminUser {
 export interface CreateUserData {
   email: string;
   password: string;
-  fullName: string;
+  fullName?: string;
+  lastName?: string;
+  firstName?: string;
+  middleName?: string;
   phone?: string;
   company?: string;
   role: UserRole;
@@ -553,6 +636,26 @@ export interface CreatePassTemplateData {
   comment?: string;
 }
 
+export interface BcPassSettings {
+  max_passes_per_day: string;
+  auto_approve_delivery: string;
+  working_hours_from: string;
+  working_hours_to: string;
+  contact_phone: string;
+  contact_email: string;
+  reception_floor: string;
+}
+
+export const DEFAULT_BC_PASS_SETTINGS: BcPassSettings = {
+  max_passes_per_day: '200',
+  auto_approve_delivery: 'false',
+  working_hours_from: '08:00',
+  working_hours_to: '20:00',
+  contact_phone: '+7 (495) 000-00-00',
+  contact_email: 'reception@pass24.local',
+  reception_floor: '1',
+};
+
 export interface BusinessCenter {
   id: string;
   name: string;
@@ -561,6 +664,7 @@ export interface BusinessCenter {
   totalAreaSqm?: number;
   isActive: boolean;
   createdAt: string;
+  passSettings?: BcPassSettings;
 }
 
 export interface AuditEntry {
@@ -618,17 +722,6 @@ function buildAuditQuery(filters: AuditFilters = {}) {
   return q.toString();
 }
 
-export interface SystemSettings {
-  business_center_name: string;
-  max_passes_per_day: string;
-  auto_approve_delivery: string;
-  working_hours_from: string;
-  working_hours_to: string;
-  contact_phone: string;
-  contact_email: string;
-  reception_floor: string;
-}
-
 export interface AdminDashboard {
   stats: {
     users: { total: number; byRole: Record<string, number> };
@@ -636,7 +729,7 @@ export interface AdminDashboard {
     businessCenters: number;
   };
   recentActivity: AuditEntry[];
-  settings: SystemSettings;
+  businessCenterNames: string[];
 }
 
 export const STATUS_LABELS: Record<PassStatus, string> = {

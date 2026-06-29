@@ -17,6 +17,7 @@ export declare class PassesController {
             createdBy: any;
             creatorName: any;
             creatorCompany: any;
+            creatorPhone: any;
             visitorName: any;
             visitorPhone: any;
             companyName: any;
@@ -64,6 +65,7 @@ export declare class PassesController {
             createdBy: any;
             creatorName: any;
             creatorCompany: any;
+            creatorPhone: any;
             visitorName: any;
             visitorPhone: any;
             companyName: any;
@@ -102,7 +104,48 @@ export declare class PassesController {
         byStatus: any;
         todayByType: any;
     }>;
-    lookup(passNumber: string): Promise<{
+    getOverdueActive(req: any): Promise<{
+        count: number;
+        passes: {
+            id: any;
+            passNumber: any;
+            isOwner: boolean;
+            createdBy: any;
+            creatorName: any;
+            creatorCompany: any;
+            creatorPhone: any;
+            visitorName: any;
+            visitorPhone: any;
+            companyName: any;
+            visitPurpose: any;
+            passType: any;
+            vehiclePlate: any;
+            vehicleModel: any;
+            visitDate: any;
+            visitTimeFrom: any;
+            visitTimeTo: any;
+            propertyId: any;
+            officeId: any;
+            businessCenterName: any;
+            office: any;
+            floor: any;
+            comment: any;
+            status: any;
+            approvedBy: any;
+            approverName: any;
+            approvedAt: any;
+            rejectionReason: any;
+            checkedInAt: any;
+            checkedInBy: any;
+            checkerInName: any;
+            checkedOutAt: any;
+            checkedOutBy: any;
+            checkerOutName: any;
+            createdAt: any;
+            updatedAt: any;
+        }[];
+    }>;
+    lookup(passNumber: string, req: any): Promise<{
         pass: {
             id: any;
             passNumber: any;
@@ -110,6 +153,7 @@ export declare class PassesController {
             createdBy: any;
             creatorName: any;
             creatorCompany: any;
+            creatorPhone: any;
             visitorName: any;
             visitorPhone: any;
             companyName: any;
@@ -149,6 +193,7 @@ export declare class PassesController {
             createdBy: any;
             creatorName: any;
             creatorCompany: any;
+            creatorPhone: any;
             visitorName: any;
             visitorPhone: any;
             companyName: any;
@@ -188,6 +233,7 @@ export declare class PassesController {
             createdBy: any;
             creatorName: any;
             creatorCompany: any;
+            creatorPhone: any;
             visitorName: any;
             visitorPhone: any;
             companyName: any;
@@ -228,6 +274,7 @@ export declare class PassesController {
             createdBy: any;
             creatorName: any;
             creatorCompany: any;
+            creatorPhone: any;
             visitorName: any;
             visitorPhone: any;
             companyName: any;
@@ -271,6 +318,7 @@ export declare class PassesController {
             createdBy: any;
             creatorName: any;
             creatorCompany: any;
+            creatorPhone: any;
             visitorName: any;
             visitorPhone: any;
             companyName: any;
@@ -310,6 +358,7 @@ export declare class PassesController {
             createdBy: any;
             creatorName: any;
             creatorCompany: any;
+            creatorPhone: any;
             visitorName: any;
             visitorPhone: any;
             companyName: any;

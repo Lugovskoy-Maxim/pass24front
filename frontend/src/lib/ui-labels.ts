@@ -25,11 +25,15 @@ export const DEFAULT_UI_LABELS = {
   },
   passes: {
     detailTitle: 'Детали пропуска',
+    detailTimeline: 'Ход визита',
     searchPlaceholder: 'Поиск...',
     allStatuses: 'Все статусы',
     notFound: 'Пропуска не найдены',
     loading: 'Загрузка...',
     close: 'Закрыть',
+    countOne: 'пропуск',
+    countFew: 'пропуска',
+    countMany: 'пропусков',
   },
   dashboard: {
     statPending: 'На рассмотрении',
@@ -106,6 +110,14 @@ export const DEFAULT_UI_LABELS = {
     overdueInsideBanner: 'Посетители всё ещё в здании после даты визита — оформите выход вручную',
     overdueInsideBadge: 'Просрочен визит',
     overdueInsideCard: 'Гость в здании после даты визита — пропуск сохранён, оформите выход',
+    overdueEndTimeBanner: 'Гости не вышли до назначенного времени — оформите выход вручную',
+    overdueEndTimeBadge: 'Просрочен выход',
+    overdueEndTimeCard: 'Гость в здании после {time} — пропуск сохранён, оформите выход',
+    overdueMixedBanner: 'Гости не вышли в срок (время или дата визита) — оформите выход вручную',
+    lookupResult: 'Результат поиска',
+    journalLoading: 'Загрузка журнала...',
+    journalEmpty: 'На выбранную дату пропусков нет',
+    selectedPass: 'Выбранный пропуск',
   },
   timeline: {
     request: 'Заявка',
@@ -152,8 +164,19 @@ export const DEFAULT_UI_LABELS = {
     actionDone: 'Действие выполнено',
     passFound: 'Найден пропуск',
     guestStillInside: 'Посетитель всё ещё в здании. Пропуск не аннулирован — оформите выход.',
+    guestPastEndTime: 'Посетитель не вышел до {time}. Оформите выход вручную.',
   },
 } as const;
+
+export {
+  getGuestOverdueKind,
+  getLocalDateString,
+  getOverdueBadgeLabel,
+  getOverdueBannerText,
+  getOverdueCardMessage,
+  isGuestStillInside,
+} from './pass-overdue';
+export type { GuestOverdueKind } from './pass-overdue';
 
 export type UiLabels = typeof DEFAULT_UI_LABELS;
 
@@ -185,21 +208,13 @@ export function getStatusLabel(status: PassStatus, labels: UiLabels): string {
   return labels.statuses[status] || DEFAULT_UI_LABELS.statuses[status];
 }
 
-export function getTodayDateString(): string {
-  return new Date().toISOString().slice(0, 10);
-}
-
-export function isGuestStillInside(pass: { status: PassStatus; visitDate: string }): boolean {
-  return pass.status === 'active' && pass.visitDate < getTodayDateString();
-}
-
 export function getPassCardBorderClass(status: PassStatus, stillInside?: boolean): string {
   if (stillInside) return 'border-amber-400 shadow-amber-100/60 ring-1 ring-amber-300';
   if (status === 'active') return 'border-emerald-200 shadow-emerald-50/50';
   if (status === 'pending') return 'border-amber-200';
-  if (status === 'approved') return 'border-blue-200';
+  if (status === 'approved') return 'border-[var(--accent-border)]';
   if (status === 'rejected') return 'border-red-200';
-  if (status === 'expired' || status === 'cancelled') return 'border-slate-200';
+  if (status === 'expired' || status === 'cancelled') return 'border-[var(--border)]';
   return '';
 }
 
@@ -221,6 +236,7 @@ export type PassCardData = {
   comment?: string;
   creatorName?: string;
   creatorCompany?: string;
+  creatorPhone?: string;
   createdAt?: string;
   approvedAt?: string;
   checkedInAt?: string;

@@ -30,10 +30,16 @@ export class PassesController {
     return this.passesService.getStats(req.user);
   }
 
+  @Get('overdue-active')
+  @RequirePermissions('passes.reception', 'passes.view_all', 'admin.panel')
+  getOverdueActive(@Req() req: any) {
+    return this.passesService.getOverdueActive(req.user);
+  }
+
   @Get('lookup/:passNumber')
   @RequirePermissions('passes.lookup', 'passes.reception', 'admin.panel')
-  lookup(@Param('passNumber') passNumber: string) {
-    return this.passesService.lookup(passNumber);
+  lookup(@Param('passNumber') passNumber: string, @Req() req: any) {
+    return this.passesService.lookup(passNumber, req.user);
   }
 
   @Get(':id')

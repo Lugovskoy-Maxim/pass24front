@@ -19,8 +19,10 @@ import {
 } from 'lucide-react';
 import { PassType, TYPE_LABELS } from '@/lib/api';
 import {
+  getGuestOverdueKind,
+  getOverdueBadgeLabel,
+  getOverdueCardMessage,
   getPassCardBorderClass,
-  isGuestStillInside,
   mergeUiLabels,
   PassCardData,
   UiLabels,
@@ -52,7 +54,7 @@ function CopyPassNumber({ passNumber, title }: { passNumber: string; title: stri
     <button
       type="button"
       onClick={handleCopy}
-      className="p-1 rounded-md text-[var(--muted)] hover:text-[var(--primary)] hover:bg-slate-100 transition-colors"
+      className="p-1 rounded-md text-[var(--muted)] hover:text-[var(--primary)] hover:bg-[var(--surface-muted)] transition-colors"
       title={title}
     >
       {copied ? <Check className="w-4 h-4 text-emerald-600" /> : <Copy className="w-4 h-4" />}
@@ -100,7 +102,8 @@ export function PassCardBase({
     ? `${pass.visitTimeFrom}${pass.visitTimeTo ? ` – ${pass.visitTimeTo}` : ''}`
     : null;
   const isTerminal = ['rejected', 'cancelled', 'expired', 'completed'].includes(pass.status);
-  const stillInside = isGuestStillInside(pass);
+  const overdueKind = getGuestOverdueKind(pass);
+  const stillInside = overdueKind !== null;
   const useTimeline = showTimeline ?? !isCompact;
   const useBadge = showStatusBadge ?? isCompact;
 
@@ -124,12 +127,12 @@ export function PassCardBase({
         }
       } : undefined}
     >
-      {stillInside && (
+      {overdueKind && (
         <div className="px-4 py-2 bg-amber-50 border-b border-amber-200 text-amber-900 text-xs sm:text-sm flex items-center gap-2">
           <span className="inline-flex px-2 py-0.5 rounded-full bg-amber-200/80 font-semibold text-[10px] uppercase tracking-wide shrink-0">
-            {labels.reception.overdueInsideBadge}
+            {getOverdueBadgeLabel(overdueKind, labels)}
           </span>
-          <span>{labels.reception.overdueInsideCard}</span>
+          <span>{getOverdueCardMessage(overdueKind, pass, labels)}</span>
         </div>
       )}
 
@@ -161,7 +164,7 @@ export function PassCardBase({
                 <Link
                   href={`/ticket/${encodeURIComponent(pass.passNumber)}`}
                   target="_blank"
-                  className="p-1 rounded-md text-[var(--muted)] hover:text-[var(--primary)] hover:bg-slate-100"
+                  className="p-1 rounded-md text-[var(--muted)] hover:text-[var(--primary)] hover:bg-[var(--surface-muted)]"
                   title={labels.buttons.qrPass}
                   onClick={(e) => e.stopPropagation()}
                 >
@@ -212,12 +215,12 @@ export function PassCardBase({
       </div>
 
       {useTimeline && (
-        <div className={`${isCompact ? 'px-2 sm:px-3 py-3' : 'px-3 sm:px-5 py-4'} ${isTerminal ? 'bg-slate-50/50' : 'bg-white'}`}>
+        <div className={`${isCompact ? 'px-2 sm:px-3 py-3' : 'px-3 sm:px-5 py-4'} ${isTerminal ? 'bg-[var(--surface-muted)]' : 'bg-white'}`}>
           <PassVisitTimeline pass={pass} labels={labels} compact={isCompact} />
         </div>
       )}
 
-      <div className={`border-t border-[var(--border)] bg-slate-50/30 ${isCompact ? 'px-3 py-2' : 'px-4 py-3'}`}>
+      <div className={`border-t border-[var(--border)] bg-[var(--surface-muted)] ${isCompact ? 'px-3 py-2' : 'px-4 py-3'}`}>
         <div className={`flex flex-wrap gap-x-4 gap-y-2 ${isCompact ? 'text-xs' : 'text-sm'}`}>
           <span className="inline-flex items-center gap-1.5 text-[var(--text)]">
             <Clock className="w-3.5 h-3.5 text-[var(--muted)]" />

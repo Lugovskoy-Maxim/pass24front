@@ -8,19 +8,19 @@ export class AppSettings {
   @Prop({ required: true, unique: true, default: 'global' })
   key: string;
 
-  @Prop({ default: 'PASS24' })
+  @Prop({ default: 'M-STYLE' })
   siteName: string;
 
-  @Prop({ default: '' })
+  @Prop({ default: '/brand/mstyle-logo.svg' })
   siteIcon: string;
 
   @Prop({ default: 'Пропуска для арендаторов бизнес-центра' })
   siteTagline: string;
 
-  @Prop({ default: '+7 (495) 123-45-67' })
+  @Prop({ default: '+7 495 663-00-00' })
   sitePhone: string;
 
-  @Prop({ default: 'info@pass24.local' })
+  @Prop({ default: 'renta@mstyle.ru' })
   siteEmail: string;
 
   @Prop({ type: Object, default: {} })

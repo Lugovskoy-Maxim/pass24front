@@ -131,26 +131,26 @@ function buildSteps(pass: PassTimelineData, now: number, t: UiLabels['timeline']
 
 const NODE_STYLES: Record<StepState, string> = {
   done: 'bg-emerald-500 text-white border-emerald-500',
-  current: 'bg-[var(--primary)] text-white border-[var(--primary)] ring-4 ring-blue-100',
-  upcoming: 'bg-white text-slate-300 border-slate-200',
+  current: 'bg-[var(--accent)] text-white border-[var(--accent)] ring-4 ring-[var(--accent-soft)]',
+  upcoming: 'bg-white text-[var(--border-strong)] border-[var(--border)]',
   failed: 'bg-red-500 text-white border-red-500',
-  skipped: 'bg-slate-100 text-slate-300 border-slate-200',
+  skipped: 'bg-[var(--surface-muted)] text-[var(--border-strong)] border-[var(--border)]',
 };
 
 const LABEL_STYLES: Record<StepState, string> = {
   done: 'text-emerald-700 font-medium',
   current: 'text-[var(--primary)] font-semibold',
-  upcoming: 'text-slate-400',
+  upcoming: 'text-[var(--muted)]',
   failed: 'text-red-600 font-semibold',
-  skipped: 'text-slate-300',
+  skipped: 'text-[var(--border-strong)]',
 };
 
 const LINE_STYLES: Record<StepState, string> = {
   done: 'bg-emerald-400',
-  current: 'bg-gradient-to-r from-emerald-400 to-slate-200',
-  upcoming: 'bg-slate-200',
+  current: 'bg-gradient-to-r from-emerald-400 to-[var(--border)]',
+  upcoming: 'bg-[var(--border)]',
   failed: 'bg-red-200',
-  skipped: 'bg-slate-100',
+  skipped: 'bg-[var(--surface-muted)]',
 };
 
 function NodeIcon({ step }: { step: TimelineStep }) {

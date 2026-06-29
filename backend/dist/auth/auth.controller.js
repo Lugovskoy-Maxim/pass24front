@@ -18,6 +18,7 @@ const passport_1 = require("@nestjs/passport");
 const auth_service_1 = require("./auth.service");
 const login_dto_1 = require("./dto/login.dto");
 const register_dto_1 = require("./dto/register.dto");
+const update_profile_dto_1 = require("./dto/update-profile.dto");
 let AuthController = class AuthController {
     authService;
     constructor(authService) {
@@ -31,6 +32,12 @@ let AuthController = class AuthController {
     }
     async me(req) {
         return this.authService.me(req.user.userId);
+    }
+    async requestProfileChange(req, dto) {
+        return this.authService.requestProfileChange(req.user.userId, dto);
+    }
+    async cancelProfileChange(req) {
+        return this.authService.cancelProfileChange(req.user.userId);
     }
 };
 exports.AuthController = AuthController;
@@ -56,6 +63,23 @@ __decorate([
     __metadata("design:paramtypes", [Object]),
     __metadata("design:returntype", Promise)
 ], AuthController.prototype, "me", null);
+__decorate([
+    (0, common_1.UseGuards)((0, passport_1.AuthGuard)('jwt')),
+    (0, common_1.Patch)('profile'),
+    __param(0, (0, common_1.Req)()),
+    __param(1, (0, common_1.Body)()),
+    __metadata("design:type", Function),
+    __metadata("design:paramtypes", [Object, update_profile_dto_1.UpdateProfileDto]),
+    __metadata("design:returntype", Promise)
+], AuthController.prototype, "requestProfileChange", null);
+__decorate([
+    (0, common_1.UseGuards)((0, passport_1.AuthGuard)('jwt')),
+    (0, common_1.Delete)('profile/request'),
+    __param(0, (0, common_1.Req)()),
+    __metadata("design:type", Function),
+    __metadata("design:paramtypes", [Object]),
+    __metadata("design:returntype", Promise)
+], AuthController.prototype, "cancelProfileChange", null);
 exports.AuthController = AuthController = __decorate([
     (0, common_1.Controller)('auth'),
     __metadata("design:paramtypes", [auth_service_1.AuthService])

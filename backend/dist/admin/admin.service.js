@@ -47,6 +47,8 @@ var __param = (this && this.__param) || function (paramIndex, decorator) {
 Object.defineProperty(exports, "__esModule", { value: true });
 exports.AdminService = void 0;
 const common_1 = require("@nestjs/common");
+const person_name_1 = require("../common/person-name");
+const profile_change_1 = require("../common/profile-change");
 const mongoose_1 = require("@nestjs/mongoose");
 const bcrypt = __importStar(require("bcryptjs"));
 const mongoose_2 = require("mongoose");
@@ -98,7 +100,7 @@ let AdminService = class AdminService {
                 businessCenters: properties.length,
             },
             recentActivity,
-            settings: this.mapPropertySettings(properties[0]),
+            businessCenterNames: properties.map((p) => p.name),
             officesCount: offices.length,
         };
     }
@@ -217,9 +219,19 @@ let AdminService = class AdminService {
         if (existing)
             throw new common_1.ConflictException('Пользователь с таким email уже существует');
         const hashed = await bcrypt.hash(dto.password, 10);
+        let personName;
+        try {
+            personName = (0, person_name_1.resolvePersonName)(dto);
+        }
+        catch {
+            throw new common_1.BadRequestException('Укажите фамилию и имя');
+        }
         const user = await this.userModel.create({
             email,
-            fullName: dto.fullName,
+            fullName: personName.fullName,
+            lastName: personName.lastName,
+            firstName: personName.firstName,
+            middleName: personName.middleName,
             phone: dto.phone,
             company: dto.company,
             role: dto.role,
@@ -246,13 +258,92 @@ let AdminService = class AdminService {
         });
         return { user: this.mapUser(user.toObject(), 0, offices, businessCenters) };
     }
+    async getProfileChangeRequests() {
+        const users = await this.userModel
+            .find({ role: 'tenant', 'profileChangeRequest.requestedAt': { $exists: true, $ne: null } })
+            .sort({ 'profileChangeRequest.requestedAt': -1 })
+            .lean();
+        const items = await Promise.all(users.map(async (user) => {
+            const offices = await this.getTenantOffices(user._id.toString());
+            return {
+                user: this.mapUser(user, 0, offices, []),
+                request: (0, profile_change_1.mapProfileChangeRequest)(user.profileChangeRequest),
+            };
+        }));
+        return { requests: items.filter((item) => item.request) };
+    }
+    async approveProfileChange(id, actor) {
+        const user = await this.userModel.findById(id);
+        if (!user)
+            throw new common_1.NotFoundException('Пользователь не найден');
+        if (!user.profileChangeRequest?.requestedAt) {
+            throw new common_1.BadRequestException('Нет заявки на изменение профиля');
+        }
+        const req = user.profileChangeRequest;
+        user.lastName = req.lastName;
+        user.firstName = req.firstName;
+        user.middleName = req.middleName;
+        user.fullName = req.fullName;
+        if (req.phone !== undefined)
+            user.phone = req.phone;
+        if (req.company !== undefined)
+            user.company = req.company;
+        user.profileChangeRequest = null;
+        user.markModified('profileChangeRequest');
+        await user.save();
+        await this.auditService.log({
+            action: 'profile.change_approved',
+            entityType: 'user',
+            entityId: user._id,
+            actor,
+            details: { fullName: user.fullName, email: user.email },
+        });
+        const offices = await this.getTenantOffices(id);
+        return { user: this.mapUser(user.toObject(), 0, offices, []) };
+    }
+    async rejectProfileChange(id, actor) {
+        const user = await this.userModel.findById(id);
+        if (!user)
+            throw new common_1.NotFoundException('Пользователь не найден');
+        if (!user.profileChangeRequest?.requestedAt) {
+            throw new common_1.BadRequestException('Нет заявки на изменение профиля');
+        }
+        const requestedName = user.profileChangeRequest.fullName;
+        user.profileChangeRequest = null;
+        user.markModified('profileChangeRequest');
+        await user.save();
+        await this.auditService.log({
+            action: 'profile.change_rejected',
+            entityType: 'user',
+            entityId: user._id,
+            actor,
+            details: { fullName: requestedName, email: user.email },
+        });
+        const offices = await this.getTenantOffices(id);
+        return { user: this.mapUser(user.toObject(), 0, offices, []) };
+    }
     async updateUser(id, dto, actor) {
         const user = await this.userModel.findById(id);
         if (!user)
             throw new common_1.NotFoundException('Пользователь не найден');
         const prevRole = user.role;
-        if (dto.fullName !== undefined)
-            user.fullName = dto.fullName;
+        if (dto.fullName !== undefined || dto.lastName !== undefined || dto.firstName !== undefined || dto.middleName !== undefined) {
+            try {
+                const personName = (0, person_name_1.resolvePersonName)({
+                    fullName: dto.fullName ?? user.fullName,
+                    lastName: dto.lastName ?? user.lastName,
+                    firstName: dto.firstName ?? user.firstName,
+                    middleName: dto.middleName ?? user.middleName,
+                });
+                user.fullName = personName.fullName;
+                user.lastName = personName.lastName;
+                user.firstName = personName.firstName;
+                user.middleName = personName.middleName;
+            }
+            catch {
+                throw new common_1.BadRequestException('Укажите фамилию и имя');
+            }
+        }
         if (dto.phone !== undefined)
             user.phone = dto.phone;
         if (dto.company !== undefined)
@@ -295,44 +386,6 @@ let AdminService = class AdminService {
         });
         return { user: this.mapUser(user.toObject(), passesCount, offices, businessCenters) };
     }
-    async getSettings(actor) {
-        const property = await this.getPrimaryProperty(actor);
-        return this.mapPropertySettings(property);
-    }
-    async updateSettings(dto, actor) {
-        const property = await this.getPrimaryProperty(actor);
-        if (!property)
-            throw new common_1.NotFoundException('Бизнес-центр не найден');
-        if (dto.business_center_name?.trim()) {
-            property.name = dto.business_center_name.trim();
-        }
-        const settings = property.settings || {};
-        if (dto.max_passes_per_day !== undefined)
-            settings.max_passes_per_day = dto.max_passes_per_day;
-        if (dto.auto_approve_delivery !== undefined)
-            settings.auto_approve_delivery = dto.auto_approve_delivery;
-        if (dto.working_hours_from !== undefined)
-            settings.working_hours_from = dto.working_hours_from;
-        if (dto.working_hours_to !== undefined)
-            settings.working_hours_to = dto.working_hours_to;
-        if (dto.contact_phone !== undefined)
-            settings.contact_phone = dto.contact_phone;
-        if (dto.contact_email !== undefined)
-            settings.contact_email = dto.contact_email;
-        if (dto.reception_floor !== undefined)
-            settings.reception_floor = dto.reception_floor;
-        property.settings = settings;
-        property.markModified('settings');
-        await property.save();
-        await this.auditService.log({
-            action: 'settings.update',
-            entityType: 'property',
-            entityId: property._id,
-            actor,
-            details: { name: property.name },
-        });
-        return { settings: this.mapPropertySettings(property.toObject()) };
-    }
     async updateBusinessCenter(id, dto, actor) {
         const property = await this.propertyModel.findById(id);
         if (!property)
@@ -342,6 +395,10 @@ let AdminService = class AdminService {
             property.name = dto.name.trim();
         if (dto.address?.trim())
             property.address = dto.address.trim();
+        if (dto.passSettings) {
+            property.settings = this.mergeBcPassSettings(property.settings, dto.passSettings);
+            property.markModified('settings');
+        }
         await property.save();
         const stats = await this.officeModel.aggregate([
             { $match: { property: property._id, isActive: true } },
@@ -363,6 +420,7 @@ let AdminService = class AdminService {
                 totalAreaSqm: stats[0]?.totalAreaSqm || 0,
                 isActive: property.isActive,
                 createdAt: property.createdAt,
+                passSettings: this.mapBcPassSettings(property.toObject()),
             },
         };
     }
@@ -397,6 +455,7 @@ let AdminService = class AdminService {
                     totalAreaSqm: stats?.totalAreaSqm || 0,
                     isActive: p.isActive,
                     createdAt: p.createdAt,
+                    passSettings: this.mapBcPassSettings(p),
                 };
             }),
         };
@@ -426,6 +485,7 @@ let AdminService = class AdminService {
                 officesCount: 0,
                 isActive: true,
                 createdAt: property.createdAt,
+                passSettings: this.mapBcPassSettings(property.toObject()),
             },
         };
     }
@@ -676,10 +736,16 @@ let AdminService = class AdminService {
         return properties.map((p) => ({ id: p._id.toString(), name: p.name }));
     }
     mapUser(user, passesCount, offices = [], businessCenters = []) {
+        const nameParts = user.lastName || user.firstName
+            ? { lastName: user.lastName || '', firstName: user.firstName || '', middleName: user.middleName || '' }
+            : (0, person_name_1.splitFullName)(user.fullName);
         return {
             id: user._id.toString(),
             email: user.email,
             fullName: user.fullName,
+            lastName: nameParts.lastName,
+            firstName: nameParts.firstName,
+            middleName: nameParts.middleName,
             phone: user.phone,
             company: user.company,
             role: user.role || 'tenant',
@@ -691,14 +757,8 @@ let AdminService = class AdminService {
             offices,
             businessCenters,
             propertyIds: businessCenters.map((bc) => bc.id),
+            profileChangeRequest: (0, profile_change_1.mapProfileChangeRequest)(user.profileChangeRequest),
         };
-    }
-    async getPrimaryProperty(actor) {
-        const scope = await this.getActorPropertyIds(actor);
-        const filter = { type: enums_1.PropertyType.BUSINESS_CENTER, isActive: true };
-        if (scope?.length)
-            filter._id = { $in: scope.map((id) => new mongoose_2.Types.ObjectId(id)) };
-        return this.propertyModel.findOne(filter).sort({ createdAt: 1 });
     }
     async getActorPropertyIds(actor) {
         if (!actor || actor.role === 'admin')
@@ -718,10 +778,9 @@ let AdminService = class AdminService {
             throw new common_1.NotFoundException('Бизнес-центр не найден');
         }
     }
-    mapPropertySettings(property) {
+    mapBcPassSettings(property) {
         const s = property?.settings || {};
         return {
-            business_center_name: property?.name || 'PASS24',
             max_passes_per_day: s.max_passes_per_day || '200',
             auto_approve_delivery: s.auto_approve_delivery || 'false',
             working_hours_from: s.working_hours_from || '08:00',
@@ -730,6 +789,24 @@ let AdminService = class AdminService {
             contact_email: s.contact_email || 'reception@pass24.local',
             reception_floor: s.reception_floor || '1',
         };
+    }
+    mergeBcPassSettings(current, dto) {
+        const settings = { ...(current || {}) };
+        if (dto.max_passes_per_day !== undefined)
+            settings.max_passes_per_day = dto.max_passes_per_day;
+        if (dto.auto_approve_delivery !== undefined)
+            settings.auto_approve_delivery = dto.auto_approve_delivery;
+        if (dto.working_hours_from !== undefined)
+            settings.working_hours_from = dto.working_hours_from;
+        if (dto.working_hours_to !== undefined)
+            settings.working_hours_to = dto.working_hours_to;
+        if (dto.contact_phone !== undefined)
+            settings.contact_phone = dto.contact_phone;
+        if (dto.contact_email !== undefined)
+            settings.contact_email = dto.contact_email;
+        if (dto.reception_floor !== undefined)
+            settings.reception_floor = dto.reception_floor;
+        return settings;
     }
     countBy(arr, key) {
         return arr.reduce((acc, item) => {

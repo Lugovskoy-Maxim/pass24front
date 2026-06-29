@@ -23,9 +23,14 @@ export function canViewPasses(user: User | null | undefined): boolean {
 }
 
 export function canViewAllPasses(user: User | null | undefined): boolean {
+  if (user?.role === 'tenant') return false;
   return hasPermission(user, 'passes.view_all') || isAdminPanelUser(user);
 }
 
 export function canUseReception(user: User | null | undefined): boolean {
   return hasAnyPermission(user, 'passes.reception', 'passes.lookup') || isAdminPanelUser(user);
+}
+
+export function canSeeOverdueAlerts(user: User | null | undefined): boolean {
+  return canUseReception(user) || canViewAllPasses(user);
 }

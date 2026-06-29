@@ -1,10 +1,6 @@
 import { IsEmail, IsOptional, IsString } from 'class-validator';
 
-export class UpdateSettingsDto {
-  @IsOptional()
-  @IsString()
-  business_center_name?: string;
-
+export class BusinessCenterPassSettingsDto {
   @IsOptional()
   @IsString()
   max_passes_per_day?: string;
@@ -26,7 +22,7 @@ export class UpdateSettingsDto {
   contact_phone?: string;
 
   @IsOptional()
-  @IsString()
+  @IsEmail()
   contact_email?: string;
 
   @IsOptional()

@@ -12,6 +12,15 @@ export class User {
   @Prop({ trim: true })
   fullName?: string;
 
+  @Prop({ trim: true })
+  lastName?: string;
+
+  @Prop({ trim: true })
+  firstName?: string;
+
+  @Prop({ trim: true })
+  middleName?: string;
+
   @Prop({ trim: true, lowercase: true, unique: true, sparse: true })
   email?: string;
 
@@ -50,6 +59,17 @@ export class User {
 
   @Prop({ type: [{ type: String }], default: [] })
   pushTokens: string[]; // Для мобильных уведомлений
+
+  @Prop({ type: Object, default: null })
+  profileChangeRequest?: {
+    lastName?: string;
+    firstName?: string;
+    middleName?: string;
+    fullName?: string;
+    phone?: string;
+    company?: string;
+    requestedAt?: Date;
+  } | null;
 }
 
 export const UserSchema = SchemaFactory.createForClass(User);

@@ -9,12 +9,12 @@ import { PassCardBase } from './PassCardBase';
 export function getReceptionSections(labels: UiLabels) {
   return [
     { key: 'pending' as PassStatus, title: labels.reception.sectionPending, icon: AlertCircle, iconClass: 'text-amber-600' },
-    { key: 'approved' as PassStatus, title: labels.reception.sectionApproved, icon: Clock, iconClass: 'text-blue-600' },
+    { key: 'approved' as PassStatus, title: labels.reception.sectionApproved, icon: Clock, iconClass: 'text-[var(--accent)]' },
     { key: 'active' as PassStatus, title: labels.reception.sectionActive, icon: LogIn, iconClass: 'text-emerald-600' },
-    { key: 'completed' as PassStatus, title: labels.reception.sectionCompleted, icon: CheckCircle, iconClass: 'text-slate-500', dimmed: true },
-    { key: 'expired' as PassStatus, title: labels.reception.sectionExpired, icon: Clock, iconClass: 'text-gray-500', dimmed: true },
+    { key: 'completed' as PassStatus, title: labels.reception.sectionCompleted, icon: CheckCircle, iconClass: 'text-[var(--muted)]', dimmed: true },
+    { key: 'expired' as PassStatus, title: labels.reception.sectionExpired, icon: Clock, iconClass: 'text-[var(--muted)]', dimmed: true },
     { key: 'rejected' as PassStatus, title: labels.reception.sectionRejected, icon: XCircle, iconClass: 'text-red-500', dimmed: true },
-    { key: 'cancelled' as PassStatus, title: labels.reception.sectionCancelled, icon: XCircle, iconClass: 'text-gray-500', dimmed: true },
+    { key: 'cancelled' as PassStatus, title: labels.reception.sectionCancelled, icon: XCircle, iconClass: 'text-[var(--muted)]', dimmed: true },
   ];
 }
 

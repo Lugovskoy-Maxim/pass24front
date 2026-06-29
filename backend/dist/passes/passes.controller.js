@@ -35,8 +35,11 @@ let PassesController = class PassesController {
     getStats(req) {
         return this.passesService.getStats(req.user);
     }
-    lookup(passNumber) {
-        return this.passesService.lookup(passNumber);
+    getOverdueActive(req) {
+        return this.passesService.getOverdueActive(req.user);
+    }
+    lookup(passNumber, req) {
+        return this.passesService.lookup(passNumber, req.user);
     }
     findOne(id, req) {
         return this.passesService.findOne(id, req.user);
@@ -85,11 +88,20 @@ __decorate([
     __metadata("design:returntype", void 0)
 ], PassesController.prototype, "getStats", null);
 __decorate([
+    (0, common_1.Get)('overdue-active'),
+    (0, permissions_decorator_1.RequirePermissions)('passes.reception', 'passes.view_all', 'admin.panel'),
+    __param(0, (0, common_1.Req)()),
+    __metadata("design:type", Function),
+    __metadata("design:paramtypes", [Object]),
+    __metadata("design:returntype", void 0)
+], PassesController.prototype, "getOverdueActive", null);
+__decorate([
     (0, common_1.Get)('lookup/:passNumber'),
     (0, permissions_decorator_1.RequirePermissions)('passes.lookup', 'passes.reception', 'admin.panel'),
     __param(0, (0, common_1.Param)('passNumber')),
+    __param(1, (0, common_1.Req)()),
     __metadata("design:type", Function),
-    __metadata("design:paramtypes", [String]),
+    __metadata("design:paramtypes", [String, Object]),
     __metadata("design:returntype", void 0)
 ], PassesController.prototype, "lookup", null);
 __decorate([

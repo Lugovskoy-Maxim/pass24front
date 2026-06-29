@@ -23,7 +23,11 @@ export declare class PassesService implements OnModuleInit {
     private generatePassNumber;
     onModuleInit(): Promise<void>;
     private getTodayDate;
+    private getLocalDateString;
+    private parseTimeToMinutes;
+    private isPassOverdueInBuilding;
     expirePastPasses(): Promise<number>;
+    private createdByFilter;
     private buildAccessFilter;
     findAll(params: {
         status?: string;
@@ -37,6 +41,7 @@ export declare class PassesService implements OnModuleInit {
             createdBy: any;
             creatorName: any;
             creatorCompany: any;
+            creatorPhone: any;
             visitorName: any;
             visitorPhone: any;
             companyName: any;
@@ -76,6 +81,7 @@ export declare class PassesService implements OnModuleInit {
             createdBy: any;
             creatorName: any;
             creatorCompany: any;
+            creatorPhone: any;
             visitorName: any;
             visitorPhone: any;
             companyName: any;
@@ -115,6 +121,7 @@ export declare class PassesService implements OnModuleInit {
             createdBy: any;
             creatorName: any;
             creatorCompany: any;
+            creatorPhone: any;
             visitorName: any;
             visitorPhone: any;
             companyName: any;
@@ -160,6 +167,7 @@ export declare class PassesService implements OnModuleInit {
             createdBy: any;
             creatorName: any;
             creatorCompany: any;
+            creatorPhone: any;
             visitorName: any;
             visitorPhone: any;
             companyName: any;
@@ -199,6 +207,7 @@ export declare class PassesService implements OnModuleInit {
             createdBy: any;
             creatorName: any;
             creatorCompany: any;
+            creatorPhone: any;
             visitorName: any;
             visitorPhone: any;
             companyName: any;
@@ -238,6 +247,7 @@ export declare class PassesService implements OnModuleInit {
             createdBy: any;
             creatorName: any;
             creatorCompany: any;
+            creatorPhone: any;
             visitorName: any;
             visitorPhone: any;
             companyName: any;
@@ -285,6 +295,7 @@ export declare class PassesService implements OnModuleInit {
             createdBy: any;
             creatorName: any;
             creatorCompany: any;
+            creatorPhone: any;
             visitorName: any;
             visitorPhone: any;
             companyName: any;
@@ -316,7 +327,7 @@ export declare class PassesService implements OnModuleInit {
             updatedAt: any;
         }[];
     }>;
-    lookup(passNumber: string): Promise<{
+    lookup(passNumber: string, user?: any): Promise<{
         pass: {
             id: any;
             passNumber: any;
@@ -324,6 +335,7 @@ export declare class PassesService implements OnModuleInit {
             createdBy: any;
             creatorName: any;
             creatorCompany: any;
+            creatorPhone: any;
             visitorName: any;
             visitorPhone: any;
             companyName: any;
@@ -377,6 +389,47 @@ export declare class PassesService implements OnModuleInit {
             rejectionReason: any;
         };
     }>;
+    getOverdueActive(user?: any): Promise<{
+        count: number;
+        passes: {
+            id: any;
+            passNumber: any;
+            isOwner: boolean;
+            createdBy: any;
+            creatorName: any;
+            creatorCompany: any;
+            creatorPhone: any;
+            visitorName: any;
+            visitorPhone: any;
+            companyName: any;
+            visitPurpose: any;
+            passType: any;
+            vehiclePlate: any;
+            vehicleModel: any;
+            visitDate: any;
+            visitTimeFrom: any;
+            visitTimeTo: any;
+            propertyId: any;
+            officeId: any;
+            businessCenterName: any;
+            office: any;
+            floor: any;
+            comment: any;
+            status: any;
+            approvedBy: any;
+            approverName: any;
+            approvedAt: any;
+            rejectionReason: any;
+            checkedInAt: any;
+            checkedInBy: any;
+            checkerInName: any;
+            checkedOutAt: any;
+            checkedOutBy: any;
+            checkerOutName: any;
+            createdAt: any;
+            updatedAt: any;
+        }[];
+    }>;
     getStats(user?: any): Promise<{
         today: string;
         todayCount: number;
@@ -390,5 +443,6 @@ export declare class PassesService implements OnModuleInit {
     private ensurePassAccess;
     private countBy;
     private mapToPublicTicket;
+    private enrichCreatorFields;
     private mapToFrontend;
 }

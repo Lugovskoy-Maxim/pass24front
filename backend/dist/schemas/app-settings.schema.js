@@ -26,11 +26,11 @@ __decorate([
     __metadata("design:type", String)
 ], AppSettings.prototype, "key", void 0);
 __decorate([
-    (0, mongoose_1.Prop)({ default: 'PASS24' }),
+    (0, mongoose_1.Prop)({ default: 'M-STYLE' }),
     __metadata("design:type", String)
 ], AppSettings.prototype, "siteName", void 0);
 __decorate([
-    (0, mongoose_1.Prop)({ default: '' }),
+    (0, mongoose_1.Prop)({ default: '/brand/mstyle-logo.svg' }),
     __metadata("design:type", String)
 ], AppSettings.prototype, "siteIcon", void 0);
 __decorate([
@@ -38,11 +38,11 @@ __decorate([
     __metadata("design:type", String)
 ], AppSettings.prototype, "siteTagline", void 0);
 __decorate([
-    (0, mongoose_1.Prop)({ default: '+7 (495) 123-45-67' }),
+    (0, mongoose_1.Prop)({ default: '+7 495 663-00-00' }),
     __metadata("design:type", String)
 ], AppSettings.prototype, "sitePhone", void 0);
 __decorate([
-    (0, mongoose_1.Prop)({ default: 'info@pass24.local' }),
+    (0, mongoose_1.Prop)({ default: 'renta@mstyle.ru' }),
     __metadata("design:type", String)
 ], AppSettings.prototype, "siteEmail", void 0);
 __decorate([

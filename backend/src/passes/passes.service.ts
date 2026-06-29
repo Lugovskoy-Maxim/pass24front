@@ -43,7 +43,34 @@ export class PassesService implements OnModuleInit {
   }
 
   private getTodayDate() {
-    return new Date().toISOString().slice(0, 10);
+    return this.getLocalDateString();
+  }
+
+  private getLocalDateString(date = new Date()) {
+    const y = date.getFullYear();
+    const m = String(date.getMonth() + 1).padStart(2, '0');
+    const d = String(date.getDate()).padStart(2, '0');
+    return `${y}-${m}-${d}`;
+  }
+
+  private parseTimeToMinutes(time: string) {
+    const [h, m] = time.split(':').map((v) => parseInt(v, 10));
+    if (Number.isNaN(h)) return 0;
+    return h * 60 + (Number.isNaN(m) ? 0 : m);
+  }
+
+  private isPassOverdueInBuilding(pass: { status: string; visitDate: string; visitTimeTo?: string }, now = new Date()) {
+    if (pass.status !== 'active') return false;
+
+    const today = this.getLocalDateString(now);
+    if (pass.visitDate < today) return true;
+
+    if (pass.visitDate === today && pass.visitTimeTo) {
+      const currentMinutes = now.getHours() * 60 + now.getMinutes();
+      return currentMinutes > this.parseTimeToMinutes(pass.visitTimeTo);
+    }
+
+    return false;
   }
 
   async expirePastPasses() {
@@ -73,15 +100,28 @@ export class PassesService implements OnModuleInit {
     return toExpire.length;
   }
 
+  private createdByFilter(userId: string) {
+    return {
+      $or: [
+        { createdBy: userId },
+        { createdBy: new Types.ObjectId(userId) },
+      ],
+    };
+  }
+
   private async buildAccessFilter(user?: any) {
     if (!user?.role) return { _id: null };
+
+    if (user.role === 'tenant') {
+      return this.createdByFilter(user.userId);
+    }
 
     if (await this.accessConfigService.canViewAllPasses(user.role)) {
       return {};
     }
 
     if (await this.accessConfigService.hasPermission(user.role, 'passes.view_own')) {
-      return { createdBy: new Types.ObjectId(user.userId) };
+      return this.createdByFilter(user.userId);
     }
 
     return { _id: null };
@@ -107,7 +147,8 @@ export class PassesService implements OnModuleInit {
     }
 
     const passes = await this.passModel.find(filter).sort({ createdAt: -1 }).lean();
-    return { passes: passes.map((p) => this.mapToFrontend(p, user)) };
+    const enriched = await this.enrichCreatorFields(passes, user);
+    return { passes: enriched.map((p) => this.mapToFrontend(p, user)) };
   }
 
   async findOne(id: string, user?: any) {
@@ -115,7 +156,8 @@ export class PassesService implements OnModuleInit {
     const pass = await this.passModel.findById(id).lean();
     if (!pass) throw new NotFoundException('Пропуск не найден');
     await this.ensurePassAccess(pass, user);
-    return { pass: this.mapToFrontend(pass, user) };
+    const [enriched] = await this.enrichCreatorFields([pass], user);
+    return { pass: this.mapToFrontend(enriched, user) };
   }
 
   async create(dto: CreatePassDto, user: any) {
@@ -135,6 +177,9 @@ export class PassesService implements OnModuleInit {
     }
 
     const resolved = await this.resolveOfficeFields(passDto, user);
+    const creator = user?.userId
+      ? await this.userModel.findById(user.userId).select('fullName phone company email').lean()
+      : null;
 
     const passNumber = this.generatePassNumber();
     const doc = await this.passModel.create({
@@ -142,9 +187,10 @@ export class PassesService implements OnModuleInit {
       ...resolved,
       passNumber,
       status: 'pending',
-      createdBy: user?.userId,
-      creatorName: user?.fullName || user?.email,
-      creatorCompany: resolved.companyName || passDto.companyName,
+      createdBy: user?.userId ? new Types.ObjectId(user.userId) : undefined,
+      creatorName: creator?.fullName || user?.fullName || user?.email,
+      creatorPhone: creator?.phone,
+      creatorCompany: resolved.companyName || passDto.companyName || creator?.company,
     });
 
     if (user?.role === 'tenant') {
@@ -303,7 +349,8 @@ export class PassesService implements OnModuleInit {
       .sort({ createdAt: -1 })
       .lean();
 
-    const mapped = passes.map((p) => this.mapToFrontend(p, user));
+    const enriched = await this.enrichCreatorFields(passes, user);
+    const mapped = enriched.map((p) => this.mapToFrontend(p, user));
     const stats = {
       total: mapped.length,
       pending: mapped.filter((p) => p.status === 'pending').length,
@@ -315,11 +362,12 @@ export class PassesService implements OnModuleInit {
     return { date: targetDate, stats, passes: mapped };
   }
 
-  async lookup(passNumber: string) {
+  async lookup(passNumber: string, user?: any) {
     await this.expirePastPasses();
     const pass = await this.passModel.findOne({ passNumber }).lean();
     if (!pass) throw new NotFoundException('Пропуск не найден');
-    return { pass: this.mapToFrontend(pass) };
+    const [enriched] = await this.enrichCreatorFields([pass], user || { role: 'security' });
+    return { pass: this.mapToFrontend(enriched, user) };
   }
 
   async getPublicTicket(passNumber: string) {
@@ -328,6 +376,22 @@ export class PassesService implements OnModuleInit {
     if (!pass) throw new NotFoundException('Пропуск не найден');
     const businessCenterName = await this.resolveBusinessCenterName(pass);
     return { ticket: { ...this.mapToPublicTicket(pass), businessCenterName } };
+  }
+
+  async getOverdueActive(user?: any) {
+    await this.expirePastPasses();
+    const accessFilter = await this.buildAccessFilter(user);
+    const passes = await this.passModel
+      .find({ status: 'active', ...accessFilter })
+      .sort({ visitDate: 1, visitTimeTo: 1 })
+      .lean();
+
+    const overdue = passes.filter((p) => this.isPassOverdueInBuilding(p));
+    const enriched = await this.enrichCreatorFields(overdue, user);
+    return {
+      count: enriched.length,
+      passes: enriched.map((p) => this.mapToFrontend(p, user)),
+    };
   }
 
   async getStats(user?: any) {
@@ -437,6 +501,12 @@ export class PassesService implements OnModuleInit {
   private async ensurePassAccess(pass: any, user?: any) {
     if (!user?.role) throw new ForbiddenException('Нет доступа к этому пропуску');
 
+    if (user.role === 'tenant') {
+      const isCreator = pass.createdBy?.toString() === user.userId;
+      if (!isCreator) throw new ForbiddenException('Нет доступа к этому пропуску');
+      return;
+    }
+
     if (await this.accessConfigService.canViewAllPasses(user.role)) return;
 
     const isCreator = pass.createdBy?.toString() === user.userId;
@@ -476,6 +546,36 @@ export class PassesService implements OnModuleInit {
     };
   }
 
+  private async enrichCreatorFields(docs: any[], viewer?: any) {
+    if (!docs.length || viewer?.role === 'tenant') return docs;
+
+    const creatorIds = [
+      ...new Set(
+        docs
+          .map((doc) => doc.createdBy?.toString())
+          .filter((id): id is string => !!id),
+      ),
+    ];
+    if (!creatorIds.length) return docs;
+
+    const creators = await this.userModel
+      .find({ _id: { $in: creatorIds.map((id) => new Types.ObjectId(id)) } })
+      .select('fullName phone company')
+      .lean();
+    const creatorMap = new Map(creators.map((u) => [u._id.toString(), u]));
+
+    return docs.map((doc) => {
+      const creator = doc.createdBy ? creatorMap.get(doc.createdBy.toString()) : null;
+      if (!creator) return doc;
+      return {
+        ...doc,
+        creatorName: doc.creatorName || creator.fullName,
+        creatorPhone: doc.creatorPhone || creator.phone,
+        creatorCompany: doc.creatorCompany || creator.company,
+      };
+    });
+  }
+
   private mapToFrontend(doc: any, user?: any) {
     const isTenant = user?.role === 'tenant';
     const isOwner = !!user?.userId && doc.createdBy?.toString() === user.userId;
@@ -486,6 +586,7 @@ export class PassesService implements OnModuleInit {
       createdBy: isOwner || !isTenant ? doc.createdBy?.toString() || '' : '',
       creatorName: isTenant ? undefined : doc.creatorName,
       creatorCompany: isTenant ? undefined : doc.creatorCompany,
+      creatorPhone: isTenant ? undefined : doc.creatorPhone,
       visitorName: doc.visitorName,
       visitorPhone: doc.visitorPhone,
       companyName: doc.companyName,

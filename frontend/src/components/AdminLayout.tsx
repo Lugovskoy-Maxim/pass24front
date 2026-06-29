@@ -3,7 +3,7 @@
 import Link from 'next/link';
 import { usePathname } from 'next/navigation';
 import {
-  LayoutDashboard, Users, ScrollText, Settings, ArrowLeft, Shield, DoorOpen, KeyRound, Globe,
+  LayoutDashboard, Users, ScrollText, ArrowLeft, Shield, DoorOpen, KeyRound, Globe,
 } from 'lucide-react';
 import { ProtectedLayout } from './ProtectedLayout';
 import { useAuth } from '@/lib/auth';
@@ -16,7 +16,6 @@ const NAV = [
   { href: '/admin/permissions', label: 'Права и пропуска', icon: KeyRound, permission: 'admin.permissions' },
   { href: '/admin/audit', label: 'Журнал действий', icon: ScrollText },
   { href: '/admin/site', label: 'Базовые настройки', icon: Globe, permission: 'admin.settings' },
-  { href: '/admin/settings', label: 'Настройки БЦ', icon: Settings, permission: 'admin.settings' },
 ];
 
 export function AdminLayout({ children, title }: { children: React.ReactNode; title: string }) {
@@ -41,10 +40,8 @@ export function AdminLayout({ children, title }: { children: React.ReactNode; ti
                   <Link
                     key={href}
                     href={href}
-                    className={`flex items-center gap-2 px-3 py-2 rounded-md text-sm transition-colors ${
-                      active
-                        ? 'bg-blue-50 text-[var(--primary)] font-medium'
-                        : 'text-[var(--muted)] hover:bg-slate-50 hover:text-[var(--text)]'
+                    className={`flex items-center gap-2 px-3 py-2 rounded text-sm ${
+                      active ? 'nav-link-light-active' : 'nav-link-light'
                     }`}
                   >
                     <Icon className="w-4 h-4" />
@@ -55,7 +52,7 @@ export function AdminLayout({ children, title }: { children: React.ReactNode; ti
             </nav>
             <Link
               href="/dashboard"
-              className="flex items-center gap-2 px-3 py-2 mt-4 text-sm text-[var(--muted)] hover:text-[var(--text)]"
+              className="flex items-center gap-2 px-3 py-2 mt-4 text-sm text-[var(--muted)] hover:text-[var(--accent)]"
             >
               <ArrowLeft className="w-4 h-4" />
               К приложению
@@ -63,7 +60,7 @@ export function AdminLayout({ children, title }: { children: React.ReactNode; ti
           </div>
         </aside>
         <div className="flex-1 min-w-0">
-          <h1 className="text-2xl font-bold mb-6">{title}</h1>
+          <h1 className="page-title mb-6">{title}</h1>
           {children}
         </div>
       </div>

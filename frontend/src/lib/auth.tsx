@@ -7,7 +7,18 @@ interface AuthContextType {
   user: User | null;
   loading: boolean;
   login: (email: string, password: string) => Promise<void>;
-  register: (data: { email: string; password: string; fullName: string; phone?: string; company?: string; office?: string; floor?: string }) => Promise<void>;
+  register: (data: {
+    email: string;
+    password: string;
+    fullName?: string;
+    lastName?: string;
+    firstName?: string;
+    middleName?: string;
+    phone?: string;
+    company?: string;
+    office?: string;
+    floor?: string;
+  }) => Promise<void>;
   logout: () => void;
   refreshUser: () => Promise<void>;
 }
@@ -33,7 +44,18 @@ export function AuthProvider({ children }: { children: ReactNode }) {
     setUser(user);
   };
 
-  const register = async (data: { email: string; password: string; fullName: string; phone?: string; company?: string; office?: string; floor?: string }) => {
+  const register = async (data: {
+    email: string;
+    password: string;
+    fullName?: string;
+    lastName?: string;
+    firstName?: string;
+    middleName?: string;
+    phone?: string;
+    company?: string;
+    office?: string;
+    floor?: string;
+  }) => {
     const { user, token } = await api.register(data);
     localStorage.setItem('pass24_token', token);
     setUser(user);

@@ -125,6 +125,8 @@ let AccessConfigService = class AccessConfigService {
         return perms.includes(permission);
     }
     async canViewAllPasses(role) {
+        if (role === 'tenant')
+            return false;
         if (await this.hasPermission(role, 'passes.view_all'))
             return true;
         return this.hasPermission(role, 'admin.panel');

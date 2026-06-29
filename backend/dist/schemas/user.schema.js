@@ -15,6 +15,9 @@ const mongoose_2 = require("mongoose");
 let User = class User {
     phone;
     fullName;
+    lastName;
+    firstName;
+    middleName;
     email;
     password;
     role;
@@ -28,6 +31,7 @@ let User = class User {
     isBlocked;
     lastLoginAt;
     pushTokens;
+    profileChangeRequest;
 };
 exports.User = User;
 __decorate([
@@ -38,6 +42,18 @@ __decorate([
     (0, mongoose_1.Prop)({ trim: true }),
     __metadata("design:type", String)
 ], User.prototype, "fullName", void 0);
+__decorate([
+    (0, mongoose_1.Prop)({ trim: true }),
+    __metadata("design:type", String)
+], User.prototype, "lastName", void 0);
+__decorate([
+    (0, mongoose_1.Prop)({ trim: true }),
+    __metadata("design:type", String)
+], User.prototype, "firstName", void 0);
+__decorate([
+    (0, mongoose_1.Prop)({ trim: true }),
+    __metadata("design:type", String)
+], User.prototype, "middleName", void 0);
 __decorate([
     (0, mongoose_1.Prop)({ trim: true, lowercase: true, unique: true, sparse: true }),
     __metadata("design:type", String)
@@ -90,6 +106,10 @@ __decorate([
     (0, mongoose_1.Prop)({ type: [{ type: String }], default: [] }),
     __metadata("design:type", Array)
 ], User.prototype, "pushTokens", void 0);
+__decorate([
+    (0, mongoose_1.Prop)({ type: Object, default: null }),
+    __metadata("design:type", Object)
+], User.prototype, "profileChangeRequest", void 0);
 exports.User = User = __decorate([
     (0, mongoose_1.Schema)({ timestamps: true, collection: 'users' })
 ], User);

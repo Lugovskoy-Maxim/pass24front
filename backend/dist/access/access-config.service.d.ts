@@ -51,7 +51,7 @@ export declare class AccessConfigService implements OnModuleInit {
             readonly group: "Администрирование";
         }, {
             readonly key: "admin.settings";
-            readonly label: "Настройки сайта и БЦ";
+            readonly label: "Базовые настройки сайта";
             readonly group: "Администрирование";
         }, {
             readonly key: "admin.permissions";
@@ -111,7 +111,7 @@ export declare class AccessConfigService implements OnModuleInit {
                 readonly group: "Администрирование";
             }, {
                 readonly key: "admin.settings";
-                readonly label: "Настройки сайта и БЦ";
+                readonly label: "Базовые настройки сайта";
                 readonly group: "Администрирование";
             }, {
                 readonly key: "admin.permissions";

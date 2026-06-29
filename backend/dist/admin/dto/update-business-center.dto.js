@@ -10,10 +10,13 @@ var __metadata = (this && this.__metadata) || function (k, v) {
 };
 Object.defineProperty(exports, "__esModule", { value: true });
 exports.UpdateBusinessCenterDto = void 0;
+const class_transformer_1 = require("class-transformer");
 const class_validator_1 = require("class-validator");
+const business_center_pass_settings_dto_1 = require("./business-center-pass-settings.dto");
 class UpdateBusinessCenterDto {
     name;
     address;
+    passSettings;
 }
 exports.UpdateBusinessCenterDto = UpdateBusinessCenterDto;
 __decorate([
@@ -28,4 +31,10 @@ __decorate([
     (0, class_validator_1.IsString)(),
     __metadata("design:type", String)
 ], UpdateBusinessCenterDto.prototype, "address", void 0);
+__decorate([
+    (0, class_validator_1.IsOptional)(),
+    (0, class_validator_1.ValidateNested)(),
+    (0, class_transformer_1.Type)(() => business_center_pass_settings_dto_1.BusinessCenterPassSettingsDto),
+    __metadata("design:type", business_center_pass_settings_dto_1.BusinessCenterPassSettingsDto)
+], UpdateBusinessCenterDto.prototype, "passSettings", void 0);
 //# sourceMappingURL=update-business-center.dto.js.map

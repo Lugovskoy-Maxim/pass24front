@@ -1,13 +1,15 @@
 'use client';
 
 import { ChangeEvent, FormEvent, useEffect, useState } from 'react';
-import { Globe, ImageIcon, Mail, Phone, Trash2, Type, Upload } from 'lucide-react';
+import { Globe, ImageIcon, Mail, Phone, RotateCcw, Trash2, Type, Upload } from 'lucide-react';
 import { AdminLayout } from '@/components/AdminLayout';
 import { SiteBrand } from '@/components/SiteBrand';
 import { UiLabelsEditor } from '@/components/UiLabelsEditor';
 import { useToast } from '@/components/Toast';
-import { api, SiteSettings } from '@/lib/api';
+import { api, SiteSettings, getErrorMessage } from '@/lib/api';
+import { PageError } from '@/components/PageError';
 import { invalidateConfigCache } from '@/hooks/useConfig';
+import { MSTYLE_BRAND_DEFAULTS, resolveBrand } from '@/lib/brand-defaults';
 import { mergeUiLabels, UiLabels } from '@/lib/ui-labels';
 
 const MAX_ICON_BYTES = 80 * 1024;
@@ -17,15 +19,28 @@ type Tab = 'brand' | 'labels';
 export default function AdminSiteSettingsPage() {
   const { toast } = useToast();
   const [settings, setSettings] = useState<SiteSettings | null>(null);
+  const [loadError, setLoadError] = useState('');
+  const [loadErrorCause, setLoadErrorCause] = useState<unknown>(null);
   const [labels, setLabels] = useState<UiLabels>(mergeUiLabels());
   const [saving, setSaving] = useState(false);
   const [tab, setTab] = useState<Tab>('brand');
 
+  const load = () => {
+    setLoadError('');
+    setLoadErrorCause(null);
+    api.admin.getSiteSettings()
+      .then(({ settings: s }) => {
+        setSettings(s);
+        setLabels(mergeUiLabels(s.uiLabels));
+      })
+      .catch((err) => {
+        setLoadErrorCause(err);
+        setLoadError(getErrorMessage(err, 'Ошибка загрузки'));
+      });
+  };
+
   useEffect(() => {
-    api.admin.getSiteSettings().then(({ settings: s }) => {
-      setSettings(s);
-      setLabels(mergeUiLabels(s.uiLabels));
-    });
+    load();
   }, []);
 
   const handleIconUpload = (e: ChangeEvent<HTMLInputElement>) => {
@@ -69,6 +84,14 @@ export default function AdminSiteSettingsPage() {
     }
   };
 
+  if (loadError) {
+    return (
+      <AdminLayout title="Базовые настройки">
+        <PageError message={loadError} error={loadErrorCause} onRetry={load} retryLabel="Повторить" />
+      </AdminLayout>
+    );
+  }
+
   if (!settings) {
     return (
       <AdminLayout title="Базовые настройки">
@@ -77,13 +100,14 @@ export default function AdminSiteSettingsPage() {
     );
   }
 
+  const previewBrand = resolveBrand(settings);
   const previewConfig = {
     siteName: settings.siteName,
     siteIcon: settings.siteIcon,
     siteTagline: settings.siteTagline,
-    sitePhone: settings.sitePhone,
-    siteEmail: settings.siteEmail,
-    businessCenterName: settings.siteName,
+    sitePhone: previewBrand.sitePhone,
+    siteEmail: previewBrand.siteEmail,
+    businessCenterName: previewBrand.siteName,
     workingHoursFrom: '08:00',
     workingHoursTo: '20:00',
     contactPhone: settings.sitePhone,
@@ -96,7 +120,7 @@ export default function AdminSiteSettingsPage() {
   return (
     <AdminLayout title="Базовые настройки">
       <p className="text-[var(--muted)] -mt-4 mb-6">
-        Бренд портала, названия кнопок, статусов и подписей на карточках пропусков
+        Бренд портала меняется без пересборки: сохраните настройки — изменения появятся сразу у всех пользователей
       </p>
 
       <div className="flex flex-wrap gap-2 mb-6">
@@ -128,7 +152,7 @@ export default function AdminSiteSettingsPage() {
                   className="input"
                   value={settings.siteName}
                   onChange={(e) => setSettings({ ...settings, siteName: e.target.value })}
-                  placeholder="PASS24"
+                  placeholder={MSTYLE_BRAND_DEFAULTS.siteName}
                   required
                 />
               </div>
@@ -139,7 +163,7 @@ export default function AdminSiteSettingsPage() {
                   className="input"
                   value={settings.siteTagline}
                   onChange={(e) => setSettings({ ...settings, siteTagline: e.target.value })}
-                  placeholder="Пропуска для арендаторов бизнес-центра"
+                  placeholder={MSTYLE_BRAND_DEFAULTS.siteTagline}
                 />
               </div>
 
@@ -150,7 +174,7 @@ export default function AdminSiteSettingsPage() {
                     className="input flex-1"
                     value={settings.siteIcon.startsWith('data:') ? '' : settings.siteIcon}
                     onChange={(e) => setSettings({ ...settings, siteIcon: e.target.value })}
-                    placeholder="https://example.com/logo.png"
+                    placeholder={MSTYLE_BRAND_DEFAULTS.siteIcon}
                   />
                   <label className="btn btn-secondary cursor-pointer shrink-0">
                     <Upload className="w-4 h-4" />
@@ -167,7 +191,9 @@ export default function AdminSiteSettingsPage() {
                     </button>
                   )}
                 </div>
-                <p className="text-xs text-[var(--muted)] mt-1">Ссылка на изображение или файл до 80 КБ</p>
+                <p className="text-xs text-[var(--muted)] mt-1">
+                  Ссылка, файл до 80 КБ или путь вида /brand/mstyle-logo.svg. Пустое поле — логотип M-STYLE по умолчанию
+                </p>
               </div>
 
               <div>
@@ -179,7 +205,7 @@ export default function AdminSiteSettingsPage() {
                   className="input"
                   value={settings.sitePhone}
                   onChange={(e) => setSettings({ ...settings, sitePhone: e.target.value })}
-                  placeholder="+7 (495) 123-45-67"
+                  placeholder={MSTYLE_BRAND_DEFAULTS.sitePhone}
                 />
               </div>
 
@@ -193,7 +219,7 @@ export default function AdminSiteSettingsPage() {
                   type="email"
                   value={settings.siteEmail}
                   onChange={(e) => setSettings({ ...settings, siteEmail: e.target.value })}
-                  placeholder="info@company.ru"
+                  placeholder={MSTYLE_BRAND_DEFAULTS.siteEmail}
                 />
               </div>
             </div>
@@ -203,7 +229,7 @@ export default function AdminSiteSettingsPage() {
                 <ImageIcon className="w-4 h-4" />
                 Предпросмотр
               </div>
-              <SiteBrand config={previewConfig} size="lg" showTagline />
+              <SiteBrand config={previewConfig} size="lg" showTagline layout="column" />
               <div className="pt-3 border-t border-[var(--border)] space-y-2 text-sm">
                 {settings.sitePhone && (
                   <a href={`tel:${settings.sitePhone}`} className="flex items-center gap-2 text-[var(--primary)] hover:underline">
@@ -228,10 +254,31 @@ export default function AdminSiteSettingsPage() {
           </div>
         )}
 
-        <div className="mt-6 max-w-4xl">
+        <div className="mt-6 max-w-4xl flex flex-wrap gap-3">
           <button type="submit" className="btn btn-primary" disabled={saving}>
             {saving ? 'Сохранение...' : labels.buttons.save}
           </button>
+          {tab === 'brand' && (
+            <button
+              type="button"
+              className="btn btn-secondary"
+              onClick={() => {
+                if (!settings) return;
+                setSettings({
+                  ...settings,
+                  siteName: MSTYLE_BRAND_DEFAULTS.siteName,
+                  siteIcon: MSTYLE_BRAND_DEFAULTS.siteIcon,
+                  siteTagline: MSTYLE_BRAND_DEFAULTS.siteTagline,
+                  sitePhone: MSTYLE_BRAND_DEFAULTS.sitePhone,
+                  siteEmail: MSTYLE_BRAND_DEFAULTS.siteEmail,
+                });
+                toast('Подставлены значения M-STYLE. Нажмите «Сохранить» для применения.', 'info');
+              }}
+            >
+              <RotateCcw className="w-4 h-4" />
+              Сбросить к M-STYLE
+            </button>
+          )}
         </div>
       </form>
     </AdminLayout>

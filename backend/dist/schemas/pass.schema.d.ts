@@ -5,6 +5,7 @@ export declare class Pass {
     createdBy?: Types.ObjectId;
     creatorName?: string;
     creatorCompany?: string;
+    creatorPhone?: string;
     visitorName: string;
     visitorPhone?: string;
     companyName?: string;
@@ -71,6 +72,15 @@ export declare const PassSchema: import("mongoose").Schema<Pass, import("mongoos
         id: string;
     }> | undefined;
     creatorCompany?: import("mongoose").SchemaDefinitionProperty<string | undefined, Pass, Document<unknown, {}, Pass, {
+        id: string;
+    }, import("mongoose").DefaultSchemaOptions> & Omit<Pass & {
+        _id: Types.ObjectId;
+    } & {
+        __v: number;
+    }, "id"> & {
+        id: string;
+    }> | undefined;
+    creatorPhone?: import("mongoose").SchemaDefinitionProperty<string | undefined, Pass, Document<unknown, {}, Pass, {
         id: string;
     }, import("mongoose").DefaultSchemaOptions> & Omit<Pass & {
         _id: Types.ObjectId;

@@ -1,14 +1,20 @@
 'use client';
 
 import { useEffect, useState, useCallback, FormEvent } from 'react';
-import { Plus, Search, Pencil, Link2, X, Users, Building2, UserCog } from 'lucide-react';
+import { Plus, Search, Pencil, Link2, X, Users, Building2, UserCog, Check, Clock } from 'lucide-react';
 import { AdminLayout } from '@/components/AdminLayout';
-import { api, AdminUser, BusinessCenter, CreateUserData, Office, ROLE_LABELS, UserCategory, UserFilters, UserRole, formatTenantOffices } from '@/lib/api';
+import { api, AdminUser, BusinessCenter, CreateUserData, Office, ProfileChangeRequest, ROLE_LABELS, UserCategory, UserFilters, UserRole, formatTenantOffices, getErrorMessage } from '@/lib/api';
+import { PageError } from '@/components/PageError';
+import { useToast } from '@/components/Toast';
 import { useDebounce } from '@/hooks/useDebounce';
+import { PersonNameFields } from '@/components/PersonNameFields';
+import { buildFullName, getUserNameLabels, isPersonNameValid, PersonNameParts, splitFullName } from '@/lib/person-name';
 
 const EMPTY: CreateUserData = {
-  email: '', password: '', fullName: '', role: 'tenant', phone: '', company: '', office: '', floor: '', officeIds: [], propertyIds: [],
+  email: '', password: '', role: 'tenant', phone: '', company: '', office: '', floor: '', officeIds: [], propertyIds: [],
 };
+
+const EMPTY_NAME: PersonNameParts = { lastName: '', firstName: '', middleName: '' };
 
 const STAFF_ROLES: UserRole[] = ['security', 'bc_admin', 'admin'];
 
@@ -21,7 +27,10 @@ const EMPTY_FILTERS: Omit<UserFilters, 'category'> = {
 };
 
 export default function AdminUsersPage() {
+  const { toast } = useToast();
   const [category, setCategory] = useState<UserCategory>('tenants');
+  const [profileRequests, setProfileRequests] = useState<Array<{ user: AdminUser; request: ProfileChangeRequest }>>([]);
+  const [moderatingId, setModeratingId] = useState<string | null>(null);
   const [users, setUsers] = useState<AdminUser[]>([]);
   const [total, setTotal] = useState(0);
   const [counts, setCounts] = useState({ tenants: 0, staff: 0 });
@@ -34,10 +43,13 @@ export default function AdminUsersPage() {
   const [showForm, setShowForm] = useState(false);
   const [editId, setEditId] = useState<string | null>(null);
   const [form, setForm] = useState<CreateUserData>(EMPTY);
+  const [nameParts, setNameParts] = useState<PersonNameParts>(EMPTY_NAME);
   const [officeIds, setOfficeIds] = useState<string[]>([]);
   const [propertyIds, setPropertyIds] = useState<string[]>([]);
   const [isActive, setIsActive] = useState(true);
   const [error, setError] = useState('');
+  const [loadError, setLoadError] = useState('');
+  const [loadErrorCause, setLoadErrorCause] = useState<unknown>(null);
   const [saving, setSaving] = useState(false);
 
   const buildQuery = useCallback((cat: UserCategory, applied: typeof appliedFilters, search?: string): UserFilters => ({
@@ -51,6 +63,8 @@ export default function AdminUsersPage() {
 
   const load = useCallback(() => {
     setLoading(true);
+    setLoadError('');
+    setLoadErrorCause(null);
     Promise.all([
       api.admin.getUsers(buildQuery(category, appliedFilters, debouncedSearch)),
       api.admin.getOffices(),
@@ -63,10 +77,53 @@ export default function AdminUsersPage() {
         setAllOffices(offices.filter((o) => o.isActive));
         setBusinessCenters(bc.filter((b) => b.isActive));
       })
+      .catch((err) => {
+        setLoadErrorCause(err);
+        setLoadError(getErrorMessage(err, 'Ошибка загрузки'));
+      })
       .finally(() => setLoading(false));
   }, [category, appliedFilters, debouncedSearch, buildQuery]);
 
   useEffect(() => { load(); }, [load]);
+
+  const loadProfileRequests = () => {
+    api.admin.getProfileChangeRequests()
+      .then(({ requests }) => setProfileRequests(requests))
+      .catch(() => setProfileRequests([]));
+  };
+
+  useEffect(() => {
+    if (category === 'tenants') loadProfileRequests();
+    else setProfileRequests([]);
+  }, [category]);
+
+  const handleApproveProfile = async (id: string) => {
+    setModeratingId(id);
+    try {
+      await api.admin.approveProfileChange(id);
+      toast('Изменения профиля подтверждены', 'success');
+      load();
+      loadProfileRequests();
+    } catch (err) {
+      toast(err instanceof Error ? err.message : 'Ошибка', 'error');
+    } finally {
+      setModeratingId(null);
+    }
+  };
+
+  const handleRejectProfile = async (id: string) => {
+    setModeratingId(id);
+    try {
+      await api.admin.rejectProfileChange(id);
+      toast('Изменения профиля отклонены', 'success');
+      load();
+      loadProfileRequests();
+    } catch (err) {
+      toast(err instanceof Error ? err.message : 'Ошибка', 'error');
+    } finally {
+      setModeratingId(null);
+    }
+  };
 
   const applyFilters = () => setAppliedFilters({ ...filters });
 
@@ -96,6 +153,7 @@ export default function AdminUsersPage() {
   const openCreate = () => {
     setEditId(null);
     setForm({ ...EMPTY, role: category === 'tenants' ? 'tenant' : 'security' });
+    setNameParts(EMPTY_NAME);
     setOfficeIds([]);
     setPropertyIds([]);
     setIsActive(true);
@@ -108,13 +166,17 @@ export default function AdminUsersPage() {
     setForm({
       email: u.email,
       password: '',
-      fullName: u.fullName,
       role: u.role,
       phone: u.phone || '',
       company: u.company || '',
       office: u.office || '',
       floor: u.floor || '',
     });
+    setNameParts(
+      u.lastName || u.firstName
+        ? { lastName: u.lastName || '', firstName: u.firstName || '', middleName: u.middleName || '' }
+        : splitFullName(u.fullName),
+    );
     setOfficeIds(u.offices?.map((o) => o.id) || []);
     setPropertyIds(u.propertyIds || u.businessCenters?.map((bc) => bc.id) || []);
     setIsActive(u.isActive);
@@ -148,11 +210,18 @@ export default function AdminUsersPage() {
 
   const handleSubmit = async (e: FormEvent) => {
     e.preventDefault();
-    setSaving(true);
     setError('');
+    if (!isPersonNameValid(nameParts)) {
+      setError('Укажите фамилию и имя');
+      return;
+    }
+    setSaving(true);
     try {
       const payload = {
-        fullName: form.fullName,
+        lastName: nameParts.lastName.trim(),
+        firstName: nameParts.firstName.trim(),
+        middleName: nameParts.middleName.trim() || undefined,
+        fullName: buildFullName(nameParts),
         phone: form.phone || undefined,
         company: form.company || undefined,
         role: form.role,
@@ -184,6 +253,16 @@ export default function AdminUsersPage() {
       <p className="text-[var(--muted)] -mt-4 mb-6">
         Арендаторы привязаны к офисам, сотрудники — к бизнес-центрам
       </p>
+
+      {loadError && (
+        <PageError
+          className="mb-6"
+          message={loadError}
+          error={loadErrorCause}
+          onRetry={load}
+          retryLabel="Повторить"
+        />
+      )}
 
       <div className="flex flex-wrap gap-2 mb-6">
         <button
@@ -301,16 +380,68 @@ export default function AdminUsersPage() {
         )}
       </div>
 
+      {category === 'tenants' && profileRequests.length > 0 && (
+        <div className="card p-5 mb-6 border-amber-200 bg-amber-50/50 space-y-3">
+          <div className="flex items-center gap-2 font-semibold text-amber-900">
+            <Clock className="w-4 h-4" />
+            Заявки на изменение профиля ({profileRequests.length})
+          </div>
+          {profileRequests.map(({ user: u, request }) => (
+            <div key={u.id} className="rounded-lg border border-amber-200 bg-white p-4 flex flex-col lg:flex-row lg:items-center justify-between gap-4">
+              <div className="text-sm">
+                <div className="font-medium">{u.fullName} → <span className="text-[var(--primary)]">{request.full_name}</span></div>
+                <div className="text-[var(--muted)] mt-1">{u.email}</div>
+                <div className="text-[var(--muted)] mt-1">
+                  {(request.company || u.company) && `Компания: ${u.company || '—'} → ${request.company || '—'} · `}
+                  {(request.phone || u.phone) && `Тел.: ${u.phone || '—'} → ${request.phone || '—'} · `}
+                  {new Date(request.requested_at).toLocaleString('ru-RU')}
+                </div>
+              </div>
+              <div className="flex gap-2 shrink-0">
+                <button
+                  type="button"
+                  className="btn btn-success text-sm"
+                  disabled={moderatingId === u.id}
+                  onClick={() => handleApproveProfile(u.id)}
+                >
+                  <Check className="w-4 h-4" />
+                  Подтвердить
+                </button>
+                <button
+                  type="button"
+                  className="btn btn-danger text-sm"
+                  disabled={moderatingId === u.id}
+                  onClick={() => handleRejectProfile(u.id)}
+                >
+                  <X className="w-4 h-4" />
+                  Отклонить
+                </button>
+              </div>
+            </div>
+          ))}
+        </div>
+      )}
+
       {showForm && (
         <form onSubmit={handleSubmit} className="card p-5 mb-6 space-y-4">
           <h2 className="font-semibold">{editId ? 'Редактирование' : 'Новый пользователь'}</h2>
           <div className="grid sm:grid-cols-2 gap-3">
             <div><label className="label">Email *</label><input className="input" type="email" value={form.email} onChange={(e) => setForm({ ...form, email: e.target.value })} required disabled={!!editId} /></div>
             <div><label className="label">{editId ? 'Новый пароль' : 'Пароль *'}</label><input className="input" type="password" value={form.password} onChange={(e) => setForm({ ...form, password: e.target.value })} required={!editId} minLength={6} /></div>
-            <div><label className="label">ФИО *</label><input className="input" value={form.fullName} onChange={(e) => setForm({ ...form, fullName: e.target.value })} required /></div>
+            <div className="sm:col-span-2">
+              <PersonNameFields
+                value={nameParts}
+                labels={getUserNameLabels(form.role)}
+                onChange={setNameParts}
+              />
+            </div>
             <div>
               <label className="label">Роль *</label>
-              <select className="input" value={form.role} onChange={(e) => setForm({ ...form, role: e.target.value as UserRole })}>
+              <select
+                className="input"
+                value={form.role}
+                onChange={(e) => setForm({ ...form, role: e.target.value as UserRole })}
+              >
                 {category === 'tenants'
                   ? <option value="tenant">{ROLE_LABELS.tenant}</option>
                   : STAFF_ROLES.map((role) => <option key={role} value={role}>{ROLE_LABELS[role]}</option>)}
@@ -322,7 +453,7 @@ export default function AdminUsersPage() {
           </div>
 
           {form.role === 'tenant' && (
-            <div className="border border-[var(--border)] rounded-lg p-4 bg-slate-50/50">
+            <div className="border border-[var(--border)] rounded-lg p-4 bg-[var(--surface-muted)]">
               <div className="flex items-center gap-2 mb-3">
                 <Link2 className="w-4 h-4 text-[var(--primary)]" />
                 <span className="font-medium text-sm">Привязка к офисам</span>
@@ -365,7 +496,7 @@ export default function AdminUsersPage() {
           )}
 
           {(form.role === 'security' || form.role === 'bc_admin') && (
-            <div className="border border-[var(--border)] rounded-lg p-4 bg-slate-50/50">
+            <div className="border border-[var(--border)] rounded-lg p-4 bg-[var(--surface-muted)]">
               <div className="flex items-center gap-2 mb-3">
                 <Link2 className="w-4 h-4 text-[var(--primary)]" />
                 <span className="font-medium text-sm">
@@ -405,7 +536,7 @@ export default function AdminUsersPage() {
 
       <div className="card overflow-hidden">
         <table className="w-full text-sm">
-          <thead className="bg-slate-50 text-[var(--muted)]">
+          <thead className="surface-muted text-[var(--muted)]">
             <tr>
               <th className="text-left p-3 font-medium">ФИО</th>
               <th className="text-left p-3 font-medium hidden lg:table-cell">Email</th>
@@ -432,9 +563,16 @@ export default function AdminUsersPage() {
                 </td>
               </tr>
             ) : users.map((u) => (
-              <tr key={u.id} className="border-t border-[var(--border)] hover:bg-slate-50">
+              <tr key={u.id} className="border-t border-[var(--border)] hover:bg-[var(--surface-muted)]">
                 <td className="p-3">
-                  <div className="font-medium">{u.fullName}</div>
+                  <div className="font-medium flex items-center gap-2 flex-wrap">
+                    {u.fullName}
+                    {u.profileChangeRequest && (
+                      <span className="text-[10px] px-1.5 py-0.5 rounded-full bg-amber-100 text-amber-800">
+                        на модерации
+                      </span>
+                    )}
+                  </div>
                   <div className="text-xs text-[var(--muted)] lg:hidden">{u.email}</div>
                 </td>
                 <td className="p-3 hidden lg:table-cell text-[var(--muted)]">{u.email}</td>

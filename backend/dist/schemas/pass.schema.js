@@ -17,6 +17,7 @@ let Pass = class Pass {
     createdBy;
     creatorName;
     creatorCompany;
+    creatorPhone;
     visitorName;
     visitorPhone;
     companyName;
@@ -63,6 +64,10 @@ __decorate([
     (0, mongoose_1.Prop)(),
     __metadata("design:type", String)
 ], Pass.prototype, "creatorCompany", void 0);
+__decorate([
+    (0, mongoose_1.Prop)(),
+    __metadata("design:type", String)
+], Pass.prototype, "creatorPhone", void 0);
 __decorate([
     (0, mongoose_1.Prop)({ required: true, trim: true }),
     __metadata("design:type", String)

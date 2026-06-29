@@ -12,7 +12,7 @@ import { CreateOfficeDto } from './dto/create-office.dto';
 import { CreateUserDto } from './dto/create-user.dto';
 import { UpdateAccessConfigDto } from './dto/update-access-config.dto';
 import { UpdateBusinessCenterDto } from './dto/update-business-center.dto';
-import { UpdateSettingsDto } from './dto/update-settings.dto';
+
 import { UpdateSiteSettingsDto } from './dto/update-site-settings.dto';
 import { SiteSettingsService } from '../site-settings/site-settings.service';
 
@@ -82,6 +82,24 @@ export class AdminController {
   @RequireAllPermissions('admin.users')
   updateUser(@Param('id') id: string, @Body() dto: Partial<CreateUserDto & { isActive: boolean }>, @Req() req: any) {
     return this.adminService.updateUser(id, dto, req.user);
+  }
+
+  @Get('profile-change-requests')
+  @RequireAllPermissions('admin.users')
+  getProfileChangeRequests() {
+    return this.adminService.getProfileChangeRequests();
+  }
+
+  @Post('users/:id/profile-change/approve')
+  @RequireAllPermissions('admin.users')
+  approveProfileChange(@Param('id') id: string, @Req() req: any) {
+    return this.adminService.approveProfileChange(id, req.user);
+  }
+
+  @Post('users/:id/profile-change/reject')
+  @RequireAllPermissions('admin.users')
+  rejectProfileChange(@Param('id') id: string, @Req() req: any) {
+    return this.adminService.rejectProfileChange(id, req.user);
   }
 
   @Get('business-centers')
@@ -165,25 +183,6 @@ export class AdminController {
       details: { siteName: settings.siteName },
     });
     return { settings };
-  }
-
-  @Get('settings')
-  @RequireAllPermissions('admin.settings')
-  async getSettings(@Req() req: any) {
-    const settings = await this.adminService.getSettings(req.user);
-    return { settings };
-  }
-
-  @Patch('settings')
-  @RequireAllPermissions('admin.settings')
-  async updateSettings(@Body() dto: UpdateSettingsDto, @Req() req: any) {
-    return this.adminService.updateSettings(dto, req.user);
-  }
-
-  @Get('blacklist')
-  @RequireAllPermissions('admin.settings')
-  getBlacklist() {
-    return { entries: [] };
   }
 
   @Get('reports/daily')

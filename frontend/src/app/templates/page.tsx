@@ -7,8 +7,10 @@ import { ProtectedLayout } from '@/components/ProtectedLayout';
 import { useAuth } from '@/lib/auth';
 import { useToast } from '@/components/Toast';
 import {
-  api, PassTemplate, PassType, TYPE_LABELS, CreatePassTemplateData, formatTenantOffices, VISIT_PURPOSES,
+  api, PassTemplate, PassType, TYPE_LABELS, CreatePassTemplateData, formatTenantOffices, VISIT_PURPOSES, getErrorMessage,
 } from '@/lib/api';
+import { PageError } from '@/components/PageError';
+import { getVisitorNameLabel } from '@/lib/person-name';
 
 const TYPE_ICONS: Record<PassType, typeof User> = {
   visitor: User,
@@ -39,6 +41,8 @@ export default function TemplatesPage() {
   const { toast } = useToast();
   const [templates, setTemplates] = useState<PassTemplate[]>([]);
   const [loading, setLoading] = useState(true);
+  const [loadError, setLoadError] = useState('');
+  const [loadErrorCause, setLoadErrorCause] = useState<unknown>(null);
   const [syncing, setSyncing] = useState(false);
   const [showForm, setShowForm] = useState(false);
   const [saving, setSaving] = useState(false);
@@ -51,9 +55,14 @@ export default function TemplatesPage() {
 
   const load = () => {
     setLoading(true);
+    setLoadError('');
+    setLoadErrorCause(null);
     api.getPassTemplates()
       .then(({ templates: data }) => setTemplates(data))
-      .catch((err) => toast(err instanceof Error ? err.message : 'Ошибка загрузки', 'error'))
+      .catch((err) => {
+        setLoadErrorCause(err);
+        setLoadError(getErrorMessage(err, 'Ошибка загрузки'));
+      })
       .finally(() => setLoading(false));
   };
 
@@ -98,7 +107,7 @@ export default function TemplatesPage() {
   const handleSubmit = async (e: FormEvent) => {
     e.preventDefault();
     if (!form.name.trim() || !form.visitorName.trim()) {
-      toast('Укажите название и ФИО посетителя', 'error');
+      toast(`Укажите название и ${getVisitorNameLabel(form.passType).toLowerCase()}`, 'error');
       return;
     }
     if (form.passType === 'parking' && !form.vehiclePlate?.trim()) {
@@ -145,7 +154,7 @@ export default function TemplatesPage() {
     <ProtectedLayout permissions={['passes.templates']}>
       <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-4 mb-6">
         <div>
-          <h1 className="text-2xl font-bold">Шаблоны пропусков</h1>
+          <h1 className="page-title">Шаблоны пропусков</h1>
           <p className="text-sm text-[var(--muted)] mt-1">
             Быстрый заказ на основе сохранённых посетителей
             {user?.offices?.length ? ` · ${formatTenantOffices(user.offices)}` : ''}
@@ -163,6 +172,16 @@ export default function TemplatesPage() {
         </div>
       </div>
 
+      {loadError && (
+        <PageError
+          className="mb-6"
+          message={loadError}
+          error={loadErrorCause}
+          onRetry={load}
+          retryLabel="Повторить"
+        />
+      )}
+
       {showForm && (
         <form onSubmit={handleSubmit} className="card p-6 mb-6 space-y-4">
           <h2 className="font-semibold">Создать шаблон вручную</h2>
@@ -172,7 +191,7 @@ export default function TemplatesPage() {
               <input className="input" value={form.name} onChange={(e) => setForm({ ...form, name: e.target.value })} placeholder="Курьер СДЭК" required />
             </div>
             <div>
-              <label className="label">ФИО посетителя *</label>
+              <label className="label">{getVisitorNameLabel(form.passType)} *</label>
               <input className="input" value={form.visitorName} onChange={(e) => setForm({ ...form, visitorName: e.target.value })} required />
             </div>
           </div>
@@ -185,7 +204,7 @@ export default function TemplatesPage() {
                   key={key}
                   type="button"
                   className={`py-2 px-3 text-sm rounded-lg border transition-colors ${
-                    form.passType === key ? 'border-[var(--primary)] bg-blue-50 text-[var(--primary)] font-medium' : 'border-[var(--border)] hover:bg-slate-50'
+                    form.passType === key ? 'border-[var(--accent)] bg-[var(--accent-soft)] text-[var(--primary)] font-medium' : 'border-[var(--border)] hover:bg-[var(--surface-muted)]'
                   }`}
                   onClick={() => setForm({ ...form, passType: key })}
                 >
@@ -279,7 +298,7 @@ export default function TemplatesPage() {
             return (
               <div key={template.id} className="card p-4 flex flex-col">
                 <div className="flex items-start gap-3 mb-3">
-                  <div className="w-9 h-9 rounded-lg bg-blue-50 flex items-center justify-center shrink-0">
+                  <div className="w-9 h-9 rounded bg-[var(--accent-soft)] flex items-center justify-center shrink-0">
                     <Icon className="w-4 h-4 text-[var(--primary)]" />
                   </div>
                   <div className="min-w-0 flex-1">

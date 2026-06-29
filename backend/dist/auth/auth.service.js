@@ -47,11 +47,14 @@ var __param = (this && this.__param) || function (paramIndex, decorator) {
 Object.defineProperty(exports, "__esModule", { value: true });
 exports.AuthService = void 0;
 const common_1 = require("@nestjs/common");
+const person_name_1 = require("../common/person-name");
+const profile_change_1 = require("../common/profile-change");
 const mongoose_1 = require("@nestjs/mongoose");
 const mongoose_2 = require("mongoose");
 const bcrypt = __importStar(require("bcryptjs"));
 const jwt_1 = require("@nestjs/jwt");
 const access_config_service_1 = require("../access/access-config.service");
+const audit_service_1 = require("../audit/audit.service");
 const schemas_1 = require("../schemas");
 let AuthService = class AuthService {
     userModel;
@@ -59,12 +62,14 @@ let AuthService = class AuthService {
     propertyModel;
     jwtService;
     accessConfigService;
-    constructor(userModel, officeModel, propertyModel, jwtService, accessConfigService) {
+    auditService;
+    constructor(userModel, officeModel, propertyModel, jwtService, accessConfigService, auditService) {
         this.userModel = userModel;
         this.officeModel = officeModel;
         this.propertyModel = propertyModel;
         this.jwtService = jwtService;
         this.accessConfigService = accessConfigService;
+        this.auditService = auditService;
     }
     async register(dto) {
         const existing = await this.userModel.findOne({ email: dto.email.toLowerCase() });
@@ -72,9 +77,19 @@ let AuthService = class AuthService {
             throw new common_1.ConflictException('Пользователь с таким email уже существует');
         }
         const hashed = await bcrypt.hash(dto.password, 10);
+        let personName;
+        try {
+            personName = (0, person_name_1.resolvePersonName)(dto);
+        }
+        catch {
+            throw new common_1.BadRequestException('Укажите фамилию и имя');
+        }
         const user = await this.userModel.create({
             email: dto.email.toLowerCase(),
-            fullName: dto.fullName,
+            fullName: personName.fullName,
+            lastName: personName.lastName,
+            firstName: personName.firstName,
+            middleName: personName.middleName,
             phone: dto.phone,
             company: dto.company,
             role: 'tenant',
@@ -109,6 +124,79 @@ let AuthService = class AuthService {
         const offices = await this.getUserOffices(userId);
         return { user: await this.toUserDto(user, offices) };
     }
+    async requestProfileChange(userId, dto) {
+        const user = await this.userModel.findById(userId);
+        if (!user)
+            throw new common_1.UnauthorizedException();
+        if (user.role !== 'tenant') {
+            throw new common_1.ForbiddenException('Редактирование профиля доступно только арендаторам');
+        }
+        let personName;
+        try {
+            personName = (0, person_name_1.resolvePersonName)({
+                lastName: dto.lastName,
+                firstName: dto.firstName,
+                middleName: dto.middleName,
+            });
+        }
+        catch {
+            throw new common_1.BadRequestException('Укажите фамилию и имя');
+        }
+        const current = user.lastName || user.firstName
+            ? {
+                lastName: user.lastName || '',
+                firstName: user.firstName || '',
+                middleName: user.middleName || '',
+            }
+            : (0, person_name_1.splitFullName)(user.fullName);
+        const requested = {
+            lastName: personName.lastName,
+            firstName: personName.firstName,
+            middleName: personName.middleName,
+            phone: dto.phone?.trim() || '',
+            company: dto.company?.trim() || '',
+        };
+        if ((0, profile_change_1.profileFieldsEqual)({ ...current, phone: user.phone || '', company: user.company || '' }, requested)) {
+            throw new common_1.BadRequestException('Нет изменений для отправки на подтверждение');
+        }
+        user.profileChangeRequest = {
+            lastName: requested.lastName,
+            firstName: requested.firstName,
+            middleName: requested.middleName,
+            fullName: personName.fullName,
+            phone: requested.phone || undefined,
+            company: requested.company || undefined,
+            requestedAt: new Date(),
+        };
+        user.markModified('profileChangeRequest');
+        await user.save();
+        await this.auditService.log({
+            action: 'profile.change_request',
+            entityType: 'user',
+            entityId: user._id,
+            actor: { userId, email: user.email, role: user.role },
+            details: {
+                fullName: personName.fullName,
+                phone: requested.phone || undefined,
+                company: requested.company || undefined,
+            },
+        });
+        const offices = await this.getUserOffices(userId);
+        return { user: await this.toUserDto(user, offices) };
+    }
+    async cancelProfileChange(userId) {
+        const user = await this.userModel.findById(userId);
+        if (!user)
+            throw new common_1.UnauthorizedException();
+        if (!user.profileChangeRequest?.requestedAt) {
+            throw new common_1.BadRequestException('Нет заявки на изменение профиля');
+        }
+        user.profileChangeRequest = null;
+        user.markModified('profileChangeRequest');
+        await user.save();
+        const offices = await this.getUserOffices(userId);
+        return { user: await this.toUserDto(user, offices) };
+    }
     async getUserOffices(userId) {
         const offices = await this.officeModel.find({ tenantId: new mongoose_2.Types.ObjectId(userId), isActive: true }).lean();
         if (!offices.length)
@@ -139,6 +227,9 @@ let AuthService = class AuthService {
             id: user._id.toString(),
             email: user.email,
             full_name: user.fullName,
+            last_name: user.lastName,
+            first_name: user.firstName,
+            middle_name: user.middleName,
             phone: user.phone,
             company: user.company,
             role: user.role || 'tenant',
@@ -147,6 +238,7 @@ let AuthService = class AuthService {
             offices,
             permissions,
             enabledPassTypes,
+            profile_change_request: (0, profile_change_1.mapProfileChangeRequest)(user.profileChangeRequest),
         };
     }
     async createTestUser(email, password) {
@@ -178,6 +270,7 @@ exports.AuthService = AuthService = __decorate([
         mongoose_2.Model,
         mongoose_2.Model,
         jwt_1.JwtService,
-        access_config_service_1.AccessConfigService])
+        access_config_service_1.AccessConfigService,
+        audit_service_1.AuditService])
 ], AuthService);
 //# sourceMappingURL=auth.service.js.map

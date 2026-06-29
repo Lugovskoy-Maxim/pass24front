@@ -3,8 +3,9 @@
 import { useEffect, useState } from 'react';
 import Link from 'next/link';
 import { useParams } from 'next/navigation';
-import { Building2 } from 'lucide-react';
-import { api, PublicPassTicket } from '@/lib/api';
+
+import { api, PublicPassTicket, getErrorMessage } from '@/lib/api';
+import { PageError } from '@/components/PageError';
 import { PassTicketView } from '@/components/PassTicketView';
 import { SiteBrand } from '@/components/SiteBrand';
 import { useAuth } from '@/lib/auth';
@@ -19,25 +20,33 @@ export default function PassTicketPage() {
   const labels = getUiLabels(config);
   const [ticket, setTicket] = useState<PublicPassTicket | null>(null);
   const [error, setError] = useState('');
+  const [errorCause, setErrorCause] = useState<unknown>(null);
   const [loading, setLoading] = useState(true);
 
-  useEffect(() => {
+  const loadTicket = () => {
     setLoading(true);
     setError('');
+    setErrorCause(null);
     api.getPublicTicket(passNumber)
       .then(({ ticket: t }) => setTicket(t))
-      .catch((err) => setError(err instanceof Error ? err.message : labels.ticketPage.notFound))
+      .catch((err) => {
+        setErrorCause(err);
+        setError(getErrorMessage(err, labels.ticketPage.notFound));
+      })
       .finally(() => setLoading(false));
+  };
+
+  useEffect(() => {
+    loadTicket();
   }, [passNumber]);
 
   const backHref = user?.role === 'tenant' ? '/templates' : user ? '/passes' : '/login';
 
   return (
     <div className="min-h-screen bg-[var(--bg)]">
-      <header className="bg-[var(--primary)] text-white px-4 py-4">
-        <div className="max-w-md mx-auto flex items-center gap-2">
-          <Building2 className="w-5 h-5 shrink-0" />
-          <SiteBrand config={config} size="sm" className="text-white [&_span]:text-white" />
+      <header className="px-4 py-4" style={{ background: 'var(--header-bg)' }}>
+        <div className="max-w-md mx-auto">
+          <SiteBrand config={config} size="sm" variant="dark" />
         </div>
       </header>
 
@@ -45,9 +54,11 @@ export default function PassTicketPage() {
         {loading ? (
           <div className="text-center text-[var(--muted)] animate-pulse">{labels.ticketPage.loading}</div>
         ) : error ? (
-          <div className="card p-8 text-center">
-            <p className="text-red-600 mb-4">{error}</p>
-            <Link href={backHref} className="btn btn-secondary">{labels.ticketPage.home}</Link>
+          <div className="space-y-4">
+            <PageError message={error} error={errorCause} onRetry={loadTicket} retryLabel={labels.buttons.retry} />
+            <div className="text-center">
+              <Link href={backHref} className="btn btn-secondary">{labels.ticketPage.home}</Link>
+            </div>
           </div>
         ) : ticket ? (
           <>

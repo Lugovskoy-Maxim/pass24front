@@ -25,7 +25,6 @@ const create_office_dto_1 = require("./dto/create-office.dto");
 const create_user_dto_1 = require("./dto/create-user.dto");
 const update_access_config_dto_1 = require("./dto/update-access-config.dto");
 const update_business_center_dto_1 = require("./dto/update-business-center.dto");
-const update_settings_dto_1 = require("./dto/update-settings.dto");
 const update_site_settings_dto_1 = require("./dto/update-site-settings.dto");
 const site_settings_service_1 = require("../site-settings/site-settings.service");
 let AdminController = class AdminController {
@@ -76,6 +75,15 @@ let AdminController = class AdminController {
     }
     updateUser(id, dto, req) {
         return this.adminService.updateUser(id, dto, req.user);
+    }
+    getProfileChangeRequests() {
+        return this.adminService.getProfileChangeRequests();
+    }
+    approveProfileChange(id, req) {
+        return this.adminService.approveProfileChange(id, req.user);
+    }
+    rejectProfileChange(id, req) {
+        return this.adminService.rejectProfileChange(id, req.user);
     }
     getBusinessCenters(req) {
         return this.adminService.getBusinessCenters(req.user);
@@ -130,16 +138,6 @@ let AdminController = class AdminController {
             details: { siteName: settings.siteName },
         });
         return { settings };
-    }
-    async getSettings(req) {
-        const settings = await this.adminService.getSettings(req.user);
-        return { settings };
-    }
-    async updateSettings(dto, req) {
-        return this.adminService.updateSettings(dto, req.user);
-    }
-    getBlacklist() {
-        return { entries: [] };
     }
     getDailyReport(date) {
         return { date: date || new Date().toISOString().slice(0, 10), summary: [], visitors: [] };
@@ -201,6 +199,31 @@ __decorate([
     __metadata("design:paramtypes", [String, Object, Object]),
     __metadata("design:returntype", void 0)
 ], AdminController.prototype, "updateUser", null);
+__decorate([
+    (0, common_1.Get)('profile-change-requests'),
+    (0, permissions_decorator_1.RequireAllPermissions)('admin.users'),
+    __metadata("design:type", Function),
+    __metadata("design:paramtypes", []),
+    __metadata("design:returntype", void 0)
+], AdminController.prototype, "getProfileChangeRequests", null);
+__decorate([
+    (0, common_1.Post)('users/:id/profile-change/approve'),
+    (0, permissions_decorator_1.RequireAllPermissions)('admin.users'),
+    __param(0, (0, common_1.Param)('id')),
+    __param(1, (0, common_1.Req)()),
+    __metadata("design:type", Function),
+    __metadata("design:paramtypes", [String, Object]),
+    __metadata("design:returntype", void 0)
+], AdminController.prototype, "approveProfileChange", null);
+__decorate([
+    (0, common_1.Post)('users/:id/profile-change/reject'),
+    (0, permissions_decorator_1.RequireAllPermissions)('admin.users'),
+    __param(0, (0, common_1.Param)('id')),
+    __param(1, (0, common_1.Req)()),
+    __metadata("design:type", Function),
+    __metadata("design:paramtypes", [String, Object]),
+    __metadata("design:returntype", void 0)
+], AdminController.prototype, "rejectProfileChange", null);
 __decorate([
     (0, common_1.Get)('business-centers'),
     (0, permissions_decorator_1.RequireAllPermissions)('admin.offices'),
@@ -285,30 +308,6 @@ __decorate([
     __metadata("design:paramtypes", [update_site_settings_dto_1.UpdateSiteSettingsDto, Object]),
     __metadata("design:returntype", Promise)
 ], AdminController.prototype, "updateSiteSettings", null);
-__decorate([
-    (0, common_1.Get)('settings'),
-    (0, permissions_decorator_1.RequireAllPermissions)('admin.settings'),
-    __param(0, (0, common_1.Req)()),
-    __metadata("design:type", Function),
-    __metadata("design:paramtypes", [Object]),
-    __metadata("design:returntype", Promise)
-], AdminController.prototype, "getSettings", null);
-__decorate([
-    (0, common_1.Patch)('settings'),
-    (0, permissions_decorator_1.RequireAllPermissions)('admin.settings'),
-    __param(0, (0, common_1.Body)()),
-    __param(1, (0, common_1.Req)()),
-    __metadata("design:type", Function),
-    __metadata("design:paramtypes", [update_settings_dto_1.UpdateSettingsDto, Object]),
-    __metadata("design:returntype", Promise)
-], AdminController.prototype, "updateSettings", null);
-__decorate([
-    (0, common_1.Get)('blacklist'),
-    (0, permissions_decorator_1.RequireAllPermissions)('admin.settings'),
-    __metadata("design:type", Function),
-    __metadata("design:paramtypes", []),
-    __metadata("design:returntype", void 0)
-], AdminController.prototype, "getBlacklist", null);
 __decorate([
     (0, common_1.Get)('reports/daily'),
     __param(0, (0, common_1.Query)('date')),
