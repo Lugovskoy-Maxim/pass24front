@@ -1,27 +1,111 @@
-const API_URL = process.env.NEXT_PUBLIC_API_URL || 'http://localhost:4000/api';
+import {
+  ApiError,
+  getErrorMessage,
+  messageForStatus,
+  parseErrorBody,
+  throwForResponse,
+} from './api-errors';
 
-export type UserRole = 'tenant' | 'security' | 'admin';
+export { ApiError, getErrorMessage, getErrorStatus, isNetworkError } from './api-errors';
+
+const API_URL = process.env.NEXT_PUBLIC_API_URL || 'http://127.0.0.1:4000/api';
+
+export type UserRole = 'tenant' | 'security' | 'bc_admin' | 'admin';
+
+export const VISIT_PURPOSES = ['Гость', 'Встреча', 'Доставка', 'Рабочий', 'Сотрудник'] as const;
+
+export function getPassTicketUrl(passNumber: string) {
+  if (typeof window === 'undefined') return `/ticket/${encodeURIComponent(passNumber)}`;
+  return `${window.location.origin}/ticket/${encodeURIComponent(passNumber)}`;
+}
+
+export interface TenantOffice {
+  id: string;
+  propertyId: string;
+  businessCenterName?: string;
+  number: string;
+  floor: string;
+  company?: string;
+}
+
+export interface ProfileChangeRequest {
+  last_name: string;
+  first_name: string;
+  middle_name?: string;
+  full_name: string;
+  phone?: string;
+  company?: string;
+  requested_at: string;
+}
 
 export interface User {
   id: string;
   email: string;
   full_name: string;
+  last_name?: string;
+  first_name?: string;
+  middle_name?: string;
+  profile_change_request?: ProfileChangeRequest | null;
   phone?: string;
   company?: string;
   role: UserRole;
   office?: string;
   floor?: string;
+  offices?: TenantOffice[];
+  permissions?: string[];
+  enabledPassTypes?: PassType[];
+}
+
+export interface PermissionMeta {
+  key: string;
+  label: string;
+  group: string;
+}
+
+export interface AccessConfig {
+  enabledPassTypes: PassType[];
+  rolePermissions: Record<string, string[]>;
+  permissions: PermissionMeta[];
+  passTypeLabels: Record<PassType, string>;
+  roleLabels?: Record<string, string>;
+  roles: string[];
 }
 
 export type PassStatus = 'pending' | 'approved' | 'rejected' | 'active' | 'completed' | 'expired' | 'cancelled';
 export type PassType = 'visitor' | 'parking' | 'delivery' | 'contractor';
 
+export interface PassTimelineData {
+  status: PassStatus;
+  createdAt?: string;
+  approvedAt?: string;
+  checkedInAt?: string;
+  checkedOutAt?: string;
+  rejectionReason?: string;
+}
+
+export interface PublicPassTicket extends PassTimelineData {
+  passNumber: string;
+  visitorName: string;
+  companyName?: string;
+  visitPurpose?: string;
+  passType: PassType;
+  vehiclePlate?: string;
+  visitDate: string;
+  visitTimeFrom?: string;
+  visitTimeTo?: string;
+  businessCenterName?: string;
+  office: string;
+  floor?: string;
+}
+
 export interface Pass {
   id: string;
   passNumber: string;
-  createdBy: string;
+  isOwner?: boolean;
+  createdBy?: string;
   creatorName?: string;
   creatorCompany?: string;
+  creatorPhone?: string;
   visitorName: string;
   visitorPhone?: string;
   companyName?: string;
@@ -32,6 +116,9 @@ export interface Pass {
   visitDate: string;
   visitTimeFrom?: string;
   visitTimeTo?: string;
+  propertyId?: string;
+  officeId?: string;
+  businessCenterName?: string;
   office: string;
   floor?: string;
   comment?: string;
@@ -55,6 +142,48 @@ function getToken(): string | null {
   return localStorage.getItem('pass24_token');
 }
 
+function parseContentDispositionFilename(header: string | null, fallback: string) {
+  if (!header) return fallback;
+  const utf8Match = header.match(/filename\*=UTF-8''([^;]+)/i);
+  if (utf8Match?.[1]) {
+    try {
+      return decodeURIComponent(utf8Match[1].trim());
+    } catch {
+      return fallback;
+    }
+  }
+  const plainMatch = header.match(/filename="?([^";]+)"?/i);
+  return plainMatch?.[1]?.trim() || fallback;
+}
+
+async function downloadFileResponse(res: Response, fallbackName: string) {
+  if (!res.ok) {
+    await throwForResponse(res);
+  }
+
+  const blob = await res.blob();
+  if (!blob.size) {
+    throw new Error('Получен пустой файл');
+  }
+
+  const filename = parseContentDispositionFilename(
+    res.headers.get('Content-Disposition'),
+    fallbackName,
+  );
+  const url = URL.createObjectURL(blob);
+  const link = document.createElement('a');
+  link.href = url;
+  link.download = filename;
+  link.style.display = 'none';
+  document.body.appendChild(link);
+  link.click();
+
+  window.setTimeout(() => {
+    link.remove();
+    URL.revokeObjectURL(url);
+  }, 1000);
+}
+
 async function request<T>(path: string, options: RequestInit = {}): Promise<T> {
   const token = getToken();
   const headers: Record<string, string> = {
@@ -63,9 +192,17 @@ async function request<T>(path: string, options: RequestInit = {}): Promise<T> {
   };
   if (token) headers.Authorization = `Bearer ${token}`;
 
-  const res = await fetch(`${API_URL}${path}`, { ...options, headers });
-  const data = await res.json().catch(() => ({}));
+  let res: Response;
+  try {
+    res = await fetch(`${API_URL}${path}`, { ...options, headers });
+  } catch (error) {
+    throw new ApiError(
+      getErrorMessage(error, 'Сервер недоступен. Проверьте подключение к сети и что backend запущен.'),
+      { isNetworkError: true },
+    );
+  }
 
+  const contentType = res.headers.get('content-type') || '';
   if (!res.ok) {
     if (res.status === 401 && typeof window !== 'undefined') {
       localStorage.removeItem('pass24_token');
@@ -73,8 +210,14 @@ async function request<T>(path: string, options: RequestInit = {}): Promise<T> {
         window.location.href = '/login';
       }
     }
-    throw new Error(data.error || 'Ошибка запроса');
+    await throwForResponse(res);
   }
+
+  if (res.status === 204 || !contentType.includes('application/json')) {
+    return {} as T;
+  }
+
+  const data = await res.json().catch(() => ({}));
   return data as T;
 }
 
@@ -85,13 +228,39 @@ export const api = {
       body: JSON.stringify({ email, password }),
     }),
 
-  register: (data: { email: string; password: string; fullName: string; phone?: string; company?: string; office?: string; floor?: string }) =>
-    request<{ user: User; token: string }>('/auth/register', {
+  register: (data: {
+    email: string;
+    password: string;
+    fullName?: string;
+    lastName?: string;
+    firstName?: string;
+    middleName?: string;
+    phone?: string;
+    company: string;
+  }) =>
+    request<{ pendingApproval: true; message: string }>('/auth/register', {
       method: 'POST',
       body: JSON.stringify(data),
     }),
 
   me: () => request<{ user: User }>('/auth/me'),
+
+  getDevAccounts: () =>
+    request<{ accounts: Array<{ label: string; email: string; password: string; role: UserRole }> }>(
+      '/auth/dev-accounts',
+    ),
+
+  updateProfile: (data: {
+    lastName: string;
+    firstName: string;
+    middleName?: string;
+    phone?: string;
+    company?: string;
+  }) =>
+    request<{ user: User }>('/auth/profile', { method: 'PATCH', body: JSON.stringify(data) }),
+
+  cancelProfileRequest: () =>
+    request<{ user: User }>('/auth/profile/request', { method: 'DELETE' }),
 
   getPasses: (params?: { status?: string; date?: string; search?: string }) => {
     const q = new URLSearchParams();
@@ -120,11 +289,20 @@ export const api = {
     visitDate: string;
     visitTimeFrom?: string;
     visitTimeTo?: string;
-    office: string;
+    officeId?: string;
+    office?: string;
     floor?: string;
     comment?: string;
+    sendEmail?: boolean;
+    recipientEmail?: string;
   }) =>
-    request<{ pass: Pass }>('/passes', { method: 'POST', body: JSON.stringify(data) }),
+    request<{ pass: Pass; emailSent?: boolean }>('/passes', { method: 'POST', body: JSON.stringify(data) }),
+
+  sendPassEmail: (passIdOrNumber: string, email: string) =>
+    request<{ sent: boolean; email: string }>(`/passes/${encodeURIComponent(passIdOrNumber)}/send-email`, {
+      method: 'POST',
+      body: JSON.stringify({ email }),
+    }),
 
   updateStatus: (id: string, status: string, rejectionReason?: string) =>
     request<{ pass: Pass }>(`/passes/${id}/status`, {
@@ -140,20 +318,74 @@ export const api = {
 
   getConfig: () => request<BcConfig>('/config'),
 
+  getAccessConfig: () => request<{
+    enabledPassTypes: PassType[];
+    passTypeLabels: Record<PassType, string>;
+    permissions: string[];
+    rolePermissions: Record<string, string[]>;
+  }>('/config/access'),
+
   getStats: () => request<PassStats>('/passes/stats'),
+
+  getOverdueActive: () => request<{ count: number; passes: Pass[] }>('/passes/overdue-active'),
 
   lookupPass: (passNumber: string) =>
     request<{ pass: Pass }>(`/passes/lookup/${encodeURIComponent(passNumber)}`),
 
+  getPublicTicket: async (passNumber: string) => {
+    let res: Response;
+    try {
+      res = await fetch(`${API_URL}/passes/public/${encodeURIComponent(passNumber)}`);
+    } catch (error) {
+      throw new ApiError(
+        getErrorMessage(error, 'Сервер недоступен. Проверьте подключение к сети и что backend запущен.'),
+        { isNetworkError: true },
+      );
+    }
+
+    if (!res.ok) {
+      const data = await parseErrorBody(res);
+      const message = res.status === 404
+        ? (data.message || data.error || 'Пропуск не найден')
+        : messageForStatus(res.status, data);
+      throw new ApiError(message, { status: res.status });
+    }
+
+    const data = await res.json().catch(() => ({}));
+    return data as { ticket: PublicPassTicket };
+  },
+
+  getPassTemplates: () => request<{ templates: PassTemplate[] }>('/pass-templates'),
+
+  getPassTemplate: (id: string) => request<{ template: PassTemplate }>(`/pass-templates/${id}`),
+
+  createPassTemplate: (data: CreatePassTemplateData) =>
+    request<{ template: PassTemplate }>('/pass-templates', { method: 'POST', body: JSON.stringify(data) }),
+
+  updatePassTemplate: (id: string, data: Partial<CreatePassTemplateData>) =>
+    request<{ template: PassTemplate }>(`/pass-templates/${id}`, { method: 'PATCH', body: JSON.stringify(data) }),
+
+  deletePassTemplate: (id: string) =>
+    request<{ ok: boolean }>(`/pass-templates/${id}`, { method: 'DELETE' }),
+
+  syncPassTemplates: () =>
+    request<{ templates: PassTemplate[]; imported: number }>('/pass-templates/sync-from-passes', { method: 'POST' }),
+
   admin: {
     dashboard: () => request<AdminDashboard>('/admin/dashboard'),
 
-    getUsers: (params?: { role?: string; search?: string }) => {
+    getUsers: (params: UserFilters = {}) => {
       const q = new URLSearchParams();
-      if (params?.role) q.set('role', params.role);
-      if (params?.search) q.set('search', params.search);
+      if (params.category) q.set('category', params.category);
+      if (params.role) q.set('role', params.role);
+      if (params.search) q.set('search', params.search);
+      if (params.isActive) q.set('isActive', params.isActive);
+      if (params.propertyId) q.set('propertyId', params.propertyId);
+      if (params.officeId) q.set('officeId', params.officeId);
       const qs = q.toString();
-      return request<{ users: AdminUser[] }>(`/admin/users${qs ? `?${qs}` : ''}`);
+      return request<{ users: AdminUser[]; total: number; counts: { tenants: number; staff: number } }>(
+        `/admin/users${qs ? `?${qs}` : ''}`,
+      );
     },
 
     createUser: (data: CreateUserData) =>
@@ -162,19 +394,80 @@ export const api = {
     updateUser: (id: string, data: Partial<CreateUserData & { isActive: boolean }>) =>
       request<{ user: AdminUser }>(`/admin/users/${id}`, { method: 'PATCH', body: JSON.stringify(data) }),
 
-    getPricing: () => request<{ plans: PricingPlan[] }>('/admin/pricing'),
+    getRegistrationRequests: () =>
+      request<{ requests: AdminUser[] }>('/admin/registration-requests'),
 
-    updatePricing: (id: string, data: Partial<PricingPlan>) =>
-      request<{ plan: PricingPlan }>(`/admin/pricing/${id}`, { method: 'PATCH', body: JSON.stringify(data) }),
+    approveRegistration: (id: string) =>
+      request<{ user: AdminUser }>(`/admin/users/${id}/registration/approve`, { method: 'POST' }),
+
+    rejectRegistration: (id: string) =>
+      request<{ message: string }>(`/admin/users/${id}/registration/reject`, { method: 'POST' }),
+
+    getProfileChangeRequests: () =>
+      request<{ requests: Array<{ user: AdminUser; request: ProfileChangeRequest }> }>('/admin/profile-change-requests'),
+
+    approveProfileChange: (id: string) =>
+      request<{ user: AdminUser }>(`/admin/users/${id}/profile-change/approve`, { method: 'POST' }),
+
+    rejectProfileChange: (id: string) =>
+      request<{ user: AdminUser }>(`/admin/users/${id}/profile-change/reject`, { method: 'POST' }),
 
     getBusinessCenters: () => request<{ businessCenters: BusinessCenter[] }>('/admin/business-centers'),
 
-    getAudit: (offset = 0) => request<{ entries: AuditEntry[]; total: number }>(`/admin/audit?offset=${offset}`),
+    createBusinessCenter: (data: { name: string; address: string; code?: string }) =>
+      request<{ businessCenter: BusinessCenter }>('/admin/business-centers', { method: 'POST', body: JSON.stringify(data) }),
 
-    getSettings: () => request<{ settings: SystemSettings }>('/admin/settings'),
+    updateBusinessCenter: (id: string, data: { name?: string; address?: string; passSettings?: Partial<BcPassSettings> }) =>
+      request<{ businessCenter: BusinessCenter }>(`/admin/business-centers/${id}`, { method: 'PATCH', body: JSON.stringify(data) }),
 
-    updateSettings: (data: Partial<SystemSettings>) =>
-      request<{ settings: SystemSettings }>('/admin/settings', { method: 'PATCH', body: JSON.stringify(data) }),
+    deleteBusinessCenter: (id: string) =>
+      request<{ message: string; id: string }>(`/admin/business-centers/${id}`, { method: 'DELETE' }),
+
+    seedTestData: () =>
+      request<{ message: string; businessCenters: number; offices: number; tenants: number; skipped: boolean }>(
+        '/admin/seed-test-data',
+        { method: 'POST' },
+      ),
+
+    getAccessConfig: () => request<AccessConfig>('/admin/access-config'),
+
+    updateAccessConfig: (data: Partial<Pick<AccessConfig, 'enabledPassTypes' | 'rolePermissions'>>) =>
+      request<{ config: AccessConfig }>('/admin/access-config', { method: 'PATCH', body: JSON.stringify(data) }),
+
+    getAudit: (filters: AuditFilters = {}) => {
+      const qs = buildAuditQuery(filters);
+      return request<{ entries: AuditEntry[]; total: number; offset: number; limit: number }>(
+        `/admin/audit${qs ? `?${qs}` : ''}`,
+      );
+    },
+
+    exportAudit: async (filters: AuditFilters = {}) => {
+      const qs = buildAuditQuery({ ...filters, offset: undefined });
+      const token = getToken();
+      const datePart = filters.dateFrom && filters.dateTo
+        ? `${filters.dateFrom}_${filters.dateTo}`
+        : new Date().toISOString().slice(0, 10);
+      let res: Response;
+      try {
+        res = await fetch(`${API_URL}/admin/audit/export${qs ? `?${qs}` : ''}`, {
+          headers: {
+            Accept: 'text/csv',
+            ...(token ? { Authorization: `Bearer ${token}` } : {}),
+          },
+        });
+      } catch (error) {
+        throw new ApiError(
+          getErrorMessage(error, 'Сервер недоступен. Проверьте подключение к сети и что backend запущен.'),
+          { isNetworkError: true },
+        );
+      }
+      await downloadFileResponse(res, `audit-${datePart}.csv`);
+    },
+
+    getSiteSettings: () => request<{ settings: SiteSettings }>('/admin/site-settings'),
+
+    updateSiteSettings: (data: Partial<SiteSettings>) =>
+      request<{ settings: SiteSettings }>('/admin/site-settings', { method: 'PATCH', body: JSON.stringify(data) }),
 
     getOffices: () => request<{ offices: Office[] }>('/admin/offices'),
 
@@ -184,20 +477,24 @@ export const api = {
     updateOffice: (id: string, data: Partial<CreateOfficeData & { isActive: boolean }>) =>
       request<{ office: Office }>(`/admin/offices/${id}`, { method: 'PATCH', body: JSON.stringify(data) }),
 
-    getBlacklist: () => request<{ entries: BlacklistEntry[] }>('/admin/blacklist'),
-
-    addBlacklist: (plate: string, reason?: string) =>
-      request<{ entry: BlacklistEntry }>('/admin/blacklist', { method: 'POST', body: JSON.stringify({ plate, reason }) }),
-
-    deleteBlacklist: (id: string) =>
-      request<{ ok: boolean }>(`/admin/blacklist/${id}`, { method: 'DELETE' }),
+    deleteOffice: (id: string) =>
+      request<{ message: string; id: string }>(`/admin/offices/${id}`, { method: 'DELETE' }),
 
     getDailyReport: (date?: string) =>
       request<DailyReport>(`/admin/reports/daily${date ? `?date=${date}` : ''}`),
   },
 };
 
-export interface BcConfig {
+export interface SiteSettings {
+  siteName: string;
+  siteIcon: string;
+  siteTagline: string;
+  sitePhone: string;
+  siteEmail: string;
+  uiLabels?: Record<string, unknown>;
+}
+
+export interface BcConfig extends SiteSettings {
   businessCenterName: string;
   workingHoursFrom: string;
   workingHoursTo: string;
@@ -217,6 +514,8 @@ export interface PassStats {
 
 export interface Office {
   id: string;
+  propertyId: string;
+  businessCenterName?: string;
   number: string;
   floor: string;
   areaSqm?: number;
@@ -228,6 +527,7 @@ export interface Office {
 }
 
 export interface CreateOfficeData {
+  propertyId: string;
   number: string;
   floor: string;
   areaSqm?: number;
@@ -235,12 +535,7 @@ export interface CreateOfficeData {
   tenantId?: string;
 }
 
-export interface BlacklistEntry {
-  id: string;
-  plate: string;
-  reason?: string;
-  createdAt: string;
-}
+
 
 export interface DailyReport {
   date: string;
@@ -264,52 +559,130 @@ export interface DailyReport {
   }>;
 }
 
+export type UserCategory = 'tenants' | 'staff';
+
+export interface UserFilters {
+  category?: UserCategory;
+  role?: string;
+  search?: string;
+  isActive?: '' | 'true' | 'false';
+  propertyId?: string;
+  officeId?: string;
+}
+
 export interface AdminUser {
   id: string;
   email: string;
   fullName: string;
+  lastName?: string;
+  firstName?: string;
+  middleName?: string;
   phone?: string;
   company?: string;
   role: UserRole;
   office?: string;
   floor?: string;
   isActive: boolean;
+  profileChangeRequest?: ProfileChangeRequest | null;
   createdAt: string;
   passesCount?: number;
+  offices?: TenantOffice[];
+  businessCenters?: { id: string; name: string }[];
+  propertyIds?: string[];
 }
 
 export interface CreateUserData {
   email: string;
   password: string;
-  fullName: string;
+  fullName?: string;
+  lastName?: string;
+  firstName?: string;
+  middleName?: string;
   phone?: string;
   company?: string;
   role: UserRole;
   office?: string;
   floor?: string;
+  officeIds?: string[];
+  propertyIds?: string[];
 }
 
-export interface PricingPlan {
+export function formatTenantOffices(offices?: TenantOffice[]): string {
+  if (!offices?.length) return '';
+  return offices
+    .map((o) => `${o.businessCenterName ? `${o.businessCenterName}: ` : ''}оф. ${o.number}${o.floor ? ` (${o.floor} эт.)` : ''}`)
+    .join(' · ');
+}
+
+export interface PassTemplate {
   id: string;
   name: string;
-  description: string;
-  priceMonthly: number;
-  maxOffices: number;
-  features: string[];
-  isActive: boolean;
+  source: 'manual' | 'from_pass';
+  sourcePassId?: string;
+  visitorName: string;
+  visitorPhone?: string;
+  companyName?: string;
+  visitPurpose?: string;
+  passType: PassType;
+  vehiclePlate?: string;
+  vehicleModel?: string;
+  visitTimeFrom?: string;
+  visitTimeTo?: string;
+  officeId?: string;
+  businessCenterName?: string;
+  office?: string;
+  floor?: string;
+  comment?: string;
+  createdAt: string;
+  updatedAt: string;
 }
+
+export interface CreatePassTemplateData {
+  name: string;
+  visitorName: string;
+  visitorPhone?: string;
+  companyName?: string;
+  visitPurpose?: string;
+  passType: PassType;
+  vehiclePlate?: string;
+  vehicleModel?: string;
+  visitTimeFrom?: string;
+  visitTimeTo?: string;
+  officeId?: string;
+  office?: string;
+  floor?: string;
+  comment?: string;
+}
+
+export interface BcPassSettings {
+  max_passes_per_day: string;
+  auto_approve_delivery: string;
+  working_hours_from: string;
+  working_hours_to: string;
+  contact_phone: string;
+  contact_email: string;
+  reception_floor: string;
+}
+
+export const DEFAULT_BC_PASS_SETTINGS: BcPassSettings = {
+  max_passes_per_day: '200',
+  auto_approve_delivery: 'false',
+  working_hours_from: '08:00',
+  working_hours_to: '20:00',
+  contact_phone: '+7 (495) 000-00-00',
+  contact_email: 'reception@pass24.local',
+  reception_floor: '1',
+};
 
 export interface BusinessCenter {
   id: string;
   name: string;
-  address: string;
+  address?: string;
   officesCount: number;
   totalAreaSqm?: number;
-  planId: string;
-  planName: string;
-  priceMonthly: number;
   isActive: boolean;
   createdAt: string;
+  passSettings?: BcPassSettings;
 }
 
 export interface AuditEntry {
@@ -320,29 +693,61 @@ export interface AuditEntry {
   action: string;
   entityType: string;
   entityId?: string;
+  entityLabel?: string;
   details?: Record<string, unknown>;
   createdAt: string;
 }
 
-export interface SystemSettings {
-  business_center_name: string;
-  max_passes_per_day: string;
-  auto_approve_delivery: string;
-  working_hours_from: string;
-  working_hours_to: string;
-  contact_phone: string;
-  contact_email: string;
-  reception_floor: string;
+export function formatAuditEntity(entry: AuditEntry): string {
+  if (entry.entityLabel) return entry.entityLabel;
+
+  const type = AUDIT_ENTITY_LABELS[entry.entityType] || entry.entityType;
+  const d = entry.details || {};
+
+  if (entry.entityType === 'pass') {
+    const passNumber = d.passNumber as string | undefined;
+    const visitorName = d.visitorName as string | undefined;
+    if (passNumber && visitorName) return `${type} ${passNumber} · ${visitorName}`;
+    if (passNumber) return `${type} ${passNumber}`;
+  }
+  if (entry.entityType === 'user') {
+    const fullName = d.fullName as string | undefined;
+    const email = d.email as string | undefined;
+    if (fullName) return `${type}: ${fullName}`;
+    if (email) return `${type}: ${email}`;
+  }
+
+  return type;
+}
+
+export interface AuditFilters {
+  offset?: number;
+  dateFrom?: string;
+  dateTo?: string;
+  action?: string;
+  entityType?: string;
+  search?: string;
+}
+
+function buildAuditQuery(filters: AuditFilters = {}) {
+  const q = new URLSearchParams();
+  if (filters.offset !== undefined) q.set('offset', String(filters.offset));
+  if (filters.dateFrom) q.set('dateFrom', filters.dateFrom);
+  if (filters.dateTo) q.set('dateTo', filters.dateTo);
+  if (filters.action) q.set('action', filters.action);
+  if (filters.entityType) q.set('entityType', filters.entityType);
+  if (filters.search) q.set('search', filters.search);
+  return q.toString();
 }
 
 export interface AdminDashboard {
   stats: {
     users: { total: number; byRole: Record<string, number> };
     passes: { total: number; today: number; week: number; byStatus: Record<string, number> };
-    revenue: { monthlyTotal: number; businessCenters: number };
+    businessCenters: number;
   };
   recentActivity: AuditEntry[];
-  settings: SystemSettings;
+  businessCenterNames: string[];
 }
 
 export const STATUS_LABELS: Record<PassStatus, string> = {
@@ -365,7 +770,8 @@ export const TYPE_LABELS: Record<PassType, string> = {
 export const ROLE_LABELS: Record<UserRole, string> = {
   tenant: 'Арендатор',
   security: 'Ресепшн / Охрана',
-  admin: 'Администратор',
+  bc_admin: 'Администратор БЦ',
+  admin: 'Супер-администратор',
 };
 
 export const AUDIT_LABELS: Record<string, string> = {
@@ -375,9 +781,29 @@ export const AUDIT_LABELS: Record<string, string> = {
   'pass.cancelled': 'Отмена',
   'pass.check_in': 'Вход в БЦ',
   'pass.check_out': 'Выход из БЦ',
+  'pass.expired': 'Истечение пропуска',
   'user.create': 'Создание пользователя',
   'user.update': 'Изменение пользователя',
-  'pricing.update': 'Изменение тарифа',
+  'user.registration_request': 'Заявка на регистрацию',
+  'user.registration_approved': 'Подтверждение регистрации',
+  'user.registration_rejected': 'Отклонение регистрации',
   'settings.update': 'Изменение настроек',
   'office.create': 'Добавление офиса',
+  'office.update': 'Изменение офиса',
+  'office.delete': 'Удаление офиса',
+  'bc.create': 'Создание БЦ',
+  'bc.update': 'Изменение БЦ',
+  'bc.delete': 'Удаление БЦ',
+  'permissions.update': 'Изменение прав доступа',
+  'site_settings.update': 'Изменение настроек сайта',
+};
+
+export const AUDIT_ENTITY_LABELS: Record<string, string> = {
+  pass: 'Пропуск',
+  user: 'Пользователь',
+  office: 'Офис',
+  business_center: 'Бизнес-центр',
+  property: 'Бизнес-центр',
+  access_config: 'Права доступа',
+  app_settings: 'Настройки сайта',
 };

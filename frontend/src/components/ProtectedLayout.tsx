@@ -5,25 +5,31 @@ import { useRouter } from 'next/navigation';
 import { useAuth } from '@/lib/auth';
 import { Header } from './Header';
 import { UserRole } from '@/lib/api';
+import { hasAllPermissions, hasAnyPermission } from '@/lib/permissions';
 
 interface ProtectedLayoutProps {
   children: React.ReactNode;
   roles?: UserRole[];
+  permissions?: string[];
+  anyPermissions?: string[];
 }
 
-export function ProtectedLayout({ children, roles }: ProtectedLayoutProps) {
+export function ProtectedLayout({ children, roles, permissions, anyPermissions }: ProtectedLayoutProps) {
   const { user, loading } = useAuth();
   const router = useRouter();
+
+  const roleDenied = !!roles && !!user && !roles.includes(user.role);
+  const permDenied = !!permissions?.length && !hasAllPermissions(user, ...permissions);
+  const anyPermDenied = !!anyPermissions?.length && !hasAnyPermission(user, ...anyPermissions);
+  const denied = roleDenied || permDenied || anyPermDenied;
 
   useEffect(() => {
     if (!loading && !user) router.replace('/login');
   }, [user, loading, router]);
 
   useEffect(() => {
-    if (!loading && user && roles && !roles.includes(user.role)) {
-      router.replace('/dashboard');
-    }
-  }, [user, loading, roles, router]);
+    if (!loading && user && denied) router.replace('/dashboard');
+  }, [user, loading, denied, router]);
 
   if (loading) {
     return (
@@ -35,7 +41,7 @@ export function ProtectedLayout({ children, roles }: ProtectedLayoutProps) {
 
   if (!user) return null;
 
-  if (roles && !roles.includes(user.role)) {
+  if (denied) {
     return (
       <div className="min-h-screen flex items-center justify-center">
         <div className="text-[var(--muted)]">Нет доступа к этой странице</div>

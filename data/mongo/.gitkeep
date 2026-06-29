@@ -1,0 +1,3 @@
+# This file ensures the data/mongo directory is created in git.
+# MongoDB data will be stored here when using docker compose.
+# This directory is ignored in .gitignore for actual data files.

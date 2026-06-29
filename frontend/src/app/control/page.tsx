@@ -1,65 +1,142 @@
 'use client';
 
-import { useEffect, useState, useCallback, FormEvent } from 'react';
-import { LogIn, LogOut, Users, CheckCircle, Clock, AlertCircle, Search } from 'lucide-react';
+import { Suspense, useEffect, useState, useCallback, FormEvent } from 'react';
+import { useSearchParams } from 'next/navigation';
+import { LogIn, LogOut, Users, CheckCircle, Clock, AlertCircle, Search, X } from 'lucide-react';
 import { ProtectedLayout } from '@/components/ProtectedLayout';
-import { PassCard } from '@/components/PassCard';
-import { StatusBadge } from '@/components/StatusBadge';
+import { PassListCard } from '@/components/PassListCard';
+import { PassDetailPanel } from '@/components/PassDetailPanel';
+import { getReceptionSections } from '@/components/ReceptionPassCard';
 import { useToast } from '@/components/Toast';
-import { api, Pass } from '@/lib/api';
+import { useConfig } from '@/hooks/useConfig';
+import { api, Pass, getErrorMessage } from '@/lib/api';
+import { PageError } from '@/components/PageError';
+import { useElementInView } from '@/hooks/useElementInView';
+import { useOverdueGuests } from '@/hooks/useOverdueGuests';
+import { OverdueGuestsAlert } from '@/components/OverdueGuestsAlert';
+import { canSeeOverdueAlerts } from '@/lib/permissions';
+import { useAuth } from '@/lib/auth';
+import { getGuestOverdueKind, getUiLabels } from '@/lib/ui-labels';
+import { getAccentStatClass, getSectionHeadingClass } from '@/lib/pass-status';
 
-export default function ControlPage() {
+function ControlPageContent() {
+  const { user } = useAuth();
   const { toast } = useToast();
+  const config = useConfig();
+  const labels = getUiLabels(config);
+  const showOverdueAlerts = canSeeOverdueAlerts(user);
+  const { passes: overduePasses, refresh: refreshOverdue } = useOverdueGuests(showOverdueAlerts);
+  const overdueIds = new Set(overduePasses.map((pass) => pass.id));
+  const receptionSections = getReceptionSections(labels);
+  const searchParams = useSearchParams();
   const [date, setDate] = useState(new Date().toISOString().slice(0, 10));
   const [passes, setPasses] = useState<Pass[]>([]);
   const [stats, setStats] = useState({ total: 0, pending: 0, active: 0, completed: 0, approved: 0 });
   const [loading, setLoading] = useState(true);
   const [loadError, setLoadError] = useState('');
+  const [loadErrorCause, setLoadErrorCause] = useState<unknown>(null);
   const [actionId, setActionId] = useState<string | null>(null);
   const [rejectReason, setRejectReason] = useState<Record<string, string>>({});
   const [lookupQuery, setLookupQuery] = useState('');
-  const [lookupResult, setLookupResult] = useState<Pass | null>(null);
   const [lookupLoading, setLookupLoading] = useState(false);
+  const [selected, setSelected] = useState<Pass | null>(null);
+  const [overdueSectionEl, setOverdueSectionEl] = useState<HTMLElement | null>(null);
+  const overdueSectionInView = useElementInView(overdueSectionEl);
 
   const load = useCallback(() => {
     setLoading(true);
     setLoadError('');
-    api.getJournal(date)
+    return api.getJournal(date)
       .then((data) => {
         setPasses(data.passes);
         setStats(data.stats);
+        return data.passes;
       })
-      .catch((err) => setLoadError(err instanceof Error ? err.message : 'Ошибка загрузки'))
+      .catch((err) => {
+        setLoadErrorCause(err);
+        setLoadError(getErrorMessage(err, 'Ошибка загрузки'));
+        return [] as Pass[];
+      })
       .finally(() => setLoading(false));
   }, [date]);
 
   useEffect(() => { load(); }, [load]);
 
-  const handleLookup = async (e: FormEvent) => {
-    e.preventDefault();
-    const q = lookupQuery.trim();
-    if (!q) return;
+  useEffect(() => {
+    if (typeof window === 'undefined') return;
+    if (window.location.hash !== '#reception-section-overdue') return;
+    const timer = window.setTimeout(() => {
+      document.getElementById('reception-section-overdue')?.scrollIntoView({ behavior: 'smooth', block: 'start' });
+    }, 150);
+    return () => window.clearTimeout(timer);
+  }, [loading, overduePasses.length]);
+
+  useEffect(() => {
+    if (loading) return;
+    setSelected((prev) => {
+      if (prev) {
+        return passes.find((p) => p.id === prev.id)
+          || overduePasses.find((p) => p.id === prev.id)
+          || null;
+      }
+      return overduePasses[0] || passes[0] || null;
+    });
+  }, [passes, overduePasses, loading]);
+
+  const runLookup = useCallback(async (q: string) => {
+    const trimmed = q.trim();
+    if (!trimmed) return;
     setLookupLoading(true);
-    setLookupResult(null);
     try {
-      const { pass } = await api.lookupPass(q);
-      setLookupResult(pass);
-      toast(`Найден пропуск ${pass.passNumber}`, 'success');
+      const { pass } = await api.lookupPass(trimmed);
+      setLookupQuery(trimmed);
+      setSelected(pass);
+      const overdueKind = getGuestOverdueKind(pass);
+      if (overdueKind === 'past_end_time') {
+        toast(labels.toasts.guestPastEndTime.replace('{time}', pass.visitTimeTo || ''), 'warning');
+      } else if (overdueKind === 'past_date') {
+        toast(labels.toasts.guestStillInside, 'warning');
+      } else {
+        toast(`${labels.toasts.passFound}: ${pass.passNumber}`, 'success');
+      }
+      const inJournal = passes.some((p) => p.id === pass.id);
+      const isOverdueGuest = pass.status === 'active' && getGuestOverdueKind(pass) !== null;
+      if (!inJournal && !isOverdueGuest && pass.visitDate !== date) {
+        setDate(pass.visitDate);
+      }
     } catch (err) {
-      toast(err instanceof Error ? err.message : 'Пропуск не найден', 'error');
+      toast(getErrorMessage(err, 'Пропуск не найден'), 'error');
     } finally {
       setLookupLoading(false);
     }
+  }, [toast, labels, passes, date]);
+
+  useEffect(() => {
+    const passFromUrl = searchParams.get('pass');
+    if (passFromUrl) runLookup(passFromUrl);
+  }, [searchParams, runLookup]);
+
+  const handleLookup = async (e: FormEvent) => {
+    e.preventDefault();
+    await runLookup(lookupQuery);
+  };
+
+  const refreshAfterAction = async (id: string) => {
+    const data = await load();
+    const freshOverdue = showOverdueAlerts ? await refreshOverdue() : overduePasses;
+    const updated = data.find((p) => p.id === id) || freshOverdue.find((p) => p.id === id);
+    if (updated) setSelected(updated);
+    else setSelected(freshOverdue.find((p) => p.id !== id) || data[0] || null);
   };
 
   const handleApprove = async (id: string) => {
     setActionId(id);
     try {
       await api.updateStatus(id, 'approved');
-      toast('Пропуск одобрен', 'success');
-      load();
+      toast(labels.toasts.approved, 'success');
+      await refreshAfterAction(id);
     } catch (err) {
-      toast(err instanceof Error ? err.message : 'Ошибка', 'error');
+      toast(getErrorMessage(err, 'Ошибка'), 'error');
     } finally {
       setActionId(null);
     }
@@ -72,10 +149,10 @@ export default function ControlPage() {
     try {
       await api.updateStatus(id, 'rejected', reason);
       setRejectReason((prev) => ({ ...prev, [id]: '' }));
-      toast('Пропуск отклонён', 'success');
-      load();
+      toast(labels.toasts.rejected, 'success');
+      await refreshAfterAction(id);
     } catch (err) {
-      toast(err instanceof Error ? err.message : 'Ошибка', 'error');
+      toast(getErrorMessage(err, 'Ошибка'), 'error');
     } finally {
       setActionId(null);
     }
@@ -85,10 +162,10 @@ export default function ControlPage() {
     setActionId(id);
     try {
       await api.checkIn(id);
-      toast('Посетитель пропущен', 'success');
-      load();
+      toast(labels.toasts.checkedIn, 'success');
+      await refreshAfterAction(id);
     } catch (err) {
-      toast(err instanceof Error ? err.message : 'Ошибка', 'error');
+      toast(getErrorMessage(err, 'Ошибка'), 'error');
     } finally {
       setActionId(null);
     }
@@ -98,29 +175,125 @@ export default function ControlPage() {
     setActionId(id);
     try {
       await api.checkOut(id);
-      toast('Выход зафиксирован', 'success');
-      load();
+      toast(labels.toasts.checkedOut, 'success');
+      await refreshAfterAction(id);
     } catch (err) {
-      toast(err instanceof Error ? err.message : 'Ошибка', 'error');
+      toast(getErrorMessage(err, 'Ошибка'), 'error');
     } finally {
       setActionId(null);
     }
   };
 
-  const pending = passes.filter((p) => p.status === 'pending');
-  const approved = passes.filter((p) => p.status === 'approved');
-  const active = passes.filter((p) => p.status === 'active');
-  const completed = passes.filter((p) => p.status === 'completed');
+  const renderActions = (pass: Pass) => {
+    if (pass.status === 'pending') {
+      return (
+        <>
+          <button
+            className="btn btn-success w-full"
+            disabled={actionId === pass.id}
+            onClick={() => handleApprove(pass.id)}
+          >
+            {labels.buttons.approve}
+          </button>
+          <input
+            className="input"
+            placeholder={labels.reception.rejectPlaceholder}
+            value={rejectReason[pass.id] || ''}
+            onChange={(e) => setRejectReason((prev) => ({ ...prev, [pass.id]: e.target.value }))}
+          />
+          <button
+            className="btn btn-danger w-full"
+            disabled={actionId === pass.id || !rejectReason[pass.id]?.trim()}
+            onClick={() => handleReject(pass.id)}
+          >
+            {labels.buttons.reject}
+          </button>
+        </>
+      );
+    }
+    if (pass.status === 'approved') {
+      return (
+        <button
+          className="btn btn-success w-full"
+          disabled={actionId === pass.id}
+          onClick={() => handleCheckIn(pass.id)}
+        >
+          <LogIn className="w-4 h-4" />
+          {labels.buttons.checkIn}
+        </button>
+      );
+    }
+    if (pass.status === 'active') {
+      return (
+        <button
+          className="btn btn-primary w-full"
+          disabled={actionId === pass.id}
+          onClick={() => handleCheckOut(pass.id)}
+        >
+          <LogOut className="w-4 h-4" />
+          {labels.buttons.checkOut}
+        </button>
+      );
+    }
+    return null;
+  };
+
+  const passesByStatus = (status: Pass['status']) => {
+    const filtered = passes.filter((p) => p.status === status);
+    if (status === 'active' && showOverdueAlerts) {
+      return filtered.filter((p) => !overdueIds.has(p.id));
+    }
+    return filtered;
+  };
+
+  const scrollToSection = (sectionId: string, selectFirst?: () => Pass | undefined) => {
+    const el = document.getElementById(sectionId);
+    if (el) el.scrollIntoView({ behavior: 'smooth', block: 'start' });
+    const first = selectFirst?.();
+    if (first) setSelected(first);
+  };
+
+  const scrollToOverdueSection = () => {
+    scrollToSection('reception-section-overdue', () => overduePasses[0]);
+  };
+
+  const overdueCount = showOverdueAlerts ? overduePasses.length : 0;
+  const activeInBuildingCount = showOverdueAlerts
+    ? passesByStatus('active').length
+    : stats.active;
+
+  const statCards: {
+    key: Pass['status'] | 'total' | 'overdue';
+    label: string;
+    value: number;
+    icon: typeof Users;
+    onClick?: () => void;
+  }[] = [
+    { key: 'total', label: labels.reception.statTotal, value: stats.total, icon: Users },
+    ...(showOverdueAlerts && overdueCount > 0
+      ? [{
+          key: 'overdue' as const,
+          label: labels.reception.statOverdue,
+          value: overdueCount,
+          icon: AlertCircle,
+          onClick: scrollToOverdueSection,
+        }]
+      : []),
+    { key: 'pending', label: labels.reception.statPending, value: stats.pending, icon: AlertCircle, onClick: () => scrollToSection('reception-section-pending', () => passesByStatus('pending')[0]) },
+    { key: 'approved', label: labels.reception.statApproved, value: stats.approved, icon: Clock, onClick: () => scrollToSection('reception-section-approved', () => passesByStatus('approved')[0]) },
+    { key: 'active', label: labels.reception.statActive, value: activeInBuildingCount, icon: LogIn, onClick: () => scrollToSection('reception-section-active', () => passesByStatus('active')[0]) },
+    { key: 'completed', label: labels.reception.statCompleted, value: stats.completed, icon: CheckCircle, onClick: () => scrollToSection('reception-section-completed', () => passesByStatus('completed')[0]) },
+  ];
 
   return (
-    <ProtectedLayout roles={['security', 'admin']}>
+    <ProtectedLayout anyPermissions={['passes.reception', 'passes.lookup', 'admin.panel']}>
       <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-4 mb-6">
         <div>
-          <h1 className="text-2xl font-bold">Панель ресепшн</h1>
-          <p className="text-[var(--muted)]">Журнал посетителей на выбранную дату</p>
+          <h1 className="page-title">{labels.pages.receptionTitle}</h1>
+          <p className="text-[var(--muted)]">{labels.pages.receptionSubtitle}</p>
         </div>
         <input
-          className="input w-auto"
+          className="input input--auto"
           type="date"
           value={date}
           onChange={(e) => setDate(e.target.value)}
@@ -131,195 +304,151 @@ export default function ControlPage() {
         <div className="relative flex-1">
           <Search className="absolute left-3 top-1/2 -translate-y-1/2 w-4 h-4 text-[var(--muted)]" />
           <input
-            className="input pl-9 font-mono"
-            placeholder="Быстрый поиск по номеру пропуска (20260619-0001)"
+            className="input input--icon-left font-mono"
+            placeholder={labels.reception.lookupPlaceholder}
             value={lookupQuery}
             onChange={(e) => setLookupQuery(e.target.value)}
           />
         </div>
         <button type="submit" className="btn btn-primary" disabled={lookupLoading || !lookupQuery.trim()}>
-          {lookupLoading ? 'Поиск...' : 'Найти'}
+          {lookupLoading ? '...' : labels.buttons.lookup}
         </button>
       </form>
 
-      {lookupResult && (
-        <div className="card p-4 mb-6 border-[var(--primary)]">
-          <div className="flex items-center justify-between mb-3">
-            <h3 className="font-semibold">Результат поиска</h3>
-            <StatusBadge status={lookupResult.status} />
-          </div>
-          <PassCard pass={lookupResult} />
-          <div className="mt-3 flex gap-2">
-            {lookupResult.status === 'approved' && (
-              <button className="btn btn-success text-sm" disabled={actionId === lookupResult.id} onClick={() => handleCheckIn(lookupResult.id)}>
-                <LogIn className="w-4 h-4" /> Пропустить
-              </button>
-            )}
-            {lookupResult.status === 'active' && (
-              <button className="btn btn-primary text-sm" disabled={actionId === lookupResult.id} onClick={() => handleCheckOut(lookupResult.id)}>
-                <LogOut className="w-4 h-4" /> Выезд
-              </button>
-            )}
-            <button className="btn btn-secondary text-sm" onClick={() => setLookupResult(null)}>Закрыть</button>
-          </div>
-        </div>
+      {showOverdueAlerts && overdueCount > 0 && !overdueSectionInView && (
+        <OverdueGuestsAlert
+          passes={overduePasses}
+          labels={labels}
+          onActionClick={scrollToOverdueSection}
+          className="mb-6"
+        />
       )}
 
-      <div className="grid grid-cols-2 sm:grid-cols-5 gap-3 mb-8">
-        <div className="card p-3 text-center">
-          <Users className="w-5 h-5 mx-auto mb-1 text-[var(--primary)]" />
-          <div className="text-xl font-bold">{stats.total}</div>
-          <div className="text-xs text-[var(--muted)]">Всего</div>
-        </div>
-        <div className="card p-3 text-center">
-          <AlertCircle className="w-5 h-5 mx-auto mb-1 text-amber-600" />
-          <div className="text-xl font-bold">{stats.pending}</div>
-          <div className="text-xs text-[var(--muted)]">Новые</div>
-        </div>
-        <div className="card p-3 text-center">
-          <Clock className="w-5 h-5 mx-auto mb-1 text-blue-600" />
-          <div className="text-xl font-bold">{stats.approved}</div>
-          <div className="text-xs text-[var(--muted)]">Ожидают</div>
-        </div>
-        <div className="card p-3 text-center">
-          <LogIn className="w-5 h-5 mx-auto mb-1 text-emerald-600" />
-          <div className="text-xl font-bold">{stats.active}</div>
-          <div className="text-xs text-[var(--muted)]">В здании</div>
-        </div>
-        <div className="card p-3 text-center">
-          <CheckCircle className="w-5 h-5 mx-auto mb-1 text-slate-500" />
-          <div className="text-xl font-bold">{stats.completed}</div>
-          <div className="text-xs text-[var(--muted)]">Выехали</div>
-        </div>
+      <div className="grid grid-cols-2 sm:grid-cols-3 lg:grid-cols-6 gap-3 mb-6">
+        {statCards.map(({ key, label, value, icon: Icon, onClick }) => {
+          const clickable = !!onClick && value > 0;
+          const Tag = clickable ? 'button' : 'div';
+          return (
+            <Tag
+              key={key}
+              type={clickable ? 'button' : undefined}
+              onClick={clickable ? onClick : undefined}
+              className={[
+                'card p-3 text-center',
+                getAccentStatClass(key),
+                clickable ? 'cursor-pointer accent-stat--interactive' : '',
+              ].filter(Boolean).join(' ')}
+            >
+              <Icon className={`w-5 h-5 mx-auto mb-1 accent-stat__icon--${key}`} />
+              <div className={`text-xl font-bold accent-stat__value--${key}`}>{value}</div>
+              <div className="text-xs text-[var(--muted)]">{label}</div>
+            </Tag>
+          );
+        })}
       </div>
 
       {loadError && (
-        <div className="mb-4 text-sm text-red-600 bg-red-50 px-3 py-2 rounded-md flex items-center justify-between">
-          {loadError}
-          <button className="btn btn-secondary text-xs" onClick={load}>Повторить</button>
-        </div>
+        <PageError
+          className="mb-4"
+          message={loadError}
+          error={loadErrorCause}
+          onRetry={() => load()}
+          retryLabel={labels.buttons.retry}
+        />
       )}
 
-      {loading ? (
-        <div className="card p-8 text-center text-[var(--muted)]">Загрузка журнала...</div>
-      ) : (
-        <div className="space-y-8">
-          {pending.length > 0 && (
-            <section>
-              <h2 className="text-lg font-semibold mb-3 flex items-center gap-2">
-                <AlertCircle className="w-5 h-5 text-amber-600" />
-                На рассмотрении ({pending.length})
-              </h2>
-              <div className="grid gap-3">
-                {pending.map((pass) => (
-                  <PassCard
-                    key={pass.id}
-                    pass={pass}
-                    actions={
-                      <div className="flex flex-col gap-2 w-full">
-                        <button
-                          className="btn btn-success text-sm"
-                          disabled={actionId === pass.id}
-                          onClick={() => handleApprove(pass.id)}
-                        >
-                          Одобрить
-                        </button>
-                        <input
-                          className="input text-sm"
-                          placeholder="Причина отклонения"
-                          value={rejectReason[pass.id] || ''}
-                          onChange={(e) => setRejectReason((prev) => ({ ...prev, [pass.id]: e.target.value }))}
+      <div className="grid lg:grid-cols-[minmax(0,1fr)_minmax(320px,400px)] gap-5 items-start">
+        <div>
+          {loading ? (
+            <div className="card p-8 text-center text-[var(--muted)]">{labels.reception.journalLoading}</div>
+          ) : passes.length === 0 && overdueCount === 0 ? (
+            <div className="card p-8 text-center text-[var(--muted)]">{labels.reception.journalEmpty}</div>
+          ) : (
+            <div className="space-y-5">
+              {showOverdueAlerts && overduePasses.length > 0 && (
+                <section id="reception-section-overdue" ref={setOverdueSectionEl} className="scroll-mt-4">
+                  <h2 className={`text-sm font-semibold mb-2 flex items-center gap-2 uppercase tracking-wide ${getSectionHeadingClass('overdue')}`}>
+                    <AlertCircle className="w-4 h-4" />
+                    {labels.reception.sectionOverdue}
+                    <span className="font-normal normal-case opacity-80">({overduePasses.length})</span>
+                  </h2>
+                  <div className="flex flex-col gap-1.5 rounded-lg border theme-alert-subtle p-2">
+                    {overduePasses.map((pass) => (
+                      <PassListCard
+                        key={pass.id}
+                        pass={pass}
+                        labels={labels}
+                        selected={selected?.id === pass.id}
+                        onClick={() => setSelected(pass)}
+                      />
+                    ))}
+                  </div>
+                </section>
+              )}
+
+              {receptionSections.map(({ key, title, icon: Icon }) => {
+                const sectionPasses = passesByStatus(key);
+                if (sectionPasses.length === 0) return null;
+
+                return (
+                  <section key={key} id={`reception-section-${key}`} className="scroll-mt-4">
+                    <h2
+                      className={`text-sm font-semibold mb-2 flex items-center gap-2 uppercase tracking-wide ${getSectionHeadingClass(key)}`}
+                    >
+                      <Icon className="w-4 h-4 shrink-0" />
+                      {title}
+                      <span className="font-normal normal-case">({sectionPasses.length})</span>
+                    </h2>
+                    <div className="flex flex-col gap-1.5">
+                      {sectionPasses.map((pass) => (
+                        <PassListCard
+                          key={pass.id}
+                          pass={pass}
+                          labels={labels}
+                          selected={selected?.id === pass.id}
+                          onClick={() => setSelected(pass)}
                         />
-                        <button
-                          className="btn btn-danger text-sm"
-                          disabled={actionId === pass.id || !rejectReason[pass.id]?.trim()}
-                          onClick={() => handleReject(pass.id)}
-                        >
-                          Отклонить
-                        </button>
-                      </div>
-                    }
-                  />
-                ))}
-              </div>
-            </section>
-          )}
-
-          {approved.length > 0 && (
-            <section>
-              <h2 className="text-lg font-semibold mb-3 flex items-center gap-2">
-                <Clock className="w-5 h-5 text-blue-600" />
-                Ожидают въезда ({approved.length})
-              </h2>
-              <div className="grid gap-3">
-                {approved.map((pass) => (
-                  <PassCard
-                    key={pass.id}
-                    pass={pass}
-                    actions={
-                      <button
-                        className="btn btn-success text-sm"
-                        disabled={actionId === pass.id}
-                        onClick={() => handleCheckIn(pass.id)}
-                      >
-                        <LogIn className="w-4 h-4" />
-                        Пропустить
-                      </button>
-                    }
-                  />
-                ))}
-              </div>
-            </section>
-          )}
-
-          {active.length > 0 && (
-            <section>
-              <h2 className="text-lg font-semibold mb-3 flex items-center gap-2">
-                <LogIn className="w-5 h-5 text-emerald-600" />
-                В здании ({active.length})
-              </h2>
-              <div className="grid gap-3">
-                {active.map((pass) => (
-                  <PassCard
-                    key={pass.id}
-                    pass={pass}
-                    actions={
-                      <button
-                        className="btn btn-primary text-sm"
-                        disabled={actionId === pass.id}
-                        onClick={() => handleCheckOut(pass.id)}
-                      >
-                        <LogOut className="w-4 h-4" />
-                        Выезд
-                      </button>
-                    }
-                  />
-                ))}
-              </div>
-            </section>
-          )}
-
-          {completed.length > 0 && (
-            <section>
-              <h2 className="text-lg font-semibold mb-3 flex items-center gap-2">
-                <CheckCircle className="w-5 h-5 text-slate-500" />
-                Завершённые ({completed.length})
-              </h2>
-              <div className="grid gap-3 opacity-75">
-                {completed.map((pass) => (
-                  <PassCard key={pass.id} pass={pass} />
-                ))}
-              </div>
-            </section>
-          )}
-
-          {passes.length === 0 && (
-            <div className="card p-8 text-center text-[var(--muted)]">
-              На выбранную дату пропусков нет
+                      ))}
+                    </div>
+                  </section>
+                );
+              })}
             </div>
           )}
         </div>
-      )}
+
+        {selected && (
+          <div className="lg:sticky lg:top-20 space-y-3">
+            <div className="flex items-center justify-between px-1">
+              <h2 className="text-base font-semibold text-[var(--muted)] uppercase tracking-wide text-[11px]">
+                {labels.reception.selectedPass}
+              </h2>
+              <button
+                type="button"
+                className="p-1.5 rounded-md text-[var(--muted)] hover:text-[var(--foreground)] hover:bg-[var(--m-block)] lg:hidden"
+                onClick={() => setSelected(null)}
+                aria-label={labels.passes.close}
+              >
+                <X className="w-4 h-4" />
+              </button>
+            </div>
+            <PassDetailPanel
+              pass={selected}
+              labels={labels}
+              showCreator
+              actions={renderActions(selected)}
+            />
+          </div>
+        )}
+      </div>
     </ProtectedLayout>
+  );
+}
+
+export default function ControlPage() {
+  return (
+    <Suspense fallback={<ProtectedLayout anyPermissions={['passes.reception', 'passes.lookup', 'admin.panel']}><div className="animate-pulse text-[var(--muted)]">Загрузка...</div></ProtectedLayout>}>
+      <ControlPageContent />
+    </Suspense>
   );
 }

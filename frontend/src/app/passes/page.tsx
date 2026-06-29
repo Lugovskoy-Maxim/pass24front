@@ -1,19 +1,39 @@
 'use client';
 
-import { useEffect, useState, useCallback } from 'react';
+import { Suspense, useEffect, useState, useCallback } from 'react';
+import { useRouter, useSearchParams } from 'next/navigation';
 import { Search, X } from 'lucide-react';
 import { ProtectedLayout } from '@/components/ProtectedLayout';
-import { PassCard } from '@/components/PassCard';
+import { PassListCard } from '@/components/PassListCard';
+import { PassDetailPanel } from '@/components/PassDetailPanel';
 import { PassPrintCard } from '@/components/PassPrintCard';
+import { SharePassActions } from '@/components/SharePassActions';
 import { useAuth } from '@/lib/auth';
 import { useDebounce } from '@/hooks/useDebounce';
 import { useConfig } from '@/hooks/useConfig';
 import { useToast } from '@/components/Toast';
-import { api, Pass, STATUS_LABELS } from '@/lib/api';
-import { StatusBadge } from '@/components/StatusBadge';
+import { api, Pass, PassStatus, getErrorMessage } from '@/lib/api';
+import { PageError } from '@/components/PageError';
+import { canViewAllPasses, canViewPasses, hasPermission } from '@/lib/permissions';
 
-export default function PassesPage() {
+
+
+import { getStatusLabel, getUiLabels, UiLabels } from '@/lib/ui-labels';
+
+const ALL_STATUSES: PassStatus[] = ['pending', 'approved', 'active', 'completed', 'rejected', 'expired', 'cancelled'];
+
+function formatPassCount(count: number, labels: UiLabels): string {
+  const mod10 = count % 10;
+  const mod100 = count % 100;
+  if (mod10 === 1 && mod100 !== 11) return `${count} ${labels.passes.countOne}`;
+  if (mod10 >= 2 && mod10 <= 4 && (mod100 < 10 || mod100 >= 20)) return `${count} ${labels.passes.countFew}`;
+  return `${count} ${labels.passes.countMany}`;
+}
+
+function PassesPageContent() {
   const { user } = useAuth();
+  const router = useRouter();
+  const searchParams = useSearchParams();
   const config = useConfig();
   const { toast } = useToast();
   const [passes, setPasses] = useState<Pass[]>([]);
@@ -24,30 +44,69 @@ export default function PassesPage() {
   const [selected, setSelected] = useState<Pass | null>(null);
   const [loading, setLoading] = useState(true);
   const [loadError, setLoadError] = useState('');
+  const [loadErrorCause, setLoadErrorCause] = useState<unknown>(null);
   const [actionLoading, setActionLoading] = useState(false);
   const [rejectReason, setRejectReason] = useState('');
 
-  const isSecurity = user?.role === 'security' || user?.role === 'admin';
-  const isOwner = selected && user && (selected.createdBy === user.id || user.role === 'admin');
+  const labels = getUiLabels(config);
+
+  const canViewPassesList = canViewPasses(user);
+  const canViewAll = canViewAllPasses(user);
+  const canApprove = hasPermission(user, 'passes.approve');
+  const canReception = hasPermission(user, 'passes.reception');
+  const showCreatorInfo = canViewAll || canReception;
+  const canCancelPass = (pass: Pass) =>
+    pass.isOwner && ['pending', 'approved'].includes(pass.status);
+
+  const canSharePass = (pass: Pass) => !['cancelled', 'rejected', 'expired'].includes(pass.status);
+
+  useEffect(() => {
+    if (user && !canViewPassesList && hasPermission(user, 'passes.templates')) {
+      router.replace('/templates');
+    }
+  }, [user, canViewPassesList, router]);
+
   const canPrint = selected && ['approved', 'active'].includes(selected.status);
 
   const load = useCallback(() => {
     setLoading(true);
     setLoadError('');
-    api.getPasses({
+    return api.getPasses({
       status: statusFilter || undefined,
       search: debouncedSearch || undefined,
       date: dateFilter || undefined,
     })
       .then(({ passes: data }) => {
         setPasses(data);
-        setSelected((prev) => (prev ? data.find((p) => p.id === prev.id) || prev : null));
+        return data;
       })
-      .catch((err) => setLoadError(err instanceof Error ? err.message : 'Ошибка загрузки'))
+      .catch((err) => {
+        setLoadErrorCause(err);
+        setLoadError(getErrorMessage(err, 'Ошибка загрузки'));
+        return [] as Pass[];
+      })
       .finally(() => setLoading(false));
   }, [statusFilter, debouncedSearch, dateFilter]);
 
   useEffect(() => { load(); }, [load]);
+
+  useEffect(() => {
+    if (loading) return;
+    const idFromUrl = searchParams.get('id');
+    const isTenant = user?.role === 'tenant';
+    setSelected((prev) => {
+      if (idFromUrl) {
+        const fromUrl = passes.find((p) => p.id === idFromUrl);
+        if (fromUrl && (!isTenant || fromUrl.isOwner)) return fromUrl;
+      }
+      if (prev) {
+        const updated = passes.find((p) => p.id === prev.id);
+        if (updated && (!isTenant || updated.isOwner)) return updated;
+      }
+      const firstOwn = isTenant ? passes.find((p) => p.isOwner) : passes[0];
+      return firstOwn || null;
+    });
+  }, [passes, loading, searchParams, user?.role]);
 
   const handleAction = async (id: string, action: 'approve' | 'reject' | 'checkin' | 'checkout' | 'cancel', reason?: string) => {
     setActionLoading(true);
@@ -61,161 +120,162 @@ export default function PassesPage() {
       setPasses((prev) => prev.map((p) => (p.id === id ? updated : p)));
       setSelected(updated);
       setRejectReason('');
-      toast('Действие выполнено', 'success');
+      const toastMsg = action === 'approve' ? labels.toasts.approved
+        : action === 'reject' ? labels.toasts.rejected
+        : action === 'checkin' ? labels.toasts.checkedIn
+        : action === 'checkout' ? labels.toasts.checkedOut
+        : labels.toasts.actionDone;
+      toast(toastMsg, 'success');
     } catch (err) {
-      toast(err instanceof Error ? err.message : 'Ошибка', 'error');
+      toast(getErrorMessage(err, 'Ошибка'), 'error');
     } finally {
       setActionLoading(false);
     }
   };
 
+  const renderDetailActions = (pass: Pass) => (
+    <>
+      {canApprove && pass.status === 'pending' && (
+        <>
+          <button className="btn btn-success w-full" disabled={actionLoading} onClick={() => handleAction(pass.id, 'approve')}>
+            {labels.buttons.approve}
+          </button>
+          <input
+            className="input"
+            placeholder={labels.reception.rejectPlaceholder}
+            value={rejectReason}
+            onChange={(e) => setRejectReason(e.target.value)}
+          />
+          <button
+            className="btn btn-danger w-full"
+            disabled={actionLoading || !rejectReason.trim()}
+            onClick={() => handleAction(pass.id, 'reject', rejectReason)}
+          >
+            {labels.buttons.reject}
+          </button>
+        </>
+      )}
+      {canReception && pass.status === 'approved' && (
+        <button className="btn btn-success w-full" disabled={actionLoading} onClick={() => handleAction(pass.id, 'checkin')}>
+          {labels.buttons.checkInBuilding}
+        </button>
+      )}
+      {canReception && pass.status === 'active' && (
+        <button className="btn btn-primary w-full" disabled={actionLoading} onClick={() => handleAction(pass.id, 'checkout')}>
+          {labels.buttons.checkOut}
+        </button>
+      )}
+      {canSharePass(pass) && (
+        <SharePassActions passIdOrNumber={pass.id} passNumber={pass.passNumber} />
+      )}
+      {canCancelPass(pass) && (
+        <button className="btn btn-danger w-full" disabled={actionLoading} onClick={() => handleAction(pass.id, 'cancel')}>
+          {labels.buttons.cancelRequest}
+        </button>
+      )}
+    </>
+  );
+
+  if (user && !canViewPassesList) return null;
+
   return (
-    <ProtectedLayout>
+    <ProtectedLayout anyPermissions={['passes.view_own', 'passes.view_all', 'admin.panel']}>
       <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-4 mb-6">
-        <h1 className="text-2xl font-bold">Пропуска</h1>
+        <div>
+          <h1 className="page-title">{labels.pages.passesTitle}</h1>
+          <p className="text-sm text-[var(--muted)] mt-1">
+            {canViewAll ? labels.pages.passesSubtitleAll : labels.pages.passesSubtitleOwn}
+          </p>
+        </div>
         <div className="flex flex-wrap gap-2">
           <div className="relative flex-1 sm:w-56">
             <Search className="absolute left-3 top-1/2 -translate-y-1/2 w-4 h-4 text-[var(--muted)]" />
-            <input className="input pl-9" placeholder="Поиск..." value={search} onChange={(e) => setSearch(e.target.value)} />
+            <input
+              className="input input--icon-left"
+              placeholder={labels.passes.searchPlaceholder}
+              value={search}
+              onChange={(e) => setSearch(e.target.value)}
+            />
           </div>
-          <input className="input w-auto" type="date" value={dateFilter} onChange={(e) => setDateFilter(e.target.value)} />
-          <select className="input w-auto" value={statusFilter} onChange={(e) => setStatusFilter(e.target.value)}>
-            <option value="">Все статусы</option>
-            {Object.entries(STATUS_LABELS).map(([k, v]) => <option key={k} value={k}>{v}</option>)}
+          <input className="input input--auto" type="date" value={dateFilter} onChange={(e) => setDateFilter(e.target.value)} />
+          <select className="input input--auto" value={statusFilter} onChange={(e) => setStatusFilter(e.target.value)}>
+            <option value="">{labels.passes.allStatuses}</option>
+            {ALL_STATUSES.map((status) => (
+              <option key={status} value={status}>{getStatusLabel(status, labels)}</option>
+            ))}
           </select>
         </div>
       </div>
 
       {loadError && (
-        <div className="mb-4 text-sm text-red-600 bg-red-50 px-3 py-2 rounded-md flex items-center justify-between">
-          {loadError}
-          <button className="btn btn-secondary text-xs" onClick={load}>Повторить</button>
-        </div>
+        <PageError
+          className="mb-4"
+          message={loadError}
+          error={loadErrorCause}
+          onRetry={() => load()}
+          retryLabel={labels.buttons.retry}
+        />
       )}
 
-      <div className="grid lg:grid-cols-2 gap-4">
-        <div className="space-y-3">
+      <div className="grid lg:grid-cols-[minmax(0,1fr)_minmax(320px,400px)] gap-5 items-start">
+        <div>
           {loading ? (
-            <div className="card p-8 text-center text-[var(--muted)]">Загрузка...</div>
+            <div className="card p-8 text-center text-[var(--muted)]">{labels.passes.loading}</div>
           ) : passes.length === 0 ? (
-            <div className="card p-8 text-center text-[var(--muted)]">Пропуска не найдены</div>
+            <div className="card p-8 text-center text-[var(--muted)]">{labels.passes.notFound}</div>
           ) : (
-            passes.map((pass) => <PassCard key={pass.id} pass={pass} onClick={() => setSelected(pass)} />)
+            <div className="flex flex-col gap-1.5">
+              <p className="text-xs text-[var(--muted)] mb-1 px-1">{formatPassCount(passes.length, labels)}</p>
+              {passes.map((pass) => (
+                <PassListCard
+                  key={pass.id}
+                  pass={pass}
+                  labels={labels}
+                  selected={selected?.id === pass.id}
+                  showCreator={showCreatorInfo}
+                  onClick={() => setSelected(pass)}
+                />
+              ))}
+            </div>
           )}
         </div>
 
         {selected && (
-          <div className="card p-5 lg:sticky lg:top-20 h-fit">
-            <div className="flex items-center justify-between mb-4">
-              <h2 className="text-lg font-semibold">Детали пропуска</h2>
-              <div className="flex items-center gap-2">
-                <StatusBadge status={selected.status} />
-                <button className="p-1 text-[var(--muted)] hover:text-[var(--text)]" onClick={() => setSelected(null)} aria-label="Закрыть">
-                  <X className="w-4 h-4" />
-                </button>
-              </div>
+          <div className="lg:sticky lg:top-20 space-y-3">
+            <div className="flex items-center justify-between px-1">
+              <h2 className="text-base font-semibold text-[var(--muted)] uppercase tracking-wide text-[11px]">
+                {labels.passes.detailTitle}
+              </h2>
+              <button
+                className="p-1.5 rounded-md text-[var(--muted)] hover:text-[var(--foreground)] hover:bg-[var(--m-block)] lg:hidden"
+                onClick={() => setSelected(null)}
+                aria-label={labels.passes.close}
+              >
+                <X className="w-4 h-4" />
+              </button>
             </div>
 
             {canPrint && (
-              <div className="mb-5 pb-5 border-b border-[var(--border)]">
-                <PassPrintCard pass={selected} businessCenterName={config?.businessCenterName} />
-              </div>
+              <PassPrintCard pass={selected} businessCenterName={selected.businessCenterName || config?.businessCenterName} />
             )}
 
-            <dl className="space-y-3 text-sm">
-              <div className="flex justify-between gap-4">
-                <dt className="text-[var(--muted)] shrink-0">Номер</dt>
-                <dd className="font-mono font-medium text-right">{selected.passNumber}</dd>
-              </div>
-              <div className="flex justify-between gap-4">
-                <dt className="text-[var(--muted)] shrink-0">Посетитель</dt>
-                <dd className="text-right">{selected.visitorName}</dd>
-              </div>
-              {selected.companyName && (
-                <div className="flex justify-between gap-4">
-                  <dt className="text-[var(--muted)] shrink-0">Компания</dt>
-                  <dd className="text-right">{selected.companyName}</dd>
-                </div>
-              )}
-              {selected.visitPurpose && (
-                <div className="flex justify-between gap-4">
-                  <dt className="text-[var(--muted)] shrink-0">Цель визита</dt>
-                  <dd className="text-right">{selected.visitPurpose}</dd>
-                </div>
-              )}
-              {selected.visitorPhone && (
-                <div className="flex justify-between gap-4">
-                  <dt className="text-[var(--muted)] shrink-0">Телефон</dt>
-                  <dd className="text-right">{selected.visitorPhone}</dd>
-                </div>
-              )}
-              {selected.creatorName && isSecurity && (
-                <div className="flex justify-between gap-4">
-                  <dt className="text-[var(--muted)] shrink-0">Заказал</dt>
-                  <dd className="text-right">{selected.creatorName}{selected.creatorCompany && ` (${selected.creatorCompany})`}</dd>
-                </div>
-              )}
-              <div className="flex justify-between gap-4">
-                <dt className="text-[var(--muted)] shrink-0">Дата визита</dt>
-                <dd className="text-right">{selected.visitDate} {selected.visitTimeFrom && `${selected.visitTimeFrom}–${selected.visitTimeTo}`}</dd>
-              </div>
-              <div className="flex justify-between gap-4">
-                <dt className="text-[var(--muted)] shrink-0">Офис</dt>
-                <dd className="text-right">оф. {selected.office}{selected.floor && `, ${selected.floor} эт.`}</dd>
-              </div>
-              {selected.vehiclePlate && (
-                <div className="flex justify-between gap-4">
-                  <dt className="text-[var(--muted)] shrink-0">Автомобиль</dt>
-                  <dd className="font-mono text-right">{selected.vehiclePlate} {selected.vehicleModel}</dd>
-                </div>
-              )}
-              {selected.comment && (
-                <div>
-                  <dt className="text-[var(--muted)] mb-1">Комментарий</dt>
-                  <dd className="bg-slate-50 p-2 rounded">{selected.comment}</dd>
-                </div>
-              )}
-              {selected.rejectionReason && (
-                <div>
-                  <dt className="text-[var(--muted)] mb-1">Причина отклонения</dt>
-                  <dd className="text-red-600">{selected.rejectionReason}</dd>
-                </div>
-              )}
-              {selected.checkedInAt && (
-                <div className="flex justify-between gap-4">
-                  <dt className="text-[var(--muted)] shrink-0">Вход</dt>
-                  <dd className="text-right">{new Date(selected.checkedInAt).toLocaleString('ru-RU')}</dd>
-                </div>
-              )}
-              {selected.checkedOutAt && (
-                <div className="flex justify-between gap-4">
-                  <dt className="text-[var(--muted)] shrink-0">Выход</dt>
-                  <dd className="text-right">{new Date(selected.checkedOutAt).toLocaleString('ru-RU')}</dd>
-                </div>
-              )}
-            </dl>
-
-            <div className="mt-5 pt-4 border-t border-[var(--border)] space-y-3">
-              {isSecurity && selected.status === 'pending' && (
-                <>
-                  <button className="btn btn-success w-full" disabled={actionLoading} onClick={() => handleAction(selected.id, 'approve')}>Одобрить</button>
-                  <input className="input" placeholder="Причина отклонения" value={rejectReason} onChange={(e) => setRejectReason(e.target.value)} />
-                  <button className="btn btn-danger w-full" disabled={actionLoading || !rejectReason.trim()} onClick={() => handleAction(selected.id, 'reject', rejectReason)}>Отклонить</button>
-                </>
-              )}
-              {isSecurity && selected.status === 'approved' && (
-                <button className="btn btn-success w-full" disabled={actionLoading} onClick={() => handleAction(selected.id, 'checkin')}>Впустить в здание</button>
-              )}
-              {isSecurity && selected.status === 'active' && (
-                <button className="btn btn-primary w-full" disabled={actionLoading} onClick={() => handleAction(selected.id, 'checkout')}>Зафиксировать выход</button>
-              )}
-              {isOwner && selected.status === 'pending' && (
-                <button className="btn btn-secondary w-full" disabled={actionLoading} onClick={() => handleAction(selected.id, 'cancel')}>Отменить заявку</button>
-              )}
-            </div>
+            <PassDetailPanel
+              pass={selected}
+              labels={labels}
+              showCreator={showCreatorInfo}
+              actions={renderDetailActions(selected)}
+            />
           </div>
         )}
       </div>
     </ProtectedLayout>
+  );
+}
+
+export default function PassesPage() {
+  return (
+    <Suspense fallback={<ProtectedLayout anyPermissions={['passes.view_own', 'passes.view_all', 'admin.panel']}><div className="animate-pulse text-[var(--muted)] p-8">Загрузка...</div></ProtectedLayout>}>
+      <PassesPageContent />
+    </Suspense>
   );
 }

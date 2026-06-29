@@ -1,0 +1,62 @@
+# Development Docker Compose with hot-reload
+# Usage:
+#   docker-compose -f docker-compose.dev.yml up --build
+#
+# This version mounts source code for live reload.
+# Note: First build may take time because of node_modules inside container.
+
+version: '3.8'
+
+services:
+  mongo:
+    image: mongo:7-jammy
+    container_name: pass24-mongo-dev
+    ports:
+      - "27017:27017"
+    environment:
+      MONGO_INITDB_DATABASE: pass24
+    volumes:
+      # Bind mount для данных MongoDB (можно переопределить MONGO_DATA_PATH)
+      - ${MONGO_DATA_PATH:-./data/mongo}:/data/db
+      # Custom configuration
+      - ./docker/mongo/mongod.conf:/etc/mongod.conf:ro
+      # Init script
+      - ./docker/mongo/init-mongo.js:/docker-entrypoint-initdb.d/init-mongo.js:ro
+    command: ["mongod", "--config", "/etc/mongod.conf"]
+
+  backend:
+    build:
+      context: ./backend
+      dockerfile: Dockerfile
+    container_name: pass24-backend-dev
+    ports:
+      - "127.0.0.1:4000:4000"
+    environment:
+      - PORT=4000
+      - MONGODB_URI=mongodb://mongo:27017/pass24
+      - JWT_SECRET=pass24-super-secret-key-2026
+      - JWT_EXPIRES_IN=7d
+    command: npm run start:dev
+    volumes:
+      - ./backend:/app
+      - /app/node_modules          # keep container's node_modules
+    depends_on:
+      - mongo
+
+  frontend:
+    build:
+      context: ./frontend
+      dockerfile: Dockerfile
+    container_name: pass24-frontend-dev
+    ports:
+      - "3000:3000"
+    environment:
+      - NEXT_PUBLIC_API_URL=http://127.0.0.1:4000/api
+    command: npm run dev
+    volumes:
+      - ./frontend:/app
+      - /app/node_modules
+      - /app/.next
+    depends_on:
+      - backend
+

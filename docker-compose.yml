@@ -1,0 +1,92 @@
+services:
+  # MongoDB database
+  mongo:
+    image: mongo:7-jammy
+    container_name: pass24-mongo
+    restart: unless-stopped
+    ports:
+      - "27017:27017"
+    environment:
+      MONGO_INITDB_DATABASE: pass24
+    volumes:
+      # Bind mount для данных MongoDB (можно переопределить через .env: MONGO_DATA_PATH=./my-mongo-data)
+      - ${MONGO_DATA_PATH:-./data/mongo}:/data/db
+      # Custom MongoDB configuration
+      - ./docker/mongo/mongod.conf:/etc/mongod.conf:ro
+      # Initialization script (runs only on first container start)
+      - ./docker/mongo/init-mongo.js:/docker-entrypoint-initdb.d/init-mongo.js:ro
+    command: ["mongod", "--config", "/etc/mongod.conf"]
+    healthcheck:
+      test: echo 'db.runCommand("ping").ok' | mongosh localhost:27017/test --quiet
+      interval: 10s
+      timeout: 5s
+      retries: 5
+      start_period: 40s
+
+  # Local SMTP catcher (web UI: http://127.0.0.1:8025)
+  mailpit:
+    image: axllent/mailpit:latest
+    container_name: pass24-mailpit
+    restart: unless-stopped
+    ports:
+      - "127.0.0.1:8025:8025"
+      - "127.0.0.1:1025:1025"
+
+  # NestJS Backend
+  backend:
+    build:
+      context: ./backend
+      dockerfile: Dockerfile
+    container_name: pass24-backend
+    restart: unless-stopped
+    ports:
+      # Только IPv4: localhost на Windows уходит в ::1 и зависает
+      - "127.0.0.1:4000:4000"
+    environment:
+      - PORT=4000
+      - MONGODB_URI=mongodb://mongo:27017/pass24
+      - JWT_SECRET=pass24-super-secret-key-2026
+      - JWT_EXPIRES_IN=7d
+      - ADMIN_EMAIL=admin@pass24.local
+      - ADMIN_PASSWORD=admin123
+      - ADMIN_FULL_NAME=Администратор БЦ
+      - SMTP_HOST=mailpit
+      - SMTP_PORT=1025
+      - SMTP_FROM=PASS24 <noreply@pass24.local>
+      - PUBLIC_APP_URL=http://127.0.0.1:3000
+      - TZ=Europe/Moscow
+    depends_on:
+      mongo:
+        condition: service_healthy
+      mailpit:
+        condition: service_started
+    # For development hot-reload (uncomment if needed):
+    # command: npm run start:dev
+    # volumes:
+    #   - ./backend:/app
+    #   - /app/node_modules
+
+  # Next.js Frontend
+  frontend:
+    build:
+      context: ./frontend
+      dockerfile: Dockerfile
+      args:
+        NEXT_PUBLIC_API_URL: http://127.0.0.1:4000/api
+    container_name: pass24-frontend
+    restart: unless-stopped
+    ports:
+      # Только IPv4: на Windows localhost → ::1, а Docker IPv6-проброс часто зависает
+      - "127.0.0.1:3000:3000"
+    environment:
+      - HOSTNAME=0.0.0.0
+      - NEXT_PUBLIC_API_URL=http://127.0.0.1:4000/api
+    depends_on:
+      - backend
+    # For development hot-reload (uncomment if needed):
+    # command: npm run dev
+    # volumes:
+    #   - ./frontend:/app
+    #   - /app/node_modules
+    #   - /app/.next
+
