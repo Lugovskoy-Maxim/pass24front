@@ -9,13 +9,10 @@ services:
     environment:
       MONGO_INITDB_DATABASE: pass24
     volumes:
-      # Bind mount для данных MongoDB (можно переопределить через .env: MONGO_DATA_PATH=./my-mongo-data)
-      - ${MONGO_DATA_PATH:-./data/mongo}:/data/db
-      # Custom MongoDB configuration
-      - ./docker/mongo/mongod.conf:/etc/mongod.conf:ro
+      # Named volume — стабильнее на Windows, чем bind mount ./data/mongo
+      - mongo_data:/data/db
       # Initialization script (runs only on first container start)
       - ./docker/mongo/init-mongo.js:/docker-entrypoint-initdb.d/init-mongo.js:ro
-    command: ["mongod", "--config", "/etc/mongod.conf"]
     healthcheck:
       test: echo 'db.runCommand("ping").ok' | mongosh localhost:27017/test --quiet
       interval: 10s
@@ -90,3 +87,5 @@ services:
     #   - /app/node_modules
     #   - /app/.next
 
+volumes:
+  mongo_data:
