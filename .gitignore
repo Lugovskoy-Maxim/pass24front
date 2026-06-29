@@ -5,6 +5,14 @@ node_modules/
 .DS_Store
 pass365/
 
-# MongoDB data (mounted in Docker)
-data/
+# MongoDB runtime data (Docker bind mount) — never commit collections/WiredTiger files
+data/*
+!data/mongo/
+data/mongo/*
+!data/mongo/.gitkeep
 
+# WiredTiger / journal / diagnostic artifacts (if path changes)
+*.wt
+WiredTiger*
+mongod.lock
+storage.bson
