@@ -16,13 +16,8 @@ services:
     environment:
       MONGO_INITDB_DATABASE: pass24
     volumes:
-      # Bind mount для данных MongoDB (можно переопределить MONGO_DATA_PATH)
-      - ${MONGO_DATA_PATH:-./data/mongo}:/data/db
-      # Custom configuration
-      - ./docker/mongo/mongod.conf:/etc/mongod.conf:ro
-      # Init script
+      - mongo_data:/data/db
       - ./docker/mongo/init-mongo.js:/docker-entrypoint-initdb.d/init-mongo.js:ro
-    command: ["mongod", "--config", "/etc/mongod.conf"]
 
   backend:
     build:
@@ -59,4 +54,7 @@ services:
       - /app/.next
     depends_on:
       - backend
+
+volumes:
+  mongo_data:
 
