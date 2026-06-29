@@ -358,7 +358,7 @@ function ControlPageContent() {
       )}
 
       <div className="grid lg:grid-cols-[minmax(0,1fr)_minmax(320px,400px)] gap-5 items-start">
-        <div>
+        <div className="min-w-0">
           {loading ? (
             <div className="card p-8 text-center text-[var(--muted)]">{labels.reception.journalLoading}</div>
           ) : passes.length === 0 && overdueCount === 0 ? (
@@ -418,7 +418,7 @@ function ControlPageContent() {
         </div>
 
         {selected && (
-          <div className="lg:sticky lg:top-20 space-y-3">
+          <div className="lg:sticky lg:top-20 space-y-3 min-w-0 max-w-full">
             <div className="flex items-center justify-between px-1">
               <h2 className="text-base font-semibold text-[var(--muted)] uppercase tracking-wide text-[11px]">
                 {labels.reception.selectedPass}

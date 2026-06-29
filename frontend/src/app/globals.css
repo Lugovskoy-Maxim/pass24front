@@ -512,7 +512,174 @@ input[type="checkbox"]:not(.checkbox) {
   border-radius: var(--radius);
   box-shadow: var(--card-shadow);
   overflow: hidden;
+  max-width: 100%;
+  min-width: 0;
   transition: border-color 0.15s, box-shadow 0.15s, transform 0.15s;
+}
+
+.pass-card__body {
+  flex: 1 1 auto;
+  min-width: 0;
+  overflow: hidden;
+}
+
+.pass-card__body--row {
+  display: flex;
+  align-items: flex-start;
+  gap: 0.5rem;
+}
+
+.pass-card__header-grid {
+  display: grid;
+  grid-template-columns: minmax(0, 1fr);
+  gap: 0.75rem;
+  align-items: start;
+}
+
+@media (min-width: 480px) {
+  .pass-card__header-grid {
+    grid-template-columns: minmax(0, 1fr) auto;
+  }
+}
+
+.pass-card__main {
+  min-width: 0;
+  overflow: hidden;
+}
+
+.pass-card__title {
+  font-weight: 700;
+  line-height: 1.25;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+  max-width: 100%;
+}
+
+.pass-card__badges {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: center;
+  gap: 0.3125rem;
+  max-width: 100%;
+  min-width: 0;
+}
+
+.pass-card__mono {
+  font-family: ui-monospace, SFMono-Regular, Menlo, Monaco, Consolas, monospace;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+  max-width: 100%;
+  min-width: 0;
+}
+
+.pass-card__meta-line {
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+  max-width: 100%;
+}
+
+.pass-card__chips {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 0.25rem 0.625rem;
+  min-width: 0;
+  max-width: 100%;
+}
+
+.pass-card__chip {
+  display: inline-flex;
+  align-items: center;
+  gap: 0.25rem;
+  min-width: 0;
+  max-width: 100%;
+  flex: 0 1 auto;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+
+.pass-card__office {
+  flex-shrink: 0;
+  text-align: right;
+  padding-left: 0.5rem;
+  border-left: 1px solid color-mix(in srgb, var(--border) 60%, transparent);
+}
+
+@media (max-width: 479px) {
+  .pass-card__office--side {
+    display: none;
+  }
+}
+
+.pass-card__office--inline {
+  display: inline-flex;
+  align-items: center;
+  gap: 0.25rem;
+  font-weight: 600;
+  color: var(--text);
+}
+
+@media (min-width: 480px) {
+  .pass-card__office--inline {
+    display: none;
+  }
+}
+
+.pass-card__alert {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: flex-start;
+  gap: 0.5rem;
+  min-width: 0;
+}
+
+.pass-card__alert-msg {
+  flex: 1 1 10rem;
+  min-width: 0;
+  overflow-wrap: anywhere;
+  word-break: break-word;
+}
+
+.pass-card__text-block {
+  overflow-wrap: anywhere;
+  word-break: break-word;
+}
+
+.pass-card__timeline {
+  min-width: 0;
+  overflow-x: auto;
+  -webkit-overflow-scrolling: touch;
+}
+
+.pass-card__timeline::-webkit-scrollbar {
+  height: 4px;
+}
+
+.pass-card__timeline::-webkit-scrollbar-thumb {
+  background: var(--border-strong);
+  border-radius: 9999px;
+}
+
+.pass-card__actions {
+  display: flex;
+  flex-direction: column;
+  gap: 0.5rem;
+  min-width: 0;
+}
+
+@media (min-width: 640px) {
+  .pass-card__actions {
+    flex-direction: row;
+    flex-wrap: wrap;
+  }
+}
+
+.pass-card__actions > * {
+  min-width: 0;
+  flex: 1 1 auto;
 }
 
 .pass-card--interactive:hover {
@@ -580,6 +747,8 @@ input[type="checkbox"]:not(.checkbox) {
   align-items: center;
   gap: 0.3125rem;
   flex-wrap: wrap;
+  max-width: 100%;
+  min-width: 0;
 }
 
 .pass-badge {
