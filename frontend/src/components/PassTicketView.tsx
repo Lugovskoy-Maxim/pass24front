@@ -64,15 +64,15 @@ export function PassTicketView({
   const typeLabel = TYPE_LABELS[ticket.passType as PassType] || ticket.passType;
 
   return (
-    <div className="max-w-md mx-auto">
-      <article className={getPassCardShellClass()}>
+    <div className="max-w-md mx-auto min-w-0 w-full px-2 sm:px-0">
+      <article className={`${getPassCardShellClass()} min-w-0 max-w-full overflow-hidden`}>
         <div className={getPassStatusTopStripeClass(ticket.status)} aria-hidden />
 
         {/* Шапка БЦ */}
         <header className="text-center px-5 pt-5 pb-4 border-b border-[var(--border)] bg-gradient-surface">
-          <div className="inline-flex items-center justify-center gap-2 text-[var(--text)]">
+          <div className="inline-flex items-center justify-center gap-2 text-[var(--text)] max-w-full min-w-0">
             <Building2 className="w-5 h-5 shrink-0" />
-            <span className="font-bold text-lg leading-tight">{businessCenterName}</span>
+            <span className="font-bold text-lg leading-tight truncate" title={businessCenterName}>{businessCenterName}</span>
           </div>
           <p className="text-xs text-[var(--muted)] mt-1">{labels.card.electronicPass}</p>
         </header>
@@ -82,8 +82,8 @@ export function PassTicketView({
           <div className={`w-14 h-14 mx-auto mb-3 rounded-full ${getPassIconTileClass(ticket.status)}`}>
             <User className="w-7 h-7" />
           </div>
-          <h1 className="text-xl font-bold leading-snug break-words">{ticket.visitorName}</h1>
-          <p className="font-mono text-sm text-[var(--text)] font-semibold mt-1">{ticket.passNumber}</p>
+          <h1 className="text-xl font-bold leading-snug break-words max-w-full" title={ticket.visitorName}>{ticket.visitorName}</h1>
+          <p className="pass-card__mono text-sm text-[var(--text)] font-semibold mt-1" title={ticket.passNumber}>{ticket.passNumber}</p>
           <div className="flex flex-wrap items-center justify-center gap-2 mt-3">
             <StatusBadge status={ticket.status} labels={labels} />
             <span className="text-xs px-2.5 py-0.5 rounded-full surface-muted border border-[var(--border)] text-[var(--muted)]">
@@ -94,8 +94,8 @@ export function PassTicketView({
 
         {/* Ключевые данные */}
         <section className="px-5 py-4 grid grid-cols-2 gap-3 border-b border-[var(--border)] bg-[var(--surface-muted)]">
-          <div className="col-span-2 flex items-center justify-center gap-4 text-sm flex-wrap">
-            <span className="inline-flex items-center gap-1.5 font-semibold text-[var(--text)]">
+          <div className="col-span-2 flex items-center justify-center gap-4 text-sm flex-wrap min-w-0">
+            <span className="inline-flex items-center gap-1.5 font-semibold text-[var(--text)] min-w-0 max-w-full pass-card__chip" title={`${labels.card.office} ${ticket.office}${ticket.floor ? ` · ${ticket.floor} ${labels.card.floorSuffix}` : ''}`}>
               <MapPin className="w-4 h-4 shrink-0" />
               {labels.card.office} {ticket.office}
               {ticket.floor && ` · ${ticket.floor} ${labels.card.floorSuffix}`}
@@ -148,7 +148,7 @@ export function PassTicketView({
         </section>
 
         {/* Timeline */}
-        <section className={`px-4 py-4 ${isTerminal ? 'bg-[var(--surface-muted)]' : 'bg-[var(--surface)]'}`}>
+        <section className={`pass-card__timeline px-4 py-4 ${isTerminal ? 'bg-[var(--surface-muted)]' : 'bg-[var(--surface)]'}`}>
           <PassVisitTimeline pass={ticket} labels={labels} compact />
         </section>
 

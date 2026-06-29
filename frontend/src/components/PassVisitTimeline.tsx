@@ -191,8 +191,8 @@ export function PassVisitTimeline({
   const topOffset = compact ? 'top-3' : 'top-4';
 
   return (
-    <div className="w-full">
-      <div className="flex items-start justify-between gap-1">
+    <div className="w-full min-w-[280px]">
+      <div className="flex items-start justify-between gap-0.5 sm:gap-1">
         {steps.map((step, index) => {
           const prevState = index > 0 ? steps[index - 1].state : null;
           const lineState: StepState =
@@ -225,9 +225,12 @@ export function PassVisitTimeline({
                 <NodeIcon step={step} />
               </div>
 
-              <p className={`text-[11px] sm:text-xs mt-2 text-center leading-tight ${
-                step.state === 'current' ? currentStyles.label : LABEL_STYLES[step.state]
-              }`}>
+              <p
+                className={`text-[11px] sm:text-xs mt-2 text-center leading-tight truncate max-w-full px-0.5 ${
+                  step.state === 'current' ? currentStyles.label : LABEL_STYLES[step.state]
+                }`}
+                title={step.label}
+              >
                 {step.label}
               </p>
               {step.sublabel && (

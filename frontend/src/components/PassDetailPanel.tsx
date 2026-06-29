@@ -64,57 +64,57 @@ export function PassDetailPanel({ pass, labels: labelsProp, showCreator, actions
     : null;
 
   return (
-    <div className={getPassCardShellClass({ overdue: stillInside })}>
-      <div className="flex items-stretch">
+    <div className={`${getPassCardShellClass({ overdue: stillInside })} min-w-0 max-w-full overflow-hidden`}>
+      <div className="flex items-stretch min-w-0 w-full">
         <div className={getPassStatusStripeClass(pass.status, stillInside)} aria-hidden />
 
-        <div className="flex-1 min-w-0">
+        <div className="pass-card__body">
           {overdueKind && (
-            <div className="px-4 py-2 theme-alert-subtle border-b text-xs">
-              {getOverdueCardMessage(overdueKind, pass, labels)}
+            <div className="px-4 py-2 theme-alert-subtle border-b text-xs pass-card__alert">
+              <span className="pass-card__alert-msg">{getOverdueCardMessage(overdueKind, pass, labels)}</span>
             </div>
           )}
 
           <div className="px-4 py-4 bg-gradient-surface border-b border-[var(--border)]">
-            <div className="flex items-start justify-between gap-3">
+            <div className="flex items-start gap-3 min-w-0">
               <div className={`shrink-0 ${getPassIconTileClass(pass.status, stillInside)} w-10 h-10`}>
                 <User className="w-5 h-5" />
               </div>
-              <div className="min-w-0 flex-1">
-                <h3 className="text-lg font-bold leading-tight break-words">{pass.visitorName}</h3>
-                <p className="font-mono text-sm text-[var(--text)] font-semibold mt-1">{pass.passNumber}</p>
-              </div>
-              <div className="flex flex-col items-end gap-1.5 shrink-0">
-                <StatusBadge status={pass.status} labels={labels} overdueKind={overdueKind} />
-                <span className="text-xs px-2 py-0.5 rounded-full bg-[var(--surface-elevated)] border border-[var(--border)] text-[var(--muted)]">
-                  {TYPE_LABELS[pass.passType as PassType] || pass.passType}
-                </span>
+              <div className="pass-card__main flex-1 min-w-0">
+                <h3 className="pass-card__title text-lg" title={pass.visitorName}>{pass.visitorName}</h3>
+                <p className="pass-card__mono text-sm font-semibold mt-1" title={pass.passNumber}>{pass.passNumber}</p>
+                <div className="pass-card__badges mt-2">
+                  <StatusBadge status={pass.status} labels={labels} overdueKind={overdueKind} />
+                  <span className="text-xs px-2 py-0.5 rounded-full bg-[var(--surface-elevated)] border border-[var(--border)] text-[var(--muted)] max-w-full min-w-0 truncate">
+                    {TYPE_LABELS[pass.passType as PassType] || pass.passType}
+                  </span>
+                </div>
               </div>
             </div>
 
-            <div className="flex flex-wrap gap-2 mt-3">
-              <span className="inline-flex items-center gap-1 text-xs bg-[var(--surface-elevated)] border border-[var(--border)] rounded-md px-2 py-1">
-                <MapPin className="w-3.5 h-3.5 text-[var(--muted)]" />
+            <div className="pass-card__chips mt-3">
+              <span className="pass-card__chip text-xs bg-[var(--surface-elevated)] border border-[var(--border)] rounded-md px-2 py-1" title={`${labels.card.office} ${pass.office}${pass.floor ? ` · ${pass.floor}` : ''}`}>
+                <MapPin className="w-3.5 h-3.5 text-[var(--muted)] shrink-0" />
                 {labels.card.office} {pass.office}
                 {pass.floor && ` · ${pass.floor} ${labels.card.floorSuffix}`}
               </span>
-              <span className="inline-flex items-center gap-1 text-xs bg-[var(--surface-elevated)] border border-[var(--border)] rounded-md px-2 py-1">
-                <Calendar className="w-3.5 h-3.5 text-[var(--muted)]" />
+              <span className="pass-card__chip text-xs bg-[var(--surface-elevated)] border border-[var(--border)] rounded-md px-2 py-1" title={`${pass.visitDate}${visitWindow ? ` · ${visitWindow}` : ''}`}>
+                <Calendar className="w-3.5 h-3.5 text-[var(--muted)] shrink-0" />
                 {pass.visitDate}
                 {visitWindow && ` · ${visitWindow}`}
               </span>
               <Link
                 href={`/ticket/${encodeURIComponent(pass.passNumber)}`}
                 target="_blank"
-                className="inline-flex items-center gap-1 text-xs bg-[var(--surface-elevated)] border border-[var(--border)] rounded-md px-2 py-1 text-[var(--text)] hover:bg-[var(--surface-muted)]"
+                className="pass-card__chip text-xs bg-[var(--surface-elevated)] border border-[var(--border)] rounded-md px-2 py-1 text-[var(--text)] hover:bg-[var(--surface-muted)]"
               >
-                <QrCode className="w-3.5 h-3.5" />
+                <QrCode className="w-3.5 h-3.5 shrink-0" />
                 {labels.buttons.qrPass}
               </Link>
             </div>
           </div>
 
-          <div className={`px-4 py-4 border-b border-[var(--border)] ${isTerminal ? 'bg-[var(--surface-muted)]' : 'bg-[var(--surface)]'}`}>
+          <div className={`pass-card__timeline px-4 py-4 border-b border-[var(--border)] ${isTerminal ? 'bg-[var(--surface-muted)]' : 'bg-[var(--surface)]'}`}>
             <p className="text-[10px] uppercase tracking-wide text-[var(--muted)] mb-3">{labels.passes.detailTimeline}</p>
             <PassVisitTimeline pass={pass} labels={labels} overdue={stillInside} />
           </div>
@@ -180,7 +180,7 @@ export function PassDetailPanel({ pass, labels: labelsProp, showCreator, actions
           {children}
 
           {actions && (
-            <div className="px-4 py-4 border-t border-[var(--border)] surface-muted/50 space-y-3">
+            <div className="pass-card__actions px-4 py-4 border-t border-[var(--border)] surface-muted/50">
               {actions}
             </div>
           )}

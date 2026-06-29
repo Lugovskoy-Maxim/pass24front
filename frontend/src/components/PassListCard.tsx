@@ -52,13 +52,15 @@ export function PassListCard({ pass, labels: labelsProp, selected, showCreator, 
     ? `${pass.visitTimeFrom}${pass.visitTimeTo ? `–${pass.visitTimeTo}` : ''}`
     : null;
 
-  const meta: string[] = [
-    pass.visitDate,
-    TYPE_LABELS[pass.passType as PassType],
-  ].filter(Boolean);
+  const metaParts = [pass.visitDate, TYPE_LABELS[pass.passType as PassType]];
+  if (visitWindow) metaParts.push(visitWindow);
+  const officeInline = [
+    `${labels.card.office} ${pass.office}`,
+    pass.floor ? `${pass.floor} ${labels.card.floorSuffix}` : '',
+  ].filter(Boolean).join(' · ');
 
   const className = [
-    'w-full text-left rounded-lg block',
+    'w-full max-w-full text-left rounded-lg block min-w-0 overflow-hidden',
     getPassCardShellClass({
       interactive: true,
       selected,
@@ -68,87 +70,85 @@ export function PassListCard({ pass, labels: labelsProp, selected, showCreator, 
   ].join(' ');
 
   const inner = (
-    <div className="flex items-stretch gap-0 min-h-[4.5rem]">
+    <div className="flex items-stretch min-w-0 w-full">
       <div className={getPassStatusStripeClass(pass.status, stillInside)} aria-hidden />
 
-      <div className="flex-1 min-w-0 px-3 py-2.5 flex items-start gap-2">
-        <div className={`w-8 h-8 rounded-lg ${getPassIconTileClass(pass.status, stillInside)} mt-0.5`}>
+      <div className="pass-card__body pass-card__body--row px-3 py-2.5 min-w-0">
+        <div className={`w-8 h-8 rounded-lg shrink-0 ${getPassIconTileClass(pass.status, stillInside)} mt-0.5`}>
           <Icon className="w-4 h-4" />
         </div>
 
-        <div className="flex-1 min-w-0">
-          <div className="flex items-center gap-2 flex-wrap pr-1">
-            <span className="font-semibold text-sm leading-tight truncate max-w-[12rem] sm:max-w-none">
-              {pass.visitorName}
-            </span>
+        <div className="pass-card__main flex-1 min-w-0">
+          <div className="pass-card__title text-sm" title={pass.visitorName}>
+            {pass.visitorName}
+          </div>
+
+          <div className="pass-card__badges mt-1">
             <StatusBadge status={pass.status} labels={labels} size="sm" overdueKind={overdueKind} />
           </div>
 
-          <div className="font-mono text-xs text-[var(--text)] font-semibold mt-0.5 opacity-90">{pass.passNumber}</div>
+          <div className="pass-card__mono text-xs font-semibold mt-1 opacity-90" title={pass.passNumber}>
+            {pass.passNumber}
+          </div>
 
-          <p className="mt-1 text-[11px] text-[var(--muted)] leading-snug">
-            {meta.join(' · ')}
-            {visitWindow && (
-              <>
-                {' · '}
-                <Clock className="w-3 h-3 inline -mt-px" />
-                {' '}
-                {visitWindow}
-              </>
-            )}
+          <p className="pass-card__meta-line mt-1 text-[11px] text-[var(--muted)]" title={metaParts.join(' · ')}>
+            {metaParts.join(' · ')}
+            <span className="pass-card__office--inline ml-1">· {officeInline}</span>
           </p>
 
-          <div className="flex flex-wrap gap-x-3 gap-y-0.5 mt-1 text-[11px] text-[var(--muted)]">
+          <div className="pass-card__chips mt-1 text-[11px] text-[var(--muted)]">
             {pass.companyName && (
-              <span className="inline-flex items-center gap-1 truncate max-w-[10rem]">
+              <span className="pass-card__chip" title={pass.companyName}>
                 <Building2 className="w-3 h-3 shrink-0" />
                 {pass.companyName}
               </span>
             )}
             {pass.businessCenterName && (
-              <span className="inline-flex items-center gap-1 truncate max-w-[8rem]">
+              <span className="pass-card__chip" title={pass.businessCenterName}>
                 <MapPin className="w-3 h-3 shrink-0" />
                 {pass.businessCenterName}
               </span>
             )}
             {pass.visitorPhone && (
-              <span className="inline-flex items-center gap-1">
+              <span className="pass-card__chip" title={pass.visitorPhone}>
                 <Phone className="w-3 h-3 shrink-0" />
                 {pass.visitorPhone}
               </span>
             )}
             {pass.vehiclePlate && (
-              <span className="inline-flex items-center gap-1 font-mono">
+              <span className="pass-card__chip font-mono" title={pass.vehiclePlate}>
                 <Car className="w-3 h-3 shrink-0" />
                 {pass.vehiclePlate}
               </span>
             )}
             {pass.visitPurpose && (
-              <span className="truncate max-w-[8rem]">{pass.visitPurpose}</span>
+              <span className="pass-card__chip" title={pass.visitPurpose}>
+                {pass.visitPurpose}
+              </span>
             )}
             {showCreator && pass.creatorName && (
-              <span className="truncate max-w-[10rem]">
+              <span className="pass-card__chip" title={pass.creatorName}>
                 {labels.card.orderedBy}: {pass.creatorName}
               </span>
             )}
           </div>
         </div>
 
-        <div className="shrink-0 flex flex-col items-end gap-1 pl-1 border-l border-[var(--border)]/60 ml-1 pl-2">
-          <div className="text-center min-w-[2.75rem]">
-            <div className="text-[9px] uppercase tracking-wide text-[var(--muted)] leading-none mb-0.5">
+        <div className="pass-card__office pass-card__office--side shrink-0 flex flex-col items-end gap-1 min-w-[2.75rem] max-w-[4.5rem]">
+          <div className="text-center w-full min-w-0">
+            <div className="text-[9px] uppercase tracking-wide text-[var(--muted)] leading-none mb-0.5 truncate">
               {labels.card.office}
             </div>
-            <div className="text-2xl font-bold leading-none text-[var(--text)] tabular-nums">
+            <div className="text-2xl font-bold leading-none text-[var(--text)] tabular-nums truncate" title={pass.office}>
               {pass.office}
             </div>
             {pass.floor && (
-              <div className="text-[10px] text-[var(--muted)] mt-0.5 whitespace-nowrap">
+              <div className="text-[10px] text-[var(--muted)] mt-0.5 truncate" title={`${pass.floor} ${labels.card.floorSuffix}`}>
                 {pass.floor} {labels.card.floorSuffix}
               </div>
             )}
           </div>
-          <ChevronRight className={`w-4 h-4 transition-colors ${selected ? 'text-[var(--text)]' : 'text-[var(--muted)]'}`} />
+          <ChevronRight className={`w-4 h-4 shrink-0 ${selected ? 'text-[var(--text)]' : 'text-[var(--muted)]'}`} />
         </div>
       </div>
     </div>
