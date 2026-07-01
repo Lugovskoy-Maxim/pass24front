@@ -6,7 +6,7 @@ import { api, User } from './api';
 interface AuthContextType {
   user: User | null;
   loading: boolean;
-  login: (email: string, password: string) => Promise<void>;
+  login: (email: string, password: string) => Promise<User>;
   register: (data: {
     email: string;
     password: string;
@@ -40,6 +40,7 @@ export function AuthProvider({ children }: { children: ReactNode }) {
     const { user, token } = await api.login(email, password);
     localStorage.setItem('pass24_token', token);
     setUser(user);
+    return user;
   };
 
   const register = async (data: {

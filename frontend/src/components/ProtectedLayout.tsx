@@ -5,7 +5,7 @@ import { useRouter } from 'next/navigation';
 import { useAuth } from '@/lib/auth';
 import { Header } from './Header';
 import { UserRole } from '@/lib/api';
-import { hasAllPermissions, hasAnyPermission } from '@/lib/permissions';
+import { getHomePath, hasAllPermissions, hasAnyPermission } from '@/lib/permissions';
 
 interface ProtectedLayoutProps {
   children: React.ReactNode;
@@ -28,7 +28,7 @@ export function ProtectedLayout({ children, roles, permissions, anyPermissions }
   }, [user, loading, router]);
 
   useEffect(() => {
-    if (!loading && user && denied) router.replace('/dashboard');
+    if (!loading && user && denied) router.replace(getHomePath(user));
   }, [user, loading, denied, router]);
 
   if (loading) {

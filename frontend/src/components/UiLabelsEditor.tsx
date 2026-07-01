@@ -16,6 +16,7 @@ const SECTIONS: Section[] = [
     description: 'Пункты в шапке сайта',
     fields: [
       { path: 'nav.dashboard', label: 'Главная' },
+      { path: 'nav.profile', label: 'Профиль' },
       { path: 'nav.templates', label: 'Шаблоны' },
       { path: 'nav.passes', label: 'Пропуска' },
       { path: 'nav.orderPass', label: 'Заказать' },
