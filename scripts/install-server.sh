@@ -6,6 +6,7 @@ APP_DIR="${APP_DIR:-/opt/pass24front}"
 REPO_URL="${REPO_URL:-https://github.com/Lugovskoy-Maxim/pass24front.git}"
 BRANCH="${BRANCH:-main}"
 PUBLIC_IP="${PUBLIC_IP:-188.64.164.202}"
+DOMAIN="${DOMAIN:-pass.mstyle.ru}"
 
 if [[ $EUID -ne 0 ]]; then
   echo "Запустите с sudo: sudo ./scripts/install-server.sh"
@@ -43,8 +44,8 @@ if [[ ! -f "$APP_DIR/.env" ]]; then
   cp "$APP_DIR/.env.production.example" "$APP_DIR/.env"
   JWT=$(openssl rand -hex 32)
   sed -i "s|^JWT_SECRET=.*|JWT_SECRET=$JWT|" "$APP_DIR/.env"
-  sed -i "s|^PUBLIC_APP_URL=.*|PUBLIC_APP_URL=http://$PUBLIC_IP|" "$APP_DIR/.env"
-  sed -i "s|^PUBLIC_API_URL=.*|PUBLIC_API_URL=http://$PUBLIC_IP/api|" "$APP_DIR/.env"
+  sed -i "s|^PUBLIC_APP_URL=.*|PUBLIC_APP_URL=https://$DOMAIN|" "$APP_DIR/.env"
+  sed -i "s|^PUBLIC_API_URL=.*|PUBLIC_API_URL=https://$DOMAIN/api|" "$APP_DIR/.env"
   chown "$DEPLOY_USER:$DEPLOY_USER" "$APP_DIR/.env"
 fi
 
@@ -59,5 +60,6 @@ echo "==> Start application"
 sudo -u "$DEPLOY_USER" bash -lc "cd '$APP_DIR' && chmod +x scripts/*.sh && ./scripts/update.sh"
 
 echo ""
-echo "Готово: http://$PUBLIC_IP"
+echo "Готово: https://$DOMAIN"
+echo "SSL (если ещё нет): sudo ./scripts/setup-ssl.sh"
 echo "Обновление: cd $APP_DIR && ./scripts/update.sh"
