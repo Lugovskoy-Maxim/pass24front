@@ -3,6 +3,14 @@
 
 services:
   mongo:
+    # Серверы без AVX (старые Xeon/VM) — MongoDB 5+ падает с Illegal instruction
+    image: mongo:4.4
+    healthcheck:
+      test: echo 'db.runCommand("ping").ok' | mongo localhost:27017/test --quiet
+      interval: 10s
+      timeout: 5s
+      retries: 5
+      start_period: 40s
     ports: []
 
   mailpit:
