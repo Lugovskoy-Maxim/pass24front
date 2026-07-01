@@ -11,10 +11,17 @@ if [[ $EUID -ne 0 ]]; then
   exit 1
 fi
 
+EXPECTED_IP="${EXPECTED_IP:-188.64.164.202}"
 echo "==> Проверка DNS: $DOMAIN"
 RESOLVED=$(getent ahosts "$DOMAIN" | awk '{print $1; exit}')
 echo "    $DOMAIN -> ${RESOLVED:-не найден}"
-echo "    Ожидается: 188.64.164.202 (или ваш белый IP)"
+echo "    Ожидается: $EXPECTED_IP"
+if [[ -n "${RESOLVED:-}" && "$RESOLVED" != "$EXPECTED_IP" ]]; then
+  echo "    ВНИМАНИЕ: DNS указывает не на белый IP сервера!"
+  echo "    Исправьте A-запись $DOMAIN -> $EXPECTED_IP"
+  echo "    и NAT tcp/80,tcp/443 на MikroTik, затем запустите снова."
+  exit 1
+fi
 
 apt-get update -qq
 apt-get install -y -qq certbot
