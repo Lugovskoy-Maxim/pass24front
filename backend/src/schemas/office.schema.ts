@@ -11,8 +11,8 @@ export class Office {
   @Prop({ required: true, trim: true })
   number: string;
 
-  @Prop({ required: true, trim: true })
-  floor: string;
+  @Prop({ trim: true })
+  floor?: string;
 
   @Prop()
   areaSqm?: number;

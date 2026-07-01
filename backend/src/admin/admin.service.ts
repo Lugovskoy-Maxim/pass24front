@@ -629,7 +629,7 @@ export class AdminService {
     const office = await this.officeModel.create({
       property: new Types.ObjectId(dto.propertyId),
       number: dto.number.trim(),
-      floor: dto.floor.trim(),
+      floor: dto.floor?.trim() || undefined,
       areaSqm: dto.areaSqm,
       company: dto.company?.trim(),
       tenantId: dto.tenantId ? new Types.ObjectId(dto.tenantId) : undefined,
@@ -793,7 +793,7 @@ export class AdminService {
       propertyId: office.property?.toString(),
       businessCenterName: property?.name,
       number: office.number,
-      floor: office.floor,
+      floor: office.floor || undefined,
       areaSqm: office.areaSqm,
       company: office.company,
       tenantId: office.tenantId?.toString(),

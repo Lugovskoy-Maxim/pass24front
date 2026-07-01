@@ -575,7 +575,7 @@ export default function AdminUsersPage() {
                               onChange={() => toggleOffice(office.id)}
                             />
                             <span>
-                              оф. {office.number}, {office.floor} эт.
+                              оф. {office.number}{office.floor ? `, ${office.floor} эт.` : ''}
                               {office.company && <span className="text-[var(--muted)]"> · {office.company}</span>}
                               {office.tenantId && office.tenantId !== editId && (
                                 <span className="text-xs text-amber-600 ml-1">(занят: {office.tenantName})</span>

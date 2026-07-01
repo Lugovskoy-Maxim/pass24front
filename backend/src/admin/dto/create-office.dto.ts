@@ -8,9 +8,9 @@ export class CreateOfficeDto {
   @IsString()
   number: string;
 
-  @IsNotEmpty()
+  @IsOptional()
   @IsString()
-  floor: string;
+  floor?: string;
 
   @IsOptional()
   @IsNumber()

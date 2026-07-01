@@ -555,7 +555,7 @@ export interface Office {
   propertyId: string;
   businessCenterName?: string;
   number: string;
-  floor: string;
+  floor?: string;
   areaSqm?: number;
   company?: string;
   tenantId?: string;
@@ -567,7 +567,7 @@ export interface Office {
 export interface CreateOfficeData {
   propertyId: string;
   number: string;
-  floor: string;
+  floor?: string;
   areaSqm?: number;
   company?: string;
   tenantId?: string;

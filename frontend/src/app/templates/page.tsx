@@ -276,7 +276,7 @@ export default function TemplatesPage() {
                   <option value="">Выберите офис</option>
                   {tenantOffices.map((o) => (
                     <option key={o.id} value={o.id}>
-                      {o.businessCenterName ? `${o.businessCenterName} · ` : ''}офис {o.number}, эт. {o.floor}
+                      {o.businessCenterName ? `${o.businessCenterName} · ` : ''}офис {o.number}{o.floor ? `, ${o.floor} эт.` : ''}
                     </option>
                   ))}
                 </FormSelect>

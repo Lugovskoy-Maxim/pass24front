@@ -191,7 +191,7 @@ export default function AdminOfficesPage() {
     setBindingOfficeId(null);
     setPropertyId(office.propertyId);
     setNumber(office.number);
-    setFloor(office.floor);
+    setFloor(office.floor || '');
     setAreaSqm(office.areaSqm?.toString() || '');
     setCompany(office.company || '');
     setTenantId(office.tenantId || '');
@@ -224,7 +224,7 @@ export default function AdminOfficesPage() {
       await api.admin.createOffice({
         propertyId,
         number: number.trim(),
-        floor: floor.trim(),
+        floor: floor.trim() || undefined,
         areaSqm: areaSqm ? parseFloat(areaSqm) : undefined,
         company: company.trim() || undefined,
         tenantId: tenantId || undefined,
@@ -339,7 +339,7 @@ export default function AdminOfficesPage() {
   }), [offices, filteredOffices]);
 
   const floors = useMemo(() => (
-    [...new Set(offices.map((o) => o.floor).filter(Boolean))].sort((a, b) => a.localeCompare(b, 'ru', { numeric: true }))
+    [...new Set(offices.map((o) => o.floor).filter((f): f is string => !!f))].sort((a, b) => a.localeCompare(b, 'ru', { numeric: true }))
   ), [offices]);
 
   const officesByBc = useMemo(() => {
@@ -722,8 +722,8 @@ export default function AdminOfficesPage() {
               <input className="input" value={number} onChange={(e) => setNumber(e.target.value)} required disabled={!!editingId} />
             </div>
             <div>
-              <label className="label">Этаж *</label>
-              <input className="input" value={floor} onChange={(e) => setFloor(e.target.value)} required disabled={!!editingId} />
+              <label className="label">Этаж</label>
+              <input className="input" value={floor} onChange={(e) => setFloor(e.target.value)} placeholder="Необязательно" disabled={!!editingId} />
             </div>
           </div>
           <div>
@@ -788,7 +788,9 @@ export default function AdminOfficesPage() {
                       <div className="flex items-start justify-between gap-2 mb-3">
                         <div>
                           <div className="text-2xl font-bold font-mono leading-none">{office.number}</div>
-                          <div className="text-sm text-[var(--muted)] mt-1">{office.floor} этаж</div>
+                          {office.floor && (
+                            <div className="text-sm text-[var(--muted)] mt-1">{office.floor} этаж</div>
+                          )}
                         </div>
                         <span className={`text-[11px] px-2 py-0.5 rounded-full shrink-0 ${
                           office.isActive ? 'bg-emerald-50 text-emerald-700' : 'bg-[var(--border)] text-[var(--muted)]'
