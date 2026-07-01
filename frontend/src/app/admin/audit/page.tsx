@@ -118,29 +118,33 @@ export default function AdminAuditPage() {
             </div>
             <div>
               <label className="label">Действие</label>
-              <select
-                className="input"
-                value={filters.action || ''}
-                onChange={(e) => setFilters((prev) => ({ ...prev, action: e.target.value }))}
-              >
-                <option value="">Все действия</option>
-                {Object.entries(AUDIT_LABELS).map(([key, label]) => (
-                  <option key={key} value={key}>{label}</option>
-                ))}
-              </select>
+              <div className="select-wrap">
+                <select
+                  className="input"
+                  value={filters.action || ''}
+                  onChange={(e) => setFilters((prev) => ({ ...prev, action: e.target.value }))}
+                >
+                  <option value="">Все действия</option>
+                  {Object.entries(AUDIT_LABELS).map(([key, label]) => (
+                    <option key={key} value={key}>{label}</option>
+                  ))}
+                </select>
+              </div>
             </div>
             <div>
               <label className="label">Тип объекта</label>
-              <select
-                className="input"
-                value={filters.entityType || ''}
-                onChange={(e) => setFilters((prev) => ({ ...prev, entityType: e.target.value }))}
-              >
-                <option value="">Все объекты</option>
-                {Object.entries(AUDIT_ENTITY_LABELS).map(([key, label]) => (
-                  <option key={key} value={key}>{label}</option>
-                ))}
-              </select>
+              <div className="select-wrap">
+                <select
+                  className="input"
+                  value={filters.entityType || ''}
+                  onChange={(e) => setFilters((prev) => ({ ...prev, entityType: e.target.value }))}
+                >
+                  <option value="">Все объекты</option>
+                  {Object.entries(AUDIT_ENTITY_LABELS).map(([key, label]) => (
+                    <option key={key} value={key}>{label}</option>
+                  ))}
+                </select>
+              </div>
             </div>
           </div>
         </div>

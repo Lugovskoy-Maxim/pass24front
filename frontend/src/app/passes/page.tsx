@@ -198,12 +198,14 @@ function PassesPageContent() {
             />
           </div>
           <input className="input input--auto" type="date" value={dateFilter} onChange={(e) => setDateFilter(e.target.value)} />
-          <select className="input input--auto" value={statusFilter} onChange={(e) => setStatusFilter(e.target.value)}>
-            <option value="">{labels.passes.allStatuses}</option>
-            {ALL_STATUSES.map((status) => (
-              <option key={status} value={status}>{getStatusLabel(status, labels)}</option>
-            ))}
-          </select>
+          <div className="select-wrap select-wrap--auto">
+            <select className="input input--auto" value={statusFilter} onChange={(e) => setStatusFilter(e.target.value)}>
+              <option value="">{labels.passes.allStatuses}</option>
+              {ALL_STATUSES.map((status) => (
+                <option key={status} value={status}>{getStatusLabel(status, labels)}</option>
+              ))}
+            </select>
+          </div>
         </div>
       </div>
 

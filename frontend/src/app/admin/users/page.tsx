@@ -341,7 +341,7 @@ export default function AdminUsersPage() {
             />
           </div>
 
-          <div>
+          <div className="select-wrap">
             <select
               className="input"
               value={filters.isActive}
@@ -353,7 +353,7 @@ export default function AdminUsersPage() {
             </select>
           </div>
 
-          <div>
+          <div className="select-wrap">
             <select
               className="input"
               value={filters.propertyId}
@@ -371,7 +371,7 @@ export default function AdminUsersPage() {
           </div>
 
           {category === 'tenants' ? (
-            <div>
+            <div className="select-wrap">
               <select
                 className="input"
                 value={filters.officeId}
@@ -386,7 +386,7 @@ export default function AdminUsersPage() {
               </select>
             </div>
           ) : (
-            <div>
+            <div className="select-wrap">
               <select
                 className="input"
                 value={filters.role}
@@ -534,16 +534,18 @@ export default function AdminUsersPage() {
             </div>
             <div>
               <label className="label">Роль *</label>
-              <select
-                className="input"
-                value={form.role}
-                onChange={(e) => setForm({ ...form, role: e.target.value as UserRole })}
-              >
-                {category === 'tenants'
-                  ? <option value="tenant">{ROLE_LABELS.tenant}</option>
-                  : STAFF_ROLES.map((role) => <option key={role} value={role}>{ROLE_LABELS[role]}</option>)}
-                {category === 'staff' && <option value="tenant">{ROLE_LABELS.tenant}</option>}
-              </select>
+              <div className="select-wrap">
+                <select
+                  className="input"
+                  value={form.role}
+                  onChange={(e) => setForm({ ...form, role: e.target.value as UserRole })}
+                >
+                  {category === 'tenants'
+                    ? <option value="tenant">{ROLE_LABELS.tenant}</option>
+                    : STAFF_ROLES.map((role) => <option key={role} value={role}>{ROLE_LABELS[role]}</option>)}
+                  {category === 'staff' && <option value="tenant">{ROLE_LABELS.tenant}</option>}
+                </select>
+              </div>
             </div>
             <div><label className="label">Компания</label><input className="input" value={form.company} onChange={(e) => setForm({ ...form, company: e.target.value })} /></div>
             <div><label className="label">Телефон</label><input className="input" value={form.phone} onChange={(e) => setForm({ ...form, phone: e.target.value })} /></div>

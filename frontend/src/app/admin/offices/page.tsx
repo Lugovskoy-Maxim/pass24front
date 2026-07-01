@@ -378,16 +378,18 @@ export default function AdminOfficesPage() {
 
   const BindingSelect = ({ office }: { office?: Office }) => (
     <div className="space-y-2">
-      <select
-        className="input text-sm"
-        value={tenantId}
-        onChange={(e) => handleTenantSelect(e.target.value, office)}
-      >
-        <option value="">Не назначен</option>
-        {tenants.map((t) => (
-          <option key={t.id} value={t.id}>{tenantLabel(t)}</option>
-        ))}
-      </select>
+      <div className="select-wrap">
+        <select
+          className="input text-sm"
+          value={tenantId}
+          onChange={(e) => handleTenantSelect(e.target.value, office)}
+        >
+          <option value="">Не назначен</option>
+          {tenants.map((t) => (
+            <option key={t.id} value={t.id}>{tenantLabel(t)}</option>
+          ))}
+        </select>
+      </div>
       {tenantId && (
         <input
           className="input text-sm"
@@ -638,44 +640,52 @@ export default function AdminOfficesPage() {
               }}
             />
           </div>
-          <select
-            className="input"
-            value={officeFilters.propertyId}
-            onChange={(e) => setOfficeFilters({ ...officeFilters, propertyId: e.target.value })}
-          >
-            <option value="">Все БЦ</option>
-            {businessCenters.map((bc) => (
-              <option key={bc.id} value={bc.id}>{bc.name}</option>
-            ))}
-          </select>
-          <select
-            className="input"
-            value={officeFilters.floor}
-            onChange={(e) => setOfficeFilters({ ...officeFilters, floor: e.target.value })}
-          >
-            <option value="">Все этажи</option>
-            {floors.map((floor) => (
-              <option key={floor} value={floor}>{floor} эт.</option>
-            ))}
-          </select>
-          <select
-            className="input"
-            value={officeFilters.binding}
-            onChange={(e) => setOfficeFilters({ ...officeFilters, binding: e.target.value as OfficeFilters['binding'] })}
-          >
-            <option value="">Все офисы</option>
-            <option value="assigned">С арендатором</option>
-            <option value="free">Свободные</option>
-          </select>
-          <select
-            className="input"
-            value={officeFilters.status}
-            onChange={(e) => setOfficeFilters({ ...officeFilters, status: e.target.value as OfficeFilters['status'] })}
-          >
-            <option value="">Любой статус</option>
-            <option value="active">Активные</option>
-            <option value="inactive">Неактивные</option>
-          </select>
+          <div className="select-wrap">
+            <select
+              className="input"
+              value={officeFilters.propertyId}
+              onChange={(e) => setOfficeFilters({ ...officeFilters, propertyId: e.target.value })}
+            >
+              <option value="">Все БЦ</option>
+              {businessCenters.map((bc) => (
+                <option key={bc.id} value={bc.id}>{bc.name}</option>
+              ))}
+            </select>
+          </div>
+          <div className="select-wrap">
+            <select
+              className="input"
+              value={officeFilters.floor}
+              onChange={(e) => setOfficeFilters({ ...officeFilters, floor: e.target.value })}
+            >
+              <option value="">Все этажи</option>
+              {floors.map((floor) => (
+                <option key={floor} value={floor}>{floor} эт.</option>
+              ))}
+            </select>
+          </div>
+          <div className="select-wrap">
+            <select
+              className="input"
+              value={officeFilters.binding}
+              onChange={(e) => setOfficeFilters({ ...officeFilters, binding: e.target.value as OfficeFilters['binding'] })}
+            >
+              <option value="">Все офисы</option>
+              <option value="assigned">С арендатором</option>
+              <option value="free">Свободные</option>
+            </select>
+          </div>
+          <div className="select-wrap">
+            <select
+              className="input"
+              value={officeFilters.status}
+              onChange={(e) => setOfficeFilters({ ...officeFilters, status: e.target.value as OfficeFilters['status'] })}
+            >
+              <option value="">Любой статус</option>
+              <option value="active">Активные</option>
+              <option value="inactive">Неактивные</option>
+            </select>
+          </div>
         </div>
 
         <div className="flex flex-wrap items-center gap-2">
@@ -697,12 +707,14 @@ export default function AdminOfficesPage() {
           <h3 className="font-semibold">{editingId ? 'Редактирование офиса' : 'Новый офис'}</h3>
           <div>
             <label className="label">Бизнес-центр *</label>
-            <select className="input" value={propertyId} onChange={(e) => setPropertyId(e.target.value)} required disabled={!!editingId}>
-              <option value="">Выберите БЦ</option>
-              {businessCenters.map((bc) => (
-                <option key={bc.id} value={bc.id}>{bc.name}</option>
-              ))}
-            </select>
+            <div className="select-wrap">
+              <select className="input" value={propertyId} onChange={(e) => setPropertyId(e.target.value)} required disabled={!!editingId}>
+                <option value="">Выберите БЦ</option>
+                {businessCenters.map((bc) => (
+                  <option key={bc.id} value={bc.id}>{bc.name}</option>
+                ))}
+              </select>
+            </div>
           </div>
           <div className="grid grid-cols-2 gap-3">
             <div>
