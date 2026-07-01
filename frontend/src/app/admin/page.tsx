@@ -1,26 +1,28 @@
 'use client';
 
-import { useEffect, useMemo, useState } from 'react';
+import { useEffect, useState } from 'react';
 import Link from 'next/link';
 import { Users, FileText, Building2, Sparkles, List, ScrollText } from 'lucide-react';
 import { AdminLayout } from '@/components/AdminLayout';
 import { useToast } from '@/components/Toast';
 import { useConfig } from '@/hooks/useConfig';
-import { api, AdminDashboard, AUDIT_LABELS, PassStatus, formatAuditEntity, getErrorMessage } from '@/lib/api';
+import { api, AdminDashboard, AUDIT_LABELS, formatAuditEntity, getErrorMessage } from '@/lib/api';
 import { PageError } from '@/components/PageError';
-import { getStatusLabel, getUiLabels } from '@/lib/ui-labels';
-import { StatusDonutChart } from '@/components/charts/StatusDonutChart';
-import { HorizontalBarChart } from '@/components/charts/HorizontalBarChart';
-import { ChartLegend } from '@/components/charts/ChartLegend';
-import { CHART_ROLE_COLORS, statusChartColor } from '@/lib/chart-colors';
+import { getUiLabels } from '@/lib/ui-labels';
+// Графики временно отключены
+// import { StatusDonutChart } from '@/components/charts/StatusDonutChart';
+// import { HorizontalBarChart } from '@/components/charts/HorizontalBarChart';
+// import { ChartLegend } from '@/components/charts/ChartLegend';
+// import { CHART_ROLE_COLORS, statusChartColor } from '@/lib/chart-colors';
 import { CardSkeleton } from '@/components/ui/Skeleton';
 
-const ROLE_NAMES: Record<string, string> = {
-  tenant: 'Арендаторы',
-  security: 'Ресепшн',
-  bc_admin: 'Админы БЦ',
-  admin: 'Супер-админы',
-};
+// Графики временно отключены
+// const ROLE_NAMES: Record<string, string> = {
+//   tenant: 'Арендаторы',
+//   security: 'Ресепшн',
+//   bc_admin: 'Админы БЦ',
+//   admin: 'Супер-админы',
+// };
 
 export default function AdminDashboardPage() {
   const config = useConfig();
@@ -57,30 +59,31 @@ export default function AdminDashboardPage() {
     }
   };
 
-  const passChartData = useMemo(() => {
-    if (!data) return [];
-    return Object.entries(data.stats.passes.byStatus).map(([status, count]) => ({
-      key: status,
-      label: getStatusLabel(status as PassStatus, labels),
-      value: count,
-      colorKey: status,
-    }));
-  }, [data, labels]);
-
-  const roleChartData = useMemo(() => {
-    if (!data) return [];
-    return Object.entries(data.stats.users.byRole).map(([role, count], i) => ({
-      key: role,
-      label: ROLE_NAMES[role] || role,
-      value: count,
-      color: CHART_ROLE_COLORS[i % CHART_ROLE_COLORS.length],
-    }));
-  }, [data]);
-
-  const passLegend = passChartData.map((d) => ({
-    ...d,
-    color: statusChartColor(d.colorKey as PassStatus),
-  }));
+  // Графики временно отключены
+  // const passChartData = useMemo(() => {
+  //   if (!data) return [];
+  //   return Object.entries(data.stats.passes.byStatus).map(([status, count]) => ({
+  //     key: status,
+  //     label: getStatusLabel(status as PassStatus, labels),
+  //     value: count,
+  //     colorKey: status,
+  //   }));
+  // }, [data, labels]);
+  //
+  // const roleChartData = useMemo(() => {
+  //   if (!data) return [];
+  //   return Object.entries(data.stats.users.byRole).map(([role, count], i) => ({
+  //     key: role,
+  //     label: ROLE_NAMES[role] || role,
+  //     value: count,
+  //     color: CHART_ROLE_COLORS[i % CHART_ROLE_COLORS.length],
+  //   }));
+  // }, [data]);
+  //
+  // const passLegend = passChartData.map((d) => ({
+  //   ...d,
+  //   color: statusChartColor(d.colorKey as PassStatus),
+  // }));
 
   if (error) {
     return (
@@ -97,10 +100,12 @@ export default function AdminDashboardPage() {
           <CardSkeleton lines={2} />
           <CardSkeleton lines={2} />
         </div>
+        {/* Графики временно отключены
         <div className="grid lg:grid-cols-2 gap-6">
           <CardSkeleton lines={5} />
           <CardSkeleton lines={5} />
         </div>
+        */}
       </AdminLayout>
     );
   }
@@ -150,6 +155,7 @@ export default function AdminDashboardPage() {
         </div>
       </div>
 
+      {/* Графики временно отключены
       <div className="grid lg:grid-cols-2 gap-6 mb-6">
         <div className="card p-5">
           <h2 className="font-semibold mb-1">Пользователи по ролям</h2>
@@ -166,6 +172,7 @@ export default function AdminDashboardPage() {
           <ChartLegend items={passLegend} />
         </div>
       </div>
+      */}
 
       <div className="card p-5">
         <div className="flex items-center justify-between mb-4">

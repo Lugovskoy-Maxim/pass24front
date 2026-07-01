@@ -19,13 +19,12 @@ import { buildHistoryHref } from '@/lib/visit-history';
 import { useAuth } from '@/lib/auth';
 import { getGuestOverdueKind, getUiLabels } from '@/lib/ui-labels';
 import { getAccentStatClass, getSectionHeadingClass } from '@/lib/pass-status';
-import { StatusDonutChart } from '@/components/charts/StatusDonutChart';
-import { ChartLegend } from '@/components/charts/ChartLegend';
-import { statusChartColor } from '@/lib/chart-colors';
+// Графики временно отключены
+// import { StatusDonutChart } from '@/components/charts/StatusDonutChart';
+// import { ChartLegend } from '@/components/charts/ChartLegend';
+// import { statusChartColor } from '@/lib/chart-colors';
 import { ListSkeleton } from '@/components/ui/Skeleton';
 import { EmptyState } from '@/components/ui/EmptyState';
-import { PassStatus } from '@/lib/api';
-
 function ControlPageContent() {
   const { user } = useAuth();
   const { toast } = useToast();
@@ -282,16 +281,17 @@ function ControlPageContent() {
     ? passesByStatus('active').length
     : stats.active;
 
-  const journalChartData = [
-    { key: 'pending', label: labels.reception.statPending, value: stats.pending, colorKey: 'pending' },
-    { key: 'approved', label: labels.reception.statApproved, value: stats.approved, colorKey: 'approved' },
-    { key: 'active', label: labels.reception.statActive, value: activeInBuildingCount, colorKey: 'active' },
-    { key: 'completed', label: labels.reception.statCompleted, value: stats.completed, colorKey: 'completed' },
-  ];
-  const journalLegend = journalChartData.map((d) => ({
-    ...d,
-    color: statusChartColor(d.colorKey as PassStatus),
-  }));
+  // Графики временно отключены
+  // const journalChartData = [
+  //   { key: 'pending', label: labels.reception.statPending, value: stats.pending, colorKey: 'pending' },
+  //   { key: 'approved', label: labels.reception.statApproved, value: stats.approved, colorKey: 'approved' },
+  //   { key: 'active', label: labels.reception.statActive, value: activeInBuildingCount, colorKey: 'active' },
+  //   { key: 'completed', label: labels.reception.statCompleted, value: stats.completed, colorKey: 'completed' },
+  // ];
+  // const journalLegend = journalChartData.map((d) => ({
+  //   ...d,
+  //   color: statusChartColor(d.colorKey as PassStatus),
+  // }));
 
   const statCards: {
     key: Pass['status'] | 'total' | 'overdue';
@@ -378,6 +378,7 @@ function ControlPageContent() {
         })}
       </div>
 
+      {/* Графики временно отключены
       {stats.total > 0 && (
         <div className="card p-4 mb-6 grid sm:grid-cols-[minmax(0,1fr)_minmax(0,1.2fr)] gap-4 items-center">
           <div>
@@ -388,6 +389,7 @@ function ControlPageContent() {
           <StatusDonutChart data={journalChartData} height={160} innerRadius={40} />
         </div>
       )}
+      */}
 
       {loadError && (
         <PageError

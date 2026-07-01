@@ -15,12 +15,13 @@ import { useConfig } from '@/hooks/useConfig';
 import { useToast } from '@/components/Toast';
 import { api, Pass, PassStatus, getErrorMessage } from '@/lib/api';
 import { PageError } from '@/components/PageError';
-import { canViewAllPasses, canViewPasses, canViewPassCharts, hasPermission } from '@/lib/permissions';
+import { canViewAllPasses, canViewPasses, hasPermission } from '@/lib/permissions';
 
 
 
 import { getStatusLabel, getUiLabels, UiLabels } from '@/lib/ui-labels';
-import { PassesStatsBar } from '@/components/PassesStatsBar';
+// Графики временно отключены
+// import { PassesStatsBar } from '@/components/PassesStatsBar';
 import { ListSkeleton } from '@/components/ui/Skeleton';
 import { EmptyState } from '@/components/ui/EmptyState';
 
@@ -222,7 +223,9 @@ function PassesPageContent() {
         </div>
       </div>
 
+      {/* Графики временно отключены
       {canViewPassCharts(user) && <PassesStatsBar />}
+      */}
 
       {loadError && (
         <PageError
