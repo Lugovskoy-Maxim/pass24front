@@ -121,11 +121,6 @@ export function PassListCard({ pass, labels: labelsProp, selected, showCreator, 
                 {pass.vehiclePlate}
               </span>
             )}
-            {pass.visitPurpose && (
-              <span className="pass-card__chip" title={pass.visitPurpose}>
-                {pass.visitPurpose}
-              </span>
-            )}
             {showCreator && pass.creatorName && (
               <span className="pass-card__chip" title={pass.creatorName}>
                 {labels.card.orderedBy}: {pass.creatorName}

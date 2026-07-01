@@ -61,6 +61,19 @@ let SiteSettingsService = class SiteSettingsService {
             update.sitePhone = data.sitePhone.trim();
         if (data.siteEmail !== undefined)
             update.siteEmail = data.siteEmail.trim();
+        if (data.brandMarkType !== undefined) {
+            update.brandMarkType = data.brandMarkType === 'text' ? 'text' : 'image';
+        }
+        if (data.brandMarkText !== undefined) {
+            update.brandMarkText = data.brandMarkText.trim().slice(0, 8) || brand_defaults_1.MSTYLE_BRAND_DEFAULTS.brandMarkText;
+        }
+        if (data.brandShowName !== undefined)
+            update.brandShowName = !!data.brandShowName;
+        if (data.brandNameBeforeMark !== undefined)
+            update.brandNameBeforeMark = !!data.brandNameBeforeMark;
+        if (data.uiIconSelectChevron !== undefined) {
+            update.uiIconSelectChevron = data.uiIconSelectChevron.trim() || brand_defaults_1.MSTYLE_BRAND_DEFAULTS.uiIconSelectChevron;
+        }
         if (data.uiLabels !== undefined) {
             update.uiLabels = (0, ui_labels_defaults_1.deepMergeUiLabels)(data.uiLabels);
         }
@@ -76,6 +89,11 @@ let SiteSettingsService = class SiteSettingsService {
             siteTagline: doc?.siteTagline?.trim() || brand_defaults_1.MSTYLE_BRAND_DEFAULTS.siteTagline,
             sitePhone: doc?.sitePhone?.trim() || brand_defaults_1.MSTYLE_BRAND_DEFAULTS.sitePhone,
             siteEmail: doc?.siteEmail?.trim() || brand_defaults_1.MSTYLE_BRAND_DEFAULTS.siteEmail,
+            brandMarkType: doc?.brandMarkType === 'text' ? 'text' : 'image',
+            brandMarkText: doc?.brandMarkText?.trim() || brand_defaults_1.MSTYLE_BRAND_DEFAULTS.brandMarkText,
+            brandShowName: doc?.brandShowName !== false,
+            brandNameBeforeMark: doc?.brandNameBeforeMark !== false,
+            uiIconSelectChevron: doc?.uiIconSelectChevron?.trim() || brand_defaults_1.MSTYLE_BRAND_DEFAULTS.uiIconSelectChevron,
             uiLabels: (0, ui_labels_defaults_1.deepMergeUiLabels)(doc?.uiLabels),
         };
     }

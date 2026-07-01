@@ -19,7 +19,9 @@ const permissions_decorator_1 = require("../auth/permissions.decorator");
 const permissions_guard_1 = require("../auth/permissions.guard");
 const passes_service_1 = require("./passes.service");
 const create_pass_dto_1 = require("./dto/create-pass.dto");
+const pass_history_query_dto_1 = require("./dto/pass-history-query.dto");
 const send_pass_email_dto_1 = require("./dto/send-pass-email.dto");
+const update_pass_visitor_dto_1 = require("./dto/update-pass-visitor.dto");
 const update_status_dto_1 = require("./dto/update-status.dto");
 let PassesController = class PassesController {
     passesService;
@@ -38,6 +40,9 @@ let PassesController = class PassesController {
     getOverdueActive(req) {
         return this.passesService.getOverdueActive(req.user);
     }
+    getHistory(query, req) {
+        return this.passesService.getHistory(query, req.user);
+    }
     lookup(passNumber, req) {
         return this.passesService.lookup(passNumber, req.user);
     }
@@ -49,6 +54,9 @@ let PassesController = class PassesController {
     }
     updateStatus(id, dto, req) {
         return this.passesService.updateStatus(id, dto, req.user);
+    }
+    updateVisitorData(id, dto, req) {
+        return this.passesService.updateVisitorData(id, dto, req.user);
     }
     sendEmail(id, dto, req) {
         return this.passesService.sendPassEmail(id, dto.email, req.user);
@@ -96,6 +104,15 @@ __decorate([
     __metadata("design:returntype", void 0)
 ], PassesController.prototype, "getOverdueActive", null);
 __decorate([
+    (0, common_1.Get)('history'),
+    (0, permissions_decorator_1.RequirePermissions)('passes.view_all', 'passes.reception', 'admin.panel'),
+    __param(0, (0, common_1.Query)()),
+    __param(1, (0, common_1.Req)()),
+    __metadata("design:type", Function),
+    __metadata("design:paramtypes", [pass_history_query_dto_1.PassHistoryQueryDto, Object]),
+    __metadata("design:returntype", void 0)
+], PassesController.prototype, "getHistory", null);
+__decorate([
     (0, common_1.Get)('lookup/:passNumber'),
     (0, permissions_decorator_1.RequirePermissions)('passes.lookup', 'passes.reception', 'admin.panel'),
     __param(0, (0, common_1.Param)('passNumber')),
@@ -132,6 +149,16 @@ __decorate([
     __metadata("design:paramtypes", [String, update_status_dto_1.UpdateStatusDto, Object]),
     __metadata("design:returntype", void 0)
 ], PassesController.prototype, "updateStatus", null);
+__decorate([
+    (0, common_1.Patch)(':id/visitor-data'),
+    (0, permissions_decorator_1.RequirePermissions)('passes.reception', 'passes.approve', 'admin.panel'),
+    __param(0, (0, common_1.Param)('id')),
+    __param(1, (0, common_1.Body)()),
+    __param(2, (0, common_1.Req)()),
+    __metadata("design:type", Function),
+    __metadata("design:paramtypes", [String, update_pass_visitor_dto_1.UpdatePassVisitorDto, Object]),
+    __metadata("design:returntype", void 0)
+], PassesController.prototype, "updateVisitorData", null);
 __decorate([
     (0, common_1.Post)(':id/send-email'),
     (0, permissions_decorator_1.RequirePermissions)('passes.create', 'passes.view_own', 'passes.view_all'),

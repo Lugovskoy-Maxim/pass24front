@@ -7,7 +7,7 @@ import { ProtectedLayout } from '@/components/ProtectedLayout';
 import { useAuth } from '@/lib/auth';
 import { useToast } from '@/components/Toast';
 import {
-  api, PassTemplate, PassType, TYPE_LABELS, CreatePassTemplateData, formatTenantOffices, VISIT_PURPOSES, getErrorMessage,
+  api, PassTemplate, PassType, TYPE_LABELS, CreatePassTemplateData, formatTenantOffices, getErrorMessage,
 } from '@/lib/api';
 import { PageError } from '@/components/PageError';
 import { FormErrorBanner, FormField, FormInput, FormSelect, FormTextarea } from '@/components/FormField';
@@ -247,12 +247,6 @@ export default function TemplatesPage() {
             </FormField>
           </div>
 
-          <FormField id="templatePurpose" label="Цель визита">
-            <FormSelect id="templatePurpose" value={form.visitPurpose} onChange={(e) => setForm({ ...form, visitPurpose: e.target.value })}>
-              {VISIT_PURPOSES.map((p) => <option key={p} value={p}>{p}</option>)}
-            </FormSelect>
-          </FormField>
-
           {form.passType === 'parking' && (
             <div className="form-grid-2">
               <FormField id="templatePlate" label="Гос. номер" required error={fieldErrors.vehiclePlate}>
@@ -351,7 +345,7 @@ export default function TemplatesPage() {
                   {!template.businessCenterName && template.office && (
                     <div>оф. {template.office}{template.floor && `, ${template.floor} эт.`}</div>
                   )}
-                  {template.visitPurpose && <div>Цель: {template.visitPurpose}</div>}
+
                   {template.vehiclePlate && <div className="font-mono">{template.vehiclePlate}</div>}
                 </div>
 

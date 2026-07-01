@@ -284,6 +284,10 @@ function PassesPageContent() {
               labels={labels}
               showCreator={showCreatorInfo}
               actions={renderDetailActions(selected)}
+              onPassUpdated={(updated) => {
+                setPasses((prev) => prev.map((p) => (p.id === updated.id ? updated : p)));
+                setSelected(updated);
+              }}
             />
           </div>
         )}

@@ -11,6 +11,11 @@ export declare class AppConfigService {
         siteTagline: string;
         sitePhone: string;
         siteEmail: string;
+        brandMarkType: string;
+        brandMarkText: string;
+        brandShowName: boolean;
+        brandNameBeforeMark: boolean;
+        uiIconSelectChevron: string;
         businessCenterName: string;
         workingHoursFrom: any;
         workingHoursTo: any;

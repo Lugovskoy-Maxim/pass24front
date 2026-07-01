@@ -50,12 +50,6 @@ export function PassPrintCard({ pass, businessCenterName }: PassPrintCardProps) 
               <dd className="text-right">{pass.companyName}</dd>
             </div>
           )}
-          {pass.visitPurpose && (
-            <div className="flex justify-between gap-4">
-              <dt className="text-[var(--muted)]">{labels.card.visitPurposeShort}</dt>
-              <dd className="text-right">{pass.visitPurpose}</dd>
-            </div>
-          )}
           <div className="flex justify-between gap-4">
             <dt className="text-[var(--muted)]">{labels.print.dateShort}</dt>
             <dd className="text-right">

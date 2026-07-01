@@ -4,7 +4,9 @@ import { RequirePermissions } from '../auth/permissions.decorator';
 import { PermissionsGuard } from '../auth/permissions.guard';
 import { PassesService } from './passes.service';
 import { CreatePassDto } from './dto/create-pass.dto';
+import { PassHistoryQueryDto } from './dto/pass-history-query.dto';
 import { SendPassEmailDto } from './dto/send-pass-email.dto';
+import { UpdatePassVisitorDto } from './dto/update-pass-visitor.dto';
 import { UpdateStatusDto } from './dto/update-status.dto';
 
 @Controller('passes')
@@ -36,6 +38,12 @@ export class PassesController {
     return this.passesService.getOverdueActive(req.user);
   }
 
+  @Get('history')
+  @RequirePermissions('passes.view_all', 'passes.reception', 'admin.panel')
+  getHistory(@Query() query: PassHistoryQueryDto, @Req() req: any) {
+    return this.passesService.getHistory(query, req.user);
+  }
+
   @Get('lookup/:passNumber')
   @RequirePermissions('passes.lookup', 'passes.reception', 'admin.panel')
   lookup(@Param('passNumber') passNumber: string, @Req() req: any) {
@@ -58,6 +66,12 @@ export class PassesController {
   @RequirePermissions('passes.approve', 'passes.create')
   updateStatus(@Param('id') id: string, @Body() dto: UpdateStatusDto, @Req() req: any) {
     return this.passesService.updateStatus(id, dto, req.user);
+  }
+
+  @Patch(':id/visitor-data')
+  @RequirePermissions('passes.reception', 'passes.approve', 'admin.panel')
+  updateVisitorData(@Param('id') id: string, @Body() dto: UpdatePassVisitorDto, @Req() req: any) {
+    return this.passesService.updateVisitorData(id, dto, req.user);
   }
 
   @Post(':id/send-email')
