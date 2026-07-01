@@ -29,9 +29,10 @@ usermod -aG docker "$DEPLOY_USER" 2>/dev/null || true
 echo "==> Clone project to $APP_DIR"
 mkdir -p "$(dirname "$APP_DIR")"
 if [[ ! -d "$APP_DIR/.git" ]]; then
-  git clone --branch "$BRANCH" "$REPO_URL" "$APP_DIR"
+  sudo -u "$DEPLOY_USER" git clone --branch "$BRANCH" "$REPO_URL" "$APP_DIR"
+else
+  chown -R "$DEPLOY_USER:$DEPLOY_USER" "$APP_DIR"
 fi
-chown -R "$DEPLOY_USER:$DEPLOY_USER" "$APP_DIR"
 
 cd "$APP_DIR"
 sudo -u "$DEPLOY_USER" git fetch origin
