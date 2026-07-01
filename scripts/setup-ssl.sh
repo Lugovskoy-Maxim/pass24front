@@ -13,7 +13,11 @@ fi
 
 EXPECTED_IP="${EXPECTED_IP:-188.64.164.202}"
 echo "==> Проверка DNS: $DOMAIN"
-RESOLVED=$(getent ahosts "$DOMAIN" | awk '{print $1; exit}')
+if command -v dig >/dev/null 2>&1; then
+  RESOLVED=$(dig +short "$DOMAIN" @1.1.1.1 A | head -1)
+else
+  RESOLVED=$(getent ahosts "$DOMAIN" | awk '{print $1; exit}')
+fi
 echo "    $DOMAIN -> ${RESOLVED:-не найден}"
 echo "    Ожидается: $EXPECTED_IP"
 if [[ -n "${RESOLVED:-}" && "$RESOLVED" != "$EXPECTED_IP" ]]; then
