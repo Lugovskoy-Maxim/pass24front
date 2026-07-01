@@ -1,0 +1,28 @@
+# Production overrides — use with:
+#   docker compose -f docker-compose.yml -f docker-compose.prod.yml --env-file .env up -d --build
+
+services:
+  mongo:
+    ports: []
+
+  mailpit:
+    ports:
+      - "127.0.0.1:8025:8025"
+      - "127.0.0.1:1025:1025"
+
+  backend:
+    ports:
+      - "127.0.0.1:4000:4000"
+    environment:
+      - PUBLIC_APP_URL=${PUBLIC_APP_URL}
+      - JWT_SECRET=${JWT_SECRET}
+      - NODE_ENV=production
+
+  frontend:
+    build:
+      args:
+        NEXT_PUBLIC_API_URL: ${PUBLIC_API_URL}
+    ports:
+      - "127.0.0.1:3000:3000"
+    environment:
+      - NEXT_PUBLIC_API_URL=${PUBLIC_API_URL}
