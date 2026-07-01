@@ -106,15 +106,17 @@ export const FormSelect = forwardRef<
   ref,
 ) {
   return (
-    <select
-      ref={ref}
-      disabled={disabled}
-      aria-invalid={invalid || undefined}
-      className={getInputClassName({ invalid, auto: inputAuto, readOnly: disabled, className })}
-      {...props}
-    >
-      {children}
-    </select>
+    <SelectWrap auto={inputAuto}>
+      <select
+        ref={ref}
+        disabled={disabled}
+        aria-invalid={invalid || undefined}
+        className={getInputClassName({ invalid, auto: inputAuto, readOnly: disabled, className })}
+        {...props}
+      >
+        {children}
+      </select>
+    </SelectWrap>
   );
 });
 
@@ -133,6 +135,22 @@ export const FormTextarea = forwardRef<
     />
   );
 });
+
+export function SelectWrap({
+  auto,
+  className,
+  children,
+}: {
+  auto?: boolean;
+  className?: string;
+  children: ReactNode;
+}) {
+  return (
+    <div className={['select-wrap', auto ? 'select-wrap--auto' : '', className].filter(Boolean).join(' ')}>
+      {children}
+    </div>
+  );
+}
 
 export function FormErrorBanner({ message, className = '' }: { message?: string; className?: string }) {
   if (!message) return null;
