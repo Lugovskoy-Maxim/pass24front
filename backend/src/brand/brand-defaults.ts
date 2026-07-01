@@ -4,6 +4,11 @@ export const MSTYLE_BRAND_DEFAULTS = {
   siteTagline: 'Пропуска для арендаторов бизнес-центра',
   sitePhone: '+7 495 663-00-00',
   siteEmail: 'renta@mstyle.ru',
+  brandMarkType: 'image',
+  brandMarkText: 'M',
+  brandShowName: true,
+  brandNameBeforeMark: true,
+  uiIconSelectChevron: 'chevron-down',
 } as const;
 
 export const LEGACY_BRAND_DEFAULTS = {

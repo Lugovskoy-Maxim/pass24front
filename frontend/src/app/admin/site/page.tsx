@@ -3,7 +3,9 @@
 import { ChangeEvent, FormEvent, useEffect, useState } from 'react';
 import { Globe, ImageIcon, Mail, Phone, RotateCcw, Trash2, Type, Upload } from 'lucide-react';
 import { AdminLayout } from '@/components/AdminLayout';
+import { IconPickerField } from '@/components/IconPickerField';
 import { SiteBrand } from '@/components/SiteBrand';
+import { SelectWrap } from '@/components/FormField';
 import { UiLabelsEditor } from '@/components/UiLabelsEditor';
 import { useToast } from '@/components/Toast';
 import { api, SiteSettings, getErrorMessage } from '@/lib/api';
@@ -15,6 +17,17 @@ import { mergeUiLabels, UiLabels } from '@/lib/ui-labels';
 const MAX_ICON_BYTES = 80 * 1024;
 
 type Tab = 'brand' | 'labels';
+
+function normalizeSettings(s: SiteSettings): SiteSettings {
+  return {
+    ...s,
+    brandMarkType: s.brandMarkType === 'text' ? 'text' : 'image',
+    brandMarkText: s.brandMarkText?.trim() || MSTYLE_BRAND_DEFAULTS.brandMarkText,
+    brandShowName: s.brandShowName !== false,
+    brandNameBeforeMark: s.brandNameBeforeMark !== false,
+    uiIconSelectChevron: s.uiIconSelectChevron?.trim() || MSTYLE_BRAND_DEFAULTS.uiIconSelectChevron,
+  };
+}
 
 export default function AdminSiteSettingsPage() {
   const { toast } = useToast();
@@ -30,7 +43,7 @@ export default function AdminSiteSettingsPage() {
     setLoadErrorCause(null);
     api.admin.getSiteSettings()
       .then(({ settings: s }) => {
-        setSettings(s);
+        setSettings(normalizeSettings(s));
         setLabels(mergeUiLabels(s.uiLabels));
       })
       .catch((err) => {
@@ -73,7 +86,7 @@ export default function AdminSiteSettingsPage() {
         ...settings,
         uiLabels: labels as unknown as Record<string, unknown>,
       });
-      setSettings(updated);
+      setSettings(normalizeSettings(updated));
       setLabels(mergeUiLabels(updated.uiLabels));
       invalidateConfigCache();
       toast('Настройки сохранены', 'success');
@@ -105,6 +118,11 @@ export default function AdminSiteSettingsPage() {
     siteName: settings.siteName,
     siteIcon: settings.siteIcon,
     siteTagline: settings.siteTagline,
+    brandMarkType: settings.brandMarkType,
+    brandMarkText: settings.brandMarkText,
+    brandShowName: settings.brandShowName,
+    brandNameBeforeMark: settings.brandNameBeforeMark,
+    uiIconSelectChevron: settings.uiIconSelectChevron,
     sitePhone: previewBrand.sitePhone,
     siteEmail: previewBrand.siteEmail,
     businessCenterName: previewBrand.siteName,
@@ -167,34 +185,93 @@ export default function AdminSiteSettingsPage() {
                 />
               </div>
 
-              <div>
-                <label className="label">Иконка / логотип</label>
-                <div className="flex flex-col sm:flex-row gap-3">
+              <div className="grid sm:grid-cols-2 gap-3 pt-1 border-t border-[var(--border)]">
+                <label className="flex items-center gap-2 text-sm cursor-pointer sm:col-span-2">
                   <input
-                    className="input flex-1"
-                    value={settings.siteIcon.startsWith('data:') ? '' : settings.siteIcon}
-                    onChange={(e) => setSettings({ ...settings, siteIcon: e.target.value })}
-                    placeholder={MSTYLE_BRAND_DEFAULTS.siteIcon}
+                    type="checkbox"
+                    className="checkbox"
+                    checked={settings.brandShowName}
+                    onChange={(e) => setSettings({ ...settings, brandShowName: e.target.checked })}
                   />
-                  <label className="btn btn-secondary cursor-pointer shrink-0">
-                    <Upload className="w-4 h-4" />
-                    Загрузить
-                    <input type="file" accept="image/*" className="hidden" onChange={handleIconUpload} />
-                  </label>
-                  {settings.siteIcon && (
-                    <button
-                      type="button"
-                      className="btn btn-secondary shrink-0"
-                      onClick={() => setSettings({ ...settings, siteIcon: '' })}
-                    >
-                      <Trash2 className="w-4 h-4" />
-                    </button>
-                  )}
-                </div>
-                <p className="text-xs text-[var(--muted)] mt-1">
-                  Ссылка, файл до 80 КБ или путь вида /brand/mstyle-logo.svg. Пустое поле — логотип M-STYLE по умолчанию
-                </p>
+                  Показывать название сайта
+                </label>
+                <label className="flex items-center gap-2 text-sm cursor-pointer sm:col-span-2">
+                  <input
+                    type="checkbox"
+                    className="checkbox"
+                    checked={settings.brandNameBeforeMark}
+                    onChange={(e) => setSettings({ ...settings, brandNameBeforeMark: e.target.checked })}
+                  />
+                  Название перед знаком (логотипом)
+                </label>
               </div>
+
+              <div>
+                <label className="label">Знак бренда</label>
+                <SelectWrap>
+                  <select
+                    className="input"
+                    value={settings.brandMarkType}
+                    onChange={(e) => setSettings({
+                      ...settings,
+                      brandMarkType: e.target.value as SiteSettings['brandMarkType'],
+                    })}
+                  >
+                    <option value="image">Картинка (логотип)</option>
+                    <option value="text">Текст (как иконка)</option>
+                  </select>
+                </SelectWrap>
+              </div>
+
+              {settings.brandMarkType === 'text' ? (
+                <div>
+                  <label className="label">Текст знака</label>
+                  <input
+                    className="input"
+                    value={settings.brandMarkText}
+                    maxLength={8}
+                    onChange={(e) => setSettings({ ...settings, brandMarkText: e.target.value })}
+                    placeholder={MSTYLE_BRAND_DEFAULTS.brandMarkText}
+                  />
+                  <p className="text-xs text-[var(--muted)] mt-1">До 8 символов, например «M» или «BC»</p>
+                </div>
+              ) : (
+                <div>
+                  <label className="label">Картинка логотипа</label>
+                  <div className="flex flex-col sm:flex-row gap-3">
+                    <input
+                      className="input flex-1"
+                      value={settings.siteIcon.startsWith('data:') ? '' : settings.siteIcon}
+                      onChange={(e) => setSettings({ ...settings, siteIcon: e.target.value })}
+                      placeholder={MSTYLE_BRAND_DEFAULTS.siteIcon}
+                    />
+                    <label className="btn btn-secondary cursor-pointer shrink-0">
+                      <Upload className="w-4 h-4" />
+                      Загрузить
+                      <input type="file" accept="image/*" className="hidden" onChange={handleIconUpload} />
+                    </label>
+                    {settings.siteIcon && (
+                      <button
+                        type="button"
+                        className="btn btn-secondary shrink-0"
+                        onClick={() => setSettings({ ...settings, siteIcon: '' })}
+                      >
+                        <Trash2 className="w-4 h-4" />
+                      </button>
+                    )}
+                  </div>
+                  <p className="text-xs text-[var(--muted)] mt-1">
+                    Ссылка, файл до 80 КБ или путь вида /brand/mstyle-logo.svg
+                  </p>
+                </div>
+              )}
+
+              <IconPickerField
+                label="Иконка выпадающих списков"
+                value={settings.uiIconSelectChevron}
+                onChange={(uiIconSelectChevron) => setSettings({ ...settings, uiIconSelectChevron })}
+                hint="Иконки из библиотеки Lucide. Применяется ко всем select на сайте."
+              />
 
               <div>
                 <label className="label flex items-center gap-1.5">
@@ -271,6 +348,11 @@ export default function AdminSiteSettingsPage() {
                   siteTagline: MSTYLE_BRAND_DEFAULTS.siteTagline,
                   sitePhone: MSTYLE_BRAND_DEFAULTS.sitePhone,
                   siteEmail: MSTYLE_BRAND_DEFAULTS.siteEmail,
+                  brandMarkType: MSTYLE_BRAND_DEFAULTS.brandMarkType,
+                  brandMarkText: MSTYLE_BRAND_DEFAULTS.brandMarkText,
+                  brandShowName: MSTYLE_BRAND_DEFAULTS.brandShowName,
+                  brandNameBeforeMark: MSTYLE_BRAND_DEFAULTS.brandNameBeforeMark,
+                  uiIconSelectChevron: MSTYLE_BRAND_DEFAULTS.uiIconSelectChevron,
                 });
                 toast('Подставлены значения M-STYLE. Нажмите «Сохранить» для применения.', 'info');
               }}
