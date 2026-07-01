@@ -10,6 +10,7 @@ cd "$APP_DIR"
 chmod +x scripts/*.sh 2>/dev/null || true
 
 echo "==> Ветка: $BRANCH"
+git checkout -- . 2>/dev/null || true
 git fetch origin
 git checkout "$BRANCH"
 git pull --ff-only origin "$BRANCH"
