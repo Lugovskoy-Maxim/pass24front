@@ -1,6 +1,6 @@
 'use client';
 
-import { useEffect, useState } from 'react';
+import { useEffect, useMemo, useState } from 'react';
 import Link from 'next/link';
 import { Users, FileText, Building2, Sparkles, List, ScrollText } from 'lucide-react';
 import { AdminLayout } from '@/components/AdminLayout';
@@ -9,6 +9,11 @@ import { useConfig } from '@/hooks/useConfig';
 import { api, AdminDashboard, AUDIT_LABELS, PassStatus, formatAuditEntity, getErrorMessage } from '@/lib/api';
 import { PageError } from '@/components/PageError';
 import { getStatusLabel, getUiLabels } from '@/lib/ui-labels';
+import { StatusDonutChart } from '@/components/charts/StatusDonutChart';
+import { HorizontalBarChart } from '@/components/charts/HorizontalBarChart';
+import { ChartLegend } from '@/components/charts/ChartLegend';
+import { CHART_ROLE_COLORS, statusChartColor } from '@/lib/chart-colors';
+import { CardSkeleton } from '@/components/ui/Skeleton';
 
 const ROLE_NAMES: Record<string, string> = {
   tenant: 'Арендаторы',
@@ -52,6 +57,31 @@ export default function AdminDashboardPage() {
     }
   };
 
+  const passChartData = useMemo(() => {
+    if (!data) return [];
+    return Object.entries(data.stats.passes.byStatus).map(([status, count]) => ({
+      key: status,
+      label: getStatusLabel(status as PassStatus, labels),
+      value: count,
+      colorKey: status,
+    }));
+  }, [data, labels]);
+
+  const roleChartData = useMemo(() => {
+    if (!data) return [];
+    return Object.entries(data.stats.users.byRole).map(([role, count], i) => ({
+      key: role,
+      label: ROLE_NAMES[role] || role,
+      value: count,
+      color: CHART_ROLE_COLORS[i % CHART_ROLE_COLORS.length],
+    }));
+  }, [data]);
+
+  const passLegend = passChartData.map((d) => ({
+    ...d,
+    color: statusChartColor(d.colorKey as PassStatus),
+  }));
+
   if (error) {
     return (
       <AdminLayout title="Обзор БЦ">
@@ -60,7 +90,19 @@ export default function AdminDashboardPage() {
     );
   }
   if (!data) {
-    return <AdminLayout title="Обзор БЦ"><div className="animate-pulse text-[var(--muted)]">Загрузка...</div></AdminLayout>;
+    return (
+      <AdminLayout title="Обзор БЦ">
+        <div className="grid grid-cols-2 lg:grid-cols-3 gap-4 mb-8">
+          <CardSkeleton lines={2} />
+          <CardSkeleton lines={2} />
+          <CardSkeleton lines={2} />
+        </div>
+        <div className="grid lg:grid-cols-2 gap-6">
+          <CardSkeleton lines={5} />
+          <CardSkeleton lines={5} />
+        </div>
+      </AdminLayout>
+    );
   }
 
   const { stats, recentActivity, businessCenterNames } = data;
@@ -91,76 +133,65 @@ export default function AdminDashboardPage() {
       </div>
 
       <div className="grid grid-cols-2 lg:grid-cols-3 gap-4 mb-8">
-        <div className="card p-4">
+        <div className="card p-4 stat-card">
           <Users className="w-5 h-5 text-[var(--primary)] mb-2" />
-          <div className="text-2xl font-bold">{stats.users.total}</div>
+          <div className="text-2xl font-bold tabular-nums">{stats.users.total}</div>
           <div className="text-sm text-[var(--muted)]">Пользователей</div>
         </div>
-        <div className="card p-4">
+        <div className="card p-4 stat-card">
           <FileText className="w-5 h-5 text-[var(--accent)] mb-2" />
-          <div className="text-2xl font-bold">{stats.passes.total}</div>
+          <div className="text-2xl font-bold tabular-nums">{stats.passes.total}</div>
           <div className="text-sm text-[var(--muted)]">Всего пропусков</div>
         </div>
-        <div className="card p-4">
+        <div className="card p-4 stat-card col-span-2 lg:col-span-1">
           <Building2 className="w-5 h-5 text-emerald-600 mb-2" />
-          <div className="text-2xl font-bold">{stats.businessCenters}</div>
+          <div className="text-2xl font-bold tabular-nums">{stats.businessCenters}</div>
           <div className="text-sm text-[var(--muted)]">Бизнес-центров</div>
         </div>
       </div>
 
-      <div className="grid lg:grid-cols-2 gap-6">
+      <div className="grid lg:grid-cols-2 gap-6 mb-6">
         <div className="card p-5">
-          <h2 className="font-semibold mb-4">Пользователи по ролям</h2>
-          <div className="space-y-2">
-            {Object.entries(stats.users.byRole).map(([role, count]) => (
-              <div key={role} className="flex justify-between text-sm">
-                <span className="text-[var(--muted)]">{ROLE_NAMES[role] || role}</span>
-                <span className="font-medium">{count}</span>
-              </div>
-            ))}
-          </div>
+          <h2 className="font-semibold mb-1">Пользователи по ролям</h2>
+          <p className="text-xs text-[var(--muted)] mb-4">Распределение учётных записей</p>
+          <HorizontalBarChart data={roleChartData} />
         </div>
 
         <div className="card p-5">
-          <h2 className="font-semibold mb-4">Пропуска по статусам</h2>
-          <div className="space-y-2">
-            {Object.entries(stats.passes.byStatus).map(([status, count]) => (
-              <div key={status} className="flex justify-between text-sm">
-                <span className="text-[var(--muted)]">{getStatusLabel(status as PassStatus, labels)}</span>
-                <span className="font-medium">{count}</span>
-              </div>
-            ))}
-          </div>
-          <div className="mt-4 pt-4 border-t border-[var(--border)] flex justify-between text-sm">
-            <span className="text-[var(--muted)]">Сегодня / за неделю</span>
-            <span className="font-medium">{stats.passes.today} / {stats.passes.week}</span>
-          </div>
+          <h2 className="font-semibold mb-1">Пропуска по статусам</h2>
+          <p className="text-xs text-[var(--muted)] mb-2">
+            Сегодня {stats.passes.today} · за неделю {stats.passes.week}
+          </p>
+          <StatusDonutChart data={passChartData} height={180} innerRadius={48} />
+          <ChartLegend items={passLegend} />
         </div>
+      </div>
 
-        <div className="card p-5 lg:col-span-2">
-          <div className="flex items-center justify-between mb-4">
-            <h2 className="font-semibold">Последние действия пользователей</h2>
-            <Link href="/admin/audit" className="text-sm text-[var(--primary)] hover:underline">{labels.buttons.fullAudit}</Link>
-          </div>
-          {recentActivity.length === 0 ? (
-            <p className="text-sm text-[var(--muted)]">Действий пока нет</p>
-          ) : (
-            <div className="space-y-2">
-              {recentActivity.map((entry) => (
-                <div key={entry.id} className="flex items-center justify-between text-sm py-2 border-b border-[var(--border)] last:border-0">
-                  <div>
-                    <span className="font-medium">{AUDIT_LABELS[entry.action] || entry.action}</span>
-                    <span className="text-[var(--muted)]"> · {entry.userName || 'Система'}</span>
-                    <span className="text-[var(--muted)] text-xs block sm:inline sm:ml-1">
-                      — {formatAuditEntity(entry)}
-                    </span>
-                  </div>
-                  <span className="text-xs text-[var(--muted)]">{new Date(entry.createdAt).toLocaleString('ru-RU')}</span>
+      <div className="card p-5">
+        <div className="flex items-center justify-between mb-4">
+          <h2 className="font-semibold">Последние действия пользователей</h2>
+          <Link href="/admin/audit" className="text-sm text-[var(--primary)] hover:underline">{labels.buttons.fullAudit}</Link>
+        </div>
+        {recentActivity.length === 0 ? (
+          <p className="text-sm text-[var(--muted)]">Действий пока нет</p>
+        ) : (
+          <div className="space-y-1">
+            {recentActivity.map((entry) => (
+              <div key={entry.id} className="flex items-center justify-between text-sm py-2.5 border-b border-[var(--border)] last:border-0 hover:bg-[var(--surface-muted)] -mx-2 px-2 rounded transition-colors">
+                <div className="min-w-0">
+                  <span className="font-medium">{AUDIT_LABELS[entry.action] || entry.action}</span>
+                  <span className="text-[var(--muted)]"> · {entry.userName || 'Система'}</span>
+                  <span className="text-[var(--muted)] text-xs block sm:inline sm:ml-1">
+                    — {formatAuditEntity(entry)}
+                  </span>
                 </div>
-              ))}
-            </div>
-          )}
-        </div>
+                <span className="text-xs text-[var(--muted)] shrink-0 ml-2 tabular-nums">
+                  {new Date(entry.createdAt).toLocaleString('ru-RU', { day: '2-digit', month: '2-digit', hour: '2-digit', minute: '2-digit' })}
+                </span>
+              </div>
+            ))}
+          </div>
+        )}
       </div>
     </AdminLayout>
   );
