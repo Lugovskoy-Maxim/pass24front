@@ -20,7 +20,7 @@ if [[ ! -f .env ]]; then
 fi
 
 echo "==> Build & start containers"
-$COMPOSE up -d --build
+$COMPOSE up -d --build --wait --wait-timeout 180
 
 echo "==> Prune dangling images"
 docker image prune -f >/dev/null 2>&1 || true
