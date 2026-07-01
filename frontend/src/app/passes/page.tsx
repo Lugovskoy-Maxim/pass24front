@@ -2,7 +2,8 @@
 
 import { Suspense, useEffect, useState, useCallback } from 'react';
 import { useRouter, useSearchParams } from 'next/navigation';
-import { Search, X } from 'lucide-react';
+import Link from 'next/link';
+import { Plus, Search, X } from 'lucide-react';
 import { ProtectedLayout } from '@/components/ProtectedLayout';
 import { PassListCard } from '@/components/PassListCard';
 import { PassDetailPanel } from '@/components/PassDetailPanel';
@@ -51,6 +52,7 @@ function PassesPageContent() {
   const labels = getUiLabels(config);
 
   const canViewPassesList = canViewPasses(user);
+  const canCreate = hasPermission(user, 'passes.create');
   const canViewAll = canViewAllPasses(user);
   const canApprove = hasPermission(user, 'passes.approve');
   const canReception = hasPermission(user, 'passes.reception');
@@ -181,11 +183,19 @@ function PassesPageContent() {
   return (
     <ProtectedLayout anyPermissions={['passes.view_own', 'passes.view_all', 'admin.panel']}>
       <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-4 mb-6">
-        <div>
-          <h1 className="page-title">{labels.pages.passesTitle}</h1>
-          <p className="text-sm text-[var(--muted)] mt-1">
-            {canViewAll ? labels.pages.passesSubtitleAll : labels.pages.passesSubtitleOwn}
-          </p>
+        <div className="flex flex-col sm:flex-row sm:items-center gap-3 sm:gap-4 min-w-0">
+          <div>
+            <h1 className="page-title">{labels.pages.passesTitle}</h1>
+            <p className="text-sm text-[var(--muted)] mt-1">
+              {canViewAll ? labels.pages.passesSubtitleAll : labels.pages.passesSubtitleOwn}
+            </p>
+          </div>
+          {canCreate && (
+            <Link href="/passes/new" className="btn btn-primary shrink-0 self-start sm:self-center">
+              <Plus className="w-4 h-4" />
+              {labels.buttons.order}
+            </Link>
+          )}
         </div>
         <div className="flex flex-wrap gap-2">
           <div className="relative flex-1 sm:w-56">
@@ -224,7 +234,15 @@ function PassesPageContent() {
           {loading ? (
             <div className="card p-8 text-center text-[var(--muted)]">{labels.passes.loading}</div>
           ) : passes.length === 0 ? (
-            <div className="card p-8 text-center text-[var(--muted)]">{labels.passes.notFound}</div>
+            <div className="card p-8 text-center text-[var(--muted)]">
+              <p>{labels.passes.notFound}</p>
+              {canCreate && (
+                <Link href="/passes/new" className="btn btn-primary mt-4 inline-flex">
+                  <Plus className="w-4 h-4" />
+                  {labels.buttons.order}
+                </Link>
+              )}
+            </div>
           ) : (
             <div className="flex flex-col gap-1.5">
               <p className="text-xs text-[var(--muted)] mb-1 px-1">{formatPassCount(passes.length, labels)}</p>

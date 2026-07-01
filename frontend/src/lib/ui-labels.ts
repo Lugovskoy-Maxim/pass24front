@@ -3,6 +3,7 @@ import { BcConfig, PassStatus, SiteSettings } from './api';
 export const DEFAULT_UI_LABELS = {
   nav: {
     dashboard: 'Главная',
+    profile: 'Профиль',
     templates: 'Шаблоны',
     passes: 'Пропуска',
     orderPass: 'Заказать',

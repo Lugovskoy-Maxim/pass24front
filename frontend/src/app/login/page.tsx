@@ -4,6 +4,7 @@ import { useState, useEffect, FormEvent } from 'react';
 import { useRouter } from 'next/navigation';
 import { Mail, Phone } from 'lucide-react';
 import { useAuth } from '@/lib/auth';
+import { getHomePath } from '@/lib/permissions';
 import { api, getErrorMessage, UserRole } from '@/lib/api';
 import { useConfig } from '@/hooks/useConfig';
 import { SiteBrand } from '@/components/SiteBrand';
@@ -26,7 +27,7 @@ export default function LoginPage() {
   const router = useRouter();
 
   useEffect(() => {
-    if (!authLoading && user) router.replace('/dashboard');
+    if (!authLoading && user) router.replace(getHomePath(user));
   }, [user, authLoading, router]);
 
   const [mode, setMode] = useState<'login' | 'register'>('login');
@@ -72,8 +73,8 @@ export default function LoginPage() {
     setFieldErrors({});
     setLoading(true);
     try {
-      await login(loginEmail, loginPassword);
-      router.push('/dashboard');
+      const loggedIn = await login(loginEmail, loginPassword);
+      router.push(getHomePath(loggedIn));
     } catch (err) {
       setFormError(getErrorMessage(err, 'Ошибка входа'));
     } finally {

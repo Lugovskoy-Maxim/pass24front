@@ -7,7 +7,7 @@ import {
 } from 'lucide-react';
 import { ProtectedLayout } from './ProtectedLayout';
 import { useAuth } from '@/lib/auth';
-import { hasPermission } from '@/lib/permissions';
+import { getHomePath, hasPermission } from '@/lib/permissions';
 
 const NAV = [
   { href: '/admin', label: 'Обзор', icon: LayoutDashboard, exact: true },
@@ -51,7 +51,7 @@ export function AdminLayout({ children, title }: { children: React.ReactNode; ti
               })}
             </nav>
             <Link
-              href="/dashboard"
+              href={getHomePath(user)}
               className="flex items-center gap-2 px-3 py-2 mt-4 text-sm text-[var(--muted)] hover:text-[var(--accent)]"
             >
               <ArrowLeft className="w-4 h-4" />

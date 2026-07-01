@@ -34,3 +34,13 @@ export function canUseReception(user: User | null | undefined): boolean {
 export function canSeeOverdueAlerts(user: User | null | undefined): boolean {
   return canUseReception(user) || canViewAllPasses(user);
 }
+
+/** Стартовая страница после входа — без дублирующей «Главной». */
+export function getHomePath(user: User | null | undefined): string {
+  if (!user) return '/login';
+  if (canViewPasses(user)) return '/passes';
+  if (hasPermission(user, 'passes.templates')) return '/templates';
+  if (canUseReception(user)) return '/control';
+  if (isAdminPanelUser(user)) return '/admin';
+  return '/profile';
+}
