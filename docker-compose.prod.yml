@@ -24,7 +24,16 @@ services:
     environment:
       - PUBLIC_APP_URL=${PUBLIC_APP_URL}
       - JWT_SECRET=${JWT_SECRET}
+      - JWT_EXPIRES_IN=${JWT_EXPIRES_IN:-7d}
       - NODE_ENV=production
+      - ADMIN_EMAIL=${ADMIN_EMAIL:-admin@pass24.local}
+      - ADMIN_PASSWORD=${ADMIN_PASSWORD:-admin123}
+      - ADMIN_FULL_NAME=${ADMIN_FULL_NAME:-Супер-администратор}
+      - ADMIN_ROLE=${ADMIN_ROLE:-admin}
+      - SEED_DEV_DATA=${SEED_DEV_DATA:-false}
+      - SMTP_HOST=${SMTP_HOST:-mailpit}
+      - SMTP_PORT=${SMTP_PORT:-1025}
+      - SMTP_FROM=${SMTP_FROM:-PASS24 <noreply@pass24.local>}
 
   frontend:
     build:

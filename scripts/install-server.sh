@@ -61,5 +61,7 @@ sudo -u "$DEPLOY_USER" bash -lc "cd '$APP_DIR' && chmod +x scripts/*.sh && ./scr
 
 echo ""
 echo "Готово: https://$DOMAIN"
+echo "Супер-админ: см. ADMIN_EMAIL / ADMIN_PASSWORD в $APP_DIR/.env"
 echo "SSL (если ещё нет): sudo ./scripts/setup-ssl.sh"
 echo "Обновление: cd $APP_DIR && ./scripts/update.sh"
+echo "Инструкция: $APP_DIR/deploy/UPDATE.md"
