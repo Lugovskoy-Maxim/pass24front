@@ -33,7 +33,7 @@ export function PersonNameFields({
       {labels.sectionTitle && (
         <p className="text-sm font-medium text-[var(--text)]">{labels.sectionTitle}</p>
       )}
-      <div className="grid grid-cols-1 sm:grid-cols-3 gap-3">
+      <div className="person-name-fields__grid form-grid-3">
         <FormField id="person-lastName" label={labels.lastName} required={required} error={errors?.lastName}>
           <FormInput
             id="person-lastName"

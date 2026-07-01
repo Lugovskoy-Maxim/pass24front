@@ -438,6 +438,18 @@ input[type="checkbox"]:not(.checkbox) {
   }
 }
 
+/* ФИО: одинаковая высота подписей — инпуты в одну линию */
+.person-name-fields__grid .form-field .label {
+  min-height: 2.75rem;
+  line-height: 1.35;
+}
+
+@media (min-width: 640px) {
+  .person-name-fields__grid {
+    align-items: end;
+  }
+}
+
 .card {
   background: var(--surface);
   color: var(--text);

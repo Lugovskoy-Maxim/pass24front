@@ -38,7 +38,7 @@ export function getUserNameLabels(role: UserRole | string): PersonNameLabels {
     case 'tenant':
       return {
         sectionTitle: 'Контактное лицо арендатора',
-        lastName: 'Фамилия контактного лица',
+        lastName: 'Фамилия',
         firstName: 'Имя',
         middleName: 'Отчество',
       };
