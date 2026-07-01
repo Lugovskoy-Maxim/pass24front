@@ -28,7 +28,7 @@ export function MobileNav() {
   ].filter((i) => i.show).slice(0, 5);
 
   return (
-    <nav className="mobile-nav sm:hidden" aria-label="Основное меню">
+    <nav className="mobile-nav" aria-label="Основное меню">
       {items.map(({ href, label, icon: Icon, accent }) => {
         const active =
           pathname === href
