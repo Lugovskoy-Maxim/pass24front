@@ -1068,22 +1068,36 @@ input[type="checkbox"]:not(.checkbox) {
   .app-main {
     padding-bottom: calc(4.5rem + env(safe-area-inset-bottom, 0px));
   }
+
+  /* iOS не зумит поля с font-size >= 16px при фокусе */
+  .input,
+  select.input,
+  textarea.input {
+    font-size: 16px;
+  }
 }
 
+/* Скрыто на десктопе — только нижняя панель на узких экранах */
 .mobile-nav {
-  position: fixed;
-  bottom: 0;
-  left: 0;
-  right: 0;
-  z-index: 50;
-  display: flex;
-  align-items: stretch;
-  justify-content: space-around;
-  gap: 0.25rem;
-  padding: 0.375rem 0.5rem calc(0.375rem + env(safe-area-inset-bottom, 0px));
-  background: var(--header-bg);
-  border-top: 1px solid var(--header-border);
-  backdrop-filter: blur(8px);
+  display: none;
+}
+
+@media (max-width: 639px) {
+  .mobile-nav {
+    position: fixed;
+    bottom: 0;
+    left: 0;
+    right: 0;
+    z-index: 50;
+    display: flex;
+    align-items: stretch;
+    justify-content: space-around;
+    gap: 0.25rem;
+    padding: 0.375rem 0.5rem calc(0.375rem + env(safe-area-inset-bottom, 0px));
+    background: var(--header-bg);
+    border-top: 1px solid var(--header-border);
+    backdrop-filter: blur(8px);
+  }
 }
 
 .mobile-nav__item {
