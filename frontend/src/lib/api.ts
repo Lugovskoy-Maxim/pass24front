@@ -108,6 +108,9 @@ export interface Pass {
   creatorPhone?: string;
   visitorName: string;
   visitorPhone?: string;
+  visitorPassportSeries?: string;
+  visitorPassportNumber?: string;
+  visitorPassportIssuedBy?: string;
   companyName?: string;
   visitPurpose?: string;
   passType: PassType;
@@ -331,6 +334,36 @@ export const api = {
 
   lookupPass: (passNumber: string) =>
     request<{ pass: Pass }>(`/passes/lookup/${encodeURIComponent(passNumber)}`),
+
+  getPassHistory: (params: {
+    scope: 'visitor' | 'office' | 'company' | 'bc';
+    visitorName?: string;
+    visitorPhone?: string;
+    visitorPassportSeries?: string;
+    visitorPassportNumber?: string;
+    officeId?: string;
+    companyName?: string;
+    propertyId?: string;
+    limit?: number;
+  }) => {
+    const q = new URLSearchParams({ scope: params.scope });
+    if (params.visitorName) q.set('visitorName', params.visitorName);
+    if (params.visitorPhone) q.set('visitorPhone', params.visitorPhone);
+    if (params.visitorPassportSeries) q.set('visitorPassportSeries', params.visitorPassportSeries);
+    if (params.visitorPassportNumber) q.set('visitorPassportNumber', params.visitorPassportNumber);
+    if (params.officeId) q.set('officeId', params.officeId);
+    if (params.companyName) q.set('companyName', params.companyName);
+    if (params.propertyId) q.set('propertyId', params.propertyId);
+    if (params.limit) q.set('limit', String(params.limit));
+    return request<{ scope: string; total: number; passes: Pass[] }>(`/passes/history?${q.toString()}`);
+  },
+
+  updatePassVisitorData: (id: string, data: {
+    visitorPassportSeries?: string;
+    visitorPassportNumber?: string;
+    visitorPassportIssuedBy?: string;
+  }) =>
+    request<{ pass: Pass }>(`/passes/${id}/visitor-data`, { method: 'PATCH', body: JSON.stringify(data) }),
 
   getPublicTicket: async (passNumber: string) => {
     let res: Response;

@@ -22,6 +22,7 @@ const mongoose_1 = require("@nestjs/mongoose");
 const mongoose_2 = require("mongoose");
 const schemas_1 = require("../schemas");
 const enums_1 = require("../schemas/enums");
+const pass_helpers_1 = require("../common/pass-helpers");
 const pass_templates_service_1 = require("./pass-templates.service");
 let PassesService = class PassesService {
     passModel;
@@ -136,6 +137,9 @@ let PassesService = class PassesService {
             filter.$and.push({
                 $or: [
                     { visitorName: new RegExp(params.search, 'i') },
+                    { visitorPhone: new RegExp(params.search, 'i') },
+                    { visitorPassportSeries: new RegExp(params.search, 'i') },
+                    { visitorPassportNumber: new RegExp(params.search, 'i') },
                     { vehiclePlate: new RegExp(params.search, 'i') },
                     { companyName: new RegExp(params.search, 'i') },
                     { businessCenterName: new RegExp(params.search, 'i') },
@@ -175,6 +179,7 @@ let PassesService = class PassesService {
         const passNumber = this.generatePassNumber();
         const doc = await this.passModel.create({
             ...passDto,
+            visitPurpose: (0, pass_helpers_1.deriveVisitPurpose)(passDto.passType),
             ...resolved,
             passNumber,
             status: 'pending',
@@ -329,6 +334,105 @@ let PassesService = class PassesService {
             approved: mapped.filter((p) => p.status === 'approved').length,
         };
         return { date: targetDate, stats, passes: mapped };
+    }
+    async getHistory(query, user) {
+        await this.expirePastPasses();
+        const accessFilter = await this.buildAccessFilter(user);
+        const limit = Math.min(Math.max(parseInt(query.limit || '50', 10) || 50, 1), 200);
+        const filter = { ...accessFilter };
+        switch (query.scope) {
+            case 'office': {
+                if (!query.officeId)
+                    throw new common_1.BadRequestException('Укажите officeId');
+                filter.officeId = new mongoose_2.Types.ObjectId(query.officeId);
+                break;
+            }
+            case 'company': {
+                if (!query.companyName?.trim())
+                    throw new common_1.BadRequestException('Укажите companyName');
+                filter.companyName = new RegExp(`^${this.escapeRegex(query.companyName.trim())}$`, 'i');
+                break;
+            }
+            case 'bc': {
+                if (!query.propertyId)
+                    throw new common_1.BadRequestException('Укажите propertyId');
+                filter.property = new mongoose_2.Types.ObjectId(query.propertyId);
+                break;
+            }
+            case 'visitor':
+            default: {
+                const or = [];
+                const name = query.visitorName?.trim();
+                if (name) {
+                    or.push({ visitorName: new RegExp(`^${this.escapeRegex(name)}$`, 'i') });
+                }
+                const phone = (0, pass_helpers_1.normalizePhone)(query.visitorPhone);
+                if (phone) {
+                    const phonePattern = phone.replace(/(\d)/g, '[\\s\\-()]*$1');
+                    or.push({ visitorPhone: new RegExp(phonePattern) });
+                }
+                if (query.visitorPassportNumber?.trim()) {
+                    or.push({ visitorPassportNumber: new RegExp(this.escapeRegex(query.visitorPassportNumber.trim())) });
+                }
+                if (query.visitorPassportSeries?.trim()) {
+                    or.push({ visitorPassportSeries: new RegExp(this.escapeRegex(query.visitorPassportSeries.trim()), 'i') });
+                }
+                if (!or.length) {
+                    throw new common_1.BadRequestException('Укажите ФИО, телефон или паспортные данные');
+                }
+                filter.$or = or;
+                break;
+            }
+        }
+        const passes = await this.passModel
+            .find(filter)
+            .sort({ visitDate: -1, createdAt: -1 })
+            .limit(limit)
+            .lean();
+        const enriched = await this.enrichCreatorFields(passes, user);
+        return {
+            scope: query.scope,
+            total: enriched.length,
+            passes: enriched.map((p) => this.mapToFrontend(p, user)),
+        };
+    }
+    async updateVisitorData(id, dto, actor) {
+        if (!actor?.role)
+            throw new common_1.ForbiddenException('Недостаточно прав');
+        const canEdit = await this.accessConfigService.hasPermission(actor.role, 'passes.reception')
+            || await this.accessConfigService.hasPermission(actor.role, 'passes.approve')
+            || await this.accessConfigService.hasPermission(actor.role, 'admin.panel');
+        if (!canEdit) {
+            throw new common_1.ForbiddenException('Паспортные данные может вносить только ресепшн или администратор');
+        }
+        const pass = await this.passModel.findById(id);
+        if (!pass)
+            throw new common_1.NotFoundException('Пропуск не найден');
+        if (dto.visitorPassportSeries !== undefined) {
+            pass.visitorPassportSeries = dto.visitorPassportSeries.trim() || undefined;
+        }
+        if (dto.visitorPassportNumber !== undefined) {
+            pass.visitorPassportNumber = dto.visitorPassportNumber.trim() || undefined;
+        }
+        if (dto.visitorPassportIssuedBy !== undefined) {
+            pass.visitorPassportIssuedBy = dto.visitorPassportIssuedBy.trim() || undefined;
+        }
+        await pass.save();
+        await this.auditService.log({
+            action: 'pass.visitor_data_updated',
+            entityType: 'pass',
+            entityId: pass._id,
+            actor,
+            details: {
+                passNumber: pass.passNumber,
+                visitorName: pass.visitorName,
+                hasPassport: !!(pass.visitorPassportSeries || pass.visitorPassportNumber),
+            },
+        });
+        return { pass: this.mapToFrontend(pass, actor) };
+    }
+    escapeRegex(value) {
+        return value.replace(/[.*+?^${}()|[\]\\]/g, '\\$&');
     }
     async lookup(passNumber, user) {
         await this.expirePastPasses();
@@ -538,6 +642,9 @@ let PassesService = class PassesService {
             creatorPhone: isTenant ? undefined : doc.creatorPhone,
             visitorName: doc.visitorName,
             visitorPhone: doc.visitorPhone,
+            visitorPassportSeries: doc.visitorPassportSeries,
+            visitorPassportNumber: doc.visitorPassportNumber,
+            visitorPassportIssuedBy: doc.visitorPassportIssuedBy,
             companyName: doc.companyName,
             visitPurpose: doc.visitPurpose,
             passType: doc.passType,

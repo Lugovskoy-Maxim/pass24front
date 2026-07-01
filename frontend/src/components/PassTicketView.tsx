@@ -126,11 +126,9 @@ export function PassTicketView({
               </div>
             </div>
           )}
-          {ticket.visitPurpose && (
-            <div className="col-span-2 text-sm text-center text-[var(--muted)]">
-              {ticket.visitPurpose}
-            </div>
-          )}
+          <div className="col-span-2 text-sm text-center text-[var(--muted)]">
+            {typeLabel}
+          </div>
         </section>
 
         {/* QR */}

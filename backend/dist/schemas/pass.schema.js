@@ -20,6 +20,9 @@ let Pass = class Pass {
     creatorPhone;
     visitorName;
     visitorPhone;
+    visitorPassportSeries;
+    visitorPassportNumber;
+    visitorPassportIssuedBy;
     companyName;
     visitPurpose;
     passType;
@@ -76,6 +79,18 @@ __decorate([
     (0, mongoose_1.Prop)(),
     __metadata("design:type", String)
 ], Pass.prototype, "visitorPhone", void 0);
+__decorate([
+    (0, mongoose_1.Prop)(),
+    __metadata("design:type", String)
+], Pass.prototype, "visitorPassportSeries", void 0);
+__decorate([
+    (0, mongoose_1.Prop)({ index: true }),
+    __metadata("design:type", String)
+], Pass.prototype, "visitorPassportNumber", void 0);
+__decorate([
+    (0, mongoose_1.Prop)(),
+    __metadata("design:type", String)
+], Pass.prototype, "visitorPassportIssuedBy", void 0);
 __decorate([
     (0, mongoose_1.Prop)(),
     __metadata("design:type", String)
@@ -185,7 +200,8 @@ exports.Pass = Pass = __decorate([
 ], Pass);
 exports.PassSchema = mongoose_1.SchemaFactory.createForClass(Pass);
 exports.PassSchema.index({ status: 1, visitDate: -1 });
-exports.PassSchema.index({ visitorName: 'text', vehiclePlate: 'text', companyName: 'text' });
+exports.PassSchema.index({ visitorName: 'text', vehiclePlate: 'text', companyName: 'text', visitorPassportNumber: 'text' });
+exports.PassSchema.index({ visitorPhone: 1 });
 exports.PassSchema.index({ office: 1 });
 exports.PassSchema.index({ property: 1, visitDate: -1 });
 exports.PassSchema.index({ officeId: 1 });

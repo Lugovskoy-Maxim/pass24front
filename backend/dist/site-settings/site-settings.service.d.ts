@@ -8,6 +8,11 @@ export interface SiteSettingsDto {
     siteTagline: string;
     sitePhone: string;
     siteEmail: string;
+    brandMarkType: string;
+    brandMarkText: string;
+    brandShowName: boolean;
+    brandNameBeforeMark: boolean;
+    uiIconSelectChevron: string;
     uiLabels: UiLabels;
 }
 export declare class SiteSettingsService implements OnModuleInit {

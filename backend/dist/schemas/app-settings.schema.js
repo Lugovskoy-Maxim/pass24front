@@ -18,6 +18,11 @@ let AppSettings = class AppSettings {
     siteTagline;
     sitePhone;
     siteEmail;
+    brandMarkType;
+    brandMarkText;
+    brandShowName;
+    brandNameBeforeMark;
+    uiIconSelectChevron;
     uiLabels;
 };
 exports.AppSettings = AppSettings;
@@ -45,6 +50,26 @@ __decorate([
     (0, mongoose_1.Prop)({ default: 'renta@mstyle.ru' }),
     __metadata("design:type", String)
 ], AppSettings.prototype, "siteEmail", void 0);
+__decorate([
+    (0, mongoose_1.Prop)({ default: 'image' }),
+    __metadata("design:type", String)
+], AppSettings.prototype, "brandMarkType", void 0);
+__decorate([
+    (0, mongoose_1.Prop)({ default: 'M' }),
+    __metadata("design:type", String)
+], AppSettings.prototype, "brandMarkText", void 0);
+__decorate([
+    (0, mongoose_1.Prop)({ default: true }),
+    __metadata("design:type", Boolean)
+], AppSettings.prototype, "brandShowName", void 0);
+__decorate([
+    (0, mongoose_1.Prop)({ default: true }),
+    __metadata("design:type", Boolean)
+], AppSettings.prototype, "brandNameBeforeMark", void 0);
+__decorate([
+    (0, mongoose_1.Prop)({ default: 'chevron-down' }),
+    __metadata("design:type", String)
+], AppSettings.prototype, "uiIconSelectChevron", void 0);
 __decorate([
     (0, mongoose_1.Prop)({ type: Object, default: {} }),
     __metadata("design:type", Object)

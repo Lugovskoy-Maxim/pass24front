@@ -72,11 +72,11 @@ let SeedService = SeedService_1 = class SeedService {
     async seedAdminUser() {
         const email = this.configService.get('ADMIN_EMAIL', 'admin@pass24.local').toLowerCase();
         const password = this.configService.get('ADMIN_PASSWORD', 'admin123');
-        const fullName = this.configService.get('ADMIN_FULL_NAME', 'Администратор БЦ');
+        const fullName = this.configService.get('ADMIN_FULL_NAME', 'Супер-администратор');
         const role = this.configService.get('ADMIN_ROLE', enums_1.UserRole.ADMIN);
         const existing = await this.userModel.findOne({ email });
         if (existing) {
-            this.logger.log(`Admin user already exists: ${email}`);
+            this.logger.log(`Супер-администратор уже существует: ${email}`);
             return;
         }
         const hashed = await bcrypt.hash(password, 10);
@@ -87,7 +87,7 @@ let SeedService = SeedService_1 = class SeedService {
             password: hashed,
             isActive: true,
         });
-        this.logger.log(`Admin user created: ${email}`);
+        this.logger.log(`Супер-администратор создан: ${email} (роль: ${role})`);
     }
     async seedDevTestData() {
         const seedEnabled = this.configService.get('SEED_DEV_DATA', process.env.NODE_ENV === 'production' ? 'false' : 'true');

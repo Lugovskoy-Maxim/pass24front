@@ -274,9 +274,7 @@ export function PassCardBase({
             </span>
           )}
 
-          {pass.visitPurpose && (
-            <span className="pass-card__chip text-[var(--muted)]" title={pass.visitPurpose}>{pass.visitPurpose}</span>
-          )}
+
 
           {!showCreator && (pass.creatorName || pass.creatorCompany) && !isCompact && (
             <span className="pass-card__chip text-[var(--muted)] text-xs" title={[pass.creatorName, pass.creatorCompany].filter(Boolean).join(' · ')}>

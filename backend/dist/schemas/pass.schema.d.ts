@@ -8,6 +8,9 @@ export declare class Pass {
     creatorPhone?: string;
     visitorName: string;
     visitorPhone?: string;
+    visitorPassportSeries?: string;
+    visitorPassportNumber?: string;
+    visitorPassportIssuedBy?: string;
     companyName?: string;
     visitPurpose?: string;
     passType: string;
@@ -99,6 +102,33 @@ export declare const PassSchema: import("mongoose").Schema<Pass, import("mongoos
         id: string;
     }> | undefined;
     visitorPhone?: import("mongoose").SchemaDefinitionProperty<string | undefined, Pass, Document<unknown, {}, Pass, {
+        id: string;
+    }, import("mongoose").DefaultSchemaOptions> & Omit<Pass & {
+        _id: Types.ObjectId;
+    } & {
+        __v: number;
+    }, "id"> & {
+        id: string;
+    }> | undefined;
+    visitorPassportSeries?: import("mongoose").SchemaDefinitionProperty<string | undefined, Pass, Document<unknown, {}, Pass, {
+        id: string;
+    }, import("mongoose").DefaultSchemaOptions> & Omit<Pass & {
+        _id: Types.ObjectId;
+    } & {
+        __v: number;
+    }, "id"> & {
+        id: string;
+    }> | undefined;
+    visitorPassportNumber?: import("mongoose").SchemaDefinitionProperty<string | undefined, Pass, Document<unknown, {}, Pass, {
+        id: string;
+    }, import("mongoose").DefaultSchemaOptions> & Omit<Pass & {
+        _id: Types.ObjectId;
+    } & {
+        __v: number;
+    }, "id"> & {
+        id: string;
+    }> | undefined;
+    visitorPassportIssuedBy?: import("mongoose").SchemaDefinitionProperty<string | undefined, Pass, Document<unknown, {}, Pass, {
         id: string;
     }, import("mongoose").DefaultSchemaOptions> & Omit<Pass & {
         _id: Types.ObjectId;

@@ -6,7 +6,7 @@ import { ProtectedLayout } from '@/components/ProtectedLayout';
 import { useAuth } from '@/lib/auth';
 import { useConfig } from '@/hooks/useConfig';
 import { useToast } from '@/components/Toast';
-import { api, PassType, TYPE_LABELS, VISIT_PURPOSES, getErrorMessage } from '@/lib/api';
+import { api, PassType, TYPE_LABELS, getErrorMessage } from '@/lib/api';
 import { FormErrorBanner, FormField, FormInput, FormSelect, FormTextarea } from '@/components/FormField';
 import { FieldErrors, hasFieldErrors, validateNewPassForm } from '@/lib/form-validation';
 import { getVisitorNameLabel } from '@/lib/person-name';
@@ -25,7 +25,6 @@ function NewPassForm() {
   const [visitorName, setVisitorName] = useState('');
   const [visitorPhone, setVisitorPhone] = useState('');
   const [companyName, setCompanyName] = useState('');
-  const [visitPurpose, setVisitPurpose] = useState('Гость');
   const [propertyId, setPropertyId] = useState('');
   const enabledTypes = (Object.keys(TYPE_LABELS) as PassType[]).filter(
     (key) => !user?.enabledPassTypes?.length || user.enabledPassTypes.includes(key),
@@ -82,7 +81,6 @@ function NewPassForm() {
         setVisitorName(template.visitorName);
         setVisitorPhone(template.visitorPhone || '');
         setCompanyName(template.companyName || user?.company || '');
-        setVisitPurpose(template.visitPurpose || 'Гость');
         if (enabledTypes.includes(template.passType)) setPassType(template.passType);
         setVehiclePlate(template.vehiclePlate || '');
         setVehicleModel(template.vehicleModel || '');
@@ -159,7 +157,6 @@ function NewPassForm() {
         visitorName: visitorName.trim(),
         visitorPhone: visitorPhone.trim() || undefined,
         companyName: companyName.trim() || undefined,
-        visitPurpose: visitPurpose.trim() || undefined,
         passType,
         vehiclePlate: passType === 'parking' ? vehiclePlate.trim().toUpperCase() : undefined,
         vehicleModel: passType === 'parking' ? vehicleModel.trim() || undefined : undefined,
@@ -244,12 +241,6 @@ function NewPassForm() {
             />
           </FormField>
         </div>
-
-        <FormField id="visitPurpose" label="Цель визита">
-          <FormSelect id="visitPurpose" value={visitPurpose} onChange={(e) => setVisitPurpose(e.target.value)}>
-            {VISIT_PURPOSES.map((p) => <option key={p} value={p}>{p}</option>)}
-          </FormSelect>
-        </FormField>
 
         {passType === 'parking' && (
           <div className="form-grid-2">

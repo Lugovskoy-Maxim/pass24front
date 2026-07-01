@@ -4,5 +4,10 @@ export declare class UpdateSiteSettingsDto {
     siteTagline?: string;
     sitePhone?: string;
     siteEmail?: string;
+    brandMarkType?: string;
+    brandMarkText?: string;
+    brandShowName?: boolean;
+    brandNameBeforeMark?: boolean;
+    uiIconSelectChevron?: string;
     uiLabels?: Record<string, unknown>;
 }

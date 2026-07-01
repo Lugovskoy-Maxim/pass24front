@@ -17,6 +17,11 @@ class UpdateSiteSettingsDto {
     siteTagline;
     sitePhone;
     siteEmail;
+    brandMarkType;
+    brandMarkText;
+    brandShowName;
+    brandNameBeforeMark;
+    uiIconSelectChevron;
     uiLabels;
 }
 exports.UpdateSiteSettingsDto = UpdateSiteSettingsDto;
@@ -50,6 +55,33 @@ __decorate([
     (0, class_validator_1.MaxLength)(120),
     __metadata("design:type", String)
 ], UpdateSiteSettingsDto.prototype, "siteEmail", void 0);
+__decorate([
+    (0, class_validator_1.IsOptional)(),
+    (0, class_validator_1.IsIn)(['image', 'text']),
+    __metadata("design:type", String)
+], UpdateSiteSettingsDto.prototype, "brandMarkType", void 0);
+__decorate([
+    (0, class_validator_1.IsOptional)(),
+    (0, class_validator_1.IsString)(),
+    (0, class_validator_1.MaxLength)(8),
+    __metadata("design:type", String)
+], UpdateSiteSettingsDto.prototype, "brandMarkText", void 0);
+__decorate([
+    (0, class_validator_1.IsOptional)(),
+    (0, class_validator_1.IsBoolean)(),
+    __metadata("design:type", Boolean)
+], UpdateSiteSettingsDto.prototype, "brandShowName", void 0);
+__decorate([
+    (0, class_validator_1.IsOptional)(),
+    (0, class_validator_1.IsBoolean)(),
+    __metadata("design:type", Boolean)
+], UpdateSiteSettingsDto.prototype, "brandNameBeforeMark", void 0);
+__decorate([
+    (0, class_validator_1.IsOptional)(),
+    (0, class_validator_1.IsString)(),
+    (0, class_validator_1.MaxLength)(40),
+    __metadata("design:type", String)
+], UpdateSiteSettingsDto.prototype, "uiIconSelectChevron", void 0);
 __decorate([
     (0, class_validator_1.IsOptional)(),
     (0, class_validator_1.IsObject)(),

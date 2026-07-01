@@ -25,6 +25,7 @@ const EXPORT_LIMIT = 10_000;
 const ACTION_LABELS: Record<string, string> = {
   'pass.create': 'Создание пропуска',
   'pass.approved': 'Одобрение',
+  'pass.visitor_data_updated': 'Паспортные данные посетителя',
   'pass.rejected': 'Отклонение',
   'pass.cancelled': 'Отмена',
   'pass.check_in': 'Вход в БЦ',

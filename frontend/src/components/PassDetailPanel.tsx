@@ -2,7 +2,10 @@
 
 import Link from 'next/link';
 import {
+  Building2,
   Calendar,
+  History,
+  IdCard,
   MapPin,
   MessageSquare,
   Phone,
@@ -22,7 +25,11 @@ import {
   getPassStatusStripeClass,
 } from '@/lib/pass-status';
 import { useConfig } from '@/hooks/useConfig';
+import { useAuth } from '@/lib/auth';
+import { canViewAllPasses, canUseReception, hasPermission } from '@/lib/permissions';
+import { buildHistoryHref } from '@/lib/visit-history';
 import { PassVisitTimeline } from './PassVisitTimeline';
+import { PassVisitorDataForm } from './PassVisitorDataForm';
 import { StatusBadge } from './StatusBadge';
 
 function DetailRow({ label, value, mono }: { label: string; value?: React.ReactNode; mono?: boolean }) {
@@ -32,6 +39,18 @@ function DetailRow({ label, value, mono }: { label: string; value?: React.ReactN
       <dt className="text-[10px] uppercase tracking-wide text-[var(--muted)] mb-0.5">{label}</dt>
       <dd className={`text-sm font-medium break-words ${mono ? 'font-mono' : ''}`}>{value}</dd>
     </div>
+  );
+}
+
+function HistoryLink({ href, label }: { href: string; label: string }) {
+  return (
+    <Link
+      href={href}
+      className="inline-flex items-center gap-1 text-xs text-link hover:underline mt-0.5"
+    >
+      <History className="w-3 h-3" />
+      {label}
+    </Link>
   );
 }
 
@@ -45,16 +64,31 @@ function formatDateTime(iso?: string) {
   });
 }
 
+function formatPassport(pass: Pass) {
+  if (!pass.visitorPassportSeries && !pass.visitorPassportNumber) return undefined;
+  const base = [pass.visitorPassportSeries, pass.visitorPassportNumber].filter(Boolean).join(' ');
+  return pass.visitorPassportIssuedBy ? `${base} · ${pass.visitorPassportIssuedBy}` : base;
+}
+
 interface PassDetailPanelProps {
   pass: Pass;
   labels?: UiLabels;
   showCreator?: boolean;
   actions?: React.ReactNode;
   children?: React.ReactNode;
+  onPassUpdated?: (pass: Pass) => void;
 }
 
-export function PassDetailPanel({ pass, labels: labelsProp, showCreator, actions, children }: PassDetailPanelProps) {
+export function PassDetailPanel({
+  pass,
+  labels: labelsProp,
+  showCreator,
+  actions,
+  children,
+  onPassUpdated,
+}: PassDetailPanelProps) {
   const config = useConfig();
+  const { user } = useAuth();
   const labels = labelsProp || getUiLabels(config);
   const overdueKind = getGuestOverdueKind(pass);
   const stillInside = overdueKind !== null;
@@ -62,6 +96,17 @@ export function PassDetailPanel({ pass, labels: labelsProp, showCreator, actions
   const visitWindow = pass.visitTimeFrom
     ? `${pass.visitTimeFrom}${pass.visitTimeTo ? ` – ${pass.visitTimeTo}` : ''}`
     : null;
+
+  const canSeeHistory = canViewAllPasses(user) || canUseReception(user) || hasPermission(user, 'admin.panel');
+  const canEditPassport = canUseReception(user) || hasPermission(user, 'passes.approve') || hasPermission(user, 'admin.panel');
+
+  const visitorHistoryHref = buildHistoryHref({
+    scope: 'visitor',
+    visitorName: pass.visitorName,
+    visitorPhone: pass.visitorPhone,
+    visitorPassportSeries: pass.visitorPassportSeries,
+    visitorPassportNumber: pass.visitorPassportNumber,
+  });
 
   return (
     <div className={`${getPassCardShellClass({ overdue: stillInside })} min-w-0 max-w-full overflow-hidden`}>
@@ -82,6 +127,9 @@ export function PassDetailPanel({ pass, labels: labelsProp, showCreator, actions
               </div>
               <div className="pass-card__main flex-1 min-w-0">
                 <h3 className="pass-card__title text-lg" title={pass.visitorName}>{pass.visitorName}</h3>
+                {canSeeHistory && (
+                  <HistoryLink href={visitorHistoryHref} label="История визитов" />
+                )}
                 <p className="pass-card__mono text-sm font-semibold mt-1" title={pass.passNumber}>{pass.passNumber}</p>
                 <div className="pass-card__badges mt-2">
                   <StatusBadge status={pass.status} labels={labels} overdueKind={overdueKind} />
@@ -93,11 +141,23 @@ export function PassDetailPanel({ pass, labels: labelsProp, showCreator, actions
             </div>
 
             <div className="pass-card__chips mt-3">
-              <span className="pass-card__chip text-xs bg-[var(--surface-elevated)] border border-[var(--border)] rounded-md px-2 py-1" title={`${labels.card.office} ${pass.office}${pass.floor ? ` · ${pass.floor}` : ''}`}>
-                <MapPin className="w-3.5 h-3.5 text-[var(--muted)] shrink-0" />
-                {labels.card.office} {pass.office}
-                {pass.floor && ` · ${pass.floor} ${labels.card.floorSuffix}`}
-              </span>
+              {canSeeHistory && pass.officeId ? (
+                <Link
+                  href={buildHistoryHref({ scope: 'office', officeId: pass.officeId, officeLabel: pass.office })}
+                  className="pass-card__chip text-xs bg-[var(--surface-elevated)] border border-[var(--border)] rounded-md px-2 py-1 hover:bg-[var(--surface-muted)]"
+                  title={`История офиса ${pass.office}`}
+                >
+                  <MapPin className="w-3.5 h-3.5 text-[var(--muted)] shrink-0" />
+                  {labels.card.office} {pass.office}
+                  {pass.floor && ` · ${pass.floor} ${labels.card.floorSuffix}`}
+                </Link>
+              ) : (
+                <span className="pass-card__chip text-xs bg-[var(--surface-elevated)] border border-[var(--border)] rounded-md px-2 py-1" title={`${labels.card.office} ${pass.office}${pass.floor ? ` · ${pass.floor}` : ''}`}>
+                  <MapPin className="w-3.5 h-3.5 text-[var(--muted)] shrink-0" />
+                  {labels.card.office} {pass.office}
+                  {pass.floor && ` · ${pass.floor} ${labels.card.floorSuffix}`}
+                </span>
+              )}
               <span className="pass-card__chip text-xs bg-[var(--surface-elevated)] border border-[var(--border)] rounded-md px-2 py-1" title={`${pass.visitDate}${visitWindow ? ` · ${visitWindow}` : ''}`}>
                 <Calendar className="w-3.5 h-3.5 text-[var(--muted)] shrink-0" />
                 {pass.visitDate}
@@ -120,11 +180,48 @@ export function PassDetailPanel({ pass, labels: labelsProp, showCreator, actions
           </div>
 
           <dl className="px-4 py-2 divide-y divide-[var(--border)]">
-            <DetailRow label={labels.card.company} value={pass.companyName} />
-            <DetailRow label={labels.card.businessCenter} value={pass.businessCenterName} />
-            <DetailRow label={labels.card.visitPurpose} value={pass.visitPurpose} />
+            {pass.companyName && (
+              <div className="py-2 border-b border-[var(--border)]">
+                <dt className="text-[10px] uppercase tracking-wide text-[var(--muted)] mb-0.5">{labels.card.company}</dt>
+                <dd className="text-sm font-medium break-words">
+                  {canSeeHistory ? (
+                    <Link href={buildHistoryHref({ scope: 'company', companyName: pass.companyName })} className="text-link hover:underline">
+                      {pass.companyName}
+                    </Link>
+                  ) : pass.companyName}
+                </dd>
+              </div>
+            )}
+            {pass.businessCenterName && (
+              <div className="py-2 border-b border-[var(--border)]">
+                <dt className="text-[10px] uppercase tracking-wide text-[var(--muted)] mb-0.5">{labels.card.businessCenter}</dt>
+                <dd className="text-sm font-medium break-words">
+                  {canSeeHistory && pass.propertyId ? (
+                    <Link href={buildHistoryHref({ scope: 'bc', propertyId: pass.propertyId, bcName: pass.businessCenterName })} className="text-link hover:underline inline-flex items-center gap-1">
+                      <Building2 className="w-3.5 h-3.5" />
+                      {pass.businessCenterName}
+                    </Link>
+                  ) : pass.businessCenterName}
+                </dd>
+              </div>
+            )}
+            <DetailRow label={labels.card.type} value={TYPE_LABELS[pass.passType as PassType] || pass.passType} />
             <DetailRow label={labels.card.phone} value={pass.visitorPhone && (
-              <a href={`tel:${pass.visitorPhone}`} className="text-link hover:underline">{pass.visitorPhone}</a>
+              <span className="flex flex-col">
+                <a href={`tel:${pass.visitorPhone}`} className="text-link hover:underline">{pass.visitorPhone}</a>
+                {canSeeHistory && (
+                  <HistoryLink
+                    href={buildHistoryHref({ scope: 'visitor', visitorPhone: pass.visitorPhone })}
+                    label="История по телефону"
+                  />
+                )}
+              </span>
+            )} />
+            <DetailRow label="Паспорт" value={formatPassport(pass) && (
+              <span className="flex items-start gap-1.5">
+                <IdCard className="w-3.5 h-3.5 text-[var(--muted)] shrink-0 mt-0.5" />
+                <span>{formatPassport(pass)}</span>
+              </span>
             )} />
             <DetailRow
               label={labels.card.vehicle}
@@ -176,6 +273,10 @@ export function PassDetailPanel({ pass, labels: labelsProp, showCreator, actions
               </div>
             )}
           </dl>
+
+          {canEditPassport && onPassUpdated && (
+            <PassVisitorDataForm pass={pass} onUpdated={onPassUpdated} />
+          )}
 
           {children}
 

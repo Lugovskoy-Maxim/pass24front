@@ -1,7 +1,7 @@
 'use client';
 
 import { Suspense, useEffect, useState, useCallback, FormEvent } from 'react';
-import { useSearchParams } from 'next/navigation';
+import { useRouter, useSearchParams } from 'next/navigation';
 import { LogIn, LogOut, Users, CheckCircle, Clock, AlertCircle, Search, X } from 'lucide-react';
 import { ProtectedLayout } from '@/components/ProtectedLayout';
 import { PassListCard } from '@/components/PassListCard';
@@ -15,6 +15,7 @@ import { useElementInView } from '@/hooks/useElementInView';
 import { useOverdueGuests } from '@/hooks/useOverdueGuests';
 import { OverdueGuestsAlert } from '@/components/OverdueGuestsAlert';
 import { canSeeOverdueAlerts } from '@/lib/permissions';
+import { buildHistoryHref } from '@/lib/visit-history';
 import { useAuth } from '@/lib/auth';
 import { getGuestOverdueKind, getUiLabels } from '@/lib/ui-labels';
 import { getAccentStatClass, getSectionHeadingClass } from '@/lib/pass-status';
@@ -28,6 +29,7 @@ function ControlPageContent() {
   const { passes: overduePasses, refresh: refreshOverdue } = useOverdueGuests(showOverdueAlerts);
   const overdueIds = new Set(overduePasses.map((pass) => pass.id));
   const receptionSections = getReceptionSections(labels);
+  const router = useRouter();
   const searchParams = useSearchParams();
   const [date, setDate] = useState(new Date().toISOString().slice(0, 10));
   const [passes, setPasses] = useState<Pass[]>([]);
@@ -86,6 +88,18 @@ function ControlPageContent() {
   const runLookup = useCallback(async (q: string) => {
     const trimmed = q.trim();
     if (!trimmed) return;
+
+    const isPassNumber = /^PS-/i.test(trimmed);
+    if (!isPassNumber) {
+      const digits = trimmed.replace(/\D/g, '');
+      const isPhone = digits.length >= 7;
+      router.push(buildHistoryHref({
+        scope: 'visitor',
+        ...(isPhone ? { visitorPhone: trimmed } : { visitorName: trimmed }),
+      }));
+      return;
+    }
+
     setLookupLoading(true);
     try {
       const { pass } = await api.lookupPass(trimmed);
@@ -109,7 +123,7 @@ function ControlPageContent() {
     } finally {
       setLookupLoading(false);
     }
-  }, [toast, labels, passes, date]);
+  }, [toast, labels, passes, date, router]);
 
   useEffect(() => {
     const passFromUrl = searchParams.get('pass');
@@ -305,7 +319,7 @@ function ControlPageContent() {
           <Search className="absolute left-3 top-1/2 -translate-y-1/2 w-4 h-4 text-[var(--muted)]" />
           <input
             className="input input--icon-left font-mono"
-            placeholder={labels.reception.lookupPlaceholder}
+            placeholder="Номер пропуска, ФИО, телефон или паспорт"
             value={lookupQuery}
             onChange={(e) => setLookupQuery(e.target.value)}
           />
@@ -437,6 +451,10 @@ function ControlPageContent() {
               labels={labels}
               showCreator
               actions={renderActions(selected)}
+              onPassUpdated={(updated) => {
+                setPasses((prev) => prev.map((p) => (p.id === updated.id ? updated : p)));
+                setSelected(updated);
+              }}
             />
           </div>
         )}
