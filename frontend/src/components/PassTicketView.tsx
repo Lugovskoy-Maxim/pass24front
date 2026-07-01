@@ -21,7 +21,6 @@ import {
 } from '@/lib/pass-status';
 import { SharePassActions } from './SharePassActions';
 import { PassVisitTimeline } from './PassVisitTimeline';
-import { StatusBadge } from './StatusBadge';
 
 interface PassTicketViewProps {
   ticket: PublicPassTicket;
@@ -92,7 +91,6 @@ export function PassTicketView({
             {ticket.passNumber}
           </p>
           <div className="flex flex-wrap items-center justify-center gap-1.5 pass-ticket__badges">
-            <StatusBadge status={ticket.status} labels={labels} size="sm" />
             <span className="text-[10px] px-2 py-0.5 rounded-full surface-muted border border-[var(--border)] text-[var(--muted)]">
               {typeLabel}
             </span>

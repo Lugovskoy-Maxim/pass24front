@@ -7,7 +7,7 @@ import { api, getErrorMessage } from '@/lib/api';
 import { useAuth } from '@/lib/auth';
 import { useConfig } from '@/hooks/useConfig';
 import { canManageTicketScan, hasPermission, isAdminPanelUser } from '@/lib/permissions';
-import { getStatusLabel, getUiLabels } from '@/lib/ui-labels';
+import { getUiLabels } from '@/lib/ui-labels';
 import { useToast } from '@/components/Toast';
 import { PassVisitorDataForm } from '@/components/PassVisitorDataForm';
 
@@ -25,7 +25,6 @@ export function PassTicketStaffPanel({ passNumber, onPassUpdated }: PassTicketSt
   const [loading, setLoading] = useState(false);
   const [actionLoading, setActionLoading] = useState(false);
   const [rejectReason, setRejectReason] = useState('');
-  const [showPassport, setShowPassport] = useState(false);
 
   const canManage = canManageTicketScan(user);
   const canApprove = hasPermission(user, 'passes.approve') || isAdminPanelUser(user);
@@ -76,6 +75,11 @@ export function PassTicketStaffPanel({ passNumber, onPassUpdated }: PassTicketSt
     }
   };
 
+  const hasActions = pass && (
+    (canApprove && pass.status === 'pending')
+    || (canReception && (pass.status === 'approved' || pass.status === 'active'))
+  );
+
   return (
     <section className="pass-ticket-staff" aria-label="Действия ресепшн">
       <div className="pass-ticket-staff__inner card overflow-hidden">
@@ -90,75 +94,63 @@ export function PassTicketStaffPanel({ passNumber, onPassUpdated }: PassTicketSt
           <p className="px-3 py-4 text-sm text-[var(--muted)]">Нет доступа к управлению пропуском</p>
         ) : (
           <>
-            <div className="px-3 py-3 space-y-2">
-              {canApprove && pass.status === 'pending' && (
-                <>
+            {hasActions && (
+              <div className="px-3 py-3 space-y-2 border-b border-[var(--border)] bg-[var(--surface-muted)]">
+                {canApprove && pass.status === 'pending' && (
+                  <>
+                    <button
+                      type="button"
+                      className="btn btn-success w-full text-sm"
+                      disabled={actionLoading}
+                      onClick={() => handleAction('approve')}
+                    >
+                      {labels.buttons.approve}
+                    </button>
+                    <input
+                      className="input text-sm"
+                      placeholder={labels.reception.rejectPlaceholder}
+                      value={rejectReason}
+                      onChange={(e) => setRejectReason(e.target.value)}
+                    />
+                    <button
+                      type="button"
+                      className="btn btn-danger w-full text-sm"
+                      disabled={actionLoading || !rejectReason.trim()}
+                      onClick={() => handleAction('reject')}
+                    >
+                      {labels.buttons.reject}
+                    </button>
+                  </>
+                )}
+                {canReception && pass.status === 'approved' && (
                   <button
                     type="button"
                     className="btn btn-success w-full text-sm"
                     disabled={actionLoading}
-                    onClick={() => handleAction('approve')}
+                    onClick={() => handleAction('checkin')}
                   >
-                    {labels.buttons.approve}
+                    {labels.buttons.checkInBuilding}
                   </button>
-                  <input
-                    className="input text-sm"
-                    placeholder={labels.reception.rejectPlaceholder}
-                    value={rejectReason}
-                    onChange={(e) => setRejectReason(e.target.value)}
-                  />
+                )}
+                {canReception && pass.status === 'active' && (
                   <button
                     type="button"
-                    className="btn btn-danger w-full text-sm"
-                    disabled={actionLoading || !rejectReason.trim()}
-                    onClick={() => handleAction('reject')}
+                    className="btn btn-primary w-full text-sm"
+                    disabled={actionLoading}
+                    onClick={() => handleAction('checkout')}
                   >
-                    {labels.buttons.reject}
+                    {labels.buttons.checkOut}
                   </button>
-                </>
-              )}
-              {canReception && pass.status === 'approved' && (
-                <button
-                  type="button"
-                  className="btn btn-success w-full text-sm"
-                  disabled={actionLoading}
-                  onClick={() => handleAction('checkin')}
-                >
-                  {labels.buttons.checkInBuilding}
-                </button>
-              )}
-              {canReception && pass.status === 'active' && (
-                <button
-                  type="button"
-                  className="btn btn-primary w-full text-sm"
-                  disabled={actionLoading}
-                  onClick={() => handleAction('checkout')}
-                >
-                  {labels.buttons.checkOut}
-                </button>
-              )}
-              {!['pending', 'approved', 'active'].includes(pass.status) && (
-                <p className="text-sm text-[var(--muted)] text-center py-1">
-                  Действий для статуса «{getStatusLabel(pass.status, labels)}» нет
-                </p>
-              )}
-              <button
-                type="button"
-                className="btn btn-secondary w-full text-sm"
-                onClick={() => setShowPassport((v) => !v)}
-              >
-                {showPassport ? 'Скрыть паспортные данные' : 'Дополнить паспортные данные'}
-              </button>
-            </div>
-            {showPassport && (
-              <PassVisitorDataForm
-                pass={pass}
-                onUpdated={(updated) => {
-                  setPass(updated);
-                  onPassUpdated();
-                }}
-              />
+                )}
+              </div>
             )}
+            <PassVisitorDataForm
+              pass={pass}
+              onUpdated={(updated) => {
+                setPass(updated);
+                onPassUpdated();
+              }}
+            />
           </>
         )}
       </div>

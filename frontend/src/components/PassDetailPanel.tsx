@@ -30,7 +30,7 @@ import { canViewAllPasses, canUseReception, hasPermission } from '@/lib/permissi
 import { buildHistoryHref } from '@/lib/visit-history';
 import { PassVisitTimeline } from './PassVisitTimeline';
 import { PassVisitorDataForm } from './PassVisitorDataForm';
-import { StatusBadge } from './StatusBadge';
+import { OverdueBadge } from './StatusBadge';
 
 function DetailRow({ label, value, mono }: { label: string; value?: React.ReactNode; mono?: boolean }) {
   if (value === undefined || value === null || value === '') return null;
@@ -132,7 +132,7 @@ export function PassDetailPanel({
                 )}
                 <p className="pass-card__mono text-sm font-semibold mt-1" title={pass.passNumber}>{pass.passNumber}</p>
                 <div className="pass-card__badges mt-2">
-                  <StatusBadge status={pass.status} labels={labels} overdueKind={overdueKind} />
+                  {overdueKind && <OverdueBadge kind={overdueKind} labels={labels} size="sm" />}
                   <span className="text-xs px-2 py-0.5 rounded-full bg-[var(--surface-elevated)] border border-[var(--border)] text-[var(--muted)] max-w-full min-w-0 truncate">
                     {TYPE_LABELS[pass.passType as PassType] || pass.passType}
                   </span>
@@ -173,6 +173,12 @@ export function PassDetailPanel({
               </Link>
             </div>
           </div>
+
+          {actions && (
+            <div className="pass-card__actions px-4 py-3 border-b border-[var(--border)] bg-[var(--surface-muted)] space-y-2">
+              {actions}
+            </div>
+          )}
 
           <div className={`pass-card__timeline px-4 py-4 border-b border-[var(--border)] ${isTerminal ? 'bg-[var(--surface-muted)]' : 'bg-[var(--surface)]'}`}>
             <p className="text-[10px] uppercase tracking-wide text-[var(--muted)] mb-3">{labels.passes.detailTimeline}</p>
@@ -254,9 +260,6 @@ export function PassDetailPanel({
             )}
             <DetailRow label={labels.card.checkIn} value={formatDateTime(pass.checkedInAt)} />
             <DetailRow label={labels.card.checkOut} value={formatDateTime(pass.checkedOutAt)} />
-            {pass.approvedAt && (
-              <DetailRow label={labels.timeline.approve} value={formatDateTime(pass.approvedAt)} />
-            )}
             {pass.comment && (
               <div className="py-2 border-b border-[var(--border)]">
                 <dt className="text-[10px] uppercase tracking-wide text-[var(--muted)] mb-1 flex items-center gap-1">
@@ -279,12 +282,6 @@ export function PassDetailPanel({
           )}
 
           {children}
-
-          {actions && (
-            <div className="pass-card__actions px-4 py-4 border-t border-[var(--border)] surface-muted/50">
-              {actions}
-            </div>
-          )}
         </div>
       </div>
     </div>

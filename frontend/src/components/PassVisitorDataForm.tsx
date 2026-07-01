@@ -1,7 +1,7 @@
 'use client';
 
 import { FormEvent, useEffect, useState } from 'react';
-import { IdCard } from 'lucide-react';
+import { ChevronDown, IdCard } from 'lucide-react';
 import { Pass } from '@/lib/api';
 import { FormField, FormInput } from '@/components/FormField';
 import { useToast } from '@/components/Toast';
@@ -10,9 +10,10 @@ import { api } from '@/lib/api';
 interface PassVisitorDataFormProps {
   pass: Pass;
   onUpdated: (pass: Pass) => void;
+  collapsible?: boolean;
 }
 
-export function PassVisitorDataForm({ pass, onUpdated }: PassVisitorDataFormProps) {
+export function PassVisitorDataForm({ pass, onUpdated, collapsible = true }: PassVisitorDataFormProps) {
   const { toast } = useToast();
   const [series, setSeries] = useState(pass.visitorPassportSeries || '');
   const [number, setNumber] = useState(pass.visitorPassportNumber || '');
@@ -24,6 +25,8 @@ export function PassVisitorDataForm({ pass, onUpdated }: PassVisitorDataFormProp
     setNumber(pass.visitorPassportNumber || '');
     setIssuedBy(pass.visitorPassportIssuedBy || '');
   }, [pass.id, pass.visitorPassportSeries, pass.visitorPassportNumber, pass.visitorPassportIssuedBy]);
+
+  const hasData = !!(pass.visitorPassportSeries || pass.visitorPassportNumber || pass.visitorPassportIssuedBy);
 
   const handleSubmit = async (e: FormEvent) => {
     e.preventDefault();
@@ -43,12 +46,8 @@ export function PassVisitorDataForm({ pass, onUpdated }: PassVisitorDataFormProp
     }
   };
 
-  return (
-    <form onSubmit={handleSubmit} className="px-4 py-3 border-t border-[var(--border)] bg-[var(--surface-muted)] space-y-3">
-      <div className="flex items-center gap-2 text-xs font-medium uppercase tracking-wide text-[var(--muted)]">
-        <IdCard className="w-3.5 h-3.5" />
-        Паспортные данные (необязательно)
-      </div>
+  const fields = (
+    <>
       <div className="grid grid-cols-2 gap-2">
         <FormField id={`passport-series-${pass.id}`} label="Серия">
           <FormInput id={`passport-series-${pass.id}`} value={series} onChange={(e) => setSeries(e.target.value)} placeholder="4510" maxLength={10} />
@@ -61,8 +60,40 @@ export function PassVisitorDataForm({ pass, onUpdated }: PassVisitorDataFormProp
         <FormInput id={`passport-issued-${pass.id}`} value={issuedBy} onChange={(e) => setIssuedBy(e.target.value)} placeholder="ОУФМС..." />
       </FormField>
       <button type="submit" className="btn btn-secondary text-sm w-full" disabled={saving}>
-        {saving ? 'Сохранение...' : 'Сохранить паспортные данные'}
+        {saving ? 'Сохранение...' : 'Сохранить'}
       </button>
-    </form>
+    </>
+  );
+
+  if (!collapsible) {
+    return (
+      <form onSubmit={handleSubmit} className="px-4 py-3 border-t border-[var(--border)] bg-[var(--surface-muted)] space-y-3">
+        <div className="flex items-center gap-2 text-xs font-medium uppercase tracking-wide text-[var(--muted)]">
+          <IdCard className="w-3.5 h-3.5" />
+          Паспортные данные (необязательно)
+        </div>
+        {fields}
+      </form>
+    );
+  }
+
+  return (
+    <details className="pass-passport-spoiler border-t border-[var(--border)] bg-[var(--surface-muted)]">
+      <summary className="pass-passport-spoiler__summary">
+        <span className="flex items-center gap-2 min-w-0">
+          <IdCard className="w-3.5 h-3.5 shrink-0" />
+          <span className="truncate">Паспортные данные</span>
+          {hasData && (
+            <span className="text-[10px] font-medium normal-case tracking-normal text-[var(--accent)] shrink-0">
+              заполнено
+            </span>
+          )}
+        </span>
+        <ChevronDown className="pass-passport-spoiler__chevron w-4 h-4 shrink-0" aria-hidden />
+      </summary>
+      <form onSubmit={handleSubmit} className="pass-passport-spoiler__body space-y-3">
+        {fields}
+      </form>
+    </details>
   );
 }

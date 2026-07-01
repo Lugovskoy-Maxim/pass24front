@@ -1169,6 +1169,40 @@ input[type="checkbox"]:not(.checkbox) {
   transition: transform 0.15s ease, box-shadow 0.15s ease;
 }
 
+/* ── Спойлер паспортных данных ── */
+.pass-passport-spoiler__summary {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 0.5rem;
+  padding: 0.625rem 1rem;
+  font-size: 0.75rem;
+  font-weight: 600;
+  text-transform: uppercase;
+  letter-spacing: 0.04em;
+  color: var(--muted);
+  cursor: pointer;
+  list-style: none;
+  user-select: none;
+}
+
+.pass-passport-spoiler__summary::-webkit-details-marker {
+  display: none;
+}
+
+.pass-passport-spoiler__chevron {
+  color: var(--muted);
+  transition: transform 0.15s ease;
+}
+
+.pass-passport-spoiler[open] .pass-passport-spoiler__chevron {
+  transform: rotate(180deg);
+}
+
+.pass-passport-spoiler__body {
+  padding: 0 1rem 0.875rem;
+}
+
 /* ── PWA: предложение установить ── */
 .pwa-install {
   position: fixed;
