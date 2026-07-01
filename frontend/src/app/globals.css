@@ -1169,6 +1169,103 @@ input[type="checkbox"]:not(.checkbox) {
   transition: transform 0.15s ease, box-shadow 0.15s ease;
 }
 
+/* ── PWA: предложение установить ── */
+.pwa-install {
+  position: fixed;
+  left: 0;
+  right: 0;
+  bottom: 0;
+  z-index: 60;
+  padding: 0.75rem;
+  padding-bottom: calc(0.75rem + env(safe-area-inset-bottom, 0px));
+  pointer-events: none;
+}
+
+@media (max-width: 639px) {
+  .app-main ~ .pwa-install,
+  body:has(.mobile-nav) .pwa-install {
+    bottom: calc(4.25rem + env(safe-area-inset-bottom, 0px));
+  }
+}
+
+.pwa-install__card {
+  pointer-events: auto;
+  max-width: 24rem;
+  margin: 0 auto;
+  padding: 0.75rem 0.875rem;
+  display: grid;
+  grid-template-columns: auto 1fr;
+  grid-template-rows: auto auto;
+  gap: 0.5rem 0.75rem;
+  align-items: center;
+  box-shadow: var(--card-shadow);
+}
+
+.pwa-install__close {
+  position: absolute;
+  top: 0.375rem;
+  right: 0.375rem;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  width: 1.75rem;
+  height: 1.75rem;
+  border: none;
+  border-radius: var(--radius-sm);
+  background: transparent;
+  color: var(--muted);
+  cursor: pointer;
+}
+
+.pwa-install__close:hover {
+  background: var(--surface-muted);
+  color: var(--text);
+}
+
+.pwa-install__icon img {
+  width: 2.5rem;
+  height: 2.5rem;
+  border-radius: 0.625rem;
+  object-fit: cover;
+}
+
+.pwa-install__title {
+  font-size: 0.875rem;
+  font-weight: 600;
+  line-height: 1.3;
+}
+
+.pwa-install__text {
+  font-size: 0.75rem;
+  color: var(--muted);
+  line-height: 1.4;
+  margin-top: 0.125rem;
+}
+
+.pwa-install__btn {
+  grid-column: 1 / -1;
+  width: 100%;
+  font-size: 0.875rem;
+  min-height: 2.5rem;
+}
+
+.pwa-install__ios-hint {
+  grid-column: 1 / -1;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  gap: 0.375rem;
+  font-size: 0.75rem;
+  color: var(--muted);
+  padding: 0.375rem 0.5rem;
+  border-radius: var(--radius-sm);
+  background: var(--surface-muted);
+}
+
+.pwa-install__card {
+  position: relative;
+}
+
 /* ── Страница QR-пропуска (компактно под смартфон) ── */
 .pass-ticket-page {
   display: flex;
