@@ -8,6 +8,7 @@ import { Model, Types } from 'mongoose';
 import { Office, OfficeDocument, Pass, PassDocument, Property, PropertyDocument, User, UserDocument } from '../schemas';
 import { PropertyType } from '../schemas/enums';
 import { deriveVisitPurpose, normalizePassport, normalizePersonName, normalizePhone } from '../common/pass-helpers';
+import { assertVisitDateNotPast, isValidVisitDateString } from '../common/visit-date';
 import { CreatePassDto } from './dto/create-pass.dto';
 import { PassHistoryQueryDto } from './dto/pass-history-query.dto';
 import { UpdatePassVisitorDto } from './dto/update-pass-visitor.dto';
@@ -177,9 +178,16 @@ export class PassesService implements OnModuleInit {
       throw new BadRequestException('Укажите email для отправки пропуска');
     }
 
-    const today = this.getTodayDate();
-    if (passDto.visitDate < today) {
-      throw new BadRequestException('Нельзя заказать пропуск на прошедшую дату');
+    if (!isValidVisitDateString(passDto.visitDate)) {
+      throw new BadRequestException('Некорректная дата визита');
+    }
+    try {
+      assertVisitDateNotPast(passDto.visitDate, this.getTodayDate());
+    } catch (e) {
+      if (e instanceof Error && e.message === 'PAST_DATE') {
+        throw new BadRequestException('Нельзя заказать пропуск на прошедшую дату');
+      }
+      throw new BadRequestException('Некорректная дата визита');
     }
 
     const resolved = await this.resolveOfficeFields(passDto, user);

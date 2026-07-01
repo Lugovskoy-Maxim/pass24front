@@ -1,5 +1,5 @@
 import { Transform } from 'class-transformer';
-import { IsBoolean, IsEmail, IsMongoId, IsNotEmpty, IsOptional, IsString } from 'class-validator';
+import { IsBoolean, IsEmail, IsMongoId, IsNotEmpty, IsOptional, IsString, Matches } from 'class-validator';
 
 export class CreatePassDto {
   @IsNotEmpty()
@@ -23,7 +23,8 @@ export class CreatePassDto {
   @IsOptional()
   vehicleModel?: string;
 
-  @IsNotEmpty()
+  @IsNotEmpty({ message: 'Укажите дату визита' })
+  @Matches(/^\d{4}-\d{2}-\d{2}$/, { message: 'Некорректная дата визита' })
   visitDate: string;
 
   @IsOptional()

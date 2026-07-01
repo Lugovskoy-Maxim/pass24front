@@ -9,6 +9,7 @@ import { useToast } from '@/components/Toast';
 import { api, PassType, TYPE_LABELS, getErrorMessage } from '@/lib/api';
 import { FormErrorBanner, FormField, FormInput, FormSelect, FormTextarea } from '@/components/FormField';
 import { FieldErrors, hasFieldErrors, validateNewPassForm } from '@/lib/form-validation';
+import { getLocalDateString } from '@/lib/local-date';
 import { getVisitorNameLabel } from '@/lib/person-name';
 
 function NewPassForm() {
@@ -32,7 +33,8 @@ function NewPassForm() {
   const [passType, setPassType] = useState<PassType>(enabledTypes[0] || 'visitor');
   const [vehiclePlate, setVehiclePlate] = useState('');
   const [vehicleModel, setVehicleModel] = useState('');
-  const [visitDate, setVisitDate] = useState(new Date().toISOString().slice(0, 10));
+  const todayLocal = getLocalDateString();
+  const [visitDate, setVisitDate] = useState(todayLocal);
   const [visitTimeFrom, setVisitTimeFrom] = useState('09:00');
   const [visitTimeTo, setVisitTimeTo] = useState('18:00');
   const [officeId, setOfficeId] = useState('');
@@ -136,6 +138,7 @@ function NewPassForm() {
 
     const errors = validateNewPassForm({
       visitorName,
+      visitDate,
       passType,
       vehiclePlate,
       visitTimeFrom,
@@ -261,13 +264,17 @@ function NewPassForm() {
         )}
 
         <div className="form-grid-3">
-          <FormField id="visitDate" label="Дата визита" required>
+          <FormField id="visitDate" label="Дата визита" required error={fieldErrors.visitDate}>
             <FormInput
               id="visitDate"
               type="date"
               value={visitDate}
-              min={new Date().toISOString().slice(0, 10)}
-              onChange={(e) => setVisitDate(e.target.value)}
+              min={todayLocal}
+              onChange={(e) => {
+                setVisitDate(e.target.value);
+                clearFieldError('visitDate');
+              }}
+              invalid={!!fieldErrors.visitDate}
             />
           </FormField>
           <FormField id="visitTimeFrom" label="С" error={fieldErrors.visitTimeFrom}>
