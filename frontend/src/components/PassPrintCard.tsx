@@ -1,6 +1,8 @@
 'use client';
 
-import { Pass, TYPE_LABELS } from '@/lib/api';
+import { useMemo } from 'react';
+import QRCode from 'react-qr-code';
+import { Pass, TYPE_LABELS, getPassTicketUrl } from '@/lib/api';
 import { useConfig } from '@/hooks/useConfig';
 import { getUiLabels } from '@/lib/ui-labels';
 import { getPassCardShellClass, getPassStatusTopStripeClass } from '@/lib/pass-status';
@@ -12,10 +14,32 @@ interface PassPrintCardProps {
   businessCenterName?: string;
 }
 
+function PrintDetailRow({ label, value }: { label: string; value?: string | null }) {
+  if (!value?.trim()) return null;
+  return (
+    <div className="print-pass__row flex justify-between gap-4">
+      <dt className="text-[var(--muted)] shrink-0">{label}</dt>
+      <dd className="font-medium text-right break-words">{value}</dd>
+    </div>
+  );
+}
+
 export function PassPrintCard({ pass, businessCenterName }: PassPrintCardProps) {
   const config = useConfig();
   const labels = getUiLabels(config);
-  const bcName = businessCenterName || labels.ticket.defaultBcName;
+  const bcName = pass.businessCenterName || businessCenterName || labels.ticket.defaultBcName;
+
+  const ticketUrl = useMemo(() => getPassTicketUrl(pass.passNumber), [pass.passNumber]);
+
+  const visitTime = pass.visitTimeFrom
+    ? `${pass.visitTimeFrom}${pass.visitTimeTo ? `–${pass.visitTimeTo}` : ''}`
+    : undefined;
+
+  const officeLine = `№${pass.office}${pass.floor ? `, ${pass.floor} ${labels.card.floorSuffix}` : ''}`;
+
+  const vehicleLine = pass.vehiclePlate
+    ? [pass.vehiclePlate, pass.vehicleModel].filter(Boolean).join(' · ')
+    : undefined;
 
   const handlePrint = () => window.print();
 
@@ -26,7 +50,7 @@ export function PassPrintCard({ pass, businessCenterName }: PassPrintCardProps) 
 
         <div className="text-center border-b border-[var(--border)] pb-4 mb-4">
           <div className="flex items-center justify-center gap-2 text-[var(--text)] mb-1">
-            <Building2 className="w-5 h-5" />
+            <Building2 className="w-5 h-5 shrink-0" />
             <span className="font-bold text-lg">{bcName}</span>
           </div>
           <div className="text-xs text-[var(--muted)]">{labels.print.guestPass}</div>
@@ -39,41 +63,31 @@ export function PassPrintCard({ pass, businessCenterName }: PassPrintCardProps) 
           </div>
         </div>
 
-        <dl className="space-y-2 text-sm">
-          <div className="flex justify-between gap-4">
-            <dt className="text-[var(--muted)]">{labels.card.visitor}</dt>
-            <dd className="font-medium text-right">{pass.visitorName}</dd>
-          </div>
-          {pass.companyName && (
-            <div className="flex justify-between gap-4">
-              <dt className="text-[var(--muted)]">{labels.card.company}</dt>
-              <dd className="text-right">{pass.companyName}</dd>
+        {ticketUrl && (
+          <div className="print-pass__qr flex flex-col items-center gap-2 border-b border-[var(--border)] pb-4 mb-4">
+            <div className="print-pass__qr-frame bg-white rounded-xl border border-[var(--border)] p-3">
+              <QRCode value={ticketUrl} size={140} level="M" />
             </div>
-          )}
-          <div className="flex justify-between gap-4">
-            <dt className="text-[var(--muted)]">{labels.print.dateShort}</dt>
-            <dd className="text-right">
-              {pass.visitDate}
-              {pass.visitTimeFrom && ` ${pass.visitTimeFrom}–${pass.visitTimeTo}`}
-            </dd>
+            <p className="text-xs text-center text-[var(--muted)] max-w-[16rem] leading-snug">
+              {labels.ticket.hint}
+            </p>
           </div>
-          <div className="flex justify-between gap-4">
-            <dt className="text-[var(--muted)]">{labels.card.office}</dt>
-            <dd className="text-right">
-              №{pass.office}
-              {pass.floor && `, ${pass.floor} ${labels.card.floorSuffix}`}
-            </dd>
-          </div>
-          <div className="flex justify-between gap-4">
-            <dt className="text-[var(--muted)]">{labels.card.type}</dt>
-            <dd>{TYPE_LABELS[pass.passType]}</dd>
-          </div>
-          {pass.vehiclePlate && (
-            <div className="flex justify-between gap-4">
-              <dt className="text-[var(--muted)]">{labels.card.vehicle}</dt>
-              <dd className="font-mono text-right">{pass.vehiclePlate}</dd>
-            </div>
-          )}
+        )}
+
+        <dl className="print-pass__details space-y-2 text-sm">
+          <PrintDetailRow label={labels.card.visitor} value={pass.visitorName} />
+          <PrintDetailRow label={labels.card.phone} value={pass.visitorPhone} />
+          <PrintDetailRow label={labels.card.company} value={pass.companyName} />
+          <PrintDetailRow
+            label={labels.print.dateShort}
+            value={visitTime ? `${pass.visitDate} ${visitTime}` : pass.visitDate}
+          />
+          <PrintDetailRow label={labels.card.office} value={officeLine} />
+          <PrintDetailRow label={labels.card.type} value={TYPE_LABELS[pass.passType]} />
+          <PrintDetailRow label={labels.card.visitPurposeShort} value={pass.visitPurpose} />
+          <PrintDetailRow label={labels.card.vehicle} value={vehicleLine} />
+          <PrintDetailRow label={labels.card.orderedBy} value={pass.creatorName} />
+          <PrintDetailRow label={labels.card.comment} value={pass.comment} />
         </dl>
       </div>
 

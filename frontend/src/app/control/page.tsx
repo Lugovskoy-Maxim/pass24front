@@ -95,7 +95,7 @@ function ControlPageContent() {
     const trimmed = q.trim();
     if (!trimmed) return;
 
-    const isPassNumber = /^PS-/i.test(trimmed);
+    const isPassNumber = /^(Pass-|PS-)/i.test(trimmed);
     if (!isPassNumber) {
       const digits = trimmed.replace(/\D/g, '');
       const isPhone = digits.length >= 7;

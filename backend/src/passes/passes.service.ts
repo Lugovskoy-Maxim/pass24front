@@ -39,7 +39,7 @@ export class PassesService implements OnModuleInit {
   private generatePassNumber() {
     const year = new Date().getFullYear();
     const random = Math.floor(1000 + Math.random() * 9000);
-    return `PS-${year}-${random}`;
+    return `Pass-${year}-${random}`;
   }
 
   async onModuleInit() {

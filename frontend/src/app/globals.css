@@ -1441,5 +1441,25 @@ input[type="checkbox"]:not(.checkbox) {
 @media print {
   body * { visibility: hidden; }
   .print-pass, .print-pass * { visibility: visible; }
-  .print-pass { position: absolute; left: 0; top: 0; width: 100%; border: 1px solid #000 !important; box-shadow: none !important; }
+  .print-pass {
+    position: absolute;
+    left: 0;
+    top: 0;
+    width: 100%;
+    max-width: 100%;
+    border: 1px solid #000 !important;
+    box-shadow: none !important;
+    background: #fff !important;
+    color: #000 !important;
+    -webkit-print-color-adjust: exact;
+    print-color-adjust: exact;
+  }
+  .print-pass__qr-frame {
+    border: 1px solid #ccc !important;
+    background: #fff !important;
+  }
+  .print-pass__qr-frame svg {
+    width: 140px !important;
+    height: 140px !important;
+  }
 }
