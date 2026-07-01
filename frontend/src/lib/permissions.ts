@@ -35,6 +35,11 @@ export function canUseReception(user: User | null | undefined): boolean {
   return hasAnyPermission(user, 'passes.reception', 'passes.lookup') || isAdminPanelUser(user);
 }
 
+/** Одобрение и дополнение пропуска после сканирования QR */
+export function canManageTicketScan(user: User | null | undefined): boolean {
+  return hasAnyPermission(user, 'passes.approve', 'passes.reception') || isAdminPanelUser(user);
+}
+
 export function canSeeOverdueAlerts(user: User | null | undefined): boolean {
   return canUseReception(user) || canViewAllPasses(user);
 }

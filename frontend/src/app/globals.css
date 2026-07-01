@@ -1169,6 +1169,137 @@ input[type="checkbox"]:not(.checkbox) {
   transition: transform 0.15s ease, box-shadow 0.15s ease;
 }
 
+/* ── Страница QR-пропуска (компактно под смартфон) ── */
+.pass-ticket-page {
+  display: flex;
+  flex-direction: column;
+}
+
+.pass-ticket-page__header {
+  flex-shrink: 0;
+  padding: 0.5rem 0.75rem;
+  padding-top: calc(0.5rem + env(safe-area-inset-top, 0px));
+}
+
+.pass-ticket-page__header-inner {
+  max-width: 24rem;
+  margin: 0 auto;
+  width: 100%;
+}
+
+.pass-ticket-page__brand {
+  display: block;
+  min-width: 0;
+}
+
+.pass-ticket-page__main {
+  flex: 1;
+  max-width: 24rem;
+  margin: 0 auto;
+  width: 100%;
+  padding: 0.5rem 0.75rem 1rem;
+}
+
+.pass-ticket-page--staff .pass-ticket-page__main {
+  padding-bottom: calc(0.75rem + env(safe-area-inset-bottom, 0px));
+}
+
+.pass-ticket--compact .pass-ticket__header {
+  padding: 0.5rem 0.75rem 0.375rem;
+}
+
+.pass-ticket--compact .pass-ticket__bc-name {
+  font-size: 0.875rem;
+}
+
+.pass-ticket--compact .pass-ticket__guest {
+  padding: 0.5rem 0.75rem 0.375rem;
+}
+
+.pass-ticket--compact .pass-ticket__avatar {
+  width: 2.25rem;
+  height: 2.25rem;
+  margin-bottom: 0.375rem;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+}
+
+.pass-ticket--compact .pass-ticket__avatar-icon {
+  width: 1.125rem;
+  height: 1.125rem;
+}
+
+.pass-ticket--compact .pass-ticket__name {
+  font-size: 1rem;
+}
+
+.pass-ticket--compact .pass-ticket__number {
+  font-size: 0.75rem;
+  margin-top: 0.125rem;
+}
+
+.pass-ticket--compact .pass-ticket__badges {
+  margin-top: 0.375rem;
+}
+
+.pass-ticket--compact .pass-ticket__meta {
+  padding: 0.5rem 0.75rem;
+}
+
+.pass-ticket--compact .pass-ticket__qr {
+  padding: 0.5rem 0.75rem 0.375rem;
+}
+
+.pass-ticket--compact .pass-ticket__qr-frame {
+  padding: 0.5rem;
+}
+
+.pass-ticket--compact .pass-ticket__hint {
+  font-size: 0.6875rem;
+  margin-top: 0.375rem;
+}
+
+.pass-ticket--compact .pass-ticket__timeline {
+  display: none;
+  padding: 0.5rem 0.75rem;
+}
+
+@media (min-width: 400px) and (min-height: 700px) {
+  .pass-ticket--compact .pass-ticket__timeline {
+    display: block;
+  }
+}
+
+.pass-ticket--compact .pass-ticket__footer {
+  padding: 0.5rem 0.75rem;
+}
+
+.pass-ticket--compact .pass-ticket__footer-note {
+  font-size: 0.625rem;
+  margin-top: 0.5rem;
+  padding: 0 0.25rem;
+}
+
+.pass-ticket-staff {
+  margin-top: 0.75rem;
+}
+
+@media (max-width: 639px) {
+  .pass-ticket-page--staff .pass-ticket-staff {
+    position: sticky;
+    bottom: 0;
+    z-index: 20;
+    margin-top: 0.5rem;
+    padding-bottom: env(safe-area-inset-bottom, 0px);
+    background: linear-gradient(to top, var(--bg) 85%, transparent);
+  }
+
+  .pass-ticket-staff__inner {
+    box-shadow: var(--card-shadow);
+  }
+}
+
 /* Sonner overrides */
 [data-sonner-toaster] [data-close-button] {
   background: var(--surface-muted) !important;
