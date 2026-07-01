@@ -23,6 +23,23 @@ export class AppSettings {
   @Prop({ default: 'renta@mstyle.ru' })
   siteEmail: string;
 
+  /** image — картинка (siteIcon), text — текстовый знак (brandMarkText) */
+  @Prop({ default: 'image' })
+  brandMarkType: string;
+
+  @Prop({ default: 'M' })
+  brandMarkText: string;
+
+  @Prop({ default: true })
+  brandShowName: boolean;
+
+  @Prop({ default: true })
+  brandNameBeforeMark: boolean;
+
+  /** Имя иконки Lucide для выпадающих списков */
+  @Prop({ default: 'chevron-down' })
+  uiIconSelectChevron: string;
+
   @Prop({ type: Object, default: {} })
   uiLabels: Record<string, unknown>;
 }

@@ -7,6 +7,9 @@ import {
   forwardRef,
   ReactNode,
 } from 'react';
+import { UiIcon } from '@/components/UiIcon';
+import { useConfig } from '@/hooks/useConfig';
+import { resolveBrand } from '@/lib/brand-defaults';
 
 export function getInputClassName(options?: {
   invalid?: boolean;
@@ -140,14 +143,23 @@ export function SelectWrap({
   auto,
   className,
   children,
+  iconName,
 }: {
   auto?: boolean;
   className?: string;
   children: ReactNode;
+  iconName?: string | null;
 }) {
+  const config = useConfig();
+  const brand = resolveBrand(config);
+  const chevron = iconName ?? brand.uiIconSelectChevron;
+
   return (
     <div className={['select-wrap', auto ? 'select-wrap--auto' : '', className].filter(Boolean).join(' ')}>
       {children}
+      <span className="select-wrap__icon" aria-hidden>
+        <UiIcon name={chevron} className="w-4 h-4 text-[var(--muted)]" />
+      </span>
     </div>
   );
 }

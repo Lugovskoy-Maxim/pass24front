@@ -14,6 +14,11 @@ export interface SiteSettingsDto {
   siteTagline: string;
   sitePhone: string;
   siteEmail: string;
+  brandMarkType: 'image' | 'text';
+  brandMarkText: string;
+  brandShowName: boolean;
+  brandNameBeforeMark: boolean;
+  uiIconSelectChevron: string;
   uiLabels: UiLabels;
 }
 
@@ -61,6 +66,17 @@ export class SiteSettingsService implements OnModuleInit {
     if (data.siteTagline !== undefined) update.siteTagline = data.siteTagline.trim();
     if (data.sitePhone !== undefined) update.sitePhone = data.sitePhone.trim();
     if (data.siteEmail !== undefined) update.siteEmail = data.siteEmail.trim();
+    if (data.brandMarkType !== undefined) {
+      update.brandMarkType = data.brandMarkType === 'text' ? 'text' : 'image';
+    }
+    if (data.brandMarkText !== undefined) {
+      update.brandMarkText = data.brandMarkText.trim().slice(0, 8) || MSTYLE_BRAND_DEFAULTS.brandMarkText;
+    }
+    if (data.brandShowName !== undefined) update.brandShowName = !!data.brandShowName;
+    if (data.brandNameBeforeMark !== undefined) update.brandNameBeforeMark = !!data.brandNameBeforeMark;
+    if (data.uiIconSelectChevron !== undefined) {
+      update.uiIconSelectChevron = data.uiIconSelectChevron.trim() || MSTYLE_BRAND_DEFAULTS.uiIconSelectChevron;
+    }
     if (data.uiLabels !== undefined) {
       update.uiLabels = deepMergeUiLabels(data.uiLabels as Record<string, unknown>);
     }
@@ -79,6 +95,11 @@ export class SiteSettingsService implements OnModuleInit {
       siteTagline: doc?.siteTagline?.trim() || MSTYLE_BRAND_DEFAULTS.siteTagline,
       sitePhone: doc?.sitePhone?.trim() || MSTYLE_BRAND_DEFAULTS.sitePhone,
       siteEmail: doc?.siteEmail?.trim() || MSTYLE_BRAND_DEFAULTS.siteEmail,
+      brandMarkType: doc?.brandMarkType === 'text' ? 'text' : 'image',
+      brandMarkText: doc?.brandMarkText?.trim() || MSTYLE_BRAND_DEFAULTS.brandMarkText,
+      brandShowName: doc?.brandShowName !== false,
+      brandNameBeforeMark: doc?.brandNameBeforeMark !== false,
+      uiIconSelectChevron: doc?.uiIconSelectChevron?.trim() || MSTYLE_BRAND_DEFAULTS.uiIconSelectChevron,
       uiLabels: deepMergeUiLabels(doc?.uiLabels),
     };
   }

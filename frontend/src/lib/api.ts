@@ -491,6 +491,11 @@ export interface SiteSettings {
   siteTagline: string;
   sitePhone: string;
   siteEmail: string;
+  brandMarkType: 'image' | 'text';
+  brandMarkText: string;
+  brandShowName: boolean;
+  brandNameBeforeMark: boolean;
+  uiIconSelectChevron: string;
   uiLabels?: Record<string, unknown>;
 }
 

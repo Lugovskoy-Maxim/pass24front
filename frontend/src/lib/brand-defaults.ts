@@ -6,9 +6,26 @@ export const MSTYLE_BRAND_DEFAULTS = {
   siteTagline: 'Пропуска для арендаторов бизнес-центра',
   sitePhone: '+7 495 663-00-00',
   siteEmail: 'renta@mstyle.ru',
-} as const;
+  brandMarkType: 'image' as const,
+  brandMarkText: 'M',
+  brandShowName: true,
+  brandNameBeforeMark: true,
+  uiIconSelectChevron: 'chevron-down',
+};
 
-export type BrandFields = Pick<BcConfig, 'siteName' | 'siteIcon' | 'siteTagline' | 'sitePhone' | 'siteEmail'>;
+export type BrandFields = Pick<
+  BcConfig,
+  | 'siteName'
+  | 'siteIcon'
+  | 'siteTagline'
+  | 'sitePhone'
+  | 'siteEmail'
+  | 'brandMarkType'
+  | 'brandMarkText'
+  | 'brandShowName'
+  | 'brandNameBeforeMark'
+  | 'uiIconSelectChevron'
+>;
 
 export function resolveBrand(config?: Partial<BrandFields> | null): Required<BrandFields> {
   return {
@@ -17,5 +34,10 @@ export function resolveBrand(config?: Partial<BrandFields> | null): Required<Bra
     siteTagline: config?.siteTagline?.trim() || MSTYLE_BRAND_DEFAULTS.siteTagline,
     sitePhone: config?.sitePhone?.trim() || MSTYLE_BRAND_DEFAULTS.sitePhone,
     siteEmail: config?.siteEmail?.trim() || MSTYLE_BRAND_DEFAULTS.siteEmail,
+    brandMarkType: config?.brandMarkType === 'text' ? 'text' : 'image',
+    brandMarkText: config?.brandMarkText?.trim() || MSTYLE_BRAND_DEFAULTS.brandMarkText,
+    brandShowName: config?.brandShowName !== false,
+    brandNameBeforeMark: config?.brandNameBeforeMark !== false,
+    uiIconSelectChevron: config?.uiIconSelectChevron?.trim() || MSTYLE_BRAND_DEFAULTS.uiIconSelectChevron,
   };
 }
