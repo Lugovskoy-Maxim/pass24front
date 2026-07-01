@@ -21,7 +21,6 @@ export declare class ConfigController {
         contactPhone: any;
         contactEmail: any;
         receptionFloor: any;
-        maxPassesPerDay: number;
         uiLabels: {
             readonly nav: {
                 readonly dashboard: "Главная";

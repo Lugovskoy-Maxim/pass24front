@@ -131,7 +131,6 @@ export default function AdminSiteSettingsPage() {
     contactPhone: settings.sitePhone,
     contactEmail: settings.siteEmail,
     receptionFloor: '1',
-    maxPassesPerDay: 200,
     uiLabels: labels as unknown as Record<string, unknown>,
   };
 

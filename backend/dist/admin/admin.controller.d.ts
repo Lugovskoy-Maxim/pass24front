@@ -461,7 +461,6 @@ export declare class AdminController {
             isActive: boolean;
             createdAt: any;
             passSettings: {
-                max_passes_per_day: any;
                 auto_approve_delivery: any;
                 working_hours_from: any;
                 working_hours_to: any;
@@ -481,7 +480,6 @@ export declare class AdminController {
             isActive: boolean;
             createdAt: any;
             passSettings: {
-                max_passes_per_day: any;
                 auto_approve_delivery: any;
                 working_hours_from: any;
                 working_hours_to: any;
@@ -500,7 +498,6 @@ export declare class AdminController {
             isActive: boolean;
             createdAt: any;
             passSettings: {
-                max_passes_per_day: any;
                 auto_approve_delivery: any;
                 working_hours_from: any;
                 working_hours_to: any;

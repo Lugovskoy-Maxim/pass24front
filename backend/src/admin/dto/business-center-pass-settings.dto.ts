@@ -3,10 +3,6 @@ import { IsEmail, IsOptional, IsString } from 'class-validator';
 export class BusinessCenterPassSettingsDto {
   @IsOptional()
   @IsString()
-  max_passes_per_day?: string;
-
-  @IsOptional()
-  @IsString()
   auto_approve_delivery?: string;
 
   @IsOptional()

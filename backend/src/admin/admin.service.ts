@@ -854,7 +854,6 @@ export class AdminService {
   private mapBcPassSettings(property?: any) {
     const s = property?.settings || {};
     return {
-      max_passes_per_day: s.max_passes_per_day || '200',
       auto_approve_delivery: s.auto_approve_delivery || 'false',
       working_hours_from: s.working_hours_from || '08:00',
       working_hours_to: s.working_hours_to || '20:00',
@@ -869,7 +868,6 @@ export class AdminService {
     dto: BusinessCenterPassSettingsDto,
   ) {
     const settings = { ...(current || {}) };
-    if (dto.max_passes_per_day !== undefined) settings.max_passes_per_day = dto.max_passes_per_day;
     if (dto.auto_approve_delivery !== undefined) settings.auto_approve_delivery = dto.auto_approve_delivery;
     if (dto.working_hours_from !== undefined) settings.working_hours_from = dto.working_hours_from;
     if (dto.working_hours_to !== undefined) settings.working_hours_to = dto.working_hours_to;

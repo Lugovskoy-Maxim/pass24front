@@ -191,7 +191,6 @@ function NewPassForm() {
       {config && (
         <p className="text-sm text-[var(--muted)] mb-6">
           Рабочие часы БЦ: {config.workingHoursFrom}–{config.workingHoursTo}
-          {config.maxPassesPerDay > 0 && ` · лимит ${config.maxPassesPerDay} пропусков/день`}
         </p>
       )}
 

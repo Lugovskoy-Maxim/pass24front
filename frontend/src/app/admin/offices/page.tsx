@@ -471,27 +471,14 @@ export default function AdminOfficesPage() {
 
                     <div className="border-t border-[var(--border)] pt-4 space-y-3">
                       <h4 className="text-sm font-medium">Параметры пропускного режима</h4>
-                      <div className="grid sm:grid-cols-2 gap-3">
-                        <div>
-                          <label className="label">Этаж ресепшн</label>
-                          <input
-                            className="input"
-                            value={bcPassSettings.reception_floor}
-                            onChange={(e) => setBcPassSettings({ ...bcPassSettings, reception_floor: e.target.value })}
-                            placeholder="1"
-                          />
-                        </div>
-                        <div>
-                          <label className="label">Лимит пропусков на арендатора в день</label>
-                          <input
-                            className="input"
-                            type="number"
-                            min={1}
-                            max={100}
-                            value={bcPassSettings.max_passes_per_day}
-                            onChange={(e) => setBcPassSettings({ ...bcPassSettings, max_passes_per_day: e.target.value })}
-                          />
-                        </div>
+                      <div>
+                        <label className="label">Этаж ресепшн</label>
+                        <input
+                          className="input"
+                          value={bcPassSettings.reception_floor}
+                          onChange={(e) => setBcPassSettings({ ...bcPassSettings, reception_floor: e.target.value })}
+                          placeholder="1"
+                        />
                       </div>
                       <label className="flex items-center gap-2 text-sm">
                         <input

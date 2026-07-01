@@ -539,7 +539,6 @@ export interface BcConfig extends SiteSettings {
   contactPhone: string;
   contactEmail: string;
   receptionFloor: string;
-  maxPassesPerDay: number;
 }
 
 export interface PassStats {
@@ -693,7 +692,6 @@ export interface CreatePassTemplateData {
 }
 
 export interface BcPassSettings {
-  max_passes_per_day: string;
   auto_approve_delivery: string;
   working_hours_from: string;
   working_hours_to: string;
@@ -703,7 +701,6 @@ export interface BcPassSettings {
 }
 
 export const DEFAULT_BC_PASS_SETTINGS: BcPassSettings = {
-  max_passes_per_day: '200',
   auto_approve_delivery: 'false',
   working_hours_from: '08:00',
   working_hours_to: '20:00',

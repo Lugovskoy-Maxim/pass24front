@@ -22,7 +22,6 @@ export declare class AppConfigService {
         contactPhone: any;
         contactEmail: any;
         receptionFloor: any;
-        maxPassesPerDay: number;
         uiLabels: {
             readonly nav: {
                 readonly dashboard: "Главная";

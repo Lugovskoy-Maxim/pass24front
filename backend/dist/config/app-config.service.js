@@ -50,7 +50,6 @@ let AppConfigService = class AppConfigService {
             contactPhone: s.contact_phone || site.sitePhone,
             contactEmail: s.contact_email || site.siteEmail,
             receptionFloor: s.reception_floor || '1',
-            maxPassesPerDay: Number(s.max_passes_per_day || 200),
             uiLabels: site.uiLabels,
         };
     }

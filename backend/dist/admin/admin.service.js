@@ -603,7 +603,7 @@ let AdminService = class AdminService {
         const office = await this.officeModel.create({
             property: new mongoose_2.Types.ObjectId(dto.propertyId),
             number: dto.number.trim(),
-            floor: dto.floor.trim(),
+            floor: dto.floor?.trim() || undefined,
             areaSqm: dto.areaSqm,
             company: dto.company?.trim(),
             tenantId: dto.tenantId ? new mongoose_2.Types.ObjectId(dto.tenantId) : undefined,
@@ -734,7 +734,7 @@ let AdminService = class AdminService {
             propertyId: office.property?.toString(),
             businessCenterName: property?.name,
             number: office.number,
-            floor: office.floor,
+            floor: office.floor || undefined,
             areaSqm: office.areaSqm,
             company: office.company,
             tenantId: office.tenantId?.toString(),
@@ -795,7 +795,6 @@ let AdminService = class AdminService {
     mapBcPassSettings(property) {
         const s = property?.settings || {};
         return {
-            max_passes_per_day: s.max_passes_per_day || '200',
             auto_approve_delivery: s.auto_approve_delivery || 'false',
             working_hours_from: s.working_hours_from || '08:00',
             working_hours_to: s.working_hours_to || '20:00',
@@ -806,8 +805,6 @@ let AdminService = class AdminService {
     }
     mergeBcPassSettings(current, dto) {
         const settings = { ...(current || {}) };
-        if (dto.max_passes_per_day !== undefined)
-            settings.max_passes_per_day = dto.max_passes_per_day;
         if (dto.auto_approve_delivery !== undefined)
             settings.auto_approve_delivery = dto.auto_approve_delivery;
         if (dto.working_hours_from !== undefined)
