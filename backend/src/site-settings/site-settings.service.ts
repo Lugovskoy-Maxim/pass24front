@@ -14,7 +14,7 @@ export interface SiteSettingsDto {
   siteTagline: string;
   sitePhone: string;
   siteEmail: string;
-  brandMarkType: 'image' | 'text';
+  brandMarkType: string;
   brandMarkText: string;
   brandShowName: boolean;
   brandNameBeforeMark: boolean;
