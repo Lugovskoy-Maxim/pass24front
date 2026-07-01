@@ -1,6 +1,6 @@
 'use client';
 
-import { AlertCircle, CheckCircle, Clock, LogIn, XCircle } from 'lucide-react';
+import { CheckCircle, Clock, LogIn, XCircle } from 'lucide-react';
 import { Pass, PassStatus } from '@/lib/api';
 import { useConfig } from '@/hooks/useConfig';
 import { getReceptionSectionStyle } from '@/lib/pass-status';
@@ -9,7 +9,6 @@ import { PassCardBase } from './PassCardBase';
 
 export function getReceptionSections(labels: UiLabels) {
   return [
-    { key: 'pending' as PassStatus, title: labels.reception.sectionPending, icon: AlertCircle },
     { key: 'approved' as PassStatus, title: labels.reception.sectionApproved, icon: Clock },
     { key: 'active' as PassStatus, title: labels.reception.sectionActive, icon: LogIn },
     { key: 'completed' as PassStatus, title: labels.reception.sectionCompleted, icon: CheckCircle, dimmed: true },

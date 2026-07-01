@@ -18,6 +18,7 @@ import { canSeeOverdueAlerts } from '@/lib/permissions';
 import { buildHistoryHref } from '@/lib/visit-history';
 import { useAuth } from '@/lib/auth';
 import { getGuestOverdueKind, getUiLabels } from '@/lib/ui-labels';
+import { isAwaitingEntry } from '@/lib/pass-entry';
 import { getAccentStatClass, getSectionHeadingClass } from '@/lib/pass-status';
 // Графики временно отключены
 // import { StatusDonutChart } from '@/components/charts/StatusDonutChart';
@@ -148,19 +149,6 @@ function ControlPageContent() {
     else setSelected(freshOverdue.find((p) => p.id !== id) || data[0] || null);
   };
 
-  const handleApprove = async (id: string) => {
-    setActionId(id);
-    try {
-      await api.updateStatus(id, 'approved');
-      toast(labels.toasts.approved, 'success');
-      await refreshAfterAction(id);
-    } catch (err) {
-      toast(getErrorMessage(err, 'Ошибка'), 'error');
-    } finally {
-      setActionId(null);
-    }
-  };
-
   const handleReject = async (id: string) => {
     const reason = rejectReason[id]?.trim();
     if (!reason) return;
@@ -204,15 +192,16 @@ function ControlPageContent() {
   };
 
   const renderActions = (pass: Pass) => {
-    if (pass.status === 'pending') {
+    if (isAwaitingEntry(pass.status)) {
       return (
         <>
           <button
             className="btn btn-success w-full"
             disabled={actionId === pass.id}
-            onClick={() => handleApprove(pass.id)}
+            onClick={() => handleCheckIn(pass.id)}
           >
-            {labels.buttons.approve}
+            <LogIn className="w-4 h-4" />
+            {labels.buttons.checkIn}
           </button>
           <input
             className="input"
@@ -228,18 +217,6 @@ function ControlPageContent() {
             {labels.buttons.reject}
           </button>
         </>
-      );
-    }
-    if (pass.status === 'approved') {
-      return (
-        <button
-          className="btn btn-success w-full"
-          disabled={actionId === pass.id}
-          onClick={() => handleCheckIn(pass.id)}
-        >
-          <LogIn className="w-4 h-4" />
-          {labels.buttons.checkIn}
-        </button>
       );
     }
     if (pass.status === 'active') {
@@ -258,7 +235,9 @@ function ControlPageContent() {
   };
 
   const passesByStatus = (status: Pass['status']) => {
-    const filtered = passes.filter((p) => p.status === status);
+    const filtered = status === 'approved'
+      ? passes.filter((p) => isAwaitingEntry(p.status))
+      : passes.filter((p) => p.status === status);
     if (status === 'active' && showOverdueAlerts) {
       return filtered.filter((p) => !overdueIds.has(p.id));
     }
@@ -310,7 +289,6 @@ function ControlPageContent() {
           onClick: scrollToOverdueSection,
         }]
       : []),
-    { key: 'pending', label: labels.reception.statPending, value: stats.pending, icon: AlertCircle, onClick: () => scrollToSection('reception-section-pending', () => passesByStatus('pending')[0]) },
     { key: 'approved', label: labels.reception.statApproved, value: stats.approved, icon: Clock, onClick: () => scrollToSection('reception-section-approved', () => passesByStatus('approved')[0]) },
     { key: 'active', label: labels.reception.statActive, value: activeInBuildingCount, icon: LogIn, onClick: () => scrollToSection('reception-section-active', () => passesByStatus('active')[0]) },
     { key: 'completed', label: labels.reception.statCompleted, value: stats.completed, icon: CheckCircle, onClick: () => scrollToSection('reception-section-completed', () => passesByStatus('completed')[0]) },

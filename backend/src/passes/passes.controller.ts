@@ -63,7 +63,7 @@ export class PassesController {
   }
 
   @Patch(':id/status')
-  @RequirePermissions('passes.approve', 'passes.create')
+  @RequirePermissions('passes.approve', 'passes.create', 'passes.reception')
   updateStatus(@Param('id') id: string, @Body() dto: UpdateStatusDto, @Req() req: any) {
     return this.passesService.updateStatus(id, dto, req.user);
   }

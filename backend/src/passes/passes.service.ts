@@ -196,12 +196,14 @@ export class PassesService implements OnModuleInit {
       : null;
 
     const passNumber = this.generatePassNumber();
+    const approvedAt = new Date().toISOString();
     const doc = await this.passModel.create({
       ...passDto,
       visitPurpose: deriveVisitPurpose(passDto.passType),
       ...resolved,
       passNumber,
-      status: 'pending',
+      status: 'approved',
+      approvedAt,
       createdBy: user?.userId ? new Types.ObjectId(user.userId) : undefined,
       creatorName: creator?.fullName || user?.fullName || user?.email,
       creatorPhone: creator?.phone,
@@ -270,14 +272,24 @@ export class PassesService implements OnModuleInit {
     const canApprove = actor?.role
       ? await this.accessConfigService.hasPermission(actor.role, 'passes.approve')
       : false;
+    const canReception = actor?.role
+      ? await this.accessConfigService.hasPermission(actor.role, 'passes.reception')
+      : false;
     const isCreator = actor?.userId && pass.createdBy?.toString() === actor.userId;
 
     if (dto.status === 'cancelled') {
       if (!canApprove && !isCreator) {
         throw new ForbiddenException('Нельзя отменить этот пропуск');
       }
-      if (!canApprove && pass.status !== 'pending') {
-        throw new BadRequestException('Можно отменить только заявку на рассмотрении');
+      if (!canApprove && !['pending', 'approved'].includes(pass.status)) {
+        throw new BadRequestException('Можно отменить только до входа в здание');
+      }
+    } else if (dto.status === 'rejected') {
+      if (!canApprove && !canReception) {
+        throw new ForbiddenException('Недостаточно прав для отклонения пропуска');
+      }
+      if (!['pending', 'approved'].includes(pass.status)) {
+        throw new BadRequestException('Можно отклонить только до входа в здание');
       }
     } else if (!canApprove) {
       throw new ForbiddenException('Недостаточно прав для изменения статуса');
@@ -319,6 +331,13 @@ export class PassesService implements OnModuleInit {
   async checkIn(id: string, actor?: AuditActor) {
     const pass = await this.passModel.findById(id);
     if (!pass) throw new NotFoundException('Пропуск не найден');
+    if (!['pending', 'approved'].includes(pass.status)) {
+      throw new BadRequestException('Пропуск нельзя впустить в текущем статусе');
+    }
+
+    if (pass.status === 'pending' && !pass.approvedAt) {
+      pass.approvedAt = new Date().toISOString();
+    }
 
     pass.status = 'active';
     pass.checkedInAt = new Date().toISOString();
@@ -371,7 +390,7 @@ export class PassesService implements OnModuleInit {
       pending: mapped.filter((p) => p.status === 'pending').length,
       active: mapped.filter((p) => p.status === 'active').length,
       completed: mapped.filter((p) => p.status === 'completed').length,
-      approved: mapped.filter((p) => p.status === 'approved').length,
+      approved: mapped.filter((p) => p.status === 'approved' || p.status === 'pending').length,
     };
 
     return { date: targetDate, stats, passes: mapped };

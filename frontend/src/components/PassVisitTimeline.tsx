@@ -8,7 +8,6 @@ import {
   Clock,
   LogIn,
   LogOut,
-  ShieldCheck,
 } from 'lucide-react';
 import { PassStatus, PassTimelineData } from '@/lib/api';
 import { getPassTimelineCurrentClasses } from '@/lib/pass-status';
@@ -42,8 +41,7 @@ function formatDuration(checkIn: string, checkOut?: string, now = Date.now()) {
 function buildSteps(pass: PassTimelineData, now: number, t: UiLabels['timeline']): TimelineStep[] {
   const fail = (label: string, sublabel?: string): TimelineStep[] => [
     { key: 'request', label: t.request, state: 'done', sublabel: formatTime(pass.createdAt) || undefined },
-    { key: 'approve', label, state: 'failed', sublabel },
-    { key: 'entry', label: t.entry, state: 'skipped' },
+    { key: 'entry', label, state: 'failed', sublabel },
     { key: 'inside', label: t.inside, state: 'skipped' },
     { key: 'exit', label: t.exit, state: 'skipped' },
   ];
@@ -60,12 +58,12 @@ function buildSteps(pass: PassTimelineData, now: number, t: UiLabels['timeline']
 
   const currentIndex: Record<PassStatus, number> = {
     pending: 1,
-    approved: 2,
-    active: 3,
-    completed: 4,
-    rejected: 1,
+    approved: 1,
+    active: 2,
+    completed: 3,
+    rejected: 0,
     cancelled: 0,
-    expired: 1,
+    expired: 0,
   };
   const current = currentIndex[pass.status] ?? 0;
 
@@ -92,35 +90,25 @@ function buildSteps(pass: PassTimelineData, now: number, t: UiLabels['timeline']
       sublabel: formatTime(pass.createdAt) || undefined,
     },
     {
-      key: 'approve',
-      label: t.approve,
-      state: stepState(1),
-      sublabel: pass.approvedAt
-        ? formatTime(pass.approvedAt) || undefined
-        : pass.status === 'pending'
-          ? t.waiting
-          : undefined,
-    },
-    {
       key: 'entry',
       label: t.entry,
-      state: stepState(2),
+      state: stepState(1),
       sublabel: pass.checkedInAt
         ? formatTime(pass.checkedInAt) || undefined
-        : pass.status === 'approved'
+        : pass.status === 'approved' || pass.status === 'pending'
           ? t.waiting
           : undefined,
     },
     {
       key: 'inside',
       label: t.inside,
-      state: stepState(3),
+      state: stepState(2),
       sublabel: insideSublabel,
     },
     {
       key: 'exit',
       label: t.exit,
-      state: stepState(4),
+      state: stepState(3),
       sublabel: pass.checkedOutAt
         ? formatTime(pass.checkedOutAt) || undefined
         : pass.status === 'active'
@@ -156,7 +144,6 @@ function NodeIcon({ step }: { step: TimelineStep }) {
   if (step.state === 'failed') return <Ban className={cls} />;
   if (step.state === 'done') return <Check className={cls} strokeWidth={3} />;
   if (step.state === 'current') {
-    if (step.key === 'approve') return <ShieldCheck className="w-4 h-4" />;
     if (step.key === 'entry') return <LogIn className="w-4 h-4" />;
     if (step.key === 'inside') return <Clock className="w-4 h-4" />;
     if (step.key === 'exit') return <LogOut className="w-4 h-4" />;
@@ -191,7 +178,7 @@ export function PassVisitTimeline({
   const topOffset = compact ? 'top-3' : 'top-4';
 
   return (
-    <div className="w-full min-w-[280px]">
+    <div className="w-full min-w-[240px]">
       <div className="flex items-start justify-between gap-0.5 sm:gap-1">
         {steps.map((step, index) => {
           const prevState = index > 0 ? steps[index - 1].state : null;

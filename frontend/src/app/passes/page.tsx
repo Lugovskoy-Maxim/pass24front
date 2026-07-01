@@ -16,6 +16,7 @@ import { useToast } from '@/components/Toast';
 import { api, Pass, PassStatus, getErrorMessage } from '@/lib/api';
 import { PageError } from '@/components/PageError';
 import { canViewAllPasses, canViewPasses, hasPermission } from '@/lib/permissions';
+import { isAwaitingEntry } from '@/lib/pass-entry';
 
 
 
@@ -58,11 +59,10 @@ function PassesPageContent() {
   const canViewPassesList = canViewPasses(user);
   const canCreate = hasPermission(user, 'passes.create');
   const canViewAll = canViewAllPasses(user);
-  const canApprove = hasPermission(user, 'passes.approve');
   const canReception = hasPermission(user, 'passes.reception');
   const showCreatorInfo = canViewAll || canReception;
   const canCancelPass = (pass: Pass) =>
-    pass.isOwner && ['pending', 'approved'].includes(pass.status);
+    pass.isOwner && isAwaitingEntry(pass.status);
 
   const canSharePass = (pass: Pass) => !['cancelled', 'rejected', 'expired'].includes(pass.status);
 
@@ -72,7 +72,7 @@ function PassesPageContent() {
     }
   }, [user, canViewPassesList, router]);
 
-  const canPrint = selected && ['approved', 'active'].includes(selected.status);
+  const canPrint = selected && (isAwaitingEntry(selected.status) || selected.status === 'active');
 
   const load = useCallback(() => {
     setLoading(true);
@@ -114,20 +114,18 @@ function PassesPageContent() {
     });
   }, [passes, loading, searchParams, user?.role]);
 
-  const handleAction = async (id: string, action: 'approve' | 'reject' | 'checkin' | 'checkout' | 'cancel', reason?: string) => {
+  const handleAction = async (id: string, action: 'reject' | 'checkin' | 'checkout' | 'cancel', reason?: string) => {
     setActionLoading(true);
     try {
       let updated: Pass;
-      if (action === 'approve') ({ pass: updated } = await api.updateStatus(id, 'approved'));
-      else if (action === 'reject') ({ pass: updated } = await api.updateStatus(id, 'rejected', reason));
+      if (action === 'reject') ({ pass: updated } = await api.updateStatus(id, 'rejected', reason));
       else if (action === 'cancel') ({ pass: updated } = await api.updateStatus(id, 'cancelled'));
       else if (action === 'checkin') ({ pass: updated } = await api.checkIn(id));
       else ({ pass: updated } = await api.checkOut(id));
       setPasses((prev) => prev.map((p) => (p.id === id ? updated : p)));
       setSelected(updated);
       setRejectReason('');
-      const toastMsg = action === 'approve' ? labels.toasts.approved
-        : action === 'reject' ? labels.toasts.rejected
+      const toastMsg = action === 'reject' ? labels.toasts.rejected
         : action === 'checkin' ? labels.toasts.checkedIn
         : action === 'checkout' ? labels.toasts.checkedOut
         : labels.toasts.actionDone;
@@ -141,10 +139,10 @@ function PassesPageContent() {
 
   const renderDetailActions = (pass: Pass) => (
     <>
-      {canApprove && pass.status === 'pending' && (
+      {canReception && isAwaitingEntry(pass.status) && (
         <>
-          <button className="btn btn-success w-full" disabled={actionLoading} onClick={() => handleAction(pass.id, 'approve')}>
-            {labels.buttons.approve}
+          <button className="btn btn-success w-full" disabled={actionLoading} onClick={() => handleAction(pass.id, 'checkin')}>
+            {labels.buttons.checkInBuilding}
           </button>
           <input
             className="input"
@@ -160,11 +158,6 @@ function PassesPageContent() {
             {labels.buttons.reject}
           </button>
         </>
-      )}
-      {canReception && pass.status === 'approved' && (
-        <button className="btn btn-success w-full" disabled={actionLoading} onClick={() => handleAction(pass.id, 'checkin')}>
-          {labels.buttons.checkInBuilding}
-        </button>
       )}
       {canReception && pass.status === 'active' && (
         <button className="btn btn-primary w-full" disabled={actionLoading} onClick={() => handleAction(pass.id, 'checkout')}>

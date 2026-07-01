@@ -7,6 +7,7 @@ import { api, getErrorMessage } from '@/lib/api';
 import { useAuth } from '@/lib/auth';
 import { useConfig } from '@/hooks/useConfig';
 import { canManageTicketScan, hasPermission, isAdminPanelUser } from '@/lib/permissions';
+import { isAwaitingEntry } from '@/lib/pass-entry';
 import { getUiLabels } from '@/lib/ui-labels';
 import { useToast } from '@/components/Toast';
 import { PassVisitorDataForm } from '@/components/PassVisitorDataForm';
@@ -27,7 +28,6 @@ export function PassTicketStaffPanel({ passNumber, onPassUpdated }: PassTicketSt
   const [rejectReason, setRejectReason] = useState('');
 
   const canManage = canManageTicketScan(user);
-  const canApprove = hasPermission(user, 'passes.approve') || isAdminPanelUser(user);
   const canReception = hasPermission(user, 'passes.reception') || isAdminPanelUser(user);
 
   const loadPass = useCallback(() => {
@@ -45,13 +45,12 @@ export function PassTicketStaffPanel({ passNumber, onPassUpdated }: PassTicketSt
 
   if (!canManage) return null;
 
-  const handleAction = async (action: 'approve' | 'reject' | 'checkin' | 'checkout') => {
+  const handleAction = async (action: 'reject' | 'checkin' | 'checkout') => {
     if (!pass) return;
     setActionLoading(true);
     try {
       let updated: Pass;
-      if (action === 'approve') ({ pass: updated } = await api.updateStatus(pass.id, 'approved'));
-      else if (action === 'reject') {
+      if (action === 'reject') {
         if (!rejectReason.trim()) {
           toast('Укажите причину отклонения', 'error');
           return;
@@ -63,8 +62,7 @@ export function PassTicketStaffPanel({ passNumber, onPassUpdated }: PassTicketSt
       setPass(updated);
       setRejectReason('');
       onPassUpdated();
-      const toastMsg = action === 'approve' ? labels.toasts.approved
-        : action === 'reject' ? labels.toasts.rejected
+      const toastMsg = action === 'reject' ? labels.toasts.rejected
         : action === 'checkin' ? labels.toasts.checkedIn
         : labels.toasts.checkedOut;
       toast(toastMsg, 'success');
@@ -75,9 +73,8 @@ export function PassTicketStaffPanel({ passNumber, onPassUpdated }: PassTicketSt
     }
   };
 
-  const hasActions = pass && (
-    (canApprove && pass.status === 'pending')
-    || (canReception && (pass.status === 'approved' || pass.status === 'active'))
+  const hasActions = pass && canReception && (
+    isAwaitingEntry(pass.status) || pass.status === 'active'
   );
 
   return (
@@ -96,15 +93,15 @@ export function PassTicketStaffPanel({ passNumber, onPassUpdated }: PassTicketSt
           <>
             {hasActions && (
               <div className="px-3 py-3 space-y-2 border-b border-[var(--border)] bg-[var(--surface-muted)]">
-                {canApprove && pass.status === 'pending' && (
+                {isAwaitingEntry(pass.status) && (
                   <>
                     <button
                       type="button"
                       className="btn btn-success w-full text-sm"
                       disabled={actionLoading}
-                      onClick={() => handleAction('approve')}
+                      onClick={() => handleAction('checkin')}
                     >
-                      {labels.buttons.approve}
+                      {labels.buttons.checkInBuilding}
                     </button>
                     <input
                       className="input text-sm"
@@ -122,17 +119,7 @@ export function PassTicketStaffPanel({ passNumber, onPassUpdated }: PassTicketSt
                     </button>
                   </>
                 )}
-                {canReception && pass.status === 'approved' && (
-                  <button
-                    type="button"
-                    className="btn btn-success w-full text-sm"
-                    disabled={actionLoading}
-                    onClick={() => handleAction('checkin')}
-                  >
-                    {labels.buttons.checkInBuilding}
-                  </button>
-                )}
-                {canReception && pass.status === 'active' && (
+                {pass.status === 'active' && (
                   <button
                     type="button"
                     className="btn btn-primary w-full text-sm"
