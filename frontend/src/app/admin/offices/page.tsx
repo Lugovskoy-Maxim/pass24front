@@ -1,7 +1,7 @@
 'use client';
 
 import { useEffect, useMemo, useState, FormEvent } from 'react';
-import { Plus, Pencil, Check, X, Link2, Search, Building2, Filter, Users, Trash2 } from 'lucide-react';
+import { Plus, Pencil, Check, X, Link2, Search, Building2, Filter, Users, Trash2, LayoutGrid, Table2 } from 'lucide-react';
 import { AdminLayout } from '@/components/AdminLayout';
 import { useToast } from '@/components/Toast';
 import { useDebounce } from '@/hooks/useDebounce';
@@ -22,6 +22,14 @@ const EMPTY_OFFICE_FILTERS: OfficeFilters = {
   status: '',
   binding: '',
 };
+
+type OfficeViewMode = 'table' | 'cards';
+const OFFICE_VIEW_STORAGE_KEY = 'pass24-offices-view';
+
+function getInitialOfficeView(): OfficeViewMode {
+  if (typeof window === 'undefined') return 'table';
+  return window.localStorage.getItem(OFFICE_VIEW_STORAGE_KEY) === 'cards' ? 'cards' : 'table';
+}
 
 export default function AdminOfficesPage() {
   const { toast } = useToast();
@@ -51,7 +59,21 @@ export default function AdminOfficesPage() {
   const [tenantId, setTenantId] = useState('');
   const [officeFilters, setOfficeFilters] = useState<OfficeFilters>(EMPTY_OFFICE_FILTERS);
   const [appliedOfficeFilters, setAppliedOfficeFilters] = useState<OfficeFilters>(EMPTY_OFFICE_FILTERS);
+  const [officeView, setOfficeView] = useState<OfficeViewMode>('table');
   const debouncedOfficeSearch = useDebounce(officeFilters.search);
+
+  useEffect(() => {
+    setOfficeView(getInitialOfficeView());
+  }, []);
+
+  const setOfficeViewMode = (mode: OfficeViewMode) => {
+    setOfficeView(mode);
+    try {
+      window.localStorage.setItem(OFFICE_VIEW_STORAGE_KEY, mode);
+    } catch {
+      /* ignore */
+    }
+  };
 
   const load = () => {
     setLoading(true);
@@ -342,6 +364,16 @@ export default function AdminOfficesPage() {
     [...new Set(offices.map((o) => o.floor).filter((f): f is string => !!f))].sort((a, b) => a.localeCompare(b, 'ru', { numeric: true }))
   ), [offices]);
 
+  const showBcColumn = businessCenters.length > 1 && !activeOfficeFilters.propertyId;
+
+  const sortedOffices = useMemo(() => (
+    [...filteredOffices].sort((a, b) => {
+      const bcCmp = (a.businessCenterName || '').localeCompare(b.businessCenterName || '', 'ru');
+      if (bcCmp !== 0) return bcCmp;
+      return a.number.localeCompare(b.number, 'ru', { numeric: true });
+    })
+  ), [filteredOffices]);
+
   const officesByBc = useMemo(() => {
     const map = new Map<string, { bc: BusinessCenter | null; items: Office[] }>();
     for (const office of filteredOffices) {
@@ -586,12 +618,38 @@ export default function AdminOfficesPage() {
               {officeStats.shown} из {officeStats.total} · активных {officeStats.active} · с арендатором {officeStats.assigned}
             </p>
           </div>
-          {!showForm && !editingId && businessCenters.length > 0 && (
-            <button className="btn btn-primary text-sm" onClick={() => setShowForm(true)}>
-              <Plus className="w-4 h-4" />
-              Добавить офис
-            </button>
-          )}
+          <div className="flex flex-wrap items-center gap-2">
+            <div className="inline-flex rounded-lg border border-[var(--border)] p-0.5 bg-[var(--surface-muted)]">
+              <button
+                type="button"
+                className={`inline-flex items-center gap-1.5 px-2.5 py-1.5 text-xs rounded-md transition-colors ${
+                  officeView === 'table' ? 'bg-[var(--surface)] shadow-sm font-medium' : 'text-[var(--muted)] hover:text-[var(--text)]'
+                }`}
+                onClick={() => setOfficeViewMode('table')}
+                title="Таблица"
+              >
+                <Table2 className="w-3.5 h-3.5" />
+                Таблица
+              </button>
+              <button
+                type="button"
+                className={`inline-flex items-center gap-1.5 px-2.5 py-1.5 text-xs rounded-md transition-colors ${
+                  officeView === 'cards' ? 'bg-[var(--surface)] shadow-sm font-medium' : 'text-[var(--muted)] hover:text-[var(--text)]'
+                }`}
+                onClick={() => setOfficeViewMode('cards')}
+                title="Карточки"
+              >
+                <LayoutGrid className="w-3.5 h-3.5" />
+                Карточки
+              </button>
+            </div>
+            {!showForm && !editingId && businessCenters.length > 0 && (
+              <button className="btn btn-primary text-sm" onClick={() => setShowForm(true)}>
+                <Plus className="w-4 h-4" />
+                Добавить офис
+              </button>
+            )}
+          </div>
         </div>
 
         <div className="grid grid-cols-2 lg:grid-cols-4 gap-3">
@@ -747,6 +805,117 @@ export default function AdminOfficesPage() {
               <button type="button" className="btn btn-secondary text-sm" onClick={resetOfficeFilters}>Сбросить фильтры</button>
             </div>
           )}
+        </div>
+      ) : officeView === 'table' ? (
+        <div className="card overflow-x-auto">
+          <table className="w-full text-sm min-w-[760px]">
+            <thead className="surface-muted text-[var(--muted)]">
+              <tr>
+                {showBcColumn && <th className="text-left p-3 font-medium">Бизнес-центр</th>}
+                <th className="text-left p-3 font-medium">Офис</th>
+                <th className="text-left p-3 font-medium hidden sm:table-cell">Этаж</th>
+                <th className="text-left p-3 font-medium hidden md:table-cell">Компания</th>
+                <th className="text-left p-3 font-medium hidden lg:table-cell">Площадь</th>
+                <th className="text-left p-3 font-medium">Арендатор</th>
+                <th className="text-left p-3 font-medium">Статус</th>
+                <th className="p-3 w-28 text-right font-medium">Действия</th>
+              </tr>
+            </thead>
+            <tbody>
+              {sortedOffices.map((office) => (
+                <tr
+                  key={office.id}
+                  className={`border-t border-[var(--border)] hover:bg-[var(--surface-muted)] ${
+                    !office.isActive ? 'opacity-70' : ''
+                  }`}
+                >
+                  {showBcColumn && (
+                    <td className="p-3 text-[var(--muted)] max-w-[10rem]">
+                      <span className="line-clamp-2">{office.businessCenterName || '—'}</span>
+                    </td>
+                  )}
+                  <td className="p-3">
+                    <div className="font-mono font-semibold">{office.number}</div>
+                    <div className="text-xs text-[var(--muted)] sm:hidden">
+                      {office.floor ? `${office.floor} эт.` : '—'}
+                      {office.company ? ` · ${office.company}` : ''}
+                    </div>
+                  </td>
+                  <td className="p-3 hidden sm:table-cell text-[var(--muted)]">
+                    {office.floor ? `${office.floor} эт.` : '—'}
+                  </td>
+                  <td className="p-3 hidden md:table-cell max-w-[12rem]">
+                    <span className="line-clamp-2">{office.company || '—'}</span>
+                  </td>
+                  <td className="p-3 hidden lg:table-cell text-[var(--muted)] whitespace-nowrap">
+                    {office.areaSqm ? `${office.areaSqm} м²` : '—'}
+                  </td>
+                  <td className="p-3 min-w-[10rem]">
+                    {bindingOfficeId === office.id ? (
+                      <div className="space-y-2 min-w-[12rem]">
+                        <BindingSelect office={office} />
+                        <div className="flex gap-1 justify-end">
+                          <button className="btn btn-primary text-xs py-1 px-2" disabled={saving} onClick={() => saveBinding(office.id)}>
+                            {saving ? '...' : 'Сохранить'}
+                          </button>
+                          <button className="btn btn-secondary text-xs py-1 px-2" onClick={resetForm}>Отмена</button>
+                        </div>
+                      </div>
+                    ) : (
+                      <div>
+                        <div className={office.tenantName ? 'font-medium' : 'text-[var(--muted)]'}>
+                          {office.tenantName || 'Не назначен'}
+                        </div>
+                        <button
+                          type="button"
+                          className="text-xs text-[var(--primary)] hover:underline mt-0.5"
+                          onClick={() => startBinding(office)}
+                        >
+                          Изменить
+                        </button>
+                      </div>
+                    )}
+                  </td>
+                  <td className="p-3 whitespace-nowrap">
+                    <span className={`text-xs px-2 py-0.5 rounded-full ${
+                      office.isActive ? 'bg-emerald-50 text-emerald-700' : 'bg-[var(--border)] text-[var(--muted)]'
+                    }`}>
+                      {office.isActive ? 'Активен' : 'Неактивен'}
+                    </span>
+                  </td>
+                  <td className="p-3">
+                    <div className="flex items-center justify-end gap-1">
+                      <button
+                        type="button"
+                        className="p-1.5 rounded-md border border-[var(--border)] hover:bg-[var(--surface-muted)]"
+                        title="Изменить"
+                        onClick={() => startEdit(office)}
+                      >
+                        <Pencil className="w-4 h-4" />
+                      </button>
+                      <button
+                        type="button"
+                        className="p-1.5 rounded-md border border-[var(--border)] hover:bg-[var(--surface-muted)]"
+                        title={office.isActive ? 'Деактивировать' : 'Активировать'}
+                        onClick={() => toggleActive(office)}
+                      >
+                        {office.isActive ? <X className="w-4 h-4 text-red-500" /> : <Check className="w-4 h-4 text-emerald-600" />}
+                      </button>
+                      <button
+                        type="button"
+                        className="p-1.5 rounded-md border border-red-200 hover:bg-red-50 text-red-600"
+                        title="Удалить офис"
+                        disabled={deletingOfficeId === office.id}
+                        onClick={() => handleDeleteOffice(office)}
+                      >
+                        <Trash2 className="w-4 h-4" />
+                      </button>
+                    </div>
+                  </td>
+                </tr>
+              ))}
+            </tbody>
+          </table>
         </div>
       ) : (
         <div className="space-y-5">
