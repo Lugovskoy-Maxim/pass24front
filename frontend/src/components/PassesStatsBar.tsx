@@ -9,21 +9,25 @@ import { PassStatus } from '@/lib/api';
 import { useConfig } from '@/hooks/useConfig';
 import { Skeleton } from '@/components/ui/Skeleton';
 import { useAuth } from '@/lib/auth';
-import { canViewAllPasses } from '@/lib/permissions';
+import { canViewAllPasses, canViewPassCharts } from '@/lib/permissions';
 
 export function PassesStatsBar() {
   const { user } = useAuth();
   const config = useConfig();
   const labels = getUiLabels(config);
+  const showCharts = canViewPassCharts(user);
   const [stats, setStats] = useState<PassStats | null>(null);
   const [loading, setLoading] = useState(true);
 
   useEffect(() => {
+    if (!showCharts) return;
     api.getStats()
       .then(setStats)
       .catch(() => setStats(null))
       .finally(() => setLoading(false));
-  }, []);
+  }, [showCharts]);
+
+  if (!showCharts) return null;
 
   if (loading) {
     return (

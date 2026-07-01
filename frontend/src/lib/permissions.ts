@@ -27,6 +27,10 @@ export function canViewAllPasses(user: User | null | undefined): boolean {
   return hasPermission(user, 'passes.view_all') || isAdminPanelUser(user);
 }
 
+export function canViewPassCharts(user: User | null | undefined): boolean {
+  return user?.role !== 'tenant';
+}
+
 export function canUseReception(user: User | null | undefined): boolean {
   return hasAnyPermission(user, 'passes.reception', 'passes.lookup') || isAdminPanelUser(user);
 }

@@ -15,7 +15,7 @@ import { useConfig } from '@/hooks/useConfig';
 import { useToast } from '@/components/Toast';
 import { api, Pass, PassStatus, getErrorMessage } from '@/lib/api';
 import { PageError } from '@/components/PageError';
-import { canViewAllPasses, canViewPasses, hasPermission } from '@/lib/permissions';
+import { canViewAllPasses, canViewPasses, canViewPassCharts, hasPermission } from '@/lib/permissions';
 
 
 
@@ -222,7 +222,7 @@ function PassesPageContent() {
         </div>
       </div>
 
-      <PassesStatsBar />
+      {canViewPassCharts(user) && <PassesStatsBar />}
 
       {loadError && (
         <PageError
