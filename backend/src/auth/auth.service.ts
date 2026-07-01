@@ -196,14 +196,20 @@ export class AuthService {
     const properties = await this.propertyModel.find({ _id: { $in: propertyIds } }).lean();
     const propertyMap = new Map(properties.map((p) => [p._id.toString(), p]));
 
-    return offices.map((o) => ({
-      id: o._id.toString(),
-      propertyId: o.property.toString(),
-      businessCenterName: propertyMap.get(o.property.toString())?.name,
-      number: o.number,
-      floor: o.floor,
-      company: o.company,
-    }));
+    return offices.map((o) => {
+      const property = propertyMap.get(o.property.toString());
+      const ps = property?.settings || {};
+      return {
+        id: o._id.toString(),
+        propertyId: o.property.toString(),
+        businessCenterName: property?.name,
+        number: o.number,
+        floor: o.floor,
+        company: o.company,
+        workingHoursFrom: ps.working_hours_from || '08:00',
+        workingHoursTo: ps.working_hours_to || '20:00',
+      };
+    });
   }
 
   private generateToken(user: any) {

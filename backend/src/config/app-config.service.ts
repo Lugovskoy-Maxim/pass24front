@@ -14,10 +14,11 @@ export class AppConfigService {
 
   async getPublicConfig() {
     const site = await this.siteSettingsService.get();
-    const property = await this.propertyModel
-      .findOne({ type: PropertyType.BUSINESS_CENTER, isActive: true })
+    const properties = await this.propertyModel
+      .find({ type: PropertyType.BUSINESS_CENTER, isActive: true })
       .sort({ createdAt: 1 })
       .lean();
+    const property = properties[0];
     const s = property?.settings || {};
 
     return {
@@ -32,8 +33,15 @@ export class AppConfigService {
       brandNameBeforeMark: site.brandNameBeforeMark,
       uiIconSelectChevron: site.uiIconSelectChevron,
       businessCenterName: property?.name || site.siteName,
-      workingHoursFrom: s.working_hours_from || '08:00',
-      workingHoursTo: s.working_hours_to || '20:00',
+      businessCenters: properties.map((p) => {
+        const ps = p.settings || {};
+        return {
+          id: p._id.toString(),
+          name: p.name,
+          workingHoursFrom: ps.working_hours_from || '08:00',
+          workingHoursTo: ps.working_hours_to || '20:00',
+        };
+      }),
       contactPhone: s.contact_phone || site.sitePhone,
       contactEmail: s.contact_email || site.siteEmail,
       receptionFloor: s.reception_floor || '1',

@@ -26,6 +26,15 @@ export interface TenantOffice {
   number: string;
   floor: string;
   company?: string;
+  workingHoursFrom?: string;
+  workingHoursTo?: string;
+}
+
+export interface PublicBusinessCenter {
+  id: string;
+  name: string;
+  workingHoursFrom: string;
+  workingHoursTo: string;
 }
 
 export interface ProfileChangeRequest {
@@ -534,8 +543,7 @@ export interface SiteSettings {
 
 export interface BcConfig extends SiteSettings {
   businessCenterName: string;
-  workingHoursFrom: string;
-  workingHoursTo: string;
+  businessCenters: PublicBusinessCenter[];
   contactPhone: string;
   contactEmail: string;
   receptionFloor: string;

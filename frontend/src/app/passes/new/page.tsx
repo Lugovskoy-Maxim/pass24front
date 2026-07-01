@@ -1,6 +1,6 @@
 'use client';
 
-import { useState, useEffect, FormEvent, Suspense } from 'react';
+import { useState, useEffect, useMemo, FormEvent, Suspense } from 'react';
 import { useRouter, useSearchParams } from 'next/navigation';
 import { ProtectedLayout } from '@/components/ProtectedLayout';
 import { useAuth } from '@/lib/auth';
@@ -51,6 +51,30 @@ function NewPassForm() {
   const officesInBc = propertyId
     ? tenantOffices.filter((o) => o.propertyId === propertyId)
     : tenantOffices;
+
+  const bcHoursById = useMemo(() => {
+    const configById = new Map(config?.businessCenters?.map((bc) => [bc.id, bc]) || []);
+    const map = new Map<string, { name: string; from: string; to: string }>();
+    tenantOffices.forEach((o) => {
+      if (!o.propertyId || map.has(o.propertyId)) return;
+      const fromConfig = configById.get(o.propertyId);
+      map.set(o.propertyId, {
+        name: o.businessCenterName || fromConfig?.name || 'Бизнес-центр',
+        from: o.workingHoursFrom || fromConfig?.workingHoursFrom || '08:00',
+        to: o.workingHoursTo || fromConfig?.workingHoursTo || '20:00',
+      });
+    });
+    config?.businessCenters?.forEach((bc) => {
+      if (!map.has(bc.id)) {
+        map.set(bc.id, { name: bc.name, from: bc.workingHoursFrom, to: bc.workingHoursTo });
+      }
+    });
+    return map;
+  }, [tenantOffices, config?.businessCenters]);
+
+  const selectedBcId = propertyId
+    || (officeId ? tenantOffices.find((o) => o.id === officeId)?.propertyId : undefined);
+  const selectedBcHours = selectedBcId ? bcHoursById.get(selectedBcId) : undefined;
 
   useEffect(() => {
     if (enabledTypes.length && !enabledTypes.includes(passType)) {
@@ -188,9 +212,21 @@ function NewPassForm() {
   return (
     <ProtectedLayout permissions={['passes.create']}>
       <h1 className="page-title mb-2">{templateId ? 'Заказ по шаблону' : 'Заказ пропуска'}</h1>
-      {config && (
+      {bcHoursById.size > 0 && (
         <p className="text-sm text-[var(--muted)] mb-6">
-          Рабочие часы БЦ: {config.workingHoursFrom}–{config.workingHoursTo}
+          {selectedBcHours ? (
+            <>Рабочие часы {selectedBcHours.name}: {selectedBcHours.from}–{selectedBcHours.to}</>
+          ) : (
+            <>
+              Рабочие часы:{' '}
+              {[...bcHoursById.entries()].map(([id, bc], i) => (
+                <span key={id}>
+                  {i > 0 && ' · '}
+                  {bc.name} {bc.from}–{bc.to}
+                </span>
+              ))}
+            </>
+          )}
         </p>
       )}
 
