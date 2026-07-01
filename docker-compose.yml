@@ -4,8 +4,6 @@ services:
     image: mongo:7-jammy
     container_name: pass24-mongo
     restart: unless-stopped
-    ports:
-      - "27017:27017"
     environment:
       MONGO_INITDB_DATABASE: pass24
     volumes:
