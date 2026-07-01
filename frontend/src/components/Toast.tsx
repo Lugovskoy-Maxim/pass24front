@@ -1,15 +1,10 @@
 'use client';
 
-import { createContext, useContext, useState, useCallback, ReactNode } from 'react';
-import { CheckCircle, AlertCircle, X } from 'lucide-react';
+import { createContext, useContext, useCallback, ReactNode } from 'react';
+import { Toaster, toast as sonnerToast } from 'sonner';
+import { useTheme } from '@/components/ThemeProvider';
 
 type ToastType = 'success' | 'error' | 'info' | 'warning';
-
-interface Toast {
-  id: number;
-  message: string;
-  type: ToastType;
-}
 
 interface ToastContextType {
   toast: (message: string, type?: ToastType) => void;
@@ -17,46 +12,43 @@ interface ToastContextType {
 
 const ToastContext = createContext<ToastContextType | null>(null);
 
-const TOAST_CLASSES: Record<ToastType, string> = {
-  success: 'theme-toast-success',
-  error: 'theme-toast-error',
-  info: 'theme-toast-info',
-  warning: 'theme-toast-warning',
-};
-
 export function ToastProvider({ children }: { children: ReactNode }) {
-  const [toasts, setToasts] = useState<Toast[]>([]);
+  const { theme } = useTheme();
 
   const toast = useCallback((message: string, type: ToastType = 'info') => {
-    const id = Date.now();
-    setToasts((prev) => [...prev, { id, message, type }]);
-    setTimeout(() => setToasts((prev) => prev.filter((t) => t.id !== id)), 4000);
+    const opts = { duration: 4000 };
+    switch (type) {
+      case 'success':
+        sonnerToast.success(message, opts);
+        break;
+      case 'error':
+        sonnerToast.error(message, opts);
+        break;
+      case 'warning':
+        sonnerToast.warning(message, opts);
+        break;
+      default:
+        sonnerToast.message(message, opts);
+    }
   }, []);
-
-  const dismiss = (id: number) => setToasts((prev) => prev.filter((t) => t.id !== id));
-
-  const icons: Record<ToastType, typeof CheckCircle> = {
-    success: CheckCircle,
-    error: AlertCircle,
-    info: AlertCircle,
-    warning: AlertCircle,
-  };
 
   return (
     <ToastContext.Provider value={{ toast }}>
       {children}
-      <div className="fixed bottom-4 right-4 z-[100] flex flex-col gap-2 max-w-sm">
-        {toasts.map((t) => {
-          const Icon = icons[t.type];
-          return (
-            <div key={t.id} className={`flex items-center gap-2 px-4 py-3 rounded-lg border shadow-lg text-sm animate-slide-up ${TOAST_CLASSES[t.type]}`}>
-              <Icon className="w-4 h-4 shrink-0" />
-              <span className="flex-1">{t.message}</span>
-              <button onClick={() => dismiss(t.id)} className="opacity-60 hover:opacity-100"><X className="w-4 h-4" /></button>
-            </div>
-          );
-        })}
-      </div>
+      <Toaster
+        theme={theme}
+        position="bottom-right"
+        closeButton
+        richColors
+        toastOptions={{
+          className: 'pass24-toast',
+          style: {
+            background: 'var(--surface-elevated)',
+            border: '1px solid var(--border)',
+            color: 'var(--text)',
+          },
+        }}
+      />
     </ToastContext.Provider>
   );
 }

@@ -4,6 +4,7 @@ import { useEffect } from 'react';
 import { useRouter } from 'next/navigation';
 import { useAuth } from '@/lib/auth';
 import { Header } from './Header';
+import { MobileNav } from './MobileNav';
 import { UserRole } from '@/lib/api';
 import { getHomePath, hasAllPermissions, hasAnyPermission } from '@/lib/permissions';
 
@@ -52,7 +53,8 @@ export function ProtectedLayout({ children, roles, permissions, anyPermissions }
   return (
     <>
       <Header />
-      <main className="max-w-6xl mx-auto px-4 py-6">{children}</main>
+      <main className="app-main max-w-6xl mx-auto px-4 py-6">{children}</main>
+      <MobileNav />
     </>
   );
 }

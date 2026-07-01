@@ -9,11 +9,14 @@
     "lint": "eslint"
   },
   "dependencies": {
+    "@radix-ui/react-tooltip": "^1.2.11",
     "lucide-react": "^0.475.0",
     "next": "^15.2.4",
     "react": "^19.0.0",
     "react-dom": "^19.0.0",
-    "react-qr-code": "^2.2.0"
+    "react-qr-code": "^2.2.0",
+    "recharts": "^3.9.1",
+    "sonner": "^2.0.7"
   },
   "devDependencies": {
     "@tailwindcss/postcss": "^4",

@@ -3,7 +3,7 @@
 import { Suspense, useEffect, useState, useCallback } from 'react';
 import { useRouter, useSearchParams } from 'next/navigation';
 import Link from 'next/link';
-import { Plus, Search, X } from 'lucide-react';
+import { Inbox, Plus, Search, X } from 'lucide-react';
 import { ProtectedLayout } from '@/components/ProtectedLayout';
 import { PassListCard } from '@/components/PassListCard';
 import { PassDetailPanel } from '@/components/PassDetailPanel';
@@ -20,6 +20,9 @@ import { canViewAllPasses, canViewPasses, hasPermission } from '@/lib/permission
 
 
 import { getStatusLabel, getUiLabels, UiLabels } from '@/lib/ui-labels';
+import { PassesStatsBar } from '@/components/PassesStatsBar';
+import { ListSkeleton } from '@/components/ui/Skeleton';
+import { EmptyState } from '@/components/ui/EmptyState';
 
 const ALL_STATUSES: PassStatus[] = ['pending', 'approved', 'active', 'completed', 'rejected', 'expired', 'cancelled'];
 
@@ -219,6 +222,8 @@ function PassesPageContent() {
         </div>
       </div>
 
+      <PassesStatsBar />
+
       {loadError && (
         <PageError
           className="mb-4"
@@ -232,16 +237,20 @@ function PassesPageContent() {
       <div className="grid lg:grid-cols-[minmax(0,1fr)_minmax(320px,400px)] gap-5 items-start">
         <div className="min-w-0">
           {loading ? (
-            <div className="card p-8 text-center text-[var(--muted)]">{labels.passes.loading}</div>
+            <ListSkeleton rows={5} />
           ) : passes.length === 0 ? (
-            <div className="card p-8 text-center text-[var(--muted)]">
-              <p>{labels.passes.notFound}</p>
-              {canCreate && (
-                <Link href="/passes/new" className="btn btn-primary mt-4 inline-flex">
-                  <Plus className="w-4 h-4" />
-                  {labels.buttons.order}
-                </Link>
-              )}
+            <div className="card">
+              <EmptyState
+                icon={Inbox}
+                title={labels.passes.notFound}
+                description={canCreate ? 'Закажите первый пропуск для посетителя или курьера' : undefined}
+                action={canCreate ? (
+                  <Link href="/passes/new" className="btn btn-primary">
+                    <Plus className="w-4 h-4" />
+                    {labels.buttons.order}
+                  </Link>
+                ) : undefined}
+              />
             </div>
           ) : (
             <div className="flex flex-col gap-1.5">
