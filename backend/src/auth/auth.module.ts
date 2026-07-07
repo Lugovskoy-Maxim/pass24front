@@ -29,6 +29,6 @@ import { Office, OfficeSchema, Property, PropertySchema, User, UserSchema } from
   ],
   controllers: [AuthController],
   providers: [AuthService, JwtStrategy, PermissionsGuard],
-  exports: [AuthService, JwtModule, PermissionsGuard, AuthDatabaseModule],
+  exports: [AuthService, JwtModule, PermissionsGuard],
 })
 export class AuthModule {}
