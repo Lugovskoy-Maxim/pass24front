@@ -18,6 +18,7 @@ import {
   User,
   UserDocument,
 } from '../schemas';
+import { AUTH_CONNECTION } from '../database/auth-database.constants';
 import { PropertyType } from '../schemas/enums';
 import { CreateBusinessCenterDto } from './dto/create-business-center.dto';
 import { CreateOfficeDto } from './dto/create-office.dto';
@@ -40,7 +41,7 @@ export interface UserQuery {
 @Injectable()
 export class AdminService {
   constructor(
-    @InjectModel(User.name) private userModel: Model<UserDocument>,
+    @InjectModel(User.name, AUTH_CONNECTION) private userModel: Model<UserDocument>,
     @InjectModel(Property.name) private propertyModel: Model<PropertyDocument>,
     @InjectModel(Office.name) private officeModel: Model<OfficeDocument>,
     @InjectModel(Pass.name) private passModel: Model<PassDocument>,

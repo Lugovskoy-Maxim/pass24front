@@ -1,6 +1,7 @@
 import { Injectable } from '@nestjs/common';
 import { InjectModel } from '@nestjs/mongoose';
 import { Model, Types } from 'mongoose';
+import { AUTH_CONNECTION } from '../database/auth-database.constants';
 import { AuditLog, AuditLogDocument, User, UserDocument } from '../schemas';
 
 export interface AuditActor {
@@ -64,7 +65,7 @@ const ENTITY_LABELS: Record<string, string> = {
 export class AuditService {
   constructor(
     @InjectModel(AuditLog.name) private auditLogModel: Model<AuditLogDocument>,
-    @InjectModel(User.name) private userModel: Model<UserDocument>,
+    @InjectModel(User.name, AUTH_CONNECTION) private userModel: Model<UserDocument>,
   ) {}
 
   async log(params: {

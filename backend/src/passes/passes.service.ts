@@ -5,6 +5,7 @@ import { AuditActor, AuditService } from '../audit/audit.service';
 import { MailService } from '../mail/mail.service';
 import { InjectModel } from '@nestjs/mongoose';
 import { Model, Types } from 'mongoose';
+import { AUTH_CONNECTION } from '../database/auth-database.constants';
 import { Office, OfficeDocument, Pass, PassDocument, Property, PropertyDocument, User, UserDocument } from '../schemas';
 import { PropertyType } from '../schemas/enums';
 import { deriveVisitPurpose, normalizePassport, normalizePersonName, normalizePhone } from '../common/pass-helpers';
@@ -21,7 +22,7 @@ export class PassesService implements OnModuleInit {
     @InjectModel(Pass.name) private passModel: Model<PassDocument>,
     @InjectModel(Office.name) private officeModel: Model<OfficeDocument>,
     @InjectModel(Property.name) private propertyModel: Model<PropertyDocument>,
-    @InjectModel(User.name) private userModel: Model<UserDocument>,
+    @InjectModel(User.name, AUTH_CONNECTION) private userModel: Model<UserDocument>,
     private accessConfigService: AccessConfigService,
     private passTemplatesService: PassTemplatesService,
     private auditService: AuditService,

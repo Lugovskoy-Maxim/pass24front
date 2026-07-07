@@ -60,6 +60,17 @@ export class User {
   @Prop({ type: [{ type: String }], default: [] })
   pushTokens: string[]; // Для мобильных уведомлений
 
+  /** Bitrix24 user ID — для будущей интеграции с приложением заявок */
+  @Prop({ trim: true, sparse: true })
+  bitrix24UserId?: string;
+
+  /** Домен портала Bitrix24 (например, company.bitrix24.ru) */
+  @Prop({ trim: true, lowercase: true })
+  bitrix24Domain?: string;
+
+  @Prop({ type: Object, default: null })
+  bitrix24Meta?: Record<string, unknown> | null;
+
   @Prop({ type: Object, default: null })
   profileChangeRequest?: {
     lastName?: string;
@@ -77,3 +88,4 @@ export const UserSchema = SchemaFactory.createForClass(User);
 UserSchema.index({ properties: 1 });
 UserSchema.index({ role: 1, isActive: 1 });
 UserSchema.index({ fullName: 'text' });
+UserSchema.index({ bitrix24UserId: 1, bitrix24Domain: 1 }, { unique: true, sparse: true });

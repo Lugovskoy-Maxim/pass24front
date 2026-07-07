@@ -4,6 +4,7 @@ import * as bcrypt from 'bcryptjs';
 import { Model, Types } from 'mongoose';
 import { Office, OfficeDocument, Property, PropertyDocument, User, UserDocument } from '../schemas';
 import { PropertyType } from '../schemas/enums';
+import { AUTH_CONNECTION } from './auth-database.constants';
 import { DEV_TEST_ACCOUNTS } from './dev-test-accounts';
 
 export interface TestDataSeedResult {
@@ -19,7 +20,7 @@ export class TestDataSeedService {
   private readonly logger = new Logger(TestDataSeedService.name);
 
   constructor(
-    @InjectModel(User.name) private userModel: Model<UserDocument>,
+    @InjectModel(User.name, AUTH_CONNECTION) private userModel: Model<UserDocument>,
     @InjectModel(Property.name) private propertyModel: Model<PropertyDocument>,
     @InjectModel(Office.name) private officeModel: Model<OfficeDocument>,
   ) {}

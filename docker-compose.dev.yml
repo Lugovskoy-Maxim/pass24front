@@ -29,6 +29,7 @@ services:
     environment:
       - PORT=4000
       - MONGODB_URI=mongodb://mongo:27017/pass24
+      - MONGODB_AUTH_URI=mongodb://mongo:27017/pass24_auth
       - JWT_SECRET=pass24-super-secret-key-2026
       - JWT_EXPIRES_IN=7d
     command: npm run start:dev

@@ -40,6 +40,7 @@ services:
     environment:
       - PORT=4000
       - MONGODB_URI=mongodb://mongo:27017/pass24
+      - MONGODB_AUTH_URI=mongodb://mongo:27017/pass24_auth
       - JWT_SECRET=pass24-super-secret-key-2026
       - JWT_EXPIRES_IN=7d
       - ADMIN_EMAIL=admin@pass24.local
@@ -48,7 +49,7 @@ services:
       - SMTP_HOST=mailpit
       - SMTP_PORT=1025
       - SMTP_FROM=PASS24 <noreply@pass24.local>
-      - PUBLIC_APP_URL=http://127.0.0.1:3000
+      - PUBLIC_APP_URL=http://127.0.0.1:3001
       - TZ=Europe/Moscow
     depends_on:
       mongo:
@@ -72,7 +73,7 @@ services:
     restart: unless-stopped
     ports:
       # Только IPv4: на Windows localhost → ::1, а Docker IPv6-проброс часто зависает
-      - "127.0.0.1:3000:3000"
+      - "127.0.0.1:3001:3001"
     environment:
       - HOSTNAME=0.0.0.0
       - NEXT_PUBLIC_API_URL=http://127.0.0.1:4000/api

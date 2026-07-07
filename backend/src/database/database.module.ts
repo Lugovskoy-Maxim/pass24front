@@ -26,13 +26,14 @@ import {
   Vehicle,
   VehicleSchema,
 } from '../schemas';
+import { AuthDatabaseModule } from './auth-database.module';
 import { SeedService } from './seed.service';
 import { TestDataSeedService } from './test-data-seed.service';
 
-const ALL_FEATURES = [
+/** Operational data: passes, offices, audit, etc. (not identity/auth). */
+const APP_FEATURES = [
   { name: Property.name, schema: PropertySchema },
   { name: Office.name, schema: OfficeSchema },
-  { name: User.name, schema: UserSchema },
   { name: Vehicle.name, schema: VehicleSchema },
   { name: Pass.name, schema: PassSchema },
   { name: PassTemplate.name, schema: PassTemplateSchema },
@@ -45,6 +46,8 @@ const ALL_FEATURES = [
 
 @Module({
   imports: [
+    AuthDatabaseModule,
+    AuthDatabaseModule.forFeature([{ name: User.name, schema: UserSchema }]),
     MongooseModule.forRootAsync({
       imports: [ConfigModule],
       useFactory: (configService: ConfigService) => {
@@ -59,13 +62,12 @@ const ALL_FEATURES = [
       inject: [ConfigService],
     }),
     MongooseModule.forFeature([
-      { name: User.name, schema: UserSchema },
       { name: Property.name, schema: PropertySchema },
       { name: Office.name, schema: OfficeSchema },
     ]),
   ],
   providers: [SeedService, TestDataSeedService],
-  exports: [MongooseModule, TestDataSeedService],
+  exports: [MongooseModule, AuthDatabaseModule, TestDataSeedService],
 })
 export class DatabaseModule {
   /**
@@ -73,7 +75,7 @@ export class DatabaseModule {
    * imports: [DatabaseModule.forFeature()]
    */
   static forFeature(): DynamicModule {
-    return MongooseModule.forFeature(ALL_FEATURES);
+    return MongooseModule.forFeature(APP_FEATURES);
   }
 
   /**

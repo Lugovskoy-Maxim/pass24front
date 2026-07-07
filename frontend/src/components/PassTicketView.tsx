@@ -1,13 +1,11 @@
 'use client';
 
-import { useMemo, useState } from 'react';
+import { useMemo } from 'react';
 import QRCode from 'react-qr-code';
 import {
   Building2,
   Calendar,
-  Check,
   Clock,
-  Copy,
   MapPin,
   User,
 } from 'lucide-react';
@@ -38,7 +36,6 @@ export function PassTicketView({
   const config = useConfig();
   const labels = getUiLabels(config);
   const businessCenterName = ticket.businessCenterName || fallbackBusinessCenterName || labels.ticket.defaultBcName;
-  const [copied, setCopied] = useState(false);
 
   const ticketUrl = useMemo(() => {
     if (typeof window === 'undefined') return '';
@@ -50,17 +47,6 @@ export function PassTicketView({
     : null;
 
   const isTerminal = ['rejected', 'cancelled', 'expired', 'completed'].includes(ticket.status);
-
-  const handleCopy = async () => {
-    if (!ticketUrl) return;
-    try {
-      await navigator.clipboard.writeText(ticketUrl);
-      setCopied(true);
-      setTimeout(() => setCopied(false), 2000);
-    } catch {
-      /* ignore */
-    }
-  };
 
   const typeLabel = TYPE_LABELS[ticket.passType as PassType] || ticket.passType;
   const qrSize = compact ? 112 : 180;
@@ -162,14 +148,12 @@ export function PassTicketView({
         </section>
 
         <footer className="pass-ticket__footer border-t border-[var(--border)] bg-[var(--surface)]">
-          {enableEmailShare ? (
-            <SharePassActions passIdOrNumber={ticket.passNumber} showQrLink={false} ticketLayout />
-          ) : ticketUrl ? (
-            <button type="button" className="btn btn-secondary w-full text-sm" onClick={handleCopy}>
-              {copied ? <Check className="w-4 h-4" /> : <Copy className="w-4 h-4" />}
-              {copied ? labels.buttons.linkCopied : labels.buttons.copyLink}
-            </button>
-          ) : null}
+          <SharePassActions
+            passIdOrNumber={ticket.passNumber}
+            showQrLink={false}
+            ticketLayout
+            enableEmailShare={enableEmailShare}
+          />
         </footer>
       </article>
 

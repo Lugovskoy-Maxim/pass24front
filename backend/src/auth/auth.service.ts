@@ -7,6 +7,7 @@ import * as bcrypt from 'bcryptjs';
 import { JwtService } from '@nestjs/jwt';
 import { AccessConfigService } from '../access/access-config.service';
 import { AuditService } from '../audit/audit.service';
+import { AUTH_CONNECTION } from '../database/auth-database.constants';
 import { Office, OfficeDocument, Property, PropertyDocument, User, UserDocument } from '../schemas';
 import { LoginDto } from './dto/login.dto';
 import { RegisterDto } from './dto/register.dto';
@@ -16,7 +17,7 @@ import { DEV_TEST_ACCOUNTS, DEV_TEST_ACCOUNT_EMAILS } from '../database/dev-test
 @Injectable()
 export class AuthService {
   constructor(
-    @InjectModel(User.name) private userModel: Model<UserDocument>,
+    @InjectModel(User.name, AUTH_CONNECTION) private userModel: Model<UserDocument>,
     @InjectModel(Office.name) private officeModel: Model<OfficeDocument>,
     @InjectModel(Property.name) private propertyModel: Model<PropertyDocument>,
     private jwtService: JwtService,

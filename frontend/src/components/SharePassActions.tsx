@@ -2,7 +2,7 @@
 
 import { FormEvent, useState } from 'react';
 import Link from 'next/link';
-import { Copy, Check, Mail, QrCode } from 'lucide-react';
+import { Copy, Check, Mail, QrCode, Share } from 'lucide-react';
 import { api, getPassTicketUrl } from '@/lib/api';
 import { useConfig } from '@/hooks/useConfig';
 import { getUiLabels } from '@/lib/ui-labels';
@@ -14,6 +14,8 @@ interface SharePassActionsProps {
   compact?: boolean;
   ticketLayout?: boolean;
   showQrLink?: boolean;
+  /** Показать форму отправки на email после копирования ссылки */
+  enableEmailShare?: boolean;
 }
 
 export function SharePassActions({
@@ -22,6 +24,7 @@ export function SharePassActions({
   compact = false,
   ticketLayout = false,
   showQrLink = true,
+  enableEmailShare = false,
 }: SharePassActionsProps) {
   const config = useConfig();
   const labels = getUiLabels(config);
@@ -32,12 +35,30 @@ export function SharePassActions({
   const [email, setEmail] = useState('');
   const [sending, setSending] = useState(false);
 
-  const handleCopy = async () => {
+  const handleShare = async () => {
+    const url = getPassTicketUrl(ticketNumber);
+    
+    if (navigator.share) {
+      try {
+        await navigator.share({
+          title: labels.passes.detailTitle,
+          url: url,
+        });
+        return;
+      } catch (err) {
+        if ((err as Error).name === 'AbortError') return;
+        // Fall through to copy fallback
+      }
+    }
+
     try {
-      await navigator.clipboard.writeText(getPassTicketUrl(ticketNumber));
+      await navigator.clipboard.writeText(url);
       setCopied(true);
       toast(labels.buttons.linkCopied, 'success');
       setTimeout(() => setCopied(false), 2000);
+      if (enableEmailShare) {
+        setShowEmailForm(true);
+      }
     } catch {
       toast('Не удалось скопировать ссылку', 'error');
     }
@@ -74,17 +95,13 @@ export function SharePassActions({
             {labels.buttons.qrPass}
           </Link>
         )}
-        <button type="button" className={`${btnClass} btn-secondary`} onClick={handleCopy}>
-          {copied ? <Check className="w-3.5 h-3.5" /> : <Copy className="w-3.5 h-3.5" />}
-          {copied ? labels.buttons.linkCopied : labels.buttons.copyLink}
-        </button>
         <button
           type="button"
           className={`${btnClass} btn-secondary`}
-          onClick={() => setShowEmailForm((v) => !v)}
+          onClick={handleShare}
         >
-          <Mail className="w-3.5 h-3.5" />
-          {labels.buttons.share}
+          {copied ? <Check className="w-3.5 h-3.5" /> : <Share className="w-3.5 h-3.5" />}
+          {copied ? labels.buttons.linkCopied : labels.buttons.share}
         </button>
       </div>
 

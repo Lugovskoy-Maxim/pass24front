@@ -7,12 +7,13 @@ import { AuthController } from './auth.controller';
 import { AuthService } from './auth.service';
 import { JwtStrategy } from './jwt.strategy';
 import { PermissionsGuard } from './permissions.guard';
+import { AuthDatabaseModule } from '../database/auth-database.module';
 import { Office, OfficeSchema, Property, PropertySchema, User, UserSchema } from '../schemas';
 
 @Module({
   imports: [
+    AuthDatabaseModule.forFeature([{ name: User.name, schema: UserSchema }]),
     MongooseModule.forFeature([
-      { name: User.name, schema: UserSchema },
       { name: Office.name, schema: OfficeSchema },
       { name: Property.name, schema: PropertySchema },
     ]),
@@ -28,6 +29,6 @@ import { Office, OfficeSchema, Property, PropertySchema, User, UserSchema } from
   ],
   controllers: [AuthController],
   providers: [AuthService, JwtStrategy, PermissionsGuard],
-  exports: [AuthService, JwtModule, PermissionsGuard],
+  exports: [AuthService, JwtModule, PermissionsGuard, AuthDatabaseModule],
 })
 export class AuthModule {}
