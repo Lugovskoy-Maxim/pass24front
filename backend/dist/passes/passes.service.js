@@ -20,9 +20,11 @@ const audit_service_1 = require("../audit/audit.service");
 const mail_service_1 = require("../mail/mail.service");
 const mongoose_1 = require("@nestjs/mongoose");
 const mongoose_2 = require("mongoose");
+const auth_database_constants_1 = require("../database/auth-database.constants");
 const schemas_1 = require("../schemas");
 const enums_1 = require("../schemas/enums");
 const pass_helpers_1 = require("../common/pass-helpers");
+const visit_date_1 = require("../common/visit-date");
 const pass_templates_service_1 = require("./pass-templates.service");
 let PassesService = class PassesService {
     passModel;
@@ -54,7 +56,7 @@ let PassesService = class PassesService {
     generatePassNumber() {
         const year = new Date().getFullYear();
         const random = Math.floor(1000 + Math.random() * 9000);
-        return `PS-${year}-${random}`;
+        return `Pass-${year}-${random}`;
     }
     async onModuleInit() {
         await this.expirePastPasses();
@@ -168,21 +170,31 @@ let PassesService = class PassesService {
         if (sendEmail && !recipientEmail?.trim()) {
             throw new common_1.BadRequestException('Укажите email для отправки пропуска');
         }
-        const today = this.getTodayDate();
-        if (passDto.visitDate < today) {
-            throw new common_1.BadRequestException('Нельзя заказать пропуск на прошедшую дату');
+        if (!(0, visit_date_1.isValidVisitDateString)(passDto.visitDate)) {
+            throw new common_1.BadRequestException('Некорректная дата визита');
+        }
+        try {
+            (0, visit_date_1.assertVisitDateNotPast)(passDto.visitDate, this.getTodayDate());
+        }
+        catch (e) {
+            if (e instanceof Error && e.message === 'PAST_DATE') {
+                throw new common_1.BadRequestException('Нельзя заказать пропуск на прошедшую дату');
+            }
+            throw new common_1.BadRequestException('Некорректная дата визита');
         }
         const resolved = await this.resolveOfficeFields(passDto, user);
         const creator = user?.userId
             ? await this.userModel.findById(user.userId).select('fullName phone company email').lean()
             : null;
         const passNumber = this.generatePassNumber();
+        const approvedAt = new Date().toISOString();
         const doc = await this.passModel.create({
             ...passDto,
             visitPurpose: (0, pass_helpers_1.deriveVisitPurpose)(passDto.passType),
             ...resolved,
             passNumber,
-            status: 'pending',
+            status: 'approved',
+            approvedAt,
             createdBy: user?.userId ? new mongoose_2.Types.ObjectId(user.userId) : undefined,
             creatorName: creator?.fullName || user?.fullName || user?.email,
             creatorPhone: creator?.phone,
@@ -243,13 +255,24 @@ let PassesService = class PassesService {
         const canApprove = actor?.role
             ? await this.accessConfigService.hasPermission(actor.role, 'passes.approve')
             : false;
+        const canReception = actor?.role
+            ? await this.accessConfigService.hasPermission(actor.role, 'passes.reception')
+            : false;
         const isCreator = actor?.userId && pass.createdBy?.toString() === actor.userId;
         if (dto.status === 'cancelled') {
             if (!canApprove && !isCreator) {
                 throw new common_1.ForbiddenException('Нельзя отменить этот пропуск');
             }
-            if (!canApprove && pass.status !== 'pending') {
-                throw new common_1.BadRequestException('Можно отменить только заявку на рассмотрении');
+            if (!canApprove && !['pending', 'approved'].includes(pass.status)) {
+                throw new common_1.BadRequestException('Можно отменить только до входа в здание');
+            }
+        }
+        else if (dto.status === 'rejected') {
+            if (!canApprove && !canReception) {
+                throw new common_1.ForbiddenException('Недостаточно прав для отклонения пропуска');
+            }
+            if (!['pending', 'approved'].includes(pass.status)) {
+                throw new common_1.BadRequestException('Можно отклонить только до входа в здание');
             }
         }
         else if (!canApprove) {
@@ -288,6 +311,12 @@ let PassesService = class PassesService {
         const pass = await this.passModel.findById(id);
         if (!pass)
             throw new common_1.NotFoundException('Пропуск не найден');
+        if (!['pending', 'approved'].includes(pass.status)) {
+            throw new common_1.BadRequestException('Пропуск нельзя впустить в текущем статусе');
+        }
+        if (pass.status === 'pending' && !pass.approvedAt) {
+            pass.approvedAt = new Date().toISOString();
+        }
         pass.status = 'active';
         pass.checkedInAt = new Date().toISOString();
         await pass.save();
@@ -331,7 +360,7 @@ let PassesService = class PassesService {
             pending: mapped.filter((p) => p.status === 'pending').length,
             active: mapped.filter((p) => p.status === 'active').length,
             completed: mapped.filter((p) => p.status === 'completed').length,
-            approved: mapped.filter((p) => p.status === 'approved').length,
+            approved: mapped.filter((p) => p.status === 'approved' || p.status === 'pending').length,
         };
         return { date: targetDate, stats, passes: mapped };
     }
@@ -681,7 +710,7 @@ exports.PassesService = PassesService = __decorate([
     __param(0, (0, mongoose_1.InjectModel)(schemas_1.Pass.name)),
     __param(1, (0, mongoose_1.InjectModel)(schemas_1.Office.name)),
     __param(2, (0, mongoose_1.InjectModel)(schemas_1.Property.name)),
-    __param(3, (0, mongoose_1.InjectModel)(schemas_1.User.name)),
+    __param(3, (0, mongoose_1.InjectModel)(schemas_1.User.name, auth_database_constants_1.AUTH_CONNECTION)),
     __metadata("design:paramtypes", [mongoose_2.Model,
         mongoose_2.Model,
         mongoose_2.Model,

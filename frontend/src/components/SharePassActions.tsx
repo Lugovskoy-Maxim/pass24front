@@ -2,7 +2,7 @@
 
 import { FormEvent, useEffect, useRef, useState } from 'react';
 import Link from 'next/link';
-import { Check, ChevronDown, Copy, Mail, QrCode, Share2, X } from 'lucide-react';
+import { AlertCircle, Check, ChevronDown, Copy, Loader2, Mail, QrCode, Share2, X } from 'lucide-react';
 import { api, getPassTicketUrl } from '@/lib/api';
 import { useConfig } from '@/hooks/useConfig';
 import { getUiLabels } from '@/lib/ui-labels';
@@ -17,6 +17,25 @@ interface SharePassActionsProps {
   /** Показать пункт «Отправить на почту» (требует авторизации) */
   enableEmailShare?: boolean;
 }
+
+type EmailModalPhase = 'form' | 'sending' | 'success' | 'error';
+
+interface EmailSendResult {
+  phase: EmailModalPhase;
+  status?: number;
+  message?: string;
+  email?: string;
+}
+
+interface EmailModalState {
+  open: boolean;
+  result: EmailSendResult;
+}
+
+const INITIAL_EMAIL_MODAL: EmailModalState = {
+  open: false,
+  result: { phase: 'form' },
+};
 
 export function SharePassActions({
   passIdOrNumber,
@@ -34,13 +53,13 @@ export function SharePassActions({
 
   const rootRef = useRef<HTMLDivElement>(null);
   const [menuOpen, setMenuOpen] = useState(false);
-  const [emailModalOpen, setEmailModalOpen] = useState(false);
+  const [emailModal, setEmailModal] = useState<EmailModalState>(INITIAL_EMAIL_MODAL);
   const [copied, setCopied] = useState(false);
   const [email, setEmail] = useState('');
-  const [sending, setSending] = useState(false);
 
   const canNativeShare = typeof navigator !== 'undefined' && typeof navigator.share === 'function';
   const btnClass = compact ? 'btn text-xs py-1.5' : ticketLayout ? 'btn text-sm flex-1' : 'btn text-sm';
+  const isSending = emailModal.result.phase === 'sending';
 
   useEffect(() => {
     if (!menuOpen) return;
@@ -61,11 +80,10 @@ export function SharePassActions({
   }, [menuOpen]);
 
   useEffect(() => {
-    if (!emailModalOpen) return;
+    if (!emailModal.open) return;
     const onKeyDown = (e: KeyboardEvent) => {
-      if (e.key === 'Escape' && !sending) {
-        setEmailModalOpen(false);
-        setEmail('');
+      if (e.key === 'Escape' && !isSending) {
+        closeEmailModal();
       }
     };
     document.addEventListener('keydown', onKeyDown);
@@ -74,7 +92,12 @@ export function SharePassActions({
       document.removeEventListener('keydown', onKeyDown);
       document.body.style.overflow = '';
     };
-  }, [emailModalOpen, sending]);
+  }, [emailModal.open, isSending]);
+
+  const closeEmailModal = () => {
+    setEmailModal(INITIAL_EMAIL_MODAL);
+    setEmail('');
+  };
 
   const closeMenu = () => setMenuOpen(false);
 
@@ -92,7 +115,7 @@ export function SharePassActions({
 
   const handleOpenEmailModal = () => {
     closeMenu();
-    setEmailModalOpen(true);
+    setEmailModal({ open: true, result: { phase: 'form' } });
   };
 
   const handleNativeShare = async () => {
@@ -116,18 +139,37 @@ export function SharePassActions({
   const handleSendEmail = async (e: FormEvent) => {
     e.preventDefault();
     const trimmed = email.trim();
-    if (!trimmed) return;
-    setSending(true);
-    try {
-      await api.sendPassEmail(passIdOrNumber, trimmed);
-      toast(`Пропуск отправлен на ${trimmed}`, 'success');
-      setEmailModalOpen(false);
-      setEmail('');
-    } catch (err) {
-      toast(err instanceof Error ? err.message : 'Не удалось отправить письмо', 'error');
-    } finally {
-      setSending(false);
+    if (!trimmed || isSending) return;
+
+    setEmailModal((prev) => ({
+      ...prev,
+      result: { phase: 'sending' },
+    }));
+
+    const result = await api.sendPassEmailWithStatus(passIdOrNumber, trimmed);
+
+    if (result.ok) {
+      setEmailModal({
+        open: true,
+        result: {
+          phase: 'success',
+          status: result.status,
+          email: result.data.email || trimmed,
+          message: labels.buttons.sendEmailSuccess,
+        },
+      });
+      toast(`${labels.buttons.sendEmailSuccess} (${result.status})`, 'success');
+      return;
     }
+
+    setEmailModal({
+      open: true,
+      result: {
+        phase: 'error',
+        status: result.status,
+        message: result.message || labels.buttons.sendEmailError,
+      },
+    });
   };
 
   const menuItems = [
@@ -212,17 +254,14 @@ export function SharePassActions({
         </div>
       </div>
 
-      {emailModalOpen && (
+      {emailModal.open && (
         <div
           className="share-modal"
           role="dialog"
           aria-modal="true"
           aria-labelledby="share-email-title"
           onClick={() => {
-            if (!sending) {
-              setEmailModalOpen(false);
-              setEmail('');
-            }
+            if (!isSending) closeEmailModal();
           }}
         >
           <div className="share-modal__panel" onClick={(e) => e.stopPropagation()}>
@@ -234,44 +273,99 @@ export function SharePassActions({
                 type="button"
                 className="share-modal__close"
                 aria-label={labels.buttons.cancel}
-                disabled={sending}
-                onClick={() => {
-                  setEmailModalOpen(false);
-                  setEmail('');
-                }}
+                disabled={isSending}
+                onClick={closeEmailModal}
               >
                 <X className="w-4 h-4" />
               </button>
             </div>
-            <p className="share-modal__hint">{labels.buttons.sendEmailHint}</p>
-            <form onSubmit={handleSendEmail} className="share-modal__form">
-              <input
-                className="input text-sm w-full"
-                type="email"
-                placeholder="email@example.com"
-                value={email}
-                onChange={(e) => setEmail(e.target.value)}
-                autoFocus
-                required
-                disabled={sending}
-              />
-              <div className="share-modal__actions">
+
+            {emailModal.result.phase === 'form' && (
+              <>
+                <p className="share-modal__hint">{labels.buttons.sendEmailHint}</p>
+                <form onSubmit={handleSendEmail} className="share-modal__form">
+                  <input
+                    className="input text-sm w-full"
+                    type="email"
+                    placeholder="email@example.com"
+                    value={email}
+                    onChange={(e) => setEmail(e.target.value)}
+                    autoFocus
+                    required
+                  />
+                  <div className="share-modal__actions">
+                    <button
+                      type="button"
+                      className="btn btn-secondary text-sm flex-1"
+                      onClick={closeEmailModal}
+                    >
+                      {labels.buttons.cancel}
+                    </button>
+                    <button type="submit" className="btn btn-primary text-sm flex-1">
+                      {labels.buttons.sendEmailSubmit}
+                    </button>
+                  </div>
+                </form>
+              </>
+            )}
+
+            {emailModal.result.phase === 'sending' && (
+              <div className="share-modal__status share-modal__status--pending" role="status" aria-live="polite">
+                <Loader2 className="w-5 h-5 shrink-0 animate-spin" />
+                <div>
+                  <div className="share-modal__status-title">{labels.buttons.sendEmailSending}</div>
+                  <div className="share-modal__status-meta">Ожидание ответа сервера…</div>
+                </div>
+              </div>
+            )}
+
+            {emailModal.result.phase === 'success' && (
+              <div className="share-modal__status share-modal__status--success" role="status" aria-live="polite">
+                <Check className="w-5 h-5 shrink-0" />
+                <div className="min-w-0">
+                  <div className="share-modal__status-title">{emailModal.result.message}</div>
+                  <div className="share-modal__status-meta">
+                    HTTP {emailModal.result.status ?? 200}
+                    {emailModal.result.email ? ` · ${emailModal.result.email}` : ''}
+                  </div>
+                  <p className="share-modal__status-hint">{labels.buttons.sendEmailSuccessHint}</p>
+                </div>
+              </div>
+            )}
+
+            {emailModal.result.phase === 'error' && (
+              <div className="share-modal__status share-modal__status--error" role="alert">
+                <AlertCircle className="w-5 h-5 shrink-0" />
+                <div className="min-w-0">
+                  <div className="share-modal__status-title">{labels.buttons.sendEmailError}</div>
+                  <div className="share-modal__status-meta">
+                    {emailModal.result.status ? `HTTP ${emailModal.result.status} · ` : ''}
+                    {emailModal.result.message}
+                  </div>
+                </div>
+              </div>
+            )}
+
+            {(emailModal.result.phase === 'success' || emailModal.result.phase === 'error') && (
+              <div className="share-modal__actions share-modal__actions--footer">
+                {emailModal.result.phase === 'error' && (
+                  <button
+                    type="button"
+                    className="btn btn-secondary text-sm flex-1"
+                    onClick={() => setEmailModal({ open: true, result: { phase: 'form' } })}
+                  >
+                    {labels.buttons.sendEmailRetry}
+                  </button>
+                )}
                 <button
                   type="button"
-                  className="btn btn-secondary text-sm flex-1"
-                  disabled={sending}
-                  onClick={() => {
-                    setEmailModalOpen(false);
-                    setEmail('');
-                  }}
+                  className="btn btn-primary text-sm flex-1"
+                  onClick={closeEmailModal}
                 >
-                  {labels.buttons.cancel}
-                </button>
-                <button type="submit" className="btn btn-primary text-sm flex-1" disabled={sending}>
-                  {sending ? '...' : labels.buttons.sendEmailSubmit}
+                  {labels.buttons.sendEmailClose}
                 </button>
               </div>
-            </form>
+            )}
           </div>
         </div>
       )}

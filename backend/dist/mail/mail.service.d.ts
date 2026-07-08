@@ -23,6 +23,7 @@ export declare class MailService {
     sendPassTicket(data: PassTicketEmailData): Promise<{
         sent: boolean;
         to: string;
+        messageId: any;
     }>;
     private initTransporter;
 }

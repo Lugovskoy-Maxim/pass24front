@@ -141,7 +141,7 @@ __decorate([
 ], PassesController.prototype, "create", null);
 __decorate([
     (0, common_1.Patch)(':id/status'),
-    (0, permissions_decorator_1.RequirePermissions)('passes.approve', 'passes.create'),
+    (0, permissions_decorator_1.RequirePermissions)('passes.approve', 'passes.create', 'passes.reception'),
     __param(0, (0, common_1.Param)('id')),
     __param(1, (0, common_1.Body)()),
     __param(2, (0, common_1.Req)()),
@@ -161,6 +161,7 @@ __decorate([
 ], PassesController.prototype, "updateVisitorData", null);
 __decorate([
     (0, common_1.Post)(':id/send-email'),
+    (0, common_1.HttpCode)(200),
     (0, permissions_decorator_1.RequirePermissions)('passes.create', 'passes.view_own', 'passes.view_all'),
     __param(0, (0, common_1.Param)('id')),
     __param(1, (0, common_1.Body)()),

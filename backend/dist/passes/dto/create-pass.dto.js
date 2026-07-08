@@ -60,7 +60,8 @@ __decorate([
     __metadata("design:type", String)
 ], CreatePassDto.prototype, "vehicleModel", void 0);
 __decorate([
-    (0, class_validator_1.IsNotEmpty)(),
+    (0, class_validator_1.IsNotEmpty)({ message: 'Укажите дату визита' }),
+    (0, class_validator_1.Matches)(/^\d{4}-\d{2}-\d{2}$/, { message: 'Некорректная дата визита' }),
     __metadata("design:type", String)
 ], CreatePassDto.prototype, "visitDate", void 0);
 __decorate([

@@ -316,6 +316,50 @@ export const api = {
       body: JSON.stringify({ email }),
     }),
 
+  sendPassEmailWithStatus: async (passIdOrNumber: string, email: string) => {
+    const token = getToken();
+    const headers: Record<string, string> = { 'Content-Type': 'application/json' };
+    if (token) headers.Authorization = `Bearer ${token}`;
+
+    try {
+      const res = await fetch(
+        `${API_URL}/passes/${encodeURIComponent(passIdOrNumber)}/send-email`,
+        { method: 'POST', headers, body: JSON.stringify({ email }) },
+      );
+      const contentType = res.headers.get('content-type') || '';
+      const data = contentType.includes('application/json')
+        ? await res.json().catch(() => ({}))
+        : {};
+
+      if (res.ok) {
+        return {
+          ok: true as const,
+          status: res.status,
+          data: data as { sent: boolean; email: string },
+        };
+      }
+
+      if (res.status === 401 && typeof window !== 'undefined') {
+        localStorage.removeItem('pass24_token');
+        if (!window.location.pathname.startsWith('/login')) {
+          window.location.href = '/login';
+        }
+      }
+
+      return {
+        ok: false as const,
+        status: res.status,
+        message: messageForStatus(res.status, data as { message?: unknown; error?: unknown }),
+      };
+    } catch (error) {
+      return {
+        ok: false as const,
+        status: 0,
+        message: getErrorMessage(error, 'Сервер недоступен'),
+      };
+    }
+  },
+
   updateStatus: (id: string, status: string, rejectionReason?: string) =>
     request<{ pass: Pass }>(`/passes/${id}/status`, {
       method: 'PATCH',

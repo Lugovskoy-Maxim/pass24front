@@ -1,4 +1,4 @@
-import { Body, Controller, Get, Param, Patch, Post, Query, Req, UseGuards } from '@nestjs/common';
+import { Body, Controller, Get, HttpCode, Param, Patch, Post, Query, Req, UseGuards } from '@nestjs/common';
 import { AuthGuard } from '@nestjs/passport';
 import { RequirePermissions } from '../auth/permissions.decorator';
 import { PermissionsGuard } from '../auth/permissions.guard';
@@ -75,6 +75,7 @@ export class PassesController {
   }
 
   @Post(':id/send-email')
+  @HttpCode(200)
   @RequirePermissions('passes.create', 'passes.view_own', 'passes.view_all')
   sendEmail(@Param('id') id: string, @Body() dto: SendPassEmailDto, @Req() req: any) {
     return this.passesService.sendPassEmail(id, dto.email, req.user);

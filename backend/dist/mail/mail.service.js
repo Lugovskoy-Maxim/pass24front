@@ -63,7 +63,7 @@ let MailService = MailService_1 = class MailService {
             throw new common_1.BadRequestException('Почтовый сервер не настроен. Укажите SMTP_HOST, SMTP_PORT и SMTP_FROM в настройках сервера.');
         }
         const from = this.configService.get('SMTP_FROM') || 'PASS24 <noreply@pass24.local>';
-        const qrUrl = `https://api.qrserver.com/v1/create-qr-code/?size=220x220&data=${encodeURIComponent(data.ticketUrl)}`;
+        const qrUrl = `https://api.qrserver.com/v1/create-qr-code/?size=220x220&color=2B2A29&bgcolor=FEFEFE&margin=12&data=${encodeURIComponent(data.ticketUrl)}`;
         const visitTime = data.visitTimeFrom
             ? `${data.visitTimeFrom}${data.visitTimeTo ? `–${data.visitTimeTo}` : ''}`
             : '';
@@ -115,15 +115,23 @@ let MailService = MailService_1 = class MailService {
             '',
             `Открыть пропуск: ${data.ticketUrl}`,
         ].join('\n');
-        await this.transporter.sendMail({
-            from,
-            to: data.to,
-            subject: `Пропуск ${data.passNumber} — ${data.visitorName}`,
-            text,
-            html,
-        });
-        this.logger.log(`Pass ticket emailed to ${data.to} (${data.passNumber})`);
-        return { sent: true, to: data.to };
+        try {
+            const info = await this.transporter.sendMail({
+                from,
+                to: data.to,
+                subject: `Пропуск ${data.passNumber} — ${data.visitorName}`,
+                text,
+                html,
+            });
+            this.logger.log(`Pass ticket emailed to ${data.to} (${data.passNumber}): ${info.messageId || 'ok'} ${info.response || ''}`.trim());
+            return { sent: true, to: data.to, messageId: info.messageId };
+        }
+        catch (err) {
+            const message = err instanceof Error ? err.message : 'Неизвестная ошибка SMTP';
+            const response = err.response;
+            this.logger.error(`SMTP send failed to ${data.to}: ${message}${response ? ` | ${response}` : ''}`);
+            throw new common_1.InternalServerErrorException(response ? `Почтовый сервер отклонил отправку: ${response}` : `Не удалось отправить письмо: ${message}`);
+        }
     }
     initTransporter() {
         const host = this.configService.get('SMTP_HOST');
@@ -140,7 +148,12 @@ let MailService = MailService_1 = class MailService {
             port,
             secure,
             auth: user ? { user, pass } : undefined,
+            connectionTimeout: 15_000,
+            greetingTimeout: 15_000,
+            socketTimeout: 20_000,
+            tls: { minVersion: 'TLSv1.2' },
         });
+        this.logger.log(`SMTP configured: ${host}:${port} (auth: ${user ? 'yes' : 'no'}, secure: ${secure})`);
     }
 };
 exports.MailService = MailService;

@@ -1,4 +1,4 @@
-import { BadRequestException, Injectable, Logger } from '@nestjs/common';
+import { BadRequestException, Injectable, InternalServerErrorException, Logger } from '@nestjs/common';
 import { ConfigService } from '@nestjs/config';
 import * as nodemailer from 'nodemailer';
 import { Transporter } from 'nodemailer';
@@ -95,16 +95,27 @@ export class MailService {
       `Открыть пропуск: ${data.ticketUrl}`,
     ].join('\n');
 
-    await this.transporter.sendMail({
-      from,
-      to: data.to,
-      subject: `Пропуск ${data.passNumber} — ${data.visitorName}`,
-      text,
-      html,
-    });
+    try {
+      const info = await this.transporter.sendMail({
+        from,
+        to: data.to,
+        subject: `Пропуск ${data.passNumber} — ${data.visitorName}`,
+        text,
+        html,
+      });
 
-    this.logger.log(`Pass ticket emailed to ${data.to} (${data.passNumber})`);
-    return { sent: true, to: data.to };
+      this.logger.log(
+        `Pass ticket emailed to ${data.to} (${data.passNumber}): ${info.messageId || 'ok'} ${info.response || ''}`.trim(),
+      );
+      return { sent: true, to: data.to, messageId: info.messageId };
+    } catch (err) {
+      const message = err instanceof Error ? err.message : 'Неизвестная ошибка SMTP';
+      const response = (err as { response?: string }).response;
+      this.logger.error(`SMTP send failed to ${data.to}: ${message}${response ? ` | ${response}` : ''}`);
+      throw new InternalServerErrorException(
+        response ? `Почтовый сервер отклонил отправку: ${response}` : `Не удалось отправить письмо: ${message}`,
+      );
+    }
   }
 
   private initTransporter() {
@@ -124,6 +135,10 @@ export class MailService {
       port,
       secure,
       auth: user ? { user, pass } : undefined,
+      connectionTimeout: 15_000,
+      greetingTimeout: 15_000,
+      socketTimeout: 20_000,
+      tls: { minVersion: 'TLSv1.2' },
     });
 
     this.logger.log(`SMTP configured: ${host}:${port} (auth: ${user ? 'yes' : 'no'}, secure: ${secure})`);

@@ -9,7 +9,9 @@ Object.defineProperty(exports, "__esModule", { value: true });
 exports.PassesModule = void 0;
 const common_1 = require("@nestjs/common");
 const auth_module_1 = require("../auth/auth.module");
+const auth_database_module_1 = require("../database/auth-database.module");
 const database_module_1 = require("../database/database.module");
+const schemas_1 = require("../schemas");
 const pass_templates_controller_1 = require("./pass-templates.controller");
 const pass_templates_service_1 = require("./pass-templates.service");
 const passes_controller_1 = require("./passes.controller");
@@ -20,7 +22,11 @@ let PassesModule = class PassesModule {
 exports.PassesModule = PassesModule;
 exports.PassesModule = PassesModule = __decorate([
     (0, common_1.Module)({
-        imports: [database_module_1.DatabaseModule.forFeature(), auth_module_1.AuthModule],
+        imports: [
+            database_module_1.DatabaseModule.forFeature(),
+            auth_database_module_1.AuthDatabaseModule.forFeature([{ name: schemas_1.User.name, schema: schemas_1.UserSchema }]),
+            auth_module_1.AuthModule,
+        ],
         controllers: [passes_controller_1.PassesController, passes_public_controller_1.PassesPublicController, pass_templates_controller_1.PassTemplatesController],
         providers: [passes_service_1.PassesService, pass_templates_service_1.PassTemplatesService],
         exports: [passes_service_1.PassesService, pass_templates_service_1.PassTemplatesService],
