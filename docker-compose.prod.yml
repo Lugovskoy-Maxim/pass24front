@@ -36,7 +36,7 @@ services:
       - SMTP_USER=${SMTP_USER:-}
       - SMTP_PASS=${SMTP_PASS:-}
       - SMTP_SECURE=${SMTP_SECURE:-false}
-      - SMTP_FROM=${SMTP_FROM:-PASS24 <noreply@pass24.local>}
+      - SMTP_FROM=${SMTP_FROM:-Пропуск.М-Стиль <pass@mstyle.ru>}
 
   frontend:
     build:

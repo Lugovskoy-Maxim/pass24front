@@ -19,6 +19,8 @@ export interface PassTicketEmailData {
   ticketUrl: string;
 }
 
+const PASS_FROM_DISPLAY_NAME = 'Пропуск.М-Стиль';
+
 @Injectable()
 export class MailService {
   private readonly logger = new Logger(MailService.name);
@@ -39,7 +41,7 @@ export class MailService {
       );
     }
 
-    const from = this.configService.get<string>('SMTP_FROM') || 'PASS24 <noreply@pass24.local>';
+    const from = this.getPassFromAddress();
     const qrUrl = `https://api.qrserver.com/v1/create-qr-code/?size=220x220&data=${encodeURIComponent(data.ticketUrl)}`;
     const visitTime = data.visitTimeFrom
       ? `${data.visitTimeFrom}${data.visitTimeTo ? `–${data.visitTimeTo}` : ''}`
@@ -116,6 +118,15 @@ export class MailService {
         response ? `Почтовый сервер отклонил отправку: ${response}` : `Не удалось отправить письмо: ${message}`,
       );
     }
+  }
+
+  private getPassFromAddress(): string {
+    const configured = this.configService.get<string>('SMTP_FROM');
+    const user = this.configService.get<string>('SMTP_USER');
+    const emailFromConfigured = configured?.match(/<([^>]+)>/)?.[1];
+    const bareEmail = configured && !configured.includes('<') ? configured.trim() : undefined;
+    const email = emailFromConfigured || bareEmail || user || 'pass@mstyle.ru';
+    return `${PASS_FROM_DISPLAY_NAME} <${email}>`;
   }
 
   private initTransporter() {
