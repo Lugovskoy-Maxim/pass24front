@@ -125,5 +125,7 @@ export class MailService {
       secure,
       auth: user ? { user, pass } : undefined,
     });
+
+    this.logger.log(`SMTP configured: ${host}:${port} (auth: ${user ? 'yes' : 'no'}, secure: ${secure})`);
   }
 }

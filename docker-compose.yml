@@ -48,6 +48,9 @@ services:
       - ADMIN_FULL_NAME=Администратор БЦ
       - SMTP_HOST=mailpit
       - SMTP_PORT=1025
+      - SMTP_USER=
+      - SMTP_PASS=
+      - SMTP_SECURE=false
       - SMTP_FROM=PASS24 <noreply@pass24.local>
       - PUBLIC_APP_URL=http://127.0.0.1:3001
       - TZ=Europe/Moscow

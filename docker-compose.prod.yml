@@ -33,6 +33,9 @@ services:
       - SEED_DEV_DATA=${SEED_DEV_DATA:-false}
       - SMTP_HOST=${SMTP_HOST:-mailpit}
       - SMTP_PORT=${SMTP_PORT:-1025}
+      - SMTP_USER=${SMTP_USER:-}
+      - SMTP_PASS=${SMTP_PASS:-}
+      - SMTP_SECURE=${SMTP_SECURE:-false}
       - SMTP_FROM=${SMTP_FROM:-PASS24 <noreply@pass24.local>}
 
   frontend:
