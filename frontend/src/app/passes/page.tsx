@@ -165,7 +165,7 @@ function PassesPageContent() {
         </button>
       )}
       {canSharePass(pass) && (
-        <SharePassActions passIdOrNumber={pass.id} passNumber={pass.passNumber} />
+        <SharePassActions passIdOrNumber={pass.id} passNumber={pass.passNumber} enableEmailShare />
       )}
       {canCancelPass(pass) && (
         <button className="btn btn-danger w-full" disabled={actionLoading} onClick={() => handleAction(pass.id, 'cancel')}>
