@@ -1,7 +1,7 @@
 'use client';
 
 import { useMemo } from 'react';
-import QRCode from 'react-qr-code';
+import { StyledPassQrCode } from './StyledPassQrCode';
 import { Pass, TYPE_LABELS, getPassTicketUrl } from '@/lib/api';
 import { useConfig } from '@/hooks/useConfig';
 import { getUiLabels } from '@/lib/ui-labels';
@@ -65,9 +65,7 @@ export function PassPrintCard({ pass, businessCenterName }: PassPrintCardProps) 
 
         {ticketUrl && (
           <div className="print-pass__qr flex flex-col items-center gap-2 border-b border-[var(--border)] pb-4 mb-4">
-            <div className="print-pass__qr-frame bg-white rounded-xl border border-[var(--border)] p-3">
-              <QRCode value={ticketUrl} size={140} level="M" />
-            </div>
+            <StyledPassQrCode value={ticketUrl} size="lg" />
             <p className="text-xs text-center text-[var(--muted)] max-w-[16rem] leading-snug">
               {labels.ticket.hint}
             </p>
