@@ -40,7 +40,7 @@ export class MailService {
     }
 
     const from = this.configService.get<string>('SMTP_FROM') || 'PASS24 <noreply@pass24.local>';
-    const qrUrl = `https://api.qrserver.com/v1/create-qr-code/?size=220x220&color=2B2A29&bgcolor=FEFEFE&margin=12&data=${encodeURIComponent(data.ticketUrl)}`;
+    const qrUrl = `https://api.qrserver.com/v1/create-qr-code/?size=220x220&data=${encodeURIComponent(data.ticketUrl)}`;
     const visitTime = data.visitTimeFrom
       ? `${data.visitTimeFrom}${data.visitTimeTo ? `–${data.visitTimeTo}` : ''}`
       : '';

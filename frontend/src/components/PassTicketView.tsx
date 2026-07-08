@@ -1,7 +1,7 @@
 'use client';
 
 import { useMemo } from 'react';
-import { StyledPassQrCode } from './StyledPassQrCode';
+import QRCode from 'react-qr-code';
 import {
   Building2,
   Calendar,
@@ -49,6 +49,8 @@ export function PassTicketView({
   const isTerminal = ['rejected', 'cancelled', 'expired', 'completed'].includes(ticket.status);
 
   const typeLabel = TYPE_LABELS[ticket.passType as PassType] || ticket.passType;
+  const qrSize = compact ? 112 : 180;
+
   return (
     <div className={`pass-ticket ${compact ? 'pass-ticket--compact' : ''} max-w-md mx-auto min-w-0 w-full`}>
       <article className={`${getPassCardShellClass()} pass-ticket__card min-w-0 max-w-full overflow-hidden`}>
@@ -129,7 +131,9 @@ export function PassTicketView({
           )}
           {ticketUrl && (
             <div className="flex justify-center">
-              <StyledPassQrCode value={ticketUrl} size={compact ? 'sm' : 'md'} />
+              <div className="pass-ticket__qr-frame bg-[var(--surface-elevated)] rounded-xl border border-[var(--border)] shadow-sm">
+                <QRCode value={ticketUrl} size={qrSize} level="M" />
+              </div>
             </div>
           )}
           {compact && (
