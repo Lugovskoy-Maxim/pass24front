@@ -2,6 +2,7 @@ import type { Metadata, Viewport } from 'next';
 import { Manrope } from 'next/font/google';
 import { AuthProvider } from '@/lib/auth';
 import { ThemeProvider } from '@/components/ThemeProvider';
+import { ThemeColorsApplier } from '@/components/ThemeColorsApplier';
 import { ToastProvider } from '@/components/Toast';
 import { PwaRegistrar } from '@/components/PwaRegistrar';
 import { PwaInstallPrompt } from '@/components/PwaInstallPrompt';
@@ -53,6 +54,7 @@ export default function RootLayout({ children }: { children: React.ReactNode }) 
       </head>
       <body>
         <ThemeProvider>
+          <ThemeColorsApplier />
           <AuthProvider>
             <ToastProvider>
               {children}

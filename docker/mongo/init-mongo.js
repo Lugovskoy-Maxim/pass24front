@@ -22,6 +22,7 @@ appDb.createCollection('app_settings');
 authDb.createCollection('users');
 
 // Useful indexes
+authDb.users.createIndex({ username: 1 }, { unique: true, sparse: true });
 authDb.users.createIndex({ email: 1 }, { unique: true, sparse: true });
 authDb.users.createIndex({ phone: 1 }, { unique: true, sparse: true });
 authDb.users.createIndex({ bitrix24UserId: 1, bitrix24Domain: 1 }, { unique: true, sparse: true });

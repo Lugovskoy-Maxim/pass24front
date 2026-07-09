@@ -35,8 +35,11 @@ export function validateLoginRegister(data: {
 }): FieldErrors {
   const errors: FieldErrors = {};
 
-  if (isBlank(data.email)) errors.email = 'Укажите email';
-  else if (!isValidEmail(data.email)) errors.email = 'Некорректный email';
+  if (isBlank(data.email)) {
+    errors.email = data.mode === 'login' ? 'Укажите логин' : 'Укажите email';
+  } else if (data.mode !== 'login' && !isValidEmail(data.email)) {
+    errors.email = 'Некорректный email';
+  }
 
   if (isBlank(data.password)) errors.password = 'Укажите пароль';
   else if (data.password.length < 6) errors.password = 'Минимум 6 символов';

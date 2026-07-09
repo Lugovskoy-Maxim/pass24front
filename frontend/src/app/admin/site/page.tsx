@@ -1,7 +1,7 @@
 'use client';
 
 import { ChangeEvent, FormEvent, useEffect, useState } from 'react';
-import { Globe, ImageIcon, Mail, Phone, RotateCcw, Trash2, Type, Upload } from 'lucide-react';
+import { Globe, ImageIcon, Mail, Palette, Phone, RotateCcw, Trash2, Type, Upload } from 'lucide-react';
 import { AdminLayout } from '@/components/AdminLayout';
 import { IconPickerField } from '@/components/IconPickerField';
 import { SiteBrand } from '@/components/SiteBrand';
@@ -12,11 +12,12 @@ import { api, SiteSettings, getErrorMessage } from '@/lib/api';
 import { PageError } from '@/components/PageError';
 import { invalidateConfigCache } from '@/hooks/useConfig';
 import { MSTYLE_BRAND_DEFAULTS, resolveBrand } from '@/lib/brand-defaults';
+import { THEME_COLOR_DEFAULTS } from '@/lib/theme-colors';
 import { mergeUiLabels, UiLabels } from '@/lib/ui-labels';
 
 const MAX_ICON_BYTES = 80 * 1024;
 
-type Tab = 'brand' | 'labels';
+type Tab = 'brand' | 'colors' | 'labels';
 
 function normalizeSettings(s: SiteSettings): SiteSettings {
   return {
@@ -26,6 +27,8 @@ function normalizeSettings(s: SiteSettings): SiteSettings {
     brandShowName: s.brandShowName !== false,
     brandNameBeforeMark: s.brandNameBeforeMark !== false,
     uiIconSelectChevron: s.uiIconSelectChevron?.trim() || MSTYLE_BRAND_DEFAULTS.uiIconSelectChevron,
+    themePrimary: s.themePrimary?.trim() || MSTYLE_BRAND_DEFAULTS.themePrimary,
+    themePrimaryHover: s.themePrimaryHover?.trim() || MSTYLE_BRAND_DEFAULTS.themePrimaryHover,
   };
 }
 
@@ -123,6 +126,8 @@ export default function AdminSiteSettingsPage() {
     brandShowName: settings.brandShowName,
     brandNameBeforeMark: settings.brandNameBeforeMark,
     uiIconSelectChevron: settings.uiIconSelectChevron,
+    themePrimary: settings.themePrimary,
+    themePrimaryHover: settings.themePrimaryHover,
     sitePhone: previewBrand.sitePhone,
     siteEmail: previewBrand.siteEmail,
     businessCenterName: previewBrand.siteName,
@@ -147,6 +152,14 @@ export default function AdminSiteSettingsPage() {
         >
           <Globe className="w-4 h-4" />
           Бренд и контакты
+        </button>
+        <button
+          type="button"
+          className={`btn text-sm ${tab === 'colors' ? 'btn-primary' : 'btn-secondary'}`}
+          onClick={() => setTab('colors')}
+        >
+          <Palette className="w-4 h-4" />
+          Цветовая гамма
         </button>
         <button
           type="button"
@@ -323,6 +336,71 @@ export default function AdminSiteSettingsPage() {
           </div>
         )}
 
+        {tab === 'colors' && (
+          <div className="grid lg:grid-cols-[1fr_280px] gap-6 max-w-4xl">
+            <div className="card p-6 space-y-5">
+              <p className="text-sm text-[var(--muted)]">
+                Основной акцентный цвет кнопок, ссылок и активных элементов интерфейса
+              </p>
+              <div className="grid sm:grid-cols-2 gap-4">
+                <div>
+                  <label className="label">Основной цвет</label>
+                  <div className="flex items-center gap-3">
+                    <input
+                      type="color"
+                      className="h-10 w-14 rounded border border-[var(--border)] bg-transparent cursor-pointer"
+                      value={settings.themePrimary}
+                      onChange={(e) => setSettings({ ...settings, themePrimary: e.target.value })}
+                    />
+                    <input
+                      className="input font-mono text-sm flex-1"
+                      value={settings.themePrimary}
+                      onChange={(e) => setSettings({ ...settings, themePrimary: e.target.value })}
+                      pattern="^#[0-9A-Fa-f]{6}$"
+                      placeholder={THEME_COLOR_DEFAULTS.themePrimary}
+                    />
+                  </div>
+                </div>
+                <div>
+                  <label className="label">Цвет при наведении</label>
+                  <div className="flex items-center gap-3">
+                    <input
+                      type="color"
+                      className="h-10 w-14 rounded border border-[var(--border)] bg-transparent cursor-pointer"
+                      value={settings.themePrimaryHover}
+                      onChange={(e) => setSettings({ ...settings, themePrimaryHover: e.target.value })}
+                    />
+                    <input
+                      className="input font-mono text-sm flex-1"
+                      value={settings.themePrimaryHover}
+                      onChange={(e) => setSettings({ ...settings, themePrimaryHover: e.target.value })}
+                      pattern="^#[0-9A-Fa-f]{6}$"
+                      placeholder={THEME_COLOR_DEFAULTS.themePrimaryHover}
+                    />
+                  </div>
+                </div>
+              </div>
+            </div>
+            <div className="card p-5 h-fit space-y-4">
+              <div className="text-sm font-medium text-[var(--muted)]">Предпросмотр</div>
+              <div className="flex flex-wrap gap-2">
+                <button
+                  type="button"
+                  className="btn btn-primary text-sm"
+                  style={{ background: settings.themePrimary, borderColor: settings.themePrimary }}
+                  onMouseEnter={(e) => { e.currentTarget.style.background = settings.themePrimaryHover; }}
+                  onMouseLeave={(e) => { e.currentTarget.style.background = settings.themePrimary; }}
+                >
+                  Кнопка
+                </button>
+                <span style={{ color: settings.themePrimary }} className="text-sm font-medium self-center">
+                  Акцентный текст
+                </span>
+              </div>
+            </div>
+          </div>
+        )}
+
         {tab === 'labels' && (
           <div className="max-w-4xl">
             <UiLabelsEditor labels={labels} onChange={setLabels} />
@@ -333,26 +411,35 @@ export default function AdminSiteSettingsPage() {
           <button type="submit" className="btn btn-primary" disabled={saving}>
             {saving ? 'Сохранение...' : labels.buttons.save}
           </button>
-          {tab === 'brand' && (
+          {(tab === 'brand' || tab === 'colors') && (
             <button
               type="button"
               className="btn btn-secondary"
               onClick={() => {
                 if (!settings) return;
-                setSettings({
-                  ...settings,
-                  siteName: MSTYLE_BRAND_DEFAULTS.siteName,
-                  siteIcon: MSTYLE_BRAND_DEFAULTS.siteIcon,
-                  siteTagline: MSTYLE_BRAND_DEFAULTS.siteTagline,
-                  sitePhone: MSTYLE_BRAND_DEFAULTS.sitePhone,
-                  siteEmail: MSTYLE_BRAND_DEFAULTS.siteEmail,
-                  brandMarkType: MSTYLE_BRAND_DEFAULTS.brandMarkType,
-                  brandMarkText: MSTYLE_BRAND_DEFAULTS.brandMarkText,
-                  brandShowName: MSTYLE_BRAND_DEFAULTS.brandShowName,
-                  brandNameBeforeMark: MSTYLE_BRAND_DEFAULTS.brandNameBeforeMark,
-                  uiIconSelectChevron: MSTYLE_BRAND_DEFAULTS.uiIconSelectChevron,
-                });
-                toast('Подставлены значения M-STYLE. Нажмите «Сохранить» для применения.', 'info');
+                if (tab === 'brand') {
+                  setSettings({
+                    ...settings,
+                    siteName: MSTYLE_BRAND_DEFAULTS.siteName,
+                    siteIcon: MSTYLE_BRAND_DEFAULTS.siteIcon,
+                    siteTagline: MSTYLE_BRAND_DEFAULTS.siteTagline,
+                    sitePhone: MSTYLE_BRAND_DEFAULTS.sitePhone,
+                    siteEmail: MSTYLE_BRAND_DEFAULTS.siteEmail,
+                    brandMarkType: MSTYLE_BRAND_DEFAULTS.brandMarkType,
+                    brandMarkText: MSTYLE_BRAND_DEFAULTS.brandMarkText,
+                    brandShowName: MSTYLE_BRAND_DEFAULTS.brandShowName,
+                    brandNameBeforeMark: MSTYLE_BRAND_DEFAULTS.brandNameBeforeMark,
+                    uiIconSelectChevron: MSTYLE_BRAND_DEFAULTS.uiIconSelectChevron,
+                  });
+                  toast('Подставлены значения M-STYLE. Нажмите «Сохранить» для применения.', 'info');
+                } else {
+                  setSettings({
+                    ...settings,
+                    themePrimary: MSTYLE_BRAND_DEFAULTS.themePrimary,
+                    themePrimaryHover: MSTYLE_BRAND_DEFAULTS.themePrimaryHover,
+                  });
+                  toast('Подставлены цвета M-STYLE. Нажмите «Сохранить» для применения.', 'info');
+                }
               }}
             >
               <RotateCcw className="w-4 h-4" />

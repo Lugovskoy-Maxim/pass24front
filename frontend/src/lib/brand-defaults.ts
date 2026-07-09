@@ -11,6 +11,8 @@ export const MSTYLE_BRAND_DEFAULTS = {
   brandShowName: true,
   brandNameBeforeMark: true,
   uiIconSelectChevron: 'chevron-down',
+  themePrimary: '#eb711c',
+  themePrimaryHover: '#d55700',
 };
 
 export type BrandFields = Pick<

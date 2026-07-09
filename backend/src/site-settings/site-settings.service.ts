@@ -19,6 +19,8 @@ export interface SiteSettingsDto {
   brandShowName: boolean;
   brandNameBeforeMark: boolean;
   uiIconSelectChevron: string;
+  themePrimary: string;
+  themePrimaryHover: string;
   uiLabels: UiLabels;
 }
 
@@ -77,6 +79,12 @@ export class SiteSettingsService implements OnModuleInit {
     if (data.uiIconSelectChevron !== undefined) {
       update.uiIconSelectChevron = data.uiIconSelectChevron.trim() || MSTYLE_BRAND_DEFAULTS.uiIconSelectChevron;
     }
+    if (data.themePrimary !== undefined) {
+      update.themePrimary = this.normalizeHexColor(data.themePrimary, MSTYLE_BRAND_DEFAULTS.themePrimary);
+    }
+    if (data.themePrimaryHover !== undefined) {
+      update.themePrimaryHover = this.normalizeHexColor(data.themePrimaryHover, MSTYLE_BRAND_DEFAULTS.themePrimaryHover);
+    }
     if (data.uiLabels !== undefined) {
       update.uiLabels = deepMergeUiLabels(data.uiLabels as Record<string, unknown>);
     }
@@ -100,7 +108,14 @@ export class SiteSettingsService implements OnModuleInit {
       brandShowName: doc?.brandShowName !== false,
       brandNameBeforeMark: doc?.brandNameBeforeMark !== false,
       uiIconSelectChevron: doc?.uiIconSelectChevron?.trim() || MSTYLE_BRAND_DEFAULTS.uiIconSelectChevron,
+      themePrimary: this.normalizeHexColor(doc?.themePrimary, MSTYLE_BRAND_DEFAULTS.themePrimary),
+      themePrimaryHover: this.normalizeHexColor(doc?.themePrimaryHover, MSTYLE_BRAND_DEFAULTS.themePrimaryHover),
       uiLabels: deepMergeUiLabels(doc?.uiLabels),
     };
+  }
+
+  private normalizeHexColor(value: string | undefined, fallback: string): string {
+    const trimmed = value?.trim() || '';
+    return /^#[0-9A-Fa-f]{6}$/.test(trimmed) ? trimmed.toLowerCase() : fallback;
   }
 }

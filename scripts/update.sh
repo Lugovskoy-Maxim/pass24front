@@ -31,6 +31,10 @@ $COMPOSE up -d --build --wait --wait-timeout 180
 echo "==> Очистка старых образов"
 docker image prune -f >/dev/null 2>&1 || true
 
+if [[ -x scripts/setup-mongo-backup-cron.sh ]]; then
+  sudo scripts/setup-mongo-backup-cron.sh 2>/dev/null || true
+fi
+
 echo ""
 echo "==> Готово: $(date -Iseconds)"
 echo "    Сайт: ${PUBLIC_APP_URL:-https://pass.mstyle.ru}"

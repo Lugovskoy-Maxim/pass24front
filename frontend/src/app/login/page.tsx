@@ -219,14 +219,14 @@ export default function LoginPage() {
                 </p>
               </>
             )}
-            <FormField id="email" label="Email" required error={fieldErrors.email}>
+            <FormField id="email" label={mode === 'login' ? 'Логин' : 'Email'} required error={fieldErrors.email}>
               <FormInput
                 id="email"
-                type="email"
+                type={mode === 'login' ? 'text' : 'email'}
                 value={email}
                 onChange={(e) => { setEmail(e.target.value); clearFieldError('email'); }}
                 invalid={!!fieldErrors.email}
-                autoComplete="email"
+                autoComplete={mode === 'login' ? 'username' : 'email'}
               />
             </FormField>
             <FormField id="password" label="Пароль" required error={fieldErrors.password} hint={mode === 'register' ? 'Минимум 6 символов' : undefined}>

@@ -72,11 +72,14 @@ export class AuthService {
   }
 
   async login(dto: LoginDto) {
-    const user = await this.userModel.findOne({ email: dto.email.toLowerCase() }).select('+password') as any;
+    const login = dto.login.trim().toLowerCase();
+    const user = await this.userModel.findOne({
+      $or: [{ username: login }, { email: login }],
+    }).select('+password') as any;
 
     if (!user) {
-      if (DEV_TEST_ACCOUNT_EMAILS.has(dto.email.toLowerCase())) {
-        return this.createTestUser(dto.email, dto.password);
+      if (DEV_TEST_ACCOUNT_EMAILS.has(login)) {
+        return this.createTestUser(login, dto.password);
       }
       throw new UnauthorizedException('Неверные учетные данные');
     }
@@ -226,6 +229,7 @@ export class AuthService {
     const { enabledPassTypes } = await this.accessConfigService.getConfig();
     return {
       id: user._id.toString(),
+      username: user.username,
       email: user.email,
       full_name: user.fullName,
       last_name: user.lastName,

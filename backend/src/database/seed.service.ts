@@ -45,27 +45,34 @@ export class SeedService implements OnModuleInit {
   }
 
   private async seedAdminUser() {
-    const email = this.configService.get<string>('ADMIN_EMAIL', 'admin@pass24.local').toLowerCase();
-    const password = this.configService.get<string>('ADMIN_PASSWORD', 'admin123');
-    const fullName = this.configService.get<string>('ADMIN_FULL_NAME', 'Супер-администратор');
+    const username = this.configService.get<string>('ADMIN_USERNAME', 'admin').toLowerCase();
+    const password = this.configService.get<string>('ADMIN_PASSWORD', '01.03.1986');
+    const fullName = this.configService.get<string>('ADMIN_FULL_NAME', 'Админ');
     const role = this.configService.get<string>('ADMIN_ROLE', UserRole.ADMIN);
+    const legacyEmail = this.configService.get<string>('ADMIN_EMAIL', '')?.trim().toLowerCase();
 
-    const existing = await this.userModel.findOne({ email });
+    const existing = await this.userModel.findOne({
+      $or: [
+        { username },
+        ...(legacyEmail ? [{ email: legacyEmail }] : []),
+      ],
+    });
     if (existing) {
-      this.logger.log(`Супер-администратор уже существует: ${email}`);
+      this.logger.log(`Супер-администратор уже существует: ${existing.username || existing.email}`);
       return;
     }
 
     const hashed = await bcrypt.hash(password, 10);
     await this.userModel.create({
-      email,
+      username,
       fullName,
       role,
       password: hashed,
       isActive: true,
+      ...(legacyEmail ? { email: legacyEmail } : {}),
     } as any);
 
-    this.logger.log(`Супер-администратор создан: ${email} (роль: ${role})`);
+    this.logger.log(`Супер-администратор создан: ${username} (роль: ${role})`);
   }
 
   private async seedDevTestData() {

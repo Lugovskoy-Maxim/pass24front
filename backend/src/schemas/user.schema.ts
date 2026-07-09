@@ -22,6 +22,9 @@ export class User {
   middleName?: string;
 
   @Prop({ trim: true, lowercase: true, unique: true, sparse: true })
+  username?: string;
+
+  @Prop({ trim: true, lowercase: true, unique: true, sparse: true })
   email?: string;
 
   @Prop({ select: false })
@@ -85,6 +88,7 @@ export class User {
 
 export const UserSchema = SchemaFactory.createForClass(User);
 
+UserSchema.index({ username: 1 }, { unique: true, sparse: true });
 UserSchema.index({ properties: 1 });
 UserSchema.index({ role: 1, isActive: 1 });
 UserSchema.index({ fullName: 'text' });

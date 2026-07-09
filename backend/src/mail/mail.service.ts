@@ -15,7 +15,6 @@ export interface PassTicketEmailData {
   floor?: string;
   companyName?: string;
   visitPurpose?: string;
-  passTypeLabel?: string;
   ticketUrl: string;
 }
 
@@ -69,7 +68,6 @@ export class MailService {
             ${data.companyName ? `<tr><td style="color:#64748b;padding:6px 0">Компания</td><td style="text-align:right;padding:6px 0">${data.companyName}</td></tr>` : ''}
             <tr><td style="color:#64748b;padding:6px 0">Дата визита</td><td style="text-align:right;padding:6px 0">${data.visitDate}${visitTime ? ` · ${visitTime}` : ''}</td></tr>
             <tr><td style="color:#64748b;padding:6px 0">Офис</td><td style="text-align:right;padding:6px 0">${officeLine}</td></tr>
-            ${data.passTypeLabel ? `<tr><td style="color:#64748b;padding:6px 0">Тип</td><td style="text-align:right;padding:6px 0">${data.passTypeLabel}</td></tr>` : ''}
             ${data.visitPurpose ? `<tr><td style="color:#64748b;padding:6px 0">Цель</td><td style="text-align:right;padding:6px 0">${data.visitPurpose}</td></tr>` : ''}
           </table>
           <div style="text-align:center;margin-top:24px">

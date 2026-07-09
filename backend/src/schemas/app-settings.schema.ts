@@ -40,6 +40,12 @@ export class AppSettings {
   @Prop({ default: 'chevron-down' })
   uiIconSelectChevron: string;
 
+  @Prop({ default: '#eb711c' })
+  themePrimary: string;
+
+  @Prop({ default: '#d55700' })
+  themePrimaryHover: string;
+
   @Prop({ type: Object, default: {} })
   uiLabels: Record<string, unknown>;
 }

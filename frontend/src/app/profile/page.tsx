@@ -161,7 +161,9 @@ export default function ProfilePage() {
 
         <div className="card p-6 space-y-4 mb-6">
           <ProfileInfoRow icon={UserIcon} label="ФИО" value={buildFullName(currentName)} />
-          <ProfileInfoRow icon={Mail} label="Email" value={user.email} />
+          {(user.email || user.username) && (
+            <ProfileInfoRow icon={Mail} label={user.email ? 'Email' : 'Логин'} value={user.email || user.username || ''} />
+          )}
           <ProfileInfoRow icon={Shield} label="Роль" value={ROLE_LABELS[user.role]} />
           {user.company && <ProfileInfoRow icon={Building2} label="Компания" value={user.company} />}
           {user.phone && <ProfileInfoRow icon={Phone} label="Телефон" value={user.phone} />}

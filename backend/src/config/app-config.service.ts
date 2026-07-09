@@ -32,6 +32,8 @@ export class AppConfigService {
       brandShowName: site.brandShowName,
       brandNameBeforeMark: site.brandNameBeforeMark,
       uiIconSelectChevron: site.uiIconSelectChevron,
+      themePrimary: site.themePrimary,
+      themePrimaryHover: site.themePrimaryHover,
       businessCenterName: property?.name || site.siteName,
       businessCenters: properties.map((p) => {
         const ps = p.settings || {};

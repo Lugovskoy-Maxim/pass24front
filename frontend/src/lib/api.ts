@@ -49,7 +49,8 @@ export interface ProfileChangeRequest {
 
 export interface User {
   id: string;
-  email: string;
+  username?: string;
+  email?: string;
   full_name: string;
   last_name?: string;
   first_name?: string;
@@ -234,10 +235,10 @@ async function request<T>(path: string, options: RequestInit = {}): Promise<T> {
 }
 
 export const api = {
-  login: (email: string, password: string) =>
+  login: (login: string, password: string) =>
     request<{ user: User; token: string }>('/auth/login', {
       method: 'POST',
-      body: JSON.stringify({ email, password }),
+      body: JSON.stringify({ login, password }),
     }),
 
   register: (data: {
@@ -582,6 +583,8 @@ export interface SiteSettings {
   brandShowName: boolean;
   brandNameBeforeMark: boolean;
   uiIconSelectChevron: string;
+  themePrimary: string;
+  themePrimaryHover: string;
   uiLabels?: Record<string, unknown>;
 }
 

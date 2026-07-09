@@ -30,12 +30,7 @@ export class PassesService implements OnModuleInit {
     private configService: ConfigService,
   ) {}
 
-  private readonly passTypeLabels: Record<string, string> = {
-    visitor: 'Посетитель',
-    parking: 'Парковка',
-    delivery: 'Доставка',
-    contractor: 'Подрядчик',
-  };
+
 
   private generatePassNumber() {
     const year = new Date().getFullYear();
@@ -254,7 +249,6 @@ export class PassesService implements OnModuleInit {
       floor: pass.floor,
       companyName: pass.companyName,
       visitPurpose: pass.visitPurpose,
-      passTypeLabel: this.passTypeLabels[pass.passType] || pass.passType,
       ticketUrl,
     });
 

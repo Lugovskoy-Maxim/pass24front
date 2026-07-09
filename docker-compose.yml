@@ -43,9 +43,9 @@ services:
       - MONGODB_AUTH_URI=mongodb://mongo:27017/pass24_auth
       - JWT_SECRET=pass24-super-secret-key-2026
       - JWT_EXPIRES_IN=7d
-      - ADMIN_EMAIL=admin@pass24.local
-      - ADMIN_PASSWORD=admin123
-      - ADMIN_FULL_NAME=Администратор БЦ
+      - ADMIN_USERNAME=admin
+      - ADMIN_PASSWORD=01.03.1986
+      - ADMIN_FULL_NAME=Админ
       - SMTP_HOST=mailpit
       - SMTP_PORT=1025
       - SMTP_USER=

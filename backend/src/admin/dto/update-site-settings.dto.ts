@@ -1,4 +1,4 @@
-import { IsBoolean, IsEmail, IsIn, IsObject, IsOptional, IsString, MaxLength } from 'class-validator';
+import { IsBoolean, IsEmail, IsIn, IsObject, IsOptional, IsString, Matches, MaxLength } from 'class-validator';
 
 export class UpdateSiteSettingsDto {
   @IsOptional()
@@ -47,6 +47,16 @@ export class UpdateSiteSettingsDto {
   @IsString()
   @MaxLength(40)
   uiIconSelectChevron?: string;
+
+  @IsOptional()
+  @IsString()
+  @Matches(/^#[0-9A-Fa-f]{6}$/)
+  themePrimary?: string;
+
+  @IsOptional()
+  @IsString()
+  @Matches(/^#[0-9A-Fa-f]{6}$/)
+  themePrimaryHover?: string;
 
   @IsOptional()
   @IsObject()
