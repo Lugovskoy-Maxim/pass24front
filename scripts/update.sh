@@ -7,7 +7,6 @@ BRANCH="${BRANCH:-main}"
 COMPOSE="docker compose -f docker-compose.yml -f docker-compose.prod.yml --env-file .env"
 
 cd "$APP_DIR"
-chmod +x scripts/*.sh 2>/dev/null || true
 
 echo "==> Ветка: $BRANCH"
 git checkout -- . 2>/dev/null || true
@@ -15,6 +14,8 @@ git fetch origin
 git checkout "$BRANCH"
 git pull --ff-only origin "$BRANCH"
 echo "    Коммит: $(git rev-parse --short HEAD) — $(git log -1 --pretty=%s)"
+
+chmod +x scripts/*.sh 2>/dev/null || true
 
 if [[ ! -f .env ]]; then
   echo "==> Создание .env из .env.production.example"
