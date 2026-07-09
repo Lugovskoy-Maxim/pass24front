@@ -99,7 +99,7 @@ export function parseOfficeCsv(text: string): { rows: OfficeCsvRow[]; errors: st
 
     const areaRaw = cells[3]?.trim().replace(',', '.');
     const areaSqm = areaRaw ? Number(areaRaw) : undefined;
-    if (areaRaw && (!Number.isFinite(areaSqm) || areaSqm < 0)) {
+    if (areaRaw && (areaSqm === undefined || !Number.isFinite(areaSqm) || areaSqm < 0)) {
       errors.push(`Строка ${rowNum}: некорректная площадь`);
       return;
     }

@@ -601,7 +601,7 @@ export class AdminService {
 
   async exportOfficesCsv() {
     const { offices } = await this.getOffices();
-    const { buildOfficeCsv } = await import('../common/office-csv');
+    const { buildOfficeCsv } = await import('../common/office-csv.js');
     const tenantIds = offices.filter((o) => o.tenantId).map((o) => new Types.ObjectId(o.tenantId!));
     const tenants = tenantIds.length
       ? await this.userModel.find({ _id: { $in: tenantIds } }).lean()
@@ -622,7 +622,7 @@ export class AdminService {
   }
 
   async importOfficesCsv(csv: string, actor?: AuditActor) {
-    const { parseOfficeCsv } = await import('../common/office-csv');
+    const { parseOfficeCsv } = await import('../common/office-csv.js');
     const parsed = parseOfficeCsv(csv);
     if (!parsed.rows.length && parsed.errors.length) {
       throw new BadRequestException(parsed.errors.join('; '));
