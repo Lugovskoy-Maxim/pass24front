@@ -11,6 +11,8 @@ const MAX_ICON_LENGTH = 120_000;
 export interface SiteSettingsDto {
   siteName: string;
   siteIcon: string;
+  siteIconLight: string;
+  siteIconDark: string;
   siteTagline: string;
   sitePhone: string;
   siteEmail: string;
@@ -58,13 +60,21 @@ export class SiteSettingsService implements OnModuleInit {
   }
 
   async update(data: Partial<Omit<SiteSettingsDto, 'uiLabels'>> & { uiLabels?: Record<string, unknown> }): Promise<SiteSettingsDto> {
-    if (data.siteIcon !== undefined && data.siteIcon.length > MAX_ICON_LENGTH) {
-      throw new BadRequestException('Иконка слишком большая. Загрузите файл до 80 КБ.');
+    for (const field of ['siteIcon', 'siteIconLight', 'siteIconDark'] as const) {
+      const value = data[field];
+      if (value !== undefined && value.length > MAX_ICON_LENGTH) {
+        throw new BadRequestException('Иконка слишком большая. Загрузите файл до 80 КБ.');
+      }
     }
 
     const update: Partial<AppSettings> = {};
     if (data.siteName !== undefined) update.siteName = data.siteName.trim() || MSTYLE_BRAND_DEFAULTS.siteName;
     if (data.siteIcon !== undefined) update.siteIcon = data.siteIcon.trim();
+    if (data.siteIconLight !== undefined) {
+      update.siteIconLight = data.siteIconLight.trim();
+      update.siteIcon = data.siteIconLight.trim();
+    }
+    if (data.siteIconDark !== undefined) update.siteIconDark = data.siteIconDark.trim();
     if (data.siteTagline !== undefined) update.siteTagline = data.siteTagline.trim();
     if (data.sitePhone !== undefined) update.sitePhone = data.sitePhone.trim();
     if (data.siteEmail !== undefined) update.siteEmail = data.siteEmail.trim();
@@ -97,9 +107,15 @@ export class SiteSettingsService implements OnModuleInit {
   }
 
   private map(doc?: Partial<AppSettings> | null): SiteSettingsDto {
+    const legacyIcon = doc?.siteIcon?.trim() || '';
+    const siteIconLight = doc?.siteIconLight?.trim() || legacyIcon || MSTYLE_BRAND_DEFAULTS.siteIconLight;
+    const siteIconDark = doc?.siteIconDark?.trim() || legacyIcon || MSTYLE_BRAND_DEFAULTS.siteIconDark;
+
     return {
       siteName: doc?.siteName?.trim() || MSTYLE_BRAND_DEFAULTS.siteName,
-      siteIcon: doc?.siteIcon?.trim() || MSTYLE_BRAND_DEFAULTS.siteIcon,
+      siteIcon: siteIconLight,
+      siteIconLight,
+      siteIconDark,
       siteTagline: doc?.siteTagline?.trim() || MSTYLE_BRAND_DEFAULTS.siteTagline,
       sitePhone: doc?.sitePhone?.trim() || MSTYLE_BRAND_DEFAULTS.sitePhone,
       siteEmail: doc?.siteEmail?.trim() || MSTYLE_BRAND_DEFAULTS.siteEmail,

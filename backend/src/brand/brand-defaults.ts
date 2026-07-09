@@ -1,6 +1,8 @@
 export const MSTYLE_BRAND_DEFAULTS = {
   siteName: 'M-STYLE',
-  siteIcon: '/brand/mstyle-logo.svg',
+  siteIcon: '/brand/mstyle-logo-light.svg',
+  siteIconLight: '/brand/mstyle-logo-light.svg',
+  siteIconDark: '/brand/mstyle-logo.svg',
   siteTagline: 'Пропуска для арендаторов бизнес-центра',
   sitePhone: '+7 495 663-00-00',
   siteEmail: 'renta@mstyle.ru',

@@ -13,6 +13,16 @@ export class UpdateSiteSettingsDto {
 
   @IsOptional()
   @IsString()
+  @MaxLength(120000)
+  siteIconLight?: string;
+
+  @IsOptional()
+  @IsString()
+  @MaxLength(120000)
+  siteIconDark?: string;
+
+  @IsOptional()
+  @IsString()
   @MaxLength(200)
   siteTagline?: string;
 

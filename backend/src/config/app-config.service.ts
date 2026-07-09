@@ -24,6 +24,8 @@ export class AppConfigService {
     return {
       siteName: site.siteName,
       siteIcon: site.siteIcon,
+      siteIconLight: site.siteIconLight,
+      siteIconDark: site.siteIconDark,
       siteTagline: site.siteTagline,
       sitePhone: site.sitePhone,
       siteEmail: site.siteEmail,

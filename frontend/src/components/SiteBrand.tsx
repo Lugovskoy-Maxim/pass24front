@@ -1,7 +1,7 @@
 'use client';
 
 import { BcConfig } from '@/lib/api';
-import { resolveBrand } from '@/lib/brand-defaults';
+import { resolveBrand, resolveSiteIcon } from '@/lib/brand-defaults';
 
 interface SiteBrandProps {
   config?: BcConfig | null;
@@ -36,9 +36,11 @@ const SIZES = {
 function BrandMark({
   brand,
   size,
+  iconSrc,
 }: {
   brand: ReturnType<typeof resolveBrand>;
   size: keyof typeof SIZES;
+  iconSrc: string;
 }) {
   const s = SIZES[size];
 
@@ -61,7 +63,7 @@ function BrandMark({
   return (
     // eslint-disable-next-line @next/next/no-img-element
     <img
-      src={brand.siteIcon}
+      src={iconSrc}
       alt=""
       className={`${s.logo} object-contain object-left shrink-0`}
     />
@@ -78,6 +80,7 @@ export function SiteBrand({
 }: SiteBrandProps) {
   const s = SIZES[size];
   const brand = resolveBrand(config);
+  const iconSrc = resolveSiteIcon(config, variant);
   const isDark = variant === 'dark';
   const textColor = isDark ? 'var(--header-text)' : 'var(--foreground)';
   const mutedColor = isDark ? 'var(--header-muted)' : 'var(--muted)';
@@ -91,7 +94,7 @@ export function SiteBrand({
     </div>
   ) : null;
 
-  const markEl = <BrandMark brand={brand} size={size} />;
+  const markEl = <BrandMark brand={brand} size={size} iconSrc={iconSrc} />;
 
   const brandRow = (
     <div className={`flex gap-2.5 min-w-0 items-center ${layout === 'column' ? 'flex-col' : ''}`}>

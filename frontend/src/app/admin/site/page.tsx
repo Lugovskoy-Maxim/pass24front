@@ -19,9 +19,16 @@ const MAX_ICON_BYTES = 80 * 1024;
 
 type Tab = 'brand' | 'colors' | 'labels';
 
+function iconInputValue(value: string): string {
+  return value.startsWith('data:') ? '' : value;
+}
+
 function normalizeSettings(s: SiteSettings): SiteSettings {
+  const legacy = s.siteIcon?.trim() || '';
   return {
     ...s,
+    siteIconLight: s.siteIconLight?.trim() || legacy || MSTYLE_BRAND_DEFAULTS.siteIconLight,
+    siteIconDark: s.siteIconDark?.trim() || legacy || MSTYLE_BRAND_DEFAULTS.siteIconDark,
     brandMarkType: s.brandMarkType === 'text' ? 'text' : 'image',
     brandMarkText: s.brandMarkText?.trim() || MSTYLE_BRAND_DEFAULTS.brandMarkText,
     brandShowName: s.brandShowName !== false,
@@ -59,7 +66,7 @@ export default function AdminSiteSettingsPage() {
     load();
   }, []);
 
-  const handleIconUpload = (e: ChangeEvent<HTMLInputElement>) => {
+  const handleIconUpload = (field: 'siteIconLight' | 'siteIconDark') => (e: ChangeEvent<HTMLInputElement>) => {
     const file = e.target.files?.[0];
     if (!file || !settings) return;
 
@@ -74,7 +81,12 @@ export default function AdminSiteSettingsPage() {
 
     const reader = new FileReader();
     reader.onload = () => {
-      setSettings({ ...settings, siteIcon: String(reader.result || '') });
+      const value = String(reader.result || '');
+      setSettings({
+        ...settings,
+        [field]: value,
+        ...(field === 'siteIconLight' ? { siteIcon: value } : {}),
+      });
     };
     reader.readAsDataURL(file);
     e.target.value = '';
@@ -119,7 +131,9 @@ export default function AdminSiteSettingsPage() {
   const previewBrand = resolveBrand(settings);
   const previewConfig = {
     siteName: settings.siteName,
-    siteIcon: settings.siteIcon,
+    siteIcon: settings.siteIconLight,
+    siteIconLight: settings.siteIconLight,
+    siteIconDark: settings.siteIconDark,
     siteTagline: settings.siteTagline,
     brandMarkType: settings.brandMarkType,
     brandMarkText: settings.brandMarkText,
@@ -247,32 +261,61 @@ export default function AdminSiteSettingsPage() {
                   <p className="text-xs text-[var(--muted)] mt-1">До 8 символов, например «M» или «BC»</p>
                 </div>
               ) : (
-                <div>
-                  <label className="label">Картинка логотипа</label>
-                  <div className="flex flex-col sm:flex-row gap-3">
-                    <input
-                      className="input flex-1"
-                      value={settings.siteIcon.startsWith('data:') ? '' : settings.siteIcon}
-                      onChange={(e) => setSettings({ ...settings, siteIcon: e.target.value })}
-                      placeholder={MSTYLE_BRAND_DEFAULTS.siteIcon}
-                    />
-                    <label className="btn btn-secondary cursor-pointer shrink-0">
-                      <Upload className="w-4 h-4" />
-                      Загрузить
-                      <input type="file" accept="image/*" className="hidden" onChange={handleIconUpload} />
-                    </label>
-                    {settings.siteIcon && (
-                      <button
-                        type="button"
-                        className="btn btn-secondary shrink-0"
-                        onClick={() => setSettings({ ...settings, siteIcon: '' })}
-                      >
-                        <Trash2 className="w-4 h-4" />
-                      </button>
-                    )}
-                  </div>
-                  <p className="text-xs text-[var(--muted)] mt-1">
-                    Ссылка, файл до 80 КБ или путь вида /brand/mstyle-logo.svg
+                <div className="space-y-4">
+                  <p className="text-xs text-[var(--muted)]">
+                    Загрузите отдельные логотипы для светлой и тёмной темы — так знак будет одинаково читаем на любом фоне.
+                  </p>
+                  {([
+                    {
+                      field: 'siteIconLight' as const,
+                      label: 'Логотип для светлой темы',
+                      hint: 'Тёмный знак на светлом фоне',
+                      placeholder: MSTYLE_BRAND_DEFAULTS.siteIconLight,
+                    },
+                    {
+                      field: 'siteIconDark' as const,
+                      label: 'Логотип для тёмной темы',
+                      hint: 'Светлый знак на тёмном фоне',
+                      placeholder: MSTYLE_BRAND_DEFAULTS.siteIconDark,
+                    },
+                  ]).map(({ field, label, hint, placeholder }) => (
+                    <div key={field}>
+                      <label className="label">{label}</label>
+                      <p className="text-xs text-[var(--muted)] mb-2">{hint}</p>
+                      <div className="flex flex-col sm:flex-row gap-3">
+                        <input
+                          className="input flex-1"
+                          value={iconInputValue(settings[field])}
+                          onChange={(e) => setSettings({
+                            ...settings,
+                            [field]: e.target.value,
+                            ...(field === 'siteIconLight' ? { siteIcon: e.target.value } : {}),
+                          })}
+                          placeholder={placeholder}
+                        />
+                        <label className="btn btn-secondary cursor-pointer shrink-0">
+                          <Upload className="w-4 h-4" />
+                          Загрузить
+                          <input type="file" accept="image/*" className="hidden" onChange={handleIconUpload(field)} />
+                        </label>
+                        {settings[field] && (
+                          <button
+                            type="button"
+                            className="btn btn-secondary shrink-0"
+                            onClick={() => setSettings({
+                              ...settings,
+                              [field]: '',
+                              ...(field === 'siteIconLight' ? { siteIcon: '' } : {}),
+                            })}
+                          >
+                            <Trash2 className="w-4 h-4" />
+                          </button>
+                        )}
+                      </div>
+                    </div>
+                  ))}
+                  <p className="text-xs text-[var(--muted)]">
+                    Ссылка, файл до 80 КБ или путь вида /brand/mstyle-logo-light.svg
                   </p>
                 </div>
               )}
@@ -317,7 +360,16 @@ export default function AdminSiteSettingsPage() {
                 <ImageIcon className="w-4 h-4" />
                 Предпросмотр
               </div>
-              <SiteBrand config={previewConfig} size="lg" showTagline layout="column" />
+              <div className="space-y-3">
+                <div className="rounded-lg border border-[var(--border)] p-4 bg-[#f0efec]">
+                  <div className="text-xs text-[var(--muted)] mb-2">Светлая тема</div>
+                  <SiteBrand config={previewConfig} size="lg" showTagline layout="column" variant="light" />
+                </div>
+                <div className="rounded-lg border border-[var(--border)] p-4 bg-[#323232]">
+                  <div className="text-xs text-[#a3a3a3] mb-2">Тёмная тема</div>
+                  <SiteBrand config={previewConfig} size="lg" showTagline layout="column" variant="dark" />
+                </div>
+              </div>
               <div className="pt-3 border-t border-[var(--border)] space-y-2 text-sm">
                 {settings.sitePhone && (
                   <a href={`tel:${settings.sitePhone}`} className="flex items-center gap-2 text-[var(--primary)] hover:underline">
@@ -421,7 +473,9 @@ export default function AdminSiteSettingsPage() {
                   setSettings({
                     ...settings,
                     siteName: MSTYLE_BRAND_DEFAULTS.siteName,
-                    siteIcon: MSTYLE_BRAND_DEFAULTS.siteIcon,
+                    siteIcon: MSTYLE_BRAND_DEFAULTS.siteIconLight,
+                    siteIconLight: MSTYLE_BRAND_DEFAULTS.siteIconLight,
+                    siteIconDark: MSTYLE_BRAND_DEFAULTS.siteIconDark,
                     siteTagline: MSTYLE_BRAND_DEFAULTS.siteTagline,
                     sitePhone: MSTYLE_BRAND_DEFAULTS.sitePhone,
                     siteEmail: MSTYLE_BRAND_DEFAULTS.siteEmail,

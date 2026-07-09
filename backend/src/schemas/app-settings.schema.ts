@@ -11,8 +11,16 @@ export class AppSettings {
   @Prop({ default: 'M-STYLE' })
   siteName: string;
 
-  @Prop({ default: '/brand/mstyle-logo.svg' })
+  @Prop({ default: '/brand/mstyle-logo-light.svg' })
   siteIcon: string;
+
+  /** Логотип для светлой темы (тёмный знак на светлом фоне) */
+  @Prop({ default: '/brand/mstyle-logo-light.svg' })
+  siteIconLight: string;
+
+  /** Логотип для тёмной темы (светлый знак на тёмном фоне) */
+  @Prop({ default: '/brand/mstyle-logo.svg' })
+  siteIconDark: string;
 
   @Prop({ default: 'Пропуска для арендаторов бизнес-центра' })
   siteTagline: string;

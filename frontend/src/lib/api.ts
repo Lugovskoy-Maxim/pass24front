@@ -604,6 +604,8 @@ export const api = {
 export interface SiteSettings {
   siteName: string;
   siteIcon: string;
+  siteIconLight: string;
+  siteIconDark: string;
   siteTagline: string;
   sitePhone: string;
   siteEmail: string;
