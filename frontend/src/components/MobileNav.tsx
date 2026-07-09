@@ -5,7 +5,7 @@ import { usePathname } from 'next/navigation';
 import { List, Plus, ClipboardList, User, Settings, Bookmark } from 'lucide-react';
 import { useAuth } from '@/lib/auth';
 import { useConfig } from '@/hooks/useConfig';
-import { canUseReception, canViewPasses, getHomePath, hasPermission } from '@/lib/permissions';
+import { canOrderPasses, canUseReception, canViewPasses, getHomePath, hasPermission } from '@/lib/permissions';
 import { getUiLabels } from '@/lib/ui-labels';
 
 export function MobileNav() {
@@ -20,7 +20,7 @@ export function MobileNav() {
 
   const items = [
     { href: canViewPasses(user) ? '/passes' : homePath, label: L.nav.passes, icon: List, show: canViewPasses(user) || hasPermission(user, 'passes.templates') },
-    { href: '/passes/new', label: L.nav.orderPass, icon: Plus, show: hasPermission(user, 'passes.create'), accent: true },
+    { href: '/passes/new', label: L.nav.orderPass, icon: Plus, show: canOrderPasses(user), accent: true },
     { href: '/templates', label: L.nav.templates, icon: Bookmark, show: hasPermission(user, 'passes.templates') && !canViewPasses(user) },
     { href: '/control', label: L.nav.reception, icon: ClipboardList, show: canUseReception(user) },
     { href: '/profile', label: L.nav.profile, icon: User, show: true },

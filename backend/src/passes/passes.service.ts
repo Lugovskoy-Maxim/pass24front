@@ -548,6 +548,21 @@ export class PassesService implements OnModuleInit {
   }
 
   private async resolveOfficeFields(dto: CreatePassDto, user: any) {
+    if (user?.role === 'tenant') {
+      const assignedOffices = await this.officeModel.countDocuments({
+        tenantId: new Types.ObjectId(user.userId),
+        isActive: true,
+      });
+      if (!assignedOffices) {
+        throw new ForbiddenException(
+          'Заказ пропусков недоступен: офис не назначен. Обратитесь к администратору.',
+        );
+      }
+      if (!dto.officeId) {
+        throw new BadRequestException('Выберите офис из списка');
+      }
+    }
+
     if (dto.officeId) {
       const office = await this.officeModel.findById(dto.officeId).lean();
       if (!office || !office.isActive) {
@@ -571,6 +586,10 @@ export class PassesService implements OnModuleInit {
         floor: office.floor,
         companyName: dto.companyName || office.company,
       };
+    }
+
+    if (user?.role === 'tenant') {
+      throw new BadRequestException('Выберите офис из списка');
     }
 
     if (!dto.office?.trim()) {

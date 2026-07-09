@@ -11,6 +11,7 @@ import { FormErrorBanner, FormField, FormInput, FormSelect, FormTextarea } from 
 import { FieldErrors, hasFieldErrors, validateNewPassForm } from '@/lib/form-validation';
 import { getLocalDateString } from '@/lib/local-date';
 import { getVisitorNameLabel } from '@/lib/person-name';
+import { canOrderPasses } from '@/lib/permissions';
 
 function NewPassForm() {
   const { user } = useAuth();
@@ -45,6 +46,8 @@ function NewPassForm() {
   const [recipientEmail, setRecipientEmail] = useState('');
 
   const tenantOffices = user?.offices || [];
+  const isTenant = user?.role === 'tenant';
+  const tenantBlocked = isTenant && tenantOffices.length === 0;
   const bcOptions = [...new Map(
     tenantOffices.map((o) => [o.propertyId, o.businessCenterName || 'Бизнес-центр']),
   ).entries()].map(([id, name]) => ({ id, name }));
@@ -94,9 +97,6 @@ function NewPassForm() {
       setOfficeId(o.id);
       setOffice(o.number);
       setFloor(o.floor);
-    } else if (!officeId && user.office) {
-      setOffice(user.office);
-      setFloor(user.floor || '');
     }
   }, [user, tenantOffices, officeId, companyName, bcOptions, propertyId]);
 
@@ -208,6 +208,20 @@ function NewPassForm() {
       setLoading(false);
     }
   };
+
+  if (user && !canOrderPasses(user)) {
+    return (
+      <ProtectedLayout permissions={['passes.create']}>
+        <h1 className="page-title mb-2">Заказ пропуска</h1>
+        <div className="card p-6 max-w-xl space-y-4 border-[var(--alert-border)] bg-[var(--alert-surface-subtle)]">
+          <p className="text-[var(--alert-text)]">
+            Заказ пропусков недоступен: офис не назначен. Дождитесь подтверждения регистрации и назначения офиса администратором.
+          </p>
+          <button type="button" className="btn btn-secondary" onClick={() => router.back()}>Назад</button>
+        </div>
+      </ProtectedLayout>
+    );
+  }
 
   return (
     <ProtectedLayout permissions={['passes.create']}>
@@ -332,7 +346,7 @@ function NewPassForm() {
           </FormField>
         </div>
 
-        {tenantOffices.length > 0 ? (
+        {isTenant || tenantOffices.length > 0 ? (
           <div className="space-y-3">
             {bcOptions.length > 1 && (
               <FormField id="propertyId" label="Бизнес-центр" required error={fieldErrors.propertyId}>
@@ -364,8 +378,14 @@ function NewPassForm() {
                   ))}
                 </FormSelect>
               </FormField>
-              <FormField id="floor" label="Этаж">
-                <FormInput id="floor" value={floor} readOnly placeholder="—" />
+              <FormField id="floor" label="Этаж" hint="Подставляется из выбранного офиса">
+                <FormInput
+                  id="floor"
+                  value={floor}
+                  readOnly
+                  disabled
+                  placeholder="—"
+                />
               </FormField>
             </div>
             {bcOptions.length === 1 && (
@@ -383,8 +403,8 @@ function NewPassForm() {
                 placeholder="401"
               />
             </FormField>
-            <FormField id="floorManual" label="Этаж">
-              <FormInput id="floorManual" value={floor} onChange={(e) => setFloor(e.target.value)} placeholder="4" />
+            <FormField id="floorManual" label="Этаж" hint="Подставляется из офиса, если указан в реестре">
+              <FormInput id="floorManual" value={floor} readOnly disabled placeholder="—" />
             </FormField>
           </div>
         )}

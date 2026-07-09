@@ -364,6 +364,11 @@ h1, h2, h3 {
   justify-content: center;
   pointer-events: none;
   transform: translateY(-50%);
+  color: var(--muted);
+}
+
+.select-wrap:focus-within .select-wrap__icon {
+  color: var(--text);
 }
 
 select.input {
@@ -372,6 +377,43 @@ select.input {
   appearance: none;
   cursor: pointer;
   padding-right: 2.5rem;
+  background-color: var(--surface);
+  color: var(--text);
+}
+
+select.input:hover:not(:disabled) {
+  border-color: var(--border-strong);
+  background-color: var(--surface-elevated);
+}
+
+select.input:disabled {
+  opacity: 0.72;
+  background-color: var(--surface-muted);
+  color: var(--muted);
+  cursor: not-allowed;
+}
+
+select.input option,
+select.input optgroup {
+  background-color: var(--surface-elevated);
+  color: var(--text);
+}
+
+select.input option:checked {
+  background-color: var(--accent-soft);
+  color: var(--text);
+}
+
+select.input option:disabled {
+  color: var(--muted);
+}
+
+[data-theme="dark"] select.input {
+  color-scheme: dark;
+}
+
+[data-theme="light"] select.input {
+  color-scheme: light;
 }
 
 select.input::-ms-expand {

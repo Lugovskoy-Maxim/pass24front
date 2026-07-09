@@ -14,6 +14,7 @@ import { FormErrorBanner, FormField, FormInput, FormSelect, FormTextarea } from 
 import { FieldErrors, hasFieldErrors, validatePassTemplateForm } from '@/lib/form-validation';
 import { getVisitorNameLabel } from '@/lib/person-name';
 
+
 const TYPE_ICONS: Record<PassType, typeof User> = {
   visitor: User,
   parking: Car,
@@ -53,6 +54,7 @@ export default function TemplatesPage() {
   const [form, setForm] = useState<CreatePassTemplateData>(EMPTY_FORM);
 
   const tenantOffices = user?.offices || [];
+  const tenantBlocked = user?.role === 'tenant' && tenantOffices.length === 0;
   const enabledTypes = (Object.keys(TYPE_LABELS) as PassType[]).filter(
     (key) => !user?.enabledPassTypes?.length || user.enabledPassTypes.includes(key),
   );
@@ -180,7 +182,12 @@ export default function TemplatesPage() {
             <RefreshCw className={`w-4 h-4 ${syncing ? 'animate-spin' : ''}`} />
             {syncing ? 'Импорт...' : 'Из старых пропусков'}
           </button>
-          <button className="btn btn-primary text-sm" onClick={() => setShowForm((v) => !v)}>
+          <button
+            className="btn btn-primary text-sm"
+            disabled={tenantBlocked}
+            title={tenantBlocked ? 'Назначьте офис администратором' : undefined}
+            onClick={() => setShowForm((v) => !v)}
+          >
             <Plus className="w-4 h-4" />
             Новый шаблон
           </button>
@@ -197,7 +204,13 @@ export default function TemplatesPage() {
         />
       )}
 
-      {showForm && (
+      {tenantBlocked && (
+        <div className="card p-4 mb-6 border-[var(--alert-border)] bg-[var(--alert-surface-subtle)] text-sm text-[var(--alert-text)]">
+          Создание шаблонов и заказ пропусков недоступны: офис не назначен. Обратитесь к администратору.
+        </div>
+      )}
+
+      {showForm && !tenantBlocked && (
         <form onSubmit={handleSubmit} className="card p-6 mb-6 space-y-4" noValidate>
           <h2 className="font-semibold">Создать шаблон вручную</h2>
           <div className="form-grid-2">
@@ -264,9 +277,9 @@ export default function TemplatesPage() {
             </div>
           )}
 
-          <div className="form-grid-3">
+          <div className="form-grid-2">
             <FormField id="templateOffice" label="Офис" required error={fieldErrors.officeId || fieldErrors.office}>
-              {tenantOffices.length > 0 ? (
+              {user?.role === 'tenant' || tenantOffices.length > 0 ? (
                 <FormSelect
                   id="templateOffice"
                   value={form.officeId}
@@ -276,7 +289,7 @@ export default function TemplatesPage() {
                   <option value="">Выберите офис</option>
                   {tenantOffices.map((o) => (
                     <option key={o.id} value={o.id}>
-                      {o.businessCenterName ? `${o.businessCenterName} · ` : ''}офис {o.number}{o.floor ? `, ${o.floor} эт.` : ''}
+                      {o.businessCenterName ? `${o.businessCenterName} · ` : ''}офис {o.number}
                     </option>
                   ))}
                 </FormSelect>
@@ -289,6 +302,11 @@ export default function TemplatesPage() {
                 />
               )}
             </FormField>
+            <FormField id="templateFloor" label="Этаж" hint="Из офиса">
+              <FormInput id="templateFloor" value={form.floor || ''} readOnly disabled placeholder="—" />
+            </FormField>
+          </div>
+          <div className="form-grid-2">
             <FormField id="templateTimeFrom" label="С">
               <FormInput id="templateTimeFrom" type="time" value={form.visitTimeFrom} onChange={(e) => setForm({ ...form, visitTimeFrom: e.target.value })} />
             </FormField>
@@ -350,9 +368,15 @@ export default function TemplatesPage() {
                 </div>
 
                 <div className="flex gap-2 pt-3 border-t border-[var(--border)]">
-                  <Link href={`/passes/new?template=${template.id}`} className="btn btn-primary flex-1 text-sm">
-                    Заказать
-                  </Link>
+                  {tenantBlocked ? (
+                    <span className="btn btn-primary flex-1 text-sm opacity-50 cursor-not-allowed" title="Офис не назначен">
+                      Заказать
+                    </span>
+                  ) : (
+                    <Link href={`/passes/new?template=${template.id}`} className="btn btn-primary flex-1 text-sm">
+                      Заказать
+                    </Link>
+                  )}
                   <button className="btn btn-secondary p-2" onClick={() => handleDelete(template.id)} title="Удалить">
                     <Trash2 className="w-4 h-4" />
                   </button>

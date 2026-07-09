@@ -7,7 +7,7 @@ import { useAuth } from '@/lib/auth';
 import { useConfig } from '@/hooks/useConfig';
 import { SiteBrand } from '@/components/SiteBrand';
 import { ROLE_LABELS, formatTenantOffices } from '@/lib/api';
-import { canSeeOverdueAlerts, canUseReception, canViewPasses, getHomePath, hasPermission } from '@/lib/permissions';
+import { canOrderPasses, canSeeOverdueAlerts, canUseReception, canViewPasses, getHomePath, hasPermission } from '@/lib/permissions';
 import { getUiLabels } from '@/lib/ui-labels';
 import { useOverdueGuests } from '@/hooks/useOverdueGuests';
 import { OverdueGuestsAlert } from '@/components/OverdueGuestsAlert';
@@ -42,7 +42,7 @@ export function Header() {
       href: '/passes/new',
       label: L.nav.orderPass,
       icon: Plus,
-      show: hasPermission(user, 'passes.create'),
+      show: canOrderPasses(user),
     },
     { href: '/control', label: L.nav.reception, icon: ClipboardList, show: canUseReception(user) },
     { href: '/profile', label: L.nav.profile, icon: User, show: true },

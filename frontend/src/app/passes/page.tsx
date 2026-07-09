@@ -15,7 +15,7 @@ import { useConfig } from '@/hooks/useConfig';
 import { useToast } from '@/components/Toast';
 import { api, Pass, PassStatus, getErrorMessage } from '@/lib/api';
 import { PageError } from '@/components/PageError';
-import { canViewAllPasses, canViewPasses, hasPermission } from '@/lib/permissions';
+import { canOrderPasses, canViewAllPasses, canViewPasses, hasPermission } from '@/lib/permissions';
 import { isAwaitingEntry } from '@/lib/pass-entry';
 
 
@@ -57,7 +57,7 @@ function PassesPageContent() {
   const labels = getUiLabels(config);
 
   const canViewPassesList = canViewPasses(user);
-  const canCreate = hasPermission(user, 'passes.create');
+  const canCreate = canOrderPasses(user);
   const canViewAll = canViewAllPasses(user);
   const canReception = hasPermission(user, 'passes.reception');
   const showCreatorInfo = canViewAll || canReception;

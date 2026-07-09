@@ -1,4 +1,4 @@
-import { ForbiddenException, Injectable, NotFoundException } from '@nestjs/common';
+import { BadRequestException, ForbiddenException, Injectable, NotFoundException } from '@nestjs/common';
 import { InjectModel } from '@nestjs/mongoose';
 import { Model, Types } from 'mongoose';
 import {
@@ -156,6 +156,21 @@ export class PassTemplatesService {
   }
 
   private async resolveOfficeFields(dto: CreatePassTemplateDto, user: any) {
+    if (user?.role === 'tenant') {
+      const assignedOffices = await this.officeModel.countDocuments({
+        tenantId: new Types.ObjectId(user.userId),
+        isActive: true,
+      });
+      if (!assignedOffices) {
+        throw new ForbiddenException(
+          'Создание шаблонов недоступно: офис не назначен. Обратитесь к администратору.',
+        );
+      }
+      if (!dto.officeId) {
+        throw new BadRequestException('Выберите офис из списка');
+      }
+    }
+
     if (!dto.officeId) {
       return {
         office: dto.office?.trim(),

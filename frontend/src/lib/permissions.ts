@@ -31,6 +31,13 @@ export function canViewPassCharts(user: User | null | undefined): boolean {
   return user?.role !== 'tenant';
 }
 
+/** Арендатор без назначенного офиса не может заказывать пропуска. */
+export function canOrderPasses(user: User | null | undefined): boolean {
+  if (!hasPermission(user, 'passes.create')) return false;
+  if (user?.role !== 'tenant') return true;
+  return (user.offices?.length ?? 0) > 0;
+}
+
 export function canUseReception(user: User | null | undefined): boolean {
   return hasAnyPermission(user, 'passes.reception', 'passes.lookup') || isAdminPanelUser(user);
 }
