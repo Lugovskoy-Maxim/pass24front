@@ -36,7 +36,7 @@ export function validateLoginRegister(data: {
   const errors: FieldErrors = {};
 
   if (isBlank(data.email)) {
-    errors.email = data.mode === 'login' ? 'Укажите логин' : 'Укажите email';
+    errors.email = data.mode === 'login' ? 'Укажите логин или email' : 'Укажите email';
   } else if (data.mode !== 'login' && !isValidEmail(data.email)) {
     errors.email = 'Некорректный email';
   }

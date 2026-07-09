@@ -300,6 +300,43 @@ h1, h2, h3 {
   padding-left: 2.375rem;
 }
 
+.password-field {
+  position: relative;
+  display: block;
+  width: 100%;
+}
+
+.password-field__input {
+  padding-right: 2.75rem;
+}
+
+.password-field__toggle {
+  position: absolute;
+  top: 50%;
+  right: 0.5rem;
+  transform: translateY(-50%);
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  width: 2rem;
+  height: 2rem;
+  border: 0;
+  border-radius: var(--radius-sm);
+  background: transparent;
+  color: var(--muted);
+  cursor: pointer;
+}
+
+.password-field__toggle:hover:not(:disabled) {
+  color: var(--text);
+  background: var(--nav-hover);
+}
+
+.password-field__toggle:disabled {
+  opacity: 0.5;
+  cursor: not-allowed;
+}
+
 .input--textarea {
   min-height: 5rem;
   resize: vertical;

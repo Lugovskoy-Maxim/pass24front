@@ -9,7 +9,7 @@ import { api, getErrorMessage, UserRole } from '@/lib/api';
 import { useConfig } from '@/hooks/useConfig';
 import { SiteBrand } from '@/components/SiteBrand';
 import { PersonNameFields } from '@/components/PersonNameFields';
-import { FormErrorBanner, FormField, FormInput } from '@/components/FormField';
+import { FormErrorBanner, FormField, FormInput, PasswordInput } from '@/components/FormField';
 import { buildFullName, getUserNameLabels, PersonNameParts } from '@/lib/person-name';
 import { FieldErrors, hasFieldErrors, validateLoginRegister } from '@/lib/form-validation';
 import { ThemeToggle } from '@/components/ThemeToggle';
@@ -95,7 +95,7 @@ export default function LoginPage() {
     if (hasFieldErrors(errors)) return;
 
     if (mode === 'login') {
-      await performLogin(email, password);
+      await performLogin(email.trim().toLowerCase(), password);
       return;
     }
 
@@ -219,7 +219,7 @@ export default function LoginPage() {
                 </p>
               </>
             )}
-            <FormField id="email" label={mode === 'login' ? 'Логин' : 'Email'} required error={fieldErrors.email}>
+            <FormField id="email" label={mode === 'login' ? 'Логин или email' : 'Email'} required error={fieldErrors.email}>
               <FormInput
                 id="email"
                 type={mode === 'login' ? 'text' : 'email'}
@@ -227,12 +227,12 @@ export default function LoginPage() {
                 onChange={(e) => { setEmail(e.target.value); clearFieldError('email'); }}
                 invalid={!!fieldErrors.email}
                 autoComplete={mode === 'login' ? 'username' : 'email'}
+                placeholder={mode === 'login' ? 'admin или email@example.com' : undefined}
               />
             </FormField>
             <FormField id="password" label="Пароль" required error={fieldErrors.password} hint={mode === 'register' ? 'Минимум 6 символов' : undefined}>
-              <FormInput
+              <PasswordInput
                 id="password"
-                type="password"
                 value={password}
                 onChange={(e) => { setPassword(e.target.value); clearFieldError('password'); }}
                 invalid={!!fieldErrors.password}

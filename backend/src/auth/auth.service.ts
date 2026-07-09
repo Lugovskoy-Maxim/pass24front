@@ -72,7 +72,10 @@ export class AuthService {
   }
 
   async login(dto: LoginDto) {
-    const login = dto.login.trim().toLowerCase();
+    const login = (dto.login || dto.email || '').trim().toLowerCase();
+    if (!login) {
+      throw new UnauthorizedException('Неверные учетные данные');
+    }
     const user = await this.userModel.findOne({
       $or: [{ username: login }, { email: login }],
     }).select('+password') as any;

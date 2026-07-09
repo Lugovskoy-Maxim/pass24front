@@ -6,7 +6,9 @@ import {
   TextareaHTMLAttributes,
   forwardRef,
   ReactNode,
+  useState,
 } from 'react';
+import { Eye, EyeOff } from 'lucide-react';
 import { UiIcon } from '@/components/UiIcon';
 import { useConfig } from '@/hooks/useConfig';
 import { resolveBrand } from '@/lib/brand-defaults';
@@ -81,6 +83,44 @@ type FormControlProps = {
   iconLeft?: boolean;
   className?: string;
 };
+
+export const PasswordInput = forwardRef<
+  HTMLInputElement,
+  Omit<InputHTMLAttributes<HTMLInputElement>, 'type'> & FormControlProps
+>(function PasswordInput(
+  { invalid, inputAuto, mono, iconLeft, className, readOnly, disabled, ...props },
+  ref,
+) {
+  const [visible, setVisible] = useState(false);
+
+  return (
+    <div className="password-field">
+      <FormInput
+        ref={ref}
+        type={visible ? 'text' : 'password'}
+        invalid={invalid}
+        inputAuto={inputAuto}
+        mono={mono}
+        iconLeft={iconLeft}
+        className={['password-field__input', className].filter(Boolean).join(' ')}
+        readOnly={readOnly}
+        disabled={disabled}
+        {...props}
+      />
+      <button
+        type="button"
+        className="password-field__toggle"
+        tabIndex={-1}
+        aria-label={visible ? 'Скрыть пароль' : 'Показать пароль'}
+        aria-pressed={visible}
+        disabled={disabled || readOnly}
+        onClick={() => setVisible((v) => !v)}
+      >
+        {visible ? <EyeOff className="w-4 h-4" /> : <Eye className="w-4 h-4" />}
+      </button>
+    </div>
+  );
+});
 
 export const FormInput = forwardRef<
   HTMLInputElement,
