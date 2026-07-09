@@ -126,12 +126,15 @@ export class MailService {
     }
 
     const from = this.getPassFromAddress();
+    const appHost = (this.configService.get<string>('PUBLIC_APP_URL') || 'https://pass.mstyle.ru')
+      .replace(/^https?:\/\//, '')
+      .replace(/\/$/, '');
     const html = `
       <div style="font-family:Inter,Arial,sans-serif;max-width:480px;margin:0 auto;color:#0f172a">
         <div style="padding:24px;border:1px solid #e2e8f0;border-radius:12px;background:#fff">
           <h2 style="margin:0 0 12px;font-size:20px">Подтверждение регистрации</h2>
           <p style="margin:0 0 16px;line-height:1.5;color:#475569">
-            Введите этот код на странице регистрации PASS24:
+            Введите этот код на странице регистрации ${appHost}:
           </p>
           <div style="font-size:32px;font-weight:700;letter-spacing:0.35em;text-align:center;padding:16px;background:#f8fafc;border-radius:8px">
             ${code}
@@ -148,7 +151,7 @@ export class MailService {
         from,
         to,
         subject: `Код подтверждения: ${code}`,
-        text: `Код подтверждения регистрации PASS24: ${code}\nКод действует 15 минут.`,
+        text: `Код подтверждения регистрации на ${appHost}: ${code}\nКод действует 15 минут.`,
         html,
       });
       this.logger.log(`Registration code emailed to ${to}`);
