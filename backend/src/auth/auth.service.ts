@@ -8,7 +8,18 @@ import { JwtService } from '@nestjs/jwt';
 import { AccessConfigService } from '../access/access-config.service';
 import { AuditService } from '../audit/audit.service';
 import { AUTH_CONNECTION } from '../database/auth-database.constants';
-import { Office, OfficeDocument, Property, PropertyDocument, User, UserDocument } from '../schemas';
+import { MailService } from '../mail/mail.service';
+import {
+  Office,
+  OfficeDocument,
+  Property,
+  PropertyDocument,
+  RegistrationPending,
+  RegistrationPendingDocument,
+  User,
+  UserDocument,
+} from '../schemas';
+import { ConfirmRegistrationDto } from './dto/confirm-registration.dto';
 import { LoginDto } from './dto/login.dto';
 import { RegisterDto } from './dto/register.dto';
 import { UpdateProfileDto } from './dto/update-profile.dto';
@@ -18,20 +29,22 @@ import { DEV_TEST_ACCOUNTS, DEV_TEST_ACCOUNT_EMAILS } from '../database/dev-test
 export class AuthService {
   constructor(
     @InjectModel(User.name, AUTH_CONNECTION) private userModel: Model<UserDocument>,
+    @InjectModel(RegistrationPending.name, AUTH_CONNECTION)
+    private pendingModel: Model<RegistrationPendingDocument>,
     @InjectModel(Office.name) private officeModel: Model<OfficeDocument>,
     @InjectModel(Property.name) private propertyModel: Model<PropertyDocument>,
     private jwtService: JwtService,
     private accessConfigService: AccessConfigService,
     private auditService: AuditService,
+    private mailService: MailService,
   ) {}
 
-  async register(dto: RegisterDto) {
-    const existing = await this.userModel.findOne({ email: dto.email.toLowerCase() });
+  async requestRegistrationCode(dto: RegisterDto) {
+    const email = dto.email.toLowerCase().trim();
+    const existing = await this.userModel.findOne({ email });
     if (existing) {
       throw new ConflictException('Пользователь с таким email уже существует');
     }
-
-    const hashed = await bcrypt.hash(dto.password, 10);
 
     let personName;
     try {
@@ -40,18 +53,78 @@ export class AuthService {
       throw new BadRequestException('Укажите фамилию и имя');
     }
 
+    const code = String(Math.floor(100000 + Math.random() * 900000));
+    const codeHash = await bcrypt.hash(code, 10);
+    const passwordHash = await bcrypt.hash(dto.password, 10);
+    const expiresAt = new Date(Date.now() + 15 * 60 * 1000);
+
+    await this.pendingModel.findOneAndUpdate(
+      { email },
+      {
+        email,
+        codeHash,
+        expiresAt,
+        password: passwordHash,
+        fullName: personName.fullName,
+        lastName: personName.lastName,
+        firstName: personName.firstName,
+        middleName: personName.middleName,
+        phone: dto.phone?.trim() || undefined,
+        company: dto.company.trim(),
+      },
+      { upsert: true, new: true, setDefaultsOnInsert: true },
+    );
+
+    await this.mailService.sendRegistrationCode(email, code);
+
+    return {
+      verificationRequired: true,
+      message: `Код подтверждения отправлен на ${email}`,
+      expiresInMinutes: 15,
+    };
+  }
+
+  async confirmRegistration(dto: ConfirmRegistrationDto) {
+    const email = dto.email.toLowerCase().trim();
+    const pending = await this.pendingModel
+      .findOne({ email })
+      .select('+codeHash +password')
+      .lean();
+
+    if (!pending) {
+      throw new BadRequestException('Код не найден. Запросите новый код регистрации.');
+    }
+
+    if (pending.expiresAt.getTime() < Date.now()) {
+      await this.pendingModel.deleteOne({ email });
+      throw new BadRequestException('Код истёк. Запросите новый код регистрации.');
+    }
+
+    const codeOk = await bcrypt.compare(dto.code, pending.codeHash);
+    if (!codeOk) {
+      throw new BadRequestException('Неверный код подтверждения');
+    }
+
+    const existing = await this.userModel.findOne({ email });
+    if (existing) {
+      await this.pendingModel.deleteOne({ email });
+      throw new ConflictException('Пользователь с таким email уже существует');
+    }
+
     const user = await this.userModel.create({
-      email: dto.email.toLowerCase(),
-      fullName: personName.fullName,
-      lastName: personName.lastName,
-      firstName: personName.firstName,
-      middleName: personName.middleName,
-      phone: dto.phone?.trim() || undefined,
-      company: dto.company.trim(),
+      email,
+      fullName: pending.fullName,
+      lastName: pending.lastName,
+      firstName: pending.firstName,
+      middleName: pending.middleName,
+      phone: pending.phone,
+      company: pending.company,
       role: 'tenant',
-      password: hashed,
+      password: pending.password,
       isActive: false,
     } as any);
+
+    await this.pendingModel.deleteOne({ email });
 
     await this.auditService.log({
       action: 'user.registration_request',
@@ -62,6 +135,7 @@ export class AuthService {
         fullName: user.fullName,
         company: user.company,
         phone: user.phone,
+        emailVerified: true,
       },
     });
 
@@ -69,6 +143,11 @@ export class AuthService {
       pendingApproval: true,
       message: 'Заявка отправлена. Доступ будет открыт после подтверждения администратором.',
     };
+  }
+
+  /** @deprecated Используйте requestRegistrationCode + confirmRegistration */
+  async register(dto: RegisterDto) {
+    return this.requestRegistrationCode(dto);
   }
 
   async login(dto: LoginDto) {

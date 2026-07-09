@@ -599,6 +599,107 @@ export class AdminService {
     };
   }
 
+  async exportOfficesCsv() {
+    const { offices } = await this.getOffices();
+    const { buildOfficeCsv } = await import('../common/office-csv');
+    const tenantIds = offices.filter((o) => o.tenantId).map((o) => new Types.ObjectId(o.tenantId!));
+    const tenants = tenantIds.length
+      ? await this.userModel.find({ _id: { $in: tenantIds } }).lean()
+      : [];
+    const tenantEmailMap = new Map(tenants.map((t) => [t._id.toString(), t.email || '']));
+
+    return buildOfficeCsv(
+      offices.map((office) => ({
+        businessCenterName: office.businessCenterName || '',
+        number: office.number,
+        floor: office.floor,
+        areaSqm: office.areaSqm,
+        company: office.company,
+        tenantEmail: office.tenantId ? tenantEmailMap.get(office.tenantId) : undefined,
+        isActive: office.isActive,
+      })),
+    );
+  }
+
+  async importOfficesCsv(csv: string, actor?: AuditActor) {
+    const { parseOfficeCsv } = await import('../common/office-csv');
+    const parsed = parseOfficeCsv(csv);
+    if (!parsed.rows.length && parsed.errors.length) {
+      throw new BadRequestException(parsed.errors.join('; '));
+    }
+
+    const properties = await this.propertyModel.find({ isActive: true }).lean();
+    const propertyByName = new Map(
+      properties.map((p) => [p.name.trim().toLowerCase(), p]),
+    );
+
+    const tenantEmails = [...new Set(parsed.rows.map((r) => r.tenantEmail).filter(Boolean))] as string[];
+    const tenants = tenantEmails.length
+      ? await this.userModel.find({ email: { $in: tenantEmails } }).lean()
+      : [];
+    const tenantByEmail = new Map(tenants.map((t) => [t.email!.toLowerCase(), t]));
+
+    const result = {
+      created: 0,
+      skipped: 0,
+      errors: [...parsed.errors] as string[],
+    };
+
+    for (const [index, row] of parsed.rows.entries()) {
+      const rowNum = index + 2;
+      const property = propertyByName.get(row.businessCenter.toLowerCase());
+      if (!property) {
+        result.errors.push(`Строка ${rowNum}: БЦ «${row.businessCenter}» не найден`);
+        continue;
+      }
+
+      const existing = await this.officeModel.findOne({
+        property: property._id,
+        number: row.number.trim(),
+      });
+      if (existing) {
+        result.skipped += 1;
+        continue;
+      }
+
+      let tenantId: Types.ObjectId | undefined;
+      if (row.tenantEmail) {
+        const tenant = tenantByEmail.get(row.tenantEmail);
+        if (!tenant) {
+          result.errors.push(`Строка ${rowNum}: арендатор ${row.tenantEmail} не найден`);
+          continue;
+        }
+        tenantId = tenant._id as Types.ObjectId;
+      }
+
+      const office = await this.officeModel.create({
+        property: property._id,
+        number: row.number.trim(),
+        floor: row.floor,
+        areaSqm: row.areaSqm,
+        company: row.company,
+        tenantId,
+        isActive: row.isActive,
+      });
+
+      if (tenantId) {
+        await this.syncTenantProperties(tenantId.toString());
+      }
+
+      await this.auditService.log({
+        action: 'office.import',
+        entityType: 'office',
+        entityId: office._id,
+        actor,
+        details: { number: office.number, propertyId: property._id.toString(), source: 'csv' },
+      });
+
+      result.created += 1;
+    }
+
+    return result;
+  }
+
   async getOffices() {
     const offices = await this.officeModel.find().sort({ createdAt: -1 }).lean();
     const propertyIds = [...new Set(offices.map((o) => o.property.toString()))];

@@ -1,7 +1,7 @@
 'use client';
 
-import { useEffect, useMemo, useState, FormEvent } from 'react';
-import { Plus, Pencil, Check, X, Link2, Search, Building2, Filter, Users, Trash2, LayoutGrid, Table2 } from 'lucide-react';
+import { useEffect, useMemo, useRef, useState, FormEvent, ChangeEvent } from 'react';
+import { Plus, Pencil, Check, X, Link2, Search, Building2, Filter, Users, Trash2, LayoutGrid, Table2, Download, Upload } from 'lucide-react';
 import { AdminLayout } from '@/components/AdminLayout';
 import { useToast } from '@/components/Toast';
 import { useDebounce } from '@/hooks/useDebounce';
@@ -60,6 +60,10 @@ export default function AdminOfficesPage() {
   const [officeFilters, setOfficeFilters] = useState<OfficeFilters>(EMPTY_OFFICE_FILTERS);
   const [appliedOfficeFilters, setAppliedOfficeFilters] = useState<OfficeFilters>(EMPTY_OFFICE_FILTERS);
   const [officeView, setOfficeView] = useState<OfficeViewMode>('table');
+  const [exporting, setExporting] = useState(false);
+  const [importing, setImporting] = useState(false);
+  const [importResult, setImportResult] = useState<{ created: number; skipped: number; errors: string[] } | null>(null);
+  const importInputRef = useRef<HTMLInputElement>(null);
   const debouncedOfficeSearch = useDebounce(officeFilters.search);
 
   useEffect(() => {
@@ -398,6 +402,42 @@ export default function AdminOfficesPage() {
   );
 
   const applyOfficeFilters = () => setAppliedOfficeFilters({ ...officeFilters });
+
+  const handleExportOffices = async () => {
+    setExporting(true);
+    try {
+      await api.admin.exportOffices();
+      toast('Список офисов выгружен', 'success');
+    } catch (err) {
+      toast(getErrorMessage(err, 'Ошибка выгрузки'), 'error');
+    } finally {
+      setExporting(false);
+    }
+  };
+
+  const handleImportFile = async (e: ChangeEvent<HTMLInputElement>) => {
+    const file = e.target.files?.[0];
+    e.target.value = '';
+    if (!file) return;
+
+    setImporting(true);
+    setImportResult(null);
+    try {
+      const csv = await file.text();
+      const result = await api.admin.importOffices(csv);
+      setImportResult(result);
+      if (result.created > 0) load();
+      const hasErrors = result.errors.length > 0;
+      toast(
+        `Импорт: добавлено ${result.created}, пропущено ${result.skipped}${hasErrors ? `, ошибок ${result.errors.length}` : ''}`,
+        hasErrors && result.created === 0 ? 'error' : 'success',
+      );
+    } catch (err) {
+      toast(getErrorMessage(err, 'Ошибка импорта'), 'error');
+    } finally {
+      setImporting(false);
+    }
+  };
   const resetOfficeFilters = () => {
     setOfficeFilters(EMPTY_OFFICE_FILTERS);
     setAppliedOfficeFilters(EMPTY_OFFICE_FILTERS);
@@ -643,6 +683,31 @@ export default function AdminOfficesPage() {
                 Карточки
               </button>
             </div>
+            <button
+              type="button"
+              className="btn btn-secondary text-sm"
+              disabled={exporting || offices.length === 0}
+              onClick={() => void handleExportOffices()}
+            >
+              <Download className="w-4 h-4" />
+              {exporting ? 'Выгрузка...' : 'Экспорт CSV'}
+            </button>
+            <button
+              type="button"
+              className="btn btn-secondary text-sm"
+              disabled={importing || businessCenters.length === 0}
+              onClick={() => importInputRef.current?.click()}
+            >
+              <Upload className="w-4 h-4" />
+              {importing ? 'Импорт...' : 'Импорт CSV'}
+            </button>
+            <input
+              ref={importInputRef}
+              type="file"
+              accept=".csv,text/csv"
+              className="hidden"
+              onChange={(e) => void handleImportFile(e)}
+            />
             {!showForm && !editingId && businessCenters.length > 0 && (
               <button className="btn btn-primary text-sm" onClick={() => setShowForm(true)}>
                 <Plus className="w-4 h-4" />
@@ -651,6 +716,30 @@ export default function AdminOfficesPage() {
             )}
           </div>
         </div>
+
+        {importResult && (
+          <div className="rounded-lg border border-[var(--border)] bg-[var(--surface-muted)] px-4 py-3 text-sm space-y-2">
+            <div>
+              Импорт завершён: <span className="font-medium text-emerald-700">добавлено {importResult.created}</span>
+              {importResult.skipped > 0 && (
+                <>, пропущено (уже есть) <span className="font-medium">{importResult.skipped}</span></>
+              )}
+            </div>
+            {importResult.errors.length > 0 && (
+              <div>
+                <div className="text-[var(--muted)] mb-1">Ошибки ({importResult.errors.length}):</div>
+                <ul className="list-disc pl-5 space-y-0.5 text-red-600 max-h-32 overflow-y-auto">
+                  {importResult.errors.map((err) => (
+                    <li key={err}>{err}</li>
+                  ))}
+                </ul>
+              </div>
+            )}
+            <p className="text-xs text-[var(--muted)]">
+              Формат: БЦ;Номер офиса;Этаж;Площадь;Компания;Email арендатора;Активен (да/нет). БЦ должен существовать в системе.
+            </p>
+          </div>
+        )}
 
         <div className="grid grid-cols-2 lg:grid-cols-4 gap-3">
           <div className="card px-3 py-2">

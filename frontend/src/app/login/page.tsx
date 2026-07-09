@@ -11,7 +11,7 @@ import { SiteBrand } from '@/components/SiteBrand';
 import { PersonNameFields } from '@/components/PersonNameFields';
 import { FormErrorBanner, FormField, FormInput, PasswordInput } from '@/components/FormField';
 import { buildFullName, getUserNameLabels, PersonNameParts } from '@/lib/person-name';
-import { FieldErrors, hasFieldErrors, validateLoginRegister } from '@/lib/form-validation';
+import { FieldErrors, hasFieldErrors, validateLoginRegister, validateRegistrationCode } from '@/lib/form-validation';
 import { ThemeToggle } from '@/components/ThemeToggle';
 import { useTheme } from '@/components/ThemeProvider';
 
@@ -31,17 +31,20 @@ export default function LoginPage() {
   }, [user, authLoading, router]);
 
   const [mode, setMode] = useState<'login' | 'register'>('login');
+  const [registerStep, setRegisterStep] = useState<'form' | 'verify'>('form');
   const [email, setEmail] = useState('');
   const [password, setPassword] = useState('');
+  const [verificationCode, setVerificationCode] = useState('');
   const [nameParts, setNameParts] = useState<PersonNameParts>({ lastName: '', firstName: '', middleName: '' });
   const [company, setCompany] = useState('');
   const [phone, setPhone] = useState('');
   const [formError, setFormError] = useState('');
   const [fieldErrors, setFieldErrors] = useState<FieldErrors>({});
   const [success, setSuccess] = useState('');
+  const [infoMessage, setInfoMessage] = useState('');
   const [loading, setLoading] = useState(false);
   const [devAccounts, setDevAccounts] = useState<DevQuickLoginAccount[]>([]);
-  const { login, register } = useAuth();
+  const { login, requestRegistrationCode, confirmRegistration } = useAuth();
   const config = useConfig();
   const { theme } = useTheme();
 
@@ -99,12 +102,40 @@ export default function LoginPage() {
       return;
     }
 
+    if (registerStep === 'verify') {
+      const codeErrors = validateRegistrationCode(verificationCode);
+      setFieldErrors(codeErrors);
+      if (hasFieldErrors(codeErrors)) return;
+
+      setFormError('');
+      setLoading(true);
+      try {
+        const message = await confirmRegistration(email.trim().toLowerCase(), verificationCode.trim());
+        setSuccess(message);
+        setInfoMessage('');
+        setRegisterStep('form');
+        setMode('login');
+        setPassword('');
+        setVerificationCode('');
+        setNameParts({ lastName: '', firstName: '', middleName: '' });
+        setCompany('');
+        setPhone('');
+        setFieldErrors({});
+      } catch (err) {
+        setFormError(getErrorMessage(err, 'Неверный код подтверждения'));
+      } finally {
+        setLoading(false);
+      }
+      return;
+    }
+
     setFormError('');
     setSuccess('');
+    setInfoMessage('');
     setLoading(true);
     try {
-      const message = await register({
-        email,
+      const message = await requestRegistrationCode({
+        email: email.trim().toLowerCase(),
         password,
         lastName: nameParts.lastName.trim(),
         firstName: nameParts.firstName.trim(),
@@ -113,15 +144,36 @@ export default function LoginPage() {
         company: company.trim(),
         phone: phone.trim() || undefined,
       });
-      setSuccess(message);
-      setMode('login');
-      setPassword('');
-      setNameParts({ lastName: '', firstName: '', middleName: '' });
-      setCompany('');
-      setPhone('');
+      setInfoMessage(message);
+      setRegisterStep('verify');
+      setVerificationCode('');
       setFieldErrors({});
     } catch (err) {
       setFormError(getErrorMessage(err, 'Ошибка регистрации'));
+    } finally {
+      setLoading(false);
+    }
+  };
+
+  const handleResendCode = async () => {
+    setFormError('');
+    setFieldErrors({});
+    setLoading(true);
+    try {
+      const message = await requestRegistrationCode({
+        email: email.trim().toLowerCase(),
+        password,
+        lastName: nameParts.lastName.trim(),
+        firstName: nameParts.firstName.trim(),
+        middleName: nameParts.middleName.trim() || undefined,
+        fullName: buildFullName(nameParts),
+        company: company.trim(),
+        phone: phone.trim() || undefined,
+      });
+      setInfoMessage(message);
+      setVerificationCode('');
+    } catch (err) {
+      setFormError(getErrorMessage(err, 'Не удалось отправить код'));
     } finally {
       setLoading(false);
     }
@@ -135,9 +187,20 @@ export default function LoginPage() {
 
   const switchMode = (next: 'login' | 'register') => {
     setMode(next);
+    setRegisterStep('form');
+    setVerificationCode('');
     setFormError('');
     setFieldErrors({});
     setSuccess('');
+    setInfoMessage('');
+  };
+
+  const backToRegisterForm = () => {
+    setRegisterStep('form');
+    setVerificationCode('');
+    setFormError('');
+    setFieldErrors({});
+    setInfoMessage('');
   };
 
   return (
@@ -187,7 +250,7 @@ export default function LoginPage() {
           </div>
 
           <form onSubmit={handleSubmit} className="space-y-4" noValidate>
-            {mode === 'register' && (
+            {mode === 'register' && registerStep === 'form' && (
               <>
                 <PersonNameFields
                   value={nameParts}
@@ -215,30 +278,59 @@ export default function LoginPage() {
                   />
                 </FormField>
                 <p className="text-xs text-[var(--muted)]">
-                  После регистрации заявка отправляется администратору. Офис назначит администратор после подтверждения.
+                  На email придёт код подтверждения. После регистрации заявка отправится администратору — офис назначит он.
                 </p>
               </>
             )}
-            <FormField id="email" label={mode === 'login' ? 'Логин или email' : 'Email'} required error={fieldErrors.email}>
-              <FormInput
-                id="email"
-                type={mode === 'login' ? 'text' : 'email'}
-                value={email}
-                onChange={(e) => { setEmail(e.target.value); clearFieldError('email'); }}
-                invalid={!!fieldErrors.email}
-                autoComplete={mode === 'login' ? 'username' : 'email'}
-                placeholder={mode === 'login' ? 'admin или email@example.com' : undefined}
-              />
-            </FormField>
-            <FormField id="password" label="Пароль" required error={fieldErrors.password} hint={mode === 'register' ? 'Минимум 6 символов' : undefined}>
-              <PasswordInput
-                id="password"
-                value={password}
-                onChange={(e) => { setPassword(e.target.value); clearFieldError('password'); }}
-                invalid={!!fieldErrors.password}
-                autoComplete={mode === 'login' ? 'current-password' : 'new-password'}
-              />
-            </FormField>
+
+            {mode === 'register' && registerStep === 'verify' && (
+              <div className="space-y-3">
+                <p className="text-sm text-[var(--text)]">
+                  Введите 6-значный код, отправленный на <span className="font-medium">{email}</span>
+                </p>
+                <FormField id="verificationCode" label="Код подтверждения" required error={fieldErrors.code}>
+                  <FormInput
+                    id="verificationCode"
+                    inputMode="numeric"
+                    autoComplete="one-time-code"
+                    value={verificationCode}
+                    onChange={(e) => {
+                      setVerificationCode(e.target.value.replace(/\D/g, '').slice(0, 6));
+                      clearFieldError('code');
+                    }}
+                    invalid={!!fieldErrors.code}
+                    placeholder="000000"
+                    className="tracking-[0.3em] text-center text-lg font-mono"
+                  />
+                </FormField>
+                <p className="text-xs text-[var(--muted)]">Код действует 15 минут. Проверьте папку «Спам», если письма нет.</p>
+              </div>
+            )}
+
+            {(mode === 'login' || (mode === 'register' && registerStep === 'form')) && (
+              <>
+                <FormField id="email" label={mode === 'login' ? 'Логин или email' : 'Email'} required error={fieldErrors.email}>
+                  <FormInput
+                    id="email"
+                    type={mode === 'login' ? 'text' : 'email'}
+                    value={email}
+                    onChange={(e) => { setEmail(e.target.value); clearFieldError('email'); }}
+                    invalid={!!fieldErrors.email}
+                    autoComplete={mode === 'login' ? 'username' : 'email'}
+                    placeholder={mode === 'login' ? 'admin или email@example.com' : undefined}
+                  />
+                </FormField>
+                <FormField id="password" label="Пароль" required error={fieldErrors.password} hint={mode === 'register' ? 'Минимум 6 символов' : undefined}>
+                  <PasswordInput
+                    id="password"
+                    value={password}
+                    onChange={(e) => { setPassword(e.target.value); clearFieldError('password'); }}
+                    invalid={!!fieldErrors.password}
+                    autoComplete={mode === 'login' ? 'current-password' : 'new-password'}
+                  />
+                </FormField>
+              </>
+            )}
 
             {success && mode === 'login' && (
               <div className="text-sm text-[var(--status-active)] bg-[var(--status-active-soft)] px-3 py-2 rounded-md border border-[var(--status-active-border)]">
@@ -246,11 +338,34 @@ export default function LoginPage() {
               </div>
             )}
 
+            {infoMessage && mode === 'register' && registerStep === 'verify' && (
+              <div className="text-sm text-[var(--status-active)] bg-[var(--status-active-soft)] px-3 py-2 rounded-md border border-[var(--status-active-border)]">
+                {infoMessage}
+              </div>
+            )}
+
             <FormErrorBanner message={formError} />
 
             <button type="submit" className="btn btn-primary w-full" disabled={loading}>
-              {loading ? 'Загрузка...' : mode === 'login' ? 'Войти' : 'Зарегистрироваться'}
+              {loading
+                ? 'Загрузка...'
+                : mode === 'login'
+                  ? 'Войти'
+                  : registerStep === 'verify'
+                    ? 'Подтвердить регистрацию'
+                    : 'Получить код'}
             </button>
+
+            {mode === 'register' && registerStep === 'verify' && (
+              <div className="flex flex-col sm:flex-row gap-2">
+                <button type="button" className="btn btn-secondary flex-1" disabled={loading} onClick={backToRegisterForm}>
+                  Изменить данные
+                </button>
+                <button type="button" className="btn btn-secondary flex-1" disabled={loading} onClick={() => void handleResendCode()}>
+                  Отправить код снова
+                </button>
+              </div>
+            )}
           </form>
 
           {devAccounts.length > 0 && mode === 'login' && (

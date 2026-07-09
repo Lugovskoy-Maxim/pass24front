@@ -8,11 +8,23 @@ import { AuthService } from './auth.service';
 import { JwtStrategy } from './jwt.strategy';
 import { PermissionsGuard } from './permissions.guard';
 import { AuthDatabaseModule } from '../database/auth-database.module';
-import { Office, OfficeSchema, Property, PropertySchema, User, UserSchema } from '../schemas';
+import {
+  Office,
+  OfficeSchema,
+  Property,
+  PropertySchema,
+  RegistrationPending,
+  RegistrationPendingSchema,
+  User,
+  UserSchema,
+} from '../schemas';
 
 @Module({
   imports: [
-    AuthDatabaseModule.forFeature([{ name: User.name, schema: UserSchema }]),
+    AuthDatabaseModule.forFeature([
+      { name: User.name, schema: UserSchema },
+      { name: RegistrationPending.name, schema: RegistrationPendingSchema },
+    ]),
     MongooseModule.forFeature([
       { name: Office.name, schema: OfficeSchema },
       { name: Property.name, schema: PropertySchema },

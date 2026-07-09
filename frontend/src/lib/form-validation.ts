@@ -53,6 +53,14 @@ export function validateLoginRegister(data: {
   return errors;
 }
 
+export function validateRegistrationCode(code: string): FieldErrors {
+  const errors: FieldErrors = {};
+  const trimmed = code.trim();
+  if (!trimmed) errors.code = 'Введите код из письма';
+  else if (!/^\d{6}$/.test(trimmed)) errors.code = 'Код состоит из 6 цифр';
+  return errors;
+}
+
 export function validateProfileForm(nameParts: PersonNameParts): FieldErrors {
   const errors: FieldErrors = {};
   if (!isPersonNameValid(nameParts)) {

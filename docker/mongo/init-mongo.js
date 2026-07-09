@@ -20,9 +20,12 @@ appDb.createCollection('app_settings');
 
 // Identity / auth data (shared with future Bitrix24 apps)
 authDb.createCollection('users');
+authDb.createCollection('registration_pending');
 
 // Useful indexes
 authDb.users.createIndex({ username: 1 }, { unique: true, sparse: true });
+authDb.registration_pending.createIndex({ email: 1 }, { unique: true });
+authDb.registration_pending.createIndex({ expiresAt: 1 }, { expireAfterSeconds: 0 });
 authDb.users.createIndex({ email: 1 }, { unique: true, sparse: true });
 authDb.users.createIndex({ phone: 1 }, { unique: true, sparse: true });
 authDb.users.createIndex({ bitrix24UserId: 1, bitrix24Domain: 1 }, { unique: true, sparse: true });

@@ -2,6 +2,7 @@ import { Body, Controller, Delete, Get, Patch, Post, Req, UseGuards } from '@nes
 import { AuthGuard } from '@nestjs/passport';
 import { AuthService } from './auth.service';
 import { LoginDto } from './dto/login.dto';
+import { ConfirmRegistrationDto } from './dto/confirm-registration.dto';
 import { RegisterDto } from './dto/register.dto';
 import { UpdateProfileDto } from './dto/update-profile.dto';
 
@@ -19,9 +20,19 @@ export class AuthController {
     return this.authService.getDevAccounts();
   }
 
+  @Post('register/request-code')
+  async requestRegistrationCode(@Body() dto: RegisterDto) {
+    return this.authService.requestRegistrationCode(dto);
+  }
+
+  @Post('register/confirm')
+  async confirmRegistration(@Body() dto: ConfirmRegistrationDto) {
+    return this.authService.confirmRegistration(dto);
+  }
+
   @Post('register')
   async register(@Body() dto: RegisterDto) {
-    return this.authService.register(dto);
+    return this.authService.requestRegistrationCode(dto);
   }
 
   @UseGuards(AuthGuard('jwt'))

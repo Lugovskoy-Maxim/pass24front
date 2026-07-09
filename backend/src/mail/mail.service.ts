@@ -118,6 +118,48 @@ export class MailService {
     }
   }
 
+  async sendRegistrationCode(to: string, code: string) {
+    if (!this.transporter) {
+      throw new BadRequestException(
+        'Почтовый сервер не настроен. Регистрация по email временно недоступна.',
+      );
+    }
+
+    const from = this.getPassFromAddress();
+    const html = `
+      <div style="font-family:Inter,Arial,sans-serif;max-width:480px;margin:0 auto;color:#0f172a">
+        <div style="padding:24px;border:1px solid #e2e8f0;border-radius:12px;background:#fff">
+          <h2 style="margin:0 0 12px;font-size:20px">Подтверждение регистрации</h2>
+          <p style="margin:0 0 16px;line-height:1.5;color:#475569">
+            Введите этот код на странице регистрации PASS24:
+          </p>
+          <div style="font-size:32px;font-weight:700;letter-spacing:0.35em;text-align:center;padding:16px;background:#f8fafc;border-radius:8px">
+            ${code}
+          </div>
+          <p style="margin:16px 0 0;font-size:13px;color:#64748b">
+            Код действует 15 минут. Если вы не запрашивали регистрацию, просто проигнорируйте письмо.
+          </p>
+        </div>
+      </div>
+    `;
+
+    try {
+      await this.transporter.sendMail({
+        from,
+        to,
+        subject: `Код подтверждения: ${code}`,
+        text: `Код подтверждения регистрации PASS24: ${code}\nКод действует 15 минут.`,
+        html,
+      });
+      this.logger.log(`Registration code emailed to ${to}`);
+      return { sent: true };
+    } catch (err) {
+      const message = err instanceof Error ? err.message : 'Неизвестная ошибка SMTP';
+      this.logger.error(`Registration code email failed to ${to}: ${message}`);
+      throw new InternalServerErrorException('Не удалось отправить код подтверждения на почту');
+    }
+  }
+
   private getPassFromAddress(): string {
     const configured = this.configService.get<string>('SMTP_FROM');
     const user = this.configService.get<string>('SMTP_USER');

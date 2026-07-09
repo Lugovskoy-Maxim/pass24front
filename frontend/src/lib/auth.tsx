@@ -7,7 +7,7 @@ interface AuthContextType {
   user: User | null;
   loading: boolean;
   login: (email: string, password: string) => Promise<User>;
-  register: (data: {
+  requestRegistrationCode: (data: {
     email: string;
     password: string;
     fullName?: string;
@@ -17,6 +17,7 @@ interface AuthContextType {
     phone?: string;
     company: string;
   }) => Promise<string>;
+  confirmRegistration: (email: string, code: string) => Promise<string>;
   logout: () => void;
   refreshUser: () => Promise<void>;
 }
@@ -43,7 +44,7 @@ export function AuthProvider({ children }: { children: ReactNode }) {
     return user;
   };
 
-  const register = async (data: {
+  const requestRegistrationCode = async (data: {
     email: string;
     password: string;
     fullName?: string;
@@ -53,7 +54,12 @@ export function AuthProvider({ children }: { children: ReactNode }) {
     phone?: string;
     company: string;
   }) => {
-    const result = await api.register(data);
+    const result = await api.registerRequestCode(data);
+    return result.message;
+  };
+
+  const confirmRegistration = async (email: string, code: string) => {
+    const result = await api.registerConfirm(email, code);
     return result.message;
   };
 
@@ -68,7 +74,7 @@ export function AuthProvider({ children }: { children: ReactNode }) {
   };
 
   return (
-    <AuthContext.Provider value={{ user, loading, login, register, logout, refreshUser }}>
+    <AuthContext.Provider value={{ user, loading, login, requestRegistrationCode, confirmRegistration, logout, refreshUser }}>
       {children}
     </AuthContext.Provider>
   );

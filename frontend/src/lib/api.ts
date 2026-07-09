@@ -241,7 +241,7 @@ export const api = {
       body: JSON.stringify({ login, email: login, password }),
     }),
 
-  register: (data: {
+  registerRequestCode: (data: {
     email: string;
     password: string;
     fullName?: string;
@@ -251,9 +251,15 @@ export const api = {
     phone?: string;
     company: string;
   }) =>
-    request<{ pendingApproval: true; message: string }>('/auth/register', {
+    request<{ verificationRequired: true; message: string; expiresInMinutes: number }>(
+      '/auth/register/request-code',
+      { method: 'POST', body: JSON.stringify(data) },
+    ),
+
+  registerConfirm: (email: string, code: string) =>
+    request<{ pendingApproval: true; message: string }>('/auth/register/confirm', {
       method: 'POST',
-      body: JSON.stringify(data),
+      body: JSON.stringify({ email, code }),
     }),
 
   me: () => request<{ user: User }>('/auth/me'),
@@ -557,6 +563,29 @@ export const api = {
       request<{ settings: SiteSettings }>('/admin/site-settings', { method: 'PATCH', body: JSON.stringify(data) }),
 
     getOffices: () => request<{ offices: Office[] }>('/admin/offices'),
+
+    exportOffices: async () => {
+      const token = getToken();
+      const datePart = new Date().toISOString().slice(0, 10);
+      let res: Response;
+      try {
+        res = await fetch(`${API_URL}/admin/offices/export`, {
+          headers: token ? { Authorization: `Bearer ${token}` } : {},
+        });
+      } catch (error) {
+        throw new ApiError(
+          getErrorMessage(error, 'Сервер недоступен. Проверьте подключение к сети и что backend запущен.'),
+          { isNetworkError: true },
+        );
+      }
+      await downloadFileResponse(res, `offices-${datePart}.csv`);
+    },
+
+    importOffices: (csv: string) =>
+      request<{ created: number; skipped: number; errors: string[] }>('/admin/offices/import', {
+        method: 'POST',
+        body: JSON.stringify({ csv }),
+      }),
 
     createOffice: (data: CreateOfficeData) =>
       request<{ office: Office }>('/admin/offices', { method: 'POST', body: JSON.stringify(data) }),

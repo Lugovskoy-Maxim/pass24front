@@ -9,6 +9,7 @@ import { AuditService } from '../audit/audit.service';
 import { AdminService } from './admin.service';
 import { CreateBusinessCenterDto } from './dto/create-business-center.dto';
 import { CreateOfficeDto } from './dto/create-office.dto';
+import { ImportOfficesDto } from './dto/import-offices.dto';
 import { CreateUserDto } from './dto/create-user.dto';
 import { UpdateAccessConfigDto } from './dto/update-access-config.dto';
 import { UpdateBusinessCenterDto } from './dto/update-business-center.dto';
@@ -148,6 +149,22 @@ export class AdminController {
   @RequireAllPermissions('admin.offices')
   getOffices() {
     return this.adminService.getOffices();
+  }
+
+  @Get('offices/export')
+  @RequireAllPermissions('admin.offices')
+  async exportOffices(@Res() res: Response) {
+    const csv = await this.adminService.exportOfficesCsv();
+    const filename = `offices-${new Date().toISOString().slice(0, 10)}.csv`;
+    res.setHeader('Content-Type', 'text/csv; charset=utf-8');
+    res.setHeader('Content-Disposition', `attachment; filename="${filename}"`);
+    res.send(Buffer.from(`\uFEFF${csv}`, 'utf-8'));
+  }
+
+  @Post('offices/import')
+  @RequireAllPermissions('admin.offices')
+  importOffices(@Body() dto: ImportOfficesDto, @Req() req: any) {
+    return this.adminService.importOfficesCsv(dto.csv, req.user);
   }
 
   @Post('offices')
