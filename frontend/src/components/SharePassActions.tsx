@@ -1,6 +1,7 @@
 'use client';
 
-import { FormEvent, useEffect, useRef, useState } from 'react';
+import { FormEvent, useCallback, useEffect, useLayoutEffect, useRef, useState } from 'react';
+import { createPortal } from 'react-dom';
 import Link from 'next/link';
 import { AlertCircle, Check, ChevronDown, Copy, Loader2, Mail, QrCode, Share2, X } from 'lucide-react';
 import { api, getPassTicketUrl } from '@/lib/api';
@@ -52,7 +53,11 @@ export function SharePassActions({
   const { toast } = useToast();
 
   const rootRef = useRef<HTMLDivElement>(null);
+  const triggerRef = useRef<HTMLButtonElement>(null);
+  const dropdownRef = useRef<HTMLDivElement>(null);
   const [menuOpen, setMenuOpen] = useState(false);
+  const [dropdownStyle, setDropdownStyle] = useState<React.CSSProperties | null>(null);
+  const [menuPlacement, setMenuPlacement] = useState<'up' | 'down'>('down');
   const [emailModal, setEmailModal] = useState<EmailModalState>(INITIAL_EMAIL_MODAL);
   const [copied, setCopied] = useState(false);
   const [email, setEmail] = useState('');
@@ -60,11 +65,69 @@ export function SharePassActions({
   const canNativeShare = typeof navigator !== 'undefined' && typeof navigator.share === 'function';
   const btnClass = compact ? 'btn text-xs py-1.5' : ticketLayout ? 'btn text-sm flex-1' : 'btn text-sm';
   const isSending = emailModal.result.phase === 'sending';
+  const menuItemCount = 1 + (enableEmailShare ? 1 : 0) + (canNativeShare ? 1 : 0);
+
+  const updateDropdownPosition = useCallback(() => {
+    const trigger = triggerRef.current;
+    if (!trigger) return;
+
+    const rect = trigger.getBoundingClientRect();
+    const dropdownHeight = dropdownRef.current?.offsetHeight ?? menuItemCount * 44 + 16;
+    const gap = 6;
+    const viewportPadding = 8;
+    const spaceBelow = window.innerHeight - rect.bottom - viewportPadding;
+    const spaceAbove = rect.top - viewportPadding;
+    const preferUp = ticketLayout || (spaceBelow < dropdownHeight + gap && spaceAbove >= spaceBelow);
+    const width = Math.min(Math.max(rect.width, 200), window.innerWidth - viewportPadding * 2);
+    const left = Math.min(
+      Math.max(viewportPadding, rect.left),
+      window.innerWidth - width - viewportPadding,
+    );
+
+    setMenuPlacement(preferUp ? 'up' : 'down');
+    setDropdownStyle(
+      preferUp
+        ? {
+            position: 'fixed',
+            left,
+            width,
+            bottom: window.innerHeight - rect.top + gap,
+            zIndex: 120,
+          }
+        : {
+            position: 'fixed',
+            left,
+            width,
+            top: rect.bottom + gap,
+            zIndex: 120,
+          },
+    );
+  }, [menuItemCount, ticketLayout]);
+
+  useLayoutEffect(() => {
+    if (!menuOpen) {
+      setDropdownStyle(null);
+      return;
+    }
+    updateDropdownPosition();
+    const frame = requestAnimationFrame(updateDropdownPosition);
+    window.addEventListener('resize', updateDropdownPosition);
+    window.addEventListener('scroll', updateDropdownPosition, true);
+    return () => {
+      cancelAnimationFrame(frame);
+      window.removeEventListener('resize', updateDropdownPosition);
+      window.removeEventListener('scroll', updateDropdownPosition, true);
+    };
+  }, [menuOpen, updateDropdownPosition]);
 
   useEffect(() => {
     if (!menuOpen) return;
     const onPointerDown = (e: MouseEvent) => {
-      if (!rootRef.current?.contains(e.target as Node)) {
+      const target = e.target as Node;
+      if (
+        !rootRef.current?.contains(target)
+        && !dropdownRef.current?.contains(target)
+      ) {
         setMenuOpen(false);
       }
     };
@@ -217,6 +280,7 @@ export function SharePassActions({
 
           <div className={`share-menu__trigger-wrap ${ticketLayout ? 'flex-1 min-w-0' : ''}`}>
             <button
+              ref={triggerRef}
               type="button"
               className={`${btnClass} btn-secondary share-menu__trigger w-full`}
               onClick={() => setMenuOpen((v) => !v)}
@@ -228,9 +292,11 @@ export function SharePassActions({
               <ChevronDown className={`w-3.5 h-3.5 shrink-0 transition-transform ${menuOpen ? 'rotate-180' : ''}`} />
             </button>
 
-            {menuOpen && (
+            {menuOpen && typeof document !== 'undefined' && createPortal(
               <div
-                className={`share-menu__dropdown ${ticketLayout ? 'share-menu__dropdown--up' : ''}`}
+                ref={dropdownRef}
+                className={`share-menu__dropdown share-menu__dropdown--portal ${menuPlacement === 'up' ? 'share-menu__dropdown--up' : ''}`}
+                style={dropdownStyle ?? { position: 'fixed', left: -9999, top: -9999, visibility: 'hidden' }}
                 role="menu"
               >
                 {menuItems.map((item) => {
@@ -248,7 +314,8 @@ export function SharePassActions({
                     </button>
                   );
                 })}
-              </div>
+              </div>,
+              document.body,
             )}
           </div>
         </div>

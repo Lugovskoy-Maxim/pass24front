@@ -112,6 +112,7 @@ export function PassExportPanel({ open, onClose, initialFilters }: PassExportPan
               />
             </FilterField>
             <FilterField label="Статус">
+              <div className="select-wrap w-full">
               <select
                 className="input w-full"
                 value={filters.status || ''}
@@ -122,6 +123,7 @@ export function PassExportPanel({ open, onClose, initialFilters }: PassExportPan
                   <option key={status} value={status}>{getStatusLabel(status, labels)}</option>
                 ))}
               </select>
+              </div>
             </FilterField>
           </div>
 

@@ -100,7 +100,7 @@ export function PassDetailPanel({
   });
 
   return (
-    <div className={`${getPassCardShellClass({ overdue: stillInside })} min-w-0 max-w-full overflow-hidden`}>
+    <div className={`${getPassCardShellClass({ overdue: stillInside })} min-w-0 max-w-full overflow-visible`}>
       <div className="flex items-stretch min-w-0 w-full">
         <div className={getPassStatusStripeClass(pass.status, stillInside)} aria-hidden />
 
