@@ -28,4 +28,8 @@ export class BusinessCenterPassSettingsDto {
   @IsOptional()
   @IsString()
   require_checkout?: string;
+
+  @IsOptional()
+  @IsString()
+  closed_weekdays?: string;
 }

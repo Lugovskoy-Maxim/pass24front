@@ -2,6 +2,7 @@ import { Injectable } from '@nestjs/common';
 import { InjectModel } from '@nestjs/mongoose';
 import { Model } from 'mongoose';
 import { Property, PropertyDocument } from '../schemas/property.schema';
+import { parseClosedWeekdays } from '../common/bookable-visit-dates';
 import { PropertyType } from '../schemas/enums';
 import { SiteSettingsService } from '../site-settings/site-settings.service';
 
@@ -45,6 +46,7 @@ export class AppConfigService {
           workingHoursFrom: ps.working_hours_from || '08:00',
           workingHoursTo: ps.working_hours_to || '20:00',
           requireCheckout: ps.require_checkout !== 'false',
+          closedWeekdays: parseClosedWeekdays(ps.closed_weekdays),
         };
       }),
       contactPhone: s.contact_phone || site.sitePhone,

@@ -963,6 +963,7 @@ export class AdminService {
       contact_email: s.contact_email || 'reception@pass24.local',
       reception_floor: s.reception_floor || '1',
       require_checkout: s.require_checkout !== 'false' ? 'true' : 'false',
+      closed_weekdays: s.closed_weekdays || '',
     };
   }
 
@@ -978,6 +979,7 @@ export class AdminService {
     if (dto.contact_email !== undefined) settings.contact_email = dto.contact_email;
     if (dto.reception_floor !== undefined) settings.reception_floor = dto.reception_floor;
     if (dto.require_checkout !== undefined) settings.require_checkout = dto.require_checkout;
+    if (dto.closed_weekdays !== undefined) settings.closed_weekdays = dto.closed_weekdays;
     return settings;
   }
 

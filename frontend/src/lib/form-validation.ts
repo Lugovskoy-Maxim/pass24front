@@ -1,6 +1,6 @@
 import { isPersonNameValid, PersonNameParts } from './person-name';
 import { PassType } from './api';
-import { validateVisitDate } from './local-date';
+import { validateBookableVisitDate } from './bookable-visit-dates';
 
 export type FieldErrors = Record<string, string | undefined>;
 
@@ -73,6 +73,7 @@ export function validateProfileForm(nameParts: PersonNameParts): FieldErrors {
 export function validateNewPassForm(data: {
   visitorName: string;
   visitDate: string;
+  bookableDates: string[];
   passType: PassType;
   vehiclePlate: string;
   propertyId: string;
@@ -87,7 +88,7 @@ export function validateNewPassForm(data: {
 
   if (isBlank(data.visitorName)) errors.visitorName = 'Укажите имя посетителя';
 
-  const dateError = validateVisitDate(data.visitDate);
+  const dateError = validateBookableVisitDate(data.visitDate, data.bookableDates);
   if (dateError) errors.visitDate = dateError;
 
   if (data.passType === 'parking' && isBlank(data.vehiclePlate)) {

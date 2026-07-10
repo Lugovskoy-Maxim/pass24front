@@ -28,6 +28,7 @@ export interface TenantOffice {
   company?: string;
   workingHoursFrom?: string;
   workingHoursTo?: string;
+  closedWeekdays?: number[];
 }
 
 export interface PublicBusinessCenter {
@@ -36,6 +37,7 @@ export interface PublicBusinessCenter {
   workingHoursFrom: string;
   workingHoursTo: string;
   requireCheckout?: boolean;
+  closedWeekdays?: number[];
 }
 
 export interface ProfileChangeRequest {
@@ -821,6 +823,7 @@ export interface BcPassSettings {
   contact_email: string;
   reception_floor: string;
   require_checkout: string;
+  closed_weekdays: string;
 }
 
 export const DEFAULT_BC_PASS_SETTINGS: BcPassSettings = {
@@ -831,6 +834,7 @@ export const DEFAULT_BC_PASS_SETTINGS: BcPassSettings = {
   contact_email: 'reception@pass24.local',
   reception_floor: '1',
   require_checkout: 'true',
+  closed_weekdays: '',
 };
 
 export interface BusinessCenter {

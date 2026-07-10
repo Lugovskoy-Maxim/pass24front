@@ -26,6 +26,7 @@ import {
   User,
   UserDocument,
 } from '../schemas';
+import { parseClosedWeekdays } from '../common/bookable-visit-dates';
 import { resolveTenantOwnerId } from '../common/tenant-owner';
 import { ConfirmRegistrationDto } from './dto/confirm-registration.dto';
 import { CreateTenantEmployeeDto } from './dto/create-tenant-employee.dto';
@@ -426,6 +427,7 @@ export class AuthService {
         company: o.company,
         workingHoursFrom: ps.working_hours_from || '08:00',
         workingHoursTo: ps.working_hours_to || '20:00',
+        closedWeekdays: parseClosedWeekdays(ps.closed_weekdays),
       };
     });
   }

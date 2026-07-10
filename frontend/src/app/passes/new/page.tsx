@@ -1,17 +1,21 @@
 'use client';
 
 import { useState, useEffect, useMemo, FormEvent, Suspense } from 'react';
+import Link from 'next/link';
 import { useRouter, useSearchParams } from 'next/navigation';
+import { Bookmark } from 'lucide-react';
 import { ProtectedLayout } from '@/components/ProtectedLayout';
+import { VisitDatePicker } from '@/components/VisitDatePicker';
 import { useAuth } from '@/lib/auth';
 import { useConfig } from '@/hooks/useConfig';
 import { useToast } from '@/components/Toast';
 import { api, PassType, TYPE_LABELS, getErrorMessage } from '@/lib/api';
 import { FormErrorBanner, FormField, FormInput, FormSelect, FormTextarea } from '@/components/FormField';
 import { FieldErrors, hasFieldErrors, validateNewPassForm } from '@/lib/form-validation';
-import { getLocalDateString, getMaxVisitDate } from '@/lib/local-date';
+import { getBookableVisitDates, parseClosedWeekdays } from '@/lib/bookable-visit-dates';
+import { getLocalDateString } from '@/lib/local-date';
 import { getVisitorNameLabel } from '@/lib/person-name';
-import { canOrderPasses } from '@/lib/permissions';
+import { canOrderPasses, hasPermission } from '@/lib/permissions';
 
 function NewPassForm() {
   const { user } = useAuth();
@@ -34,7 +38,6 @@ function NewPassForm() {
   const [vehiclePlate, setVehiclePlate] = useState('');
   const [vehicleModel, setVehicleModel] = useState('');
   const todayLocal = getLocalDateString();
-  const maxVisitDate = getMaxVisitDate(1, todayLocal);
   const [visitDate, setVisitDate] = useState(todayLocal);
   const [officeId, setOfficeId] = useState('');
   const [office, setOffice] = useState('');
@@ -45,6 +48,7 @@ function NewPassForm() {
 
   const tenantOffices = user?.offices || [];
   const isTenant = user?.role === 'tenant';
+  const canUseTemplates = hasPermission(user, 'passes.templates');
   const bcOptions = [...new Map(
     tenantOffices.map((o) => [o.propertyId, o.businessCenterName || 'Бизнес-центр']),
   ).entries()].map(([id, name]) => ({ id, name }));
@@ -73,8 +77,24 @@ function NewPassForm() {
   }, [tenantOffices, config?.businessCenters]);
 
   const selectedBcId = propertyId
-    || (officeId ? tenantOffices.find((o) => o.id === officeId)?.propertyId : undefined);
+    || (officeId ? tenantOffices.find((o) => o.id === officeId)?.propertyId : undefined)
+    || (bcOptions.length === 1 ? bcOptions[0].id : config?.businessCenters?.[0]?.id);
+
   const selectedBcHours = selectedBcId ? bcHoursById.get(selectedBcId) : undefined;
+
+  const closedWeekdays = useMemo(() => {
+    if (selectedBcId) {
+      const fromOffice = tenantOffices.find((o) => o.propertyId === selectedBcId)?.closedWeekdays;
+      const fromConfig = config?.businessCenters?.find((bc) => bc.id === selectedBcId)?.closedWeekdays;
+      return parseClosedWeekdays(fromOffice ?? fromConfig);
+    }
+    return parseClosedWeekdays();
+  }, [selectedBcId, tenantOffices, config?.businessCenters]);
+
+  const bookableDates = useMemo(
+    () => getBookableVisitDates(todayLocal, closedWeekdays, 2),
+    [todayLocal, closedWeekdays],
+  );
 
   useEffect(() => {
     if (enabledTypes.length && !enabledTypes.includes(passType)) {
@@ -95,6 +115,13 @@ function NewPassForm() {
       setFloor(o.floor);
     }
   }, [user, tenantOffices, officeId, bcOptions, propertyId]);
+
+  useEffect(() => {
+    if (!bookableDates.length) return;
+    if (!bookableDates.includes(visitDate)) {
+      setVisitDate(bookableDates[0]);
+    }
+  }, [bookableDates, visitDate]);
 
   useEffect(() => {
     if (!templateId) return;
@@ -155,6 +182,7 @@ function NewPassForm() {
     const errors = validateNewPassForm({
       visitorName,
       visitDate,
+      bookableDates,
       passType,
       vehiclePlate,
       propertyId,
@@ -213,7 +241,15 @@ function NewPassForm() {
 
   return (
     <ProtectedLayout permissions={['passes.create']}>
-      <h1 className="page-title mb-2">{templateId ? 'Заказ по шаблону' : 'Заказ пропуска'}</h1>
+      <div className="flex flex-col sm:flex-row sm:items-start sm:justify-between gap-3 mb-2">
+        <h1 className="page-title">{templateId ? 'Заказ по шаблону' : 'Заказ пропуска'}</h1>
+        {canUseTemplates && (
+          <Link href="/templates" className="btn btn-secondary shrink-0 self-start">
+            <Bookmark className="w-4 h-4" />
+            Шаблоны
+          </Link>
+        )}
+      </div>
       {bcHoursById.size > 0 && (
         <p className="text-sm text-[var(--muted)] mb-6">
           {selectedBcHours ? (
@@ -295,16 +331,13 @@ function NewPassForm() {
           label="Дата визита"
           required
           error={fieldErrors.visitDate}
-          hint="Доступны только сегодня и завтра"
+          hint="Доступны только ближайшие рабочие дни с учётом выходных БЦ"
         >
-          <FormInput
-            id="visitDate"
-            type="date"
+          <VisitDatePicker
             value={visitDate}
-            min={todayLocal}
-            max={maxVisitDate}
-            onChange={(e) => {
-              setVisitDate(e.target.value);
+            bookableDates={bookableDates}
+            onChange={(date) => {
+              setVisitDate(date);
               clearFieldError('visitDate');
             }}
             invalid={!!fieldErrors.visitDate}

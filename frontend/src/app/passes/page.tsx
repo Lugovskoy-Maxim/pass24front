@@ -239,12 +239,6 @@ function PassesPageContent() {
                 icon={Inbox}
                 title={labels.passes.notFound}
                 description={canCreate ? 'Закажите первый пропуск для посетителя или курьера' : undefined}
-                action={canCreate ? (
-                  <Link href="/passes/new" className="btn btn-primary">
-                    <Plus className="w-4 h-4" />
-                    {labels.buttons.order}
-                  </Link>
-                ) : undefined}
               />
             </div>
           ) : (

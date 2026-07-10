@@ -6,6 +6,7 @@ import { AdminLayout } from '@/components/AdminLayout';
 import { useToast } from '@/components/Toast';
 import { useDebounce } from '@/hooks/useDebounce';
 import { api, Office, AdminUser, BusinessCenter, BcPassSettings, DEFAULT_BC_PASS_SETTINGS, getErrorMessage } from '@/lib/api';
+import { parseClosedWeekdays, serializeClosedWeekdays, WEEKDAY_OPTIONS } from '@/lib/bookable-visit-dates';
 import { PageError } from '@/components/PageError';
 
 type OfficeFilters = {
@@ -129,6 +130,17 @@ export default function AdminOfficesPage() {
     setShowForm(false);
     setEditingId(null);
     setBindingOfficeId(null);
+  };
+
+  const toggleBcClosedWeekday = (day: number) => {
+    const current = parseClosedWeekdays(bcPassSettings.closed_weekdays);
+    const next = current.includes(day)
+      ? current.filter((value) => value !== day)
+      : [...current, day];
+    setBcPassSettings({
+      ...bcPassSettings,
+      closed_weekdays: serializeClosedWeekdays(next),
+    });
   };
 
   const startBcEdit = (bc: BusinessCenter) => {
@@ -577,6 +589,31 @@ export default function AdminOfficesPage() {
                         />
                         Автоодобрение пропусков на доставку
                       </label>
+                      <div>
+                        <label className="label">Выходные дни</label>
+                        <p className="text-xs text-[var(--muted)] mb-2">
+                          Не учитываются при выборе даты заказа пропуска. По умолчанию выходных нет.
+                        </p>
+                        <div className="flex flex-wrap gap-2">
+                          {WEEKDAY_OPTIONS.map((day) => {
+                            const active = parseClosedWeekdays(bcPassSettings.closed_weekdays).includes(day.value);
+                            return (
+                              <button
+                                key={day.value}
+                                type="button"
+                                className={`px-3 py-1.5 text-sm rounded-lg border transition-colors ${
+                                  active
+                                    ? 'border-[var(--status-rejected-border)] bg-[var(--status-rejected-soft)] text-[var(--status-rejected)]'
+                                    : 'border-[var(--border)] hover:bg-[var(--surface-muted)]'
+                                }`}
+                                onClick={() => toggleBcClosedWeekday(day.value)}
+                              >
+                                {day.label}
+                              </button>
+                            );
+                          })}
+                        </div>
+                      </div>
                       <div className="grid sm:grid-cols-2 gap-3">
                         <div>
                           <label className="label">Рабочие часы с</label>

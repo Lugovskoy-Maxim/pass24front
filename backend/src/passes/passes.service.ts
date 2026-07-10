@@ -10,7 +10,8 @@ import { Office, OfficeDocument, Pass, PassDocument, Property, PropertyDocument,
 import { PropertyType } from '../schemas/enums';
 import { deriveVisitPurpose, normalizePassport, normalizePersonName, normalizePhone } from '../common/pass-helpers';
 import { resolveTenantOwnerId, tenantOwnerObjectId } from '../common/tenant-owner';
-import { assertVisitDateWithinWindow, isValidVisitDateString } from '../common/visit-date';
+import { assertVisitDateBookable, parseClosedWeekdays } from '../common/bookable-visit-dates';
+import { isValidVisitDateString } from '../common/visit-date';
 import { CreatePassDto } from './dto/create-pass.dto';
 import { PassHistoryQueryDto } from './dto/pass-history-query.dto';
 import { UpdatePassVisitorDto } from './dto/update-pass-visitor.dto';
@@ -203,19 +204,19 @@ export class PassesService implements OnModuleInit {
     if (!isValidVisitDateString(passDto.visitDate)) {
       throw new BadRequestException('Некорректная дата визита');
     }
+    const resolved = await this.resolveOfficeFields(passDto, user);
+    const closedWeekdays = await this.getClosedWeekdaysForProperty(resolved.property);
     try {
-      assertVisitDateWithinWindow(passDto.visitDate, this.getTodayDate(), 1);
+      assertVisitDateBookable(passDto.visitDate, this.getTodayDate(), closedWeekdays);
     } catch (e) {
       if (e instanceof Error && e.message === 'PAST_DATE') {
         throw new BadRequestException('Нельзя заказать пропуск на прошедшую дату');
       }
-      if (e instanceof Error && e.message === 'TOO_FAR_AHEAD') {
-        throw new BadRequestException('Можно заказать пропуск только на сегодня или завтра');
+      if (e instanceof Error && e.message === 'NOT_BOOKABLE') {
+        throw new BadRequestException('Выберите одну из доступных дат визита');
       }
       throw new BadRequestException('Некорректная дата визита');
     }
-
-    const resolved = await this.resolveOfficeFields(passDto, user);
     const workingHours = await this.resolveWorkingHours(resolved.property, passDto);
     passDto.visitTimeFrom = workingHours.from;
     passDto.visitTimeTo = workingHours.to;
@@ -591,6 +592,12 @@ export class PassesService implements OnModuleInit {
       byStatus: this.countBy(passes, 'status'),
       todayByType: this.countBy(todayPasses, 'passType'),
     };
+  }
+
+  private async getClosedWeekdaysForProperty(propertyId?: Types.ObjectId) {
+    if (!propertyId) return [];
+    const property = await this.propertyModel.findById(propertyId).select('settings').lean();
+    return parseClosedWeekdays(property?.settings?.closed_weekdays);
   }
 
   private async resolveWorkingHours(propertyId: Types.ObjectId | undefined, dto: CreatePassDto) {
