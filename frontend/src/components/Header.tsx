@@ -2,7 +2,7 @@
 
 import Link from 'next/link';
 import { usePathname } from 'next/navigation';
-import { AlertCircle, LogOut, Plus, List, ClipboardList, Settings, Bookmark, User } from 'lucide-react';
+import { AlertCircle, LogOut, Plus, List, ClipboardList, Settings, User } from 'lucide-react';
 import { useAuth } from '@/lib/auth';
 import { useConfig } from '@/hooks/useConfig';
 import { SiteBrand } from '@/components/SiteBrand';
@@ -36,7 +36,6 @@ export function Header() {
   const homePath = getHomePath(user);
 
   const links = [
-    { href: '/templates', label: L.nav.templates, icon: Bookmark, show: hasPermission(user, 'passes.templates') },
     { href: '/passes', label: L.nav.passes, icon: List, show: canViewPasses(user) },
     {
       href: '/passes/new',

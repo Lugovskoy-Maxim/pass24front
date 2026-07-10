@@ -55,7 +55,7 @@ export function canSeeOverdueAlerts(user: User | null | undefined): boolean {
 export function getHomePath(user: User | null | undefined): string {
   if (!user) return '/login';
   if (canViewPasses(user)) return '/passes';
-  if (hasPermission(user, 'passes.templates')) return '/templates';
+  if (canOrderPasses(user)) return '/passes/new';
   if (canUseReception(user)) return '/control';
   if (isAdminPanelUser(user)) return '/admin';
   return '/profile';

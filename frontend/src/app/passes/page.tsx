@@ -69,10 +69,10 @@ function PassesPageContent() {
   const canSharePass = (pass: Pass) => !['cancelled', 'rejected', 'expired'].includes(pass.status);
 
   useEffect(() => {
-    if (user && !canViewPassesList && hasPermission(user, 'passes.templates')) {
-      router.replace('/templates');
+    if (user && !canViewPassesList && canCreate) {
+      router.replace('/passes/new');
     }
-  }, [user, canViewPassesList, router]);
+  }, [user, canViewPassesList, canCreate, router]);
 
   const canPrint = selected && (isAwaitingEntry(selected.status) || selected.status === 'active');
 

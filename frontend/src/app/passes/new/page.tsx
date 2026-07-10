@@ -1,15 +1,14 @@
 'use client';
 
 import { useState, useEffect, useMemo, FormEvent, Suspense } from 'react';
-import Link from 'next/link';
 import { useRouter, useSearchParams } from 'next/navigation';
-import { Bookmark } from 'lucide-react';
 import { ProtectedLayout } from '@/components/ProtectedLayout';
+import { PassTemplatesPicker } from '@/components/PassTemplatesPicker';
 import { VisitDatePicker } from '@/components/VisitDatePicker';
 import { useAuth } from '@/lib/auth';
 import { useConfig } from '@/hooks/useConfig';
 import { useToast } from '@/components/Toast';
-import { api, PassType, TYPE_LABELS, getErrorMessage } from '@/lib/api';
+import { api, PassTemplate, PassType, TYPE_LABELS, getErrorMessage } from '@/lib/api';
 import { FormErrorBanner, FormField, FormInput, FormSelect, FormTextarea } from '@/components/FormField';
 import { FieldErrors, hasFieldErrors, validateNewPassForm } from '@/lib/form-validation';
 import { getBookableVisitDates, parseClosedWeekdays } from '@/lib/bookable-visit-dates';
@@ -45,6 +44,7 @@ function NewPassForm() {
   const [comment, setComment] = useState('');
   const [sendEmail, setSendEmail] = useState(false);
   const [recipientEmail, setRecipientEmail] = useState('');
+  const [selectedTemplateId, setSelectedTemplateId] = useState<string | null>(null);
 
   const tenantOffices = user?.offices || [];
   const isTenant = user?.role === 'tenant';
@@ -126,29 +126,32 @@ function NewPassForm() {
     }
   }, [bookableDates, visitDate]);
 
+  const applyTemplate = (template: PassTemplate) => {
+    setSelectedTemplateId(template.id);
+    setVisitorName(template.visitorName);
+    setVisitorPhone(template.visitorPhone || '');
+    if (enabledTypes.includes(template.passType)) setPassType(template.passType);
+    setVehiclePlate(template.vehiclePlate || '');
+    setVehicleModel(template.vehicleModel || '');
+    setComment(template.comment || '');
+    if (template.officeId) {
+      const matched = tenantOffices.find((o) => o.id === template.officeId);
+      if (matched) setPropertyId(matched.propertyId);
+      setOfficeId(template.officeId);
+      setOffice(template.office || '');
+      setFloor(template.floor || '');
+    } else if (template.office) {
+      setOffice(template.office);
+      setFloor(template.floor || '');
+    }
+  };
+
   useEffect(() => {
     if (!templateId) return;
     api.getPassTemplate(templateId)
-      .then(({ template }) => {
-        setVisitorName(template.visitorName);
-        setVisitorPhone(template.visitorPhone || '');
-        if (enabledTypes.includes(template.passType)) setPassType(template.passType);
-        setVehiclePlate(template.vehiclePlate || '');
-        setVehicleModel(template.vehicleModel || '');
-        setComment(template.comment || '');
-        if (template.officeId) {
-          const matched = tenantOffices.find((o) => o.id === template.officeId);
-          if (matched) setPropertyId(matched.propertyId);
-          setOfficeId(template.officeId);
-          setOffice(template.office || '');
-          setFloor(template.floor || '');
-        } else if (template.office) {
-          setOffice(template.office);
-          setFloor(template.floor || '');
-        }
-      })
+      .then(({ template }) => applyTemplate(template))
       .catch((err) => toast(getErrorMessage(err, 'Шаблон не найден'), 'error'));
-  }, [templateId]);
+  }, [templateId, tenantOffices, enabledTypes]);
 
   const handleBcSelect = (id: string) => {
     setPropertyId(id);
@@ -244,15 +247,16 @@ function NewPassForm() {
 
   return (
     <ProtectedLayout permissions={['passes.create']}>
-      <div className="flex flex-col sm:flex-row sm:items-start sm:justify-between gap-3 mb-2">
-        <h1 className="page-title">{templateId ? 'Заказ по шаблону' : 'Заказ пропуска'}</h1>
-        {canUseTemplates && (
-          <Link href="/templates" className="btn btn-secondary shrink-0 self-start">
-            <Bookmark className="w-4 h-4" />
-            Шаблоны
-          </Link>
-        )}
-      </div>
+      <h1 className="page-title mb-2">
+        {selectedTemplateId || templateId ? 'Заказ по шаблону' : 'Заказ пропуска'}
+      </h1>
+      {canUseTemplates && (
+        <PassTemplatesPicker
+          enabledTypes={enabledTypes}
+          selectedId={selectedTemplateId || templateId}
+          onSelect={applyTemplate}
+        />
+      )}
       <form onSubmit={handleSubmit} className="card p-6 max-w-xl space-y-5" noValidate>
         {enabledTypes.length > 1 && (
           <div>
