@@ -84,7 +84,6 @@ export function PassPrintCard({ pass, businessCenterName }: PassPrintCardProps) 
           />
           <PrintDetailRow label={labels.card.office} value={officeLine} />
           <PrintDetailRow label={labels.card.type} value={TYPE_LABELS[pass.passType]} />
-          <PrintDetailRow label={labels.card.visitPurposeShort} value={pass.visitPurpose} />
           <PrintDetailRow label={labels.card.vehicle} value={vehicleLine} />
           <PrintDetailRow label={labels.card.orderedBy} value={pass.creatorName} />
           <PrintDetailRow label={labels.card.comment} value={pass.comment} />

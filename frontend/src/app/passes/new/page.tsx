@@ -254,25 +254,27 @@ function NewPassForm() {
         )}
       </div>
       <form onSubmit={handleSubmit} className="card p-6 max-w-xl space-y-5" noValidate>
-        <div>
-          <label className="label">Тип пропуска</label>
-          <div className="grid grid-cols-2 sm:grid-cols-4 gap-2">
-            {(Object.entries(TYPE_LABELS) as [PassType, string][])
-              .filter(([key]) => !user?.enabledPassTypes?.length || user.enabledPassTypes.includes(key))
-              .map(([key, label]) => (
-              <button
-                key={key}
-                type="button"
-                className={`py-2 px-3 text-sm rounded-lg border transition-colors ${
-                  passType === key ? 'border-[var(--status-approved-border)] bg-[var(--status-approved-soft)] text-[var(--status-approved)] font-medium' : 'border-[var(--border)] hover:bg-[var(--surface-muted)]'
-                }`}
-                onClick={() => setPassType(key)}
-              >
-                {label}
-              </button>
-            ))}
+        {enabledTypes.length > 1 && (
+          <div>
+            <label className="label">Тип пропуска</label>
+            <div className="grid grid-cols-2 sm:grid-cols-4 gap-2">
+              {(Object.entries(TYPE_LABELS) as [PassType, string][])
+                .filter(([key]) => !user?.enabledPassTypes?.length || user.enabledPassTypes.includes(key))
+                .map(([key, label]) => (
+                <button
+                  key={key}
+                  type="button"
+                  className={`py-2 px-3 text-sm rounded-lg border transition-colors ${
+                    passType === key ? 'border-[var(--status-approved-border)] bg-[var(--status-approved-soft)] text-[var(--status-approved)] font-medium' : 'border-[var(--border)] hover:bg-[var(--surface-muted)]'
+                  }`}
+                  onClick={() => setPassType(key)}
+                >
+                  {label}
+                </button>
+              ))}
+            </div>
           </div>
-        </div>
+        )}
 
         <FormField id="visitorName" label={getVisitorNameLabel(passType)} required error={fieldErrors.visitorName}>
           <FormInput

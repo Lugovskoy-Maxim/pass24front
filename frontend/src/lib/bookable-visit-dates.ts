@@ -75,23 +75,13 @@ export const WEEKDAY_OPTIONS = [
 
 const WEEKDAY_SHORT = ['вс', 'пн', 'вт', 'ср', 'чт', 'пт', 'сб'];
 
-export function formatVisitDateChip(
-  dateStr: string,
-  bookableDates: string[],
-  today = getLocalDateString(),
-) {
+export function formatVisitDateChip(dateStr: string) {
   const [y, m, d] = dateStr.split('-').map(Number);
   const dt = new Date(y, m - 1, d);
-  const index = bookableDates.indexOf(dateStr);
-
-  let caption = WEEKDAY_SHORT[dt.getDay()];
-  if (dateStr === today) caption = 'Сегодня';
-  else if (index === 1 && bookableDates[0] === today) caption = 'Следующий день';
 
   return {
     day: d,
     weekday: WEEKDAY_SHORT[dt.getDay()],
     month: dt.toLocaleDateString('ru-RU', { month: 'long' }),
-    caption,
   };
 }

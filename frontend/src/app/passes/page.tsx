@@ -3,9 +3,10 @@
 import { Suspense, useEffect, useState, useCallback } from 'react';
 import { useRouter, useSearchParams } from 'next/navigation';
 import Link from 'next/link';
-import { Inbox, Plus, Search, X } from 'lucide-react';
+import { Inbox, Plus, Search } from 'lucide-react';
 import { ProtectedLayout } from '@/components/ProtectedLayout';
 import { PassListCard } from '@/components/PassListCard';
+import { PassDetailModal } from '@/components/PassDetailModal';
 import { PassDetailPanel } from '@/components/PassDetailPanel';
 import { PassPrintCard } from '@/components/PassPrintCard';
 import { SharePassActions } from '@/components/SharePassActions';
@@ -97,6 +98,13 @@ function PassesPageContent() {
 
   useEffect(() => { load(); }, [load]);
 
+  const closeDetail = useCallback(() => {
+    setSelected(null);
+    if (searchParams.get('id')) {
+      router.replace('/passes');
+    }
+  }, [router, searchParams]);
+
   useEffect(() => {
     if (loading) return;
     const idFromUrl = searchParams.get('id');
@@ -109,7 +117,7 @@ function PassesPageContent() {
         const updated = passes.find((p) => p.id === prev.id);
         if (updated) return updated;
       }
-      return passes[0] || null;
+      return prev;
     });
   }, [passes, loading, searchParams]);
 
@@ -229,54 +237,45 @@ function PassesPageContent() {
         />
       )}
 
-      <div className="grid lg:grid-cols-[minmax(0,1fr)_minmax(320px,400px)] gap-5 items-start">
-        <div className="min-w-0">
-          {loading ? (
-            <ListSkeleton rows={5} />
-          ) : passes.length === 0 ? (
-            <div className="card">
-              <EmptyState
-                icon={Inbox}
-                title={labels.passes.notFound}
-                description={canCreate ? 'Закажите первый пропуск для посетителя или курьера' : undefined}
+      <div className="min-w-0">
+        {loading ? (
+          <ListSkeleton rows={5} />
+        ) : passes.length === 0 ? (
+          <div className="card">
+            <EmptyState
+              icon={Inbox}
+              title={labels.passes.notFound}
+              description={canCreate ? 'Закажите первый пропуск для посетителя или курьера' : undefined}
+            />
+          </div>
+        ) : (
+          <div className="flex flex-col gap-1.5">
+            <p className="text-xs text-[var(--muted)] mb-1 px-1">{formatPassCount(passes.length, labels)}</p>
+            {passes.map((pass) => (
+              <PassListCard
+                key={pass.id}
+                pass={pass}
+                labels={labels}
+                selected={selected?.id === pass.id}
+                showCreator={showCreatorInfo}
+                onClick={() => setSelected(pass)}
               />
-            </div>
-          ) : (
-            <div className="flex flex-col gap-1.5">
-              <p className="text-xs text-[var(--muted)] mb-1 px-1">{formatPassCount(passes.length, labels)}</p>
-              {passes.map((pass) => (
-                <PassListCard
-                  key={pass.id}
-                  pass={pass}
-                  labels={labels}
-                  selected={selected?.id === pass.id}
-                  showCreator={showCreatorInfo}
-                  onClick={() => setSelected(pass)}
-                />
-              ))}
-            </div>
-          )}
-        </div>
+            ))}
+          </div>
+        )}
+      </div>
 
+      <PassDetailModal
+        open={!!selected}
+        title={labels.passes.detailTitle}
+        closeLabel={labels.passes.close}
+        onClose={closeDetail}
+      >
         {selected && (
-          <div className="lg:sticky lg:top-20 space-y-3 min-w-0 max-w-full">
-            <div className="flex items-center justify-between px-1">
-              <h2 className="text-base font-semibold text-[var(--muted)] uppercase tracking-wide text-[11px]">
-                {labels.passes.detailTitle}
-              </h2>
-              <button
-                className="p-1.5 rounded-md text-[var(--muted)] hover:text-[var(--foreground)] hover:bg-[var(--m-block)] lg:hidden"
-                onClick={() => setSelected(null)}
-                aria-label={labels.passes.close}
-              >
-                <X className="w-4 h-4" />
-              </button>
-            </div>
-
+          <div className="space-y-3">
             {canPrint && (
               <PassPrintCard pass={selected} businessCenterName={selected.businessCenterName || config?.businessCenterName} />
             )}
-
             <PassDetailPanel
               pass={selected}
               labels={labels}
@@ -289,7 +288,7 @@ function PassesPageContent() {
             />
           </div>
         )}
-      </div>
+      </PassDetailModal>
     </ProtectedLayout>
   );
 }

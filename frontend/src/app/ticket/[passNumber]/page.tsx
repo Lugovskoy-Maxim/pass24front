@@ -14,7 +14,7 @@ import { useConfig } from '@/hooks/useConfig';
 import { getUiLabels } from '@/lib/ui-labels';
 import { useTheme } from '@/components/ThemeProvider';
 import { ThemeToggle } from '@/components/ThemeToggle';
-import { canManageTicketScan, getHomePath } from '@/lib/permissions';
+import { canManageTicketScan, canViewPasses, getHomePath } from '@/lib/permissions';
 
 export default function PassTicketPage() {
   const params = useParams();
@@ -30,6 +30,12 @@ export default function PassTicketPage() {
 
   const homePath = getHomePath(user);
   const showStaffPanel = canManageTicketScan(user);
+  const backHref = user && canViewPasses(user) ? '/passes' : homePath;
+  const backLabel = user && canViewPasses(user)
+    ? labels.buttons.backToPasses
+    : user?.role === 'tenant'
+      ? labels.buttons.backToTemplates
+      : labels.buttons.backToPasses;
 
   const loadTicket = useCallback(() => {
     setLoading(true);
@@ -86,8 +92,8 @@ export default function PassTicketPage() {
             )}
             {user && !showStaffPanel && (
               <div className="mt-4 text-center">
-                <Link href={homePath} className="btn btn-primary text-sm">
-                  {user.role === 'tenant' ? labels.buttons.backToTemplates : labels.buttons.backToPasses}
+                <Link href={backHref} className="btn btn-primary text-sm">
+                  {backLabel}
                 </Link>
               </div>
             )}

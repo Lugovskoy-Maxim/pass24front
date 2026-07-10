@@ -1,7 +1,6 @@
 'use client';
 
 import { formatVisitDateChip } from '@/lib/bookable-visit-dates';
-import { getLocalDateString } from '@/lib/local-date';
 
 interface VisitDatePickerProps {
   value: string;
@@ -11,8 +10,6 @@ interface VisitDatePickerProps {
 }
 
 export function VisitDatePicker({ value, bookableDates, onChange, invalid }: VisitDatePickerProps) {
-  const today = getLocalDateString();
-
   if (!bookableDates.length) {
     return (
       <p className="text-sm text-[var(--muted)]">
@@ -24,7 +21,7 @@ export function VisitDatePicker({ value, bookableDates, onChange, invalid }: Vis
   return (
     <div className="grid grid-cols-2 gap-3 max-w-sm" role="radiogroup" aria-label="Дата визита">
       {bookableDates.map((date) => {
-        const chip = formatVisitDateChip(date, bookableDates, today);
+        const chip = formatVisitDateChip(date);
         const selected = value === date;
 
         return (
@@ -44,7 +41,7 @@ export function VisitDatePicker({ value, bookableDates, onChange, invalid }: Vis
           >
             <div className="text-[11px] uppercase tracking-wide text-[var(--muted)]">{chip.month}</div>
             <div className="text-3xl font-semibold leading-none mt-1 tabular-nums">{chip.day}</div>
-            <div className="text-sm text-[var(--muted)] mt-2">{chip.caption}</div>
+            <div className="text-sm text-[var(--muted)] mt-2 uppercase">{chip.weekday}</div>
           </button>
         );
       })}
