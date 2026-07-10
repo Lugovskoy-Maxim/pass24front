@@ -17,18 +17,18 @@ const auth_service_1 = require("./auth.service");
 const jwt_strategy_1 = require("./jwt.strategy");
 const permissions_guard_1 = require("./permissions.guard");
 const auth_database_module_1 = require("../database/auth-database.module");
+const access_config_module_1 = require("../access/access-config.module");
 const schemas_1 = require("../schemas");
-const tenant_employee_position_service_1 = require("./tenant-employee-position.service");
 let AuthModule = class AuthModule {
 };
 exports.AuthModule = AuthModule;
 exports.AuthModule = AuthModule = __decorate([
     (0, common_1.Module)({
         imports: [
+            access_config_module_1.AccessConfigModule,
             auth_database_module_1.AuthDatabaseModule.forFeature([
                 { name: schemas_1.User.name, schema: schemas_1.UserSchema },
                 { name: schemas_1.RegistrationPending.name, schema: schemas_1.RegistrationPendingSchema },
-                { name: schemas_1.TenantEmployeePosition.name, schema: schemas_1.TenantEmployeePositionSchema },
             ]),
             mongoose_1.MongooseModule.forFeature([
                 { name: schemas_1.Office.name, schema: schemas_1.OfficeSchema },
@@ -45,8 +45,8 @@ exports.AuthModule = AuthModule = __decorate([
             }),
         ],
         controllers: [auth_controller_1.AuthController],
-        providers: [auth_service_1.AuthService, tenant_employee_position_service_1.TenantEmployeePositionService, jwt_strategy_1.JwtStrategy, permissions_guard_1.PermissionsGuard],
-        exports: [auth_service_1.AuthService, tenant_employee_position_service_1.TenantEmployeePositionService, jwt_1.JwtModule, permissions_guard_1.PermissionsGuard],
+        providers: [auth_service_1.AuthService, jwt_strategy_1.JwtStrategy, permissions_guard_1.PermissionsGuard],
+        exports: [auth_service_1.AuthService, jwt_1.JwtModule, permissions_guard_1.PermissionsGuard],
     })
 ], AuthModule);
 //# sourceMappingURL=auth.module.js.map

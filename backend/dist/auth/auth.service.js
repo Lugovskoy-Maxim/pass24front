@@ -60,7 +60,6 @@ const mail_service_1 = require("../mail/mail.service");
 const schemas_1 = require("../schemas");
 const bookable_visit_dates_1 = require("../common/bookable-visit-dates");
 const tenant_owner_1 = require("../common/tenant-owner");
-const tenant_employee_position_service_1 = require("./tenant-employee-position.service");
 const dev_test_accounts_1 = require("../database/dev-test-accounts");
 let AuthService = class AuthService {
     userModel;
@@ -71,8 +70,7 @@ let AuthService = class AuthService {
     accessConfigService;
     auditService;
     mailService;
-    positionService;
-    constructor(userModel, pendingModel, officeModel, propertyModel, jwtService, accessConfigService, auditService, mailService, positionService) {
+    constructor(userModel, pendingModel, officeModel, propertyModel, jwtService, accessConfigService, auditService, mailService) {
         this.userModel = userModel;
         this.pendingModel = pendingModel;
         this.officeModel = officeModel;
@@ -81,7 +79,6 @@ let AuthService = class AuthService {
         this.accessConfigService = accessConfigService;
         this.auditService = auditService;
         this.mailService = mailService;
-        this.positionService = positionService;
     }
     async requestRegistrationCode(dto) {
         const email = dto.email.toLowerCase().trim();
@@ -213,11 +210,11 @@ let AuthService = class AuthService {
         const user = await this.userModel.findById(userId);
         if (!user)
             throw new common_1.UnauthorizedException();
-        if (user.role !== 'tenant') {
-            throw new common_1.ForbiddenException('Редактирование профиля доступно только арендаторам');
-        }
         if (user.parentTenantId) {
             throw new common_1.ForbiddenException('Сотрудники компании не могут изменять профиль — обратитесь к владельцу аккаунта');
+        }
+        if (user.role !== 'tenant') {
+            throw new common_1.ForbiddenException('Редактирование профиля доступно только арендаторам');
         }
         let personName;
         try {
@@ -293,28 +290,25 @@ let AuthService = class AuthService {
             throw new common_1.ForbiddenException('Управление сотрудниками доступно только владельцу компании');
         }
         const employees = await this.userModel
-            .find({ parentTenantId: owner._id, role: 'tenant' })
+            .find({ parentTenantId: owner._id })
             .sort({ createdAt: -1 })
             .lean();
-        const positionMap = await this.positionService.getPositionMap();
+        const { roles } = await this.accessConfigService.getEmployeeAssignableRoles();
+        const roleLabelMap = new Map(roles.map((item) => [item.key, item.label]));
         return {
-            employees: employees.map((e) => {
-                const positionId = (e.employeePositionId || e.employeeCategoryId)?.toString();
-                const position = positionId ? positionMap.get(positionId) : undefined;
-                return {
-                    id: e._id.toString(),
-                    email: e.email,
-                    full_name: e.fullName,
-                    last_name: e.lastName,
-                    first_name: e.firstName,
-                    middle_name: e.middleName,
-                    phone: e.phone,
-                    is_active: e.isActive !== false,
-                    position_id: positionId,
-                    position_name: position?.name,
-                    created_at: e.createdAt,
-                };
-            }),
+            employees: employees.map((e) => ({
+                id: e._id.toString(),
+                email: e.email,
+                full_name: e.fullName,
+                last_name: e.lastName,
+                first_name: e.firstName,
+                middle_name: e.middleName,
+                phone: e.phone,
+                is_active: e.isActive !== false,
+                role: e.role,
+                role_label: roleLabelMap.get(e.role) || e.role,
+                created_at: e.createdAt,
+            })),
         };
     }
     async addTenantEmployee(userId, dto) {
@@ -340,8 +334,14 @@ let AuthService = class AuthService {
         catch {
             throw new common_1.BadRequestException('Укажите фамилию и имя');
         }
+        const assignable = await this.accessConfigService.getEmployeeAssignableRoles();
+        const employeeRole = dto.role || assignable.roles[0]?.key;
+        if (!employeeRole) {
+            throw new common_1.BadRequestException('Сначала создайте тип пользователя в разделе «Права и типы пропусков»');
+        }
+        await this.accessConfigService.assertEmployeeRole(employeeRole);
+        const roleLabel = assignable.roles.find((item) => item.key === employeeRole)?.label || employeeRole;
         const passwordHash = await bcrypt.hash(dto.password, 10);
-        const position = await this.positionService.resolvePositionForEmployee(dto.positionId);
         const employee = await this.userModel.create({
             email,
             fullName: personName.fullName,
@@ -350,9 +350,8 @@ let AuthService = class AuthService {
             middleName: personName.middleName,
             phone: dto.phone?.trim() || undefined,
             company: owner.company,
-            role: 'tenant',
+            role: employeeRole,
             parentTenantId: owner._id,
-            employeePositionId: position._id,
             password: passwordHash,
             isActive: true,
         });
@@ -365,8 +364,8 @@ let AuthService = class AuthService {
                 employeeEmail: email,
                 employeeName: personName.fullName,
                 ownerCompany: owner.company,
-                positionId: position._id.toString(),
-                positionName: position.name,
+                employeeRole,
+                employeeRoleLabel: roleLabel,
             },
         });
         return {
@@ -379,8 +378,8 @@ let AuthService = class AuthService {
                 middle_name: employee.middleName,
                 phone: employee.phone,
                 is_active: true,
-                position_id: position._id.toString(),
-                position_name: position.name,
+                role: employee.role,
+                role_label: roleLabel,
                 created_at: employee.createdAt,
             },
         };
@@ -439,8 +438,9 @@ let AuthService = class AuthService {
         });
     }
     async toUserDto(user, offices = []) {
-        const permissions = await this.positionService.resolveUserPermissions(user);
-        const { enabledPassTypes } = await this.accessConfigService.getConfig();
+        const role = user.role || 'tenant';
+        const permissions = await this.accessConfigService.getPermissionsForRole(role);
+        const { enabledPassTypes, roleLabels } = await this.accessConfigService.getConfig();
         return {
             id: user._id.toString(),
             username: user.username,
@@ -451,7 +451,8 @@ let AuthService = class AuthService {
             middle_name: user.middleName,
             phone: user.phone,
             company: user.company,
-            role: user.role || 'tenant',
+            role,
+            role_label: roleLabels?.[role] || role,
             office: user.office,
             floor: user.floor,
             offices,
@@ -513,7 +514,6 @@ exports.AuthService = AuthService = __decorate([
         jwt_1.JwtService,
         access_config_service_1.AccessConfigService,
         audit_service_1.AuditService,
-        mail_service_1.MailService,
-        tenant_employee_position_service_1.TenantEmployeePositionService])
+        mail_service_1.MailService])
 ], AuthService);
 //# sourceMappingURL=auth.service.js.map

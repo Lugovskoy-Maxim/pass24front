@@ -4,6 +4,7 @@ import { Model, Types } from 'mongoose';
 import {
   Office, OfficeDocument, Pass, PassDocument, PassTemplate, PassTemplateDocument, Property, PropertyDocument,
 } from '../schemas';
+import { isTenantCompanyUser } from '../common/tenant-account';
 import { tenantOwnerObjectId } from '../common/tenant-owner';
 import { CreatePassTemplateDto } from './dto/create-pass-template.dto';
 
@@ -159,7 +160,7 @@ export class PassTemplatesService {
   private async resolveOfficeFields(dto: CreatePassTemplateDto, user: any) {
     const tenantOwnerId = tenantOwnerObjectId(user);
 
-    if (user?.role === 'tenant') {
+    if (isTenantCompanyUser(user)) {
       if (!tenantOwnerId) {
         throw new ForbiddenException('Создание шаблонов недоступно');
       }
@@ -187,7 +188,7 @@ export class PassTemplatesService {
     const office = await this.officeModel.findById(dto.officeId).lean();
     if (!office || !office.isActive) throw new NotFoundException('Офис не найден');
 
-    if (user.role === 'tenant' && office.tenantId?.toString() !== tenantOwnerId?.toString()) {
+    if (isTenantCompanyUser(user) && office.tenantId?.toString() !== tenantOwnerId?.toString()) {
       throw new ForbiddenException('Вы можете использовать только свои офисы');
     }
 

@@ -4,6 +4,7 @@ export declare class AccessConfig {
     key: string;
     enabledPassTypes: string[];
     rolePermissions: Record<string, string[]>;
+    roleLabels: Record<string, string>;
 }
 export declare const AccessConfigSchema: import("mongoose").Schema<AccessConfig, import("mongoose").Model<AccessConfig, any, any, any, any, any, AccessConfig>, {}, {}, {}, {}, import("mongoose").DefaultSchemaOptions, AccessConfig, Document<unknown, {}, AccessConfig, {
     id: string;
@@ -33,6 +34,15 @@ export declare const AccessConfigSchema: import("mongoose").Schema<AccessConfig,
         id: string;
     }> | undefined;
     rolePermissions?: import("mongoose").SchemaDefinitionProperty<Record<string, string[]>, AccessConfig, Document<unknown, {}, AccessConfig, {
+        id: string;
+    }, import("mongoose").DefaultSchemaOptions> & Omit<AccessConfig & {
+        _id: import("mongoose").Types.ObjectId;
+    } & {
+        __v: number;
+    }, "id"> & {
+        id: string;
+    }> | undefined;
+    roleLabels?: import("mongoose").SchemaDefinitionProperty<Record<string, string>, AccessConfig, Document<unknown, {}, AccessConfig, {
         id: string;
     }, import("mongoose").DefaultSchemaOptions> & Omit<AccessConfig & {
         _id: import("mongoose").Types.ObjectId;

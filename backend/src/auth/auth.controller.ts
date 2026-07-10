@@ -1,18 +1,18 @@
 import { Body, Controller, Delete, Get, Param, Patch, Post, Req, UseGuards } from '@nestjs/common';
 import { AuthGuard } from '@nestjs/passport';
+import { AccessConfigService } from '../access/access-config.service';
 import { AuthService } from './auth.service';
 import { LoginDto } from './dto/login.dto';
 import { ConfirmRegistrationDto } from './dto/confirm-registration.dto';
 import { CreateTenantEmployeeDto } from './dto/create-tenant-employee.dto';
 import { RegisterDto } from './dto/register.dto';
 import { UpdateProfileDto } from './dto/update-profile.dto';
-import { TenantEmployeePositionService } from './tenant-employee-position.service';
 
 @Controller('auth')
 export class AuthController {
   constructor(
     private readonly authService: AuthService,
-    private readonly positionService: TenantEmployeePositionService,
+    private readonly accessConfigService: AccessConfigService,
   ) {}
 
   @Post('login')
@@ -77,8 +77,8 @@ export class AuthController {
   }
 
   @UseGuards(AuthGuard('jwt'))
-  @Get('tenant/employee-positions')
-  listEmployeePositions(@Req() req: any) {
-    return this.positionService.listPositionsForTenantOwner(req.user.userId);
+  @Get('tenant/employee-roles')
+  listEmployeeRoles() {
+    return this.accessConfigService.getEmployeeAssignableRoles();
   }
 }

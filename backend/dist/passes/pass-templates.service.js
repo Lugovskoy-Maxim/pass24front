@@ -17,6 +17,7 @@ const common_1 = require("@nestjs/common");
 const mongoose_1 = require("@nestjs/mongoose");
 const mongoose_2 = require("mongoose");
 const schemas_1 = require("../schemas");
+const tenant_account_1 = require("../common/tenant-account");
 const tenant_owner_1 = require("../common/tenant-owner");
 let PassTemplatesService = class PassTemplatesService {
     templateModel;
@@ -172,7 +173,7 @@ let PassTemplatesService = class PassTemplatesService {
     }
     async resolveOfficeFields(dto, user) {
         const tenantOwnerId = (0, tenant_owner_1.tenantOwnerObjectId)(user);
-        if (user?.role === 'tenant') {
+        if ((0, tenant_account_1.isTenantCompanyUser)(user)) {
             if (!tenantOwnerId) {
                 throw new common_1.ForbiddenException('Создание шаблонов недоступно');
             }
@@ -196,7 +197,7 @@ let PassTemplatesService = class PassTemplatesService {
         const office = await this.officeModel.findById(dto.officeId).lean();
         if (!office || !office.isActive)
             throw new common_1.NotFoundException('Офис не найден');
-        if (user.role === 'tenant' && office.tenantId?.toString() !== tenantOwnerId?.toString()) {
+        if ((0, tenant_account_1.isTenantCompanyUser)(user) && office.tenantId?.toString() !== tenantOwnerId?.toString()) {
             throw new common_1.ForbiddenException('Вы можете использовать только свои офисы');
         }
         const property = await this.propertyModel.findById(office.property).lean();

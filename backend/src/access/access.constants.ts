@@ -31,6 +31,8 @@ export const DEFAULT_ROLE_PERMISSIONS: Record<string, string[]> = {
   admin: ALL_PERMISSIONS.map((p) => p.key),
 };
 
+export const SYSTEM_ROLES = ['tenant', 'security', 'bc_admin', 'admin'] as const;
+
 export const ROLE_LABELS: Record<string, string> = {
   tenant: 'Арендатор',
   security: 'Ресепшн / Охрана',

@@ -1,4 +1,4 @@
-import { IsEmail, IsMongoId, IsNotEmpty, IsOptional, IsString, MinLength } from 'class-validator';
+import { IsEmail, IsNotEmpty, IsOptional, IsString, MinLength } from 'class-validator';
 
 export class CreateTenantEmployeeDto {
   @IsEmail()
@@ -25,6 +25,6 @@ export class CreateTenantEmployeeDto {
   phone?: string;
 
   @IsOptional()
-  @IsMongoId()
-  positionId?: string;
+  @IsString()
+  role?: string;
 }

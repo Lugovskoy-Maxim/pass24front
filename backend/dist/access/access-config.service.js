@@ -18,6 +18,7 @@ const mongoose_1 = require("@nestjs/mongoose");
 const mongoose_2 = require("mongoose");
 const access_config_schema_1 = require("../schemas/access-config.schema");
 const access_constants_1 = require("./access.constants");
+const ROLE_KEY_PATTERN = /^[a-z][a-z0-9_]*$/;
 let AccessConfigService = class AccessConfigService {
     accessConfigModel;
     constructor(accessConfigModel) {
@@ -33,11 +34,16 @@ let AccessConfigService = class AccessConfigService {
                 key: 'default',
                 enabledPassTypes: [...access_constants_1.ALL_PASS_TYPES],
                 rolePermissions: { ...access_constants_1.DEFAULT_ROLE_PERMISSIONS },
+                roleLabels: {},
             });
             return;
         }
         let changed = false;
         const validKeys = new Set(access_constants_1.ALL_PERMISSIONS.map((p) => p.key));
+        if (!existing.roleLabels) {
+            existing.roleLabels = {};
+            changed = true;
+        }
         for (const [role, defaults] of Object.entries(access_constants_1.DEFAULT_ROLE_PERMISSIONS)) {
             if (!existing.rolePermissions[role]) {
                 existing.rolePermissions[role] = [...defaults];
@@ -64,6 +70,7 @@ let AccessConfigService = class AccessConfigService {
         }
         if (changed) {
             existing.markModified('rolePermissions');
+            existing.markModified('roleLabels');
             await existing.save();
         }
     }
@@ -89,6 +96,16 @@ let AccessConfigService = class AccessConfigService {
         }
         if (data.rolePermissions) {
             const validKeys = new Set(access_constants_1.ALL_PERMISSIONS.map((p) => p.key));
+            for (const role of access_constants_1.SYSTEM_ROLES) {
+                if (!data.rolePermissions[role]) {
+                    throw new common_1.BadRequestException(`Нельзя удалить системную роль: ${role}`);
+                }
+            }
+            for (const role of Object.keys(data.rolePermissions)) {
+                if (!ROLE_KEY_PATTERN.test(role)) {
+                    throw new common_1.BadRequestException(`Некорректный код роли: ${role}`);
+                }
+            }
             for (const [role, perms] of Object.entries(data.rolePermissions)) {
                 doc.rolePermissions[role] = (perms || []).filter((p) => validKeys.has(p));
             }
@@ -109,12 +126,47 @@ let AccessConfigService = class AccessConfigService {
             }
             doc.markModified('rolePermissions');
         }
+        if (data.roleLabels) {
+            const labels = { ...(doc.roleLabels || {}) };
+            for (const [role, label] of Object.entries(data.roleLabels)) {
+                const trimmed = label?.trim();
+                if (trimmed)
+                    labels[role] = trimmed;
+                else
+                    delete labels[role];
+            }
+            for (const role of access_constants_1.SYSTEM_ROLES) {
+                labels[role] = access_constants_1.ROLE_LABELS[role];
+            }
+            doc.roleLabels = labels;
+            doc.markModified('roleLabels');
+        }
         await doc.save();
         return { config: this.mapConfig(doc.toObject()) };
     }
     async getPermissionsForRole(role) {
         const { rolePermissions } = await this.getConfig();
         return rolePermissions[role] || [];
+    }
+    async getEmployeeAssignableRoles() {
+        const config = await this.getConfig();
+        const roles = config.roles.filter((role) => !access_constants_1.SYSTEM_ROLES.includes(role));
+        return {
+            roles: roles.map((role) => ({
+                key: role,
+                label: config.roleLabels?.[role] || role,
+                permissions: config.rolePermissions[role] || [],
+            })),
+        };
+    }
+    async assertEmployeeRole(role) {
+        const config = await this.getConfig();
+        if (access_constants_1.SYSTEM_ROLES.includes(role)) {
+            throw new common_1.BadRequestException('Нельзя назначить системную роль сотруднику компании');
+        }
+        if (!config.rolePermissions[role]) {
+            throw new common_1.BadRequestException('Неизвестный тип пользователя');
+        }
     }
     async isPassTypeEnabled(passType) {
         const { enabledPassTypes } = await this.getConfig();
@@ -124,8 +176,8 @@ let AccessConfigService = class AccessConfigService {
         const perms = await this.getPermissionsForRole(role);
         return perms.includes(permission);
     }
-    async canViewAllPasses(role) {
-        if (role === 'tenant')
+    async canViewAllPasses(role, parentTenantId) {
+        if (role === 'tenant' || parentTenantId)
             return false;
         if (await this.hasPermission(role, 'passes.view_all'))
             return true;
@@ -141,8 +193,12 @@ let AccessConfigService = class AccessConfigService {
             rolePermissions: doc.rolePermissions,
             permissions: access_constants_1.ALL_PERMISSIONS,
             passTypeLabels: access_constants_1.PASS_TYPE_LABELS,
-            roleLabels: access_constants_1.ROLE_LABELS,
+            roleLabels: {
+                ...access_constants_1.ROLE_LABELS,
+                ...(doc.roleLabels || {}),
+            },
             roles: Object.keys(mergedRoles),
+            systemRoles: [...access_constants_1.SYSTEM_ROLES],
         };
     }
 };

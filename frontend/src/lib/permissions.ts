@@ -1,4 +1,21 @@
-import { User } from './api';
+import { ROLE_LABELS, User } from './api';
+
+export function isTenantOwner(user: User | null | undefined): boolean {
+  return !!user?.is_tenant_owner;
+}
+
+export function isTenantEmployee(user: User | null | undefined): boolean {
+  return !!user?.parent_tenant_id;
+}
+
+export function isTenantCompanyUser(user: User | null | undefined): boolean {
+  return isTenantOwner(user) || isTenantEmployee(user);
+}
+
+export function getUserRoleLabel(user: User | null | undefined): string {
+  if (!user) return '';
+  return user.role_label || ROLE_LABELS[user.role as keyof typeof ROLE_LABELS] || user.role;
+}
 
 export function hasPermission(user: User | null | undefined, permission: string): boolean {
   return !!user?.permissions?.includes(permission);
@@ -23,19 +40,19 @@ export function canViewPasses(user: User | null | undefined): boolean {
 }
 
 export function canViewAllPasses(user: User | null | undefined): boolean {
-  if (user?.role === 'tenant') return false;
+  if (isTenantCompanyUser(user)) return false;
   return hasPermission(user, 'passes.view_all') || isAdminPanelUser(user);
 }
 
 export function canViewPassCharts(user: User | null | undefined): boolean {
-  return user?.role !== 'tenant';
+  return !isTenantCompanyUser(user);
 }
 
 /** Арендатор без назначенного офиса не может заказывать пропуска. */
 export function canOrderPasses(user: User | null | undefined): boolean {
   if (!hasPermission(user, 'passes.create')) return false;
-  if (user?.role !== 'tenant') return true;
-  return (user.offices?.length ?? 0) > 0;
+  if (!isTenantOwner(user)) return true;
+  return (user?.offices?.length ?? 0) > 0;
 }
 
 export function canUseReception(user: User | null | undefined): boolean {

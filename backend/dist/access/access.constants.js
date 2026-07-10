@@ -1,6 +1,6 @@
 "use strict";
 Object.defineProperty(exports, "__esModule", { value: true });
-exports.PASS_TYPE_LABELS = exports.ROLE_LABELS = exports.DEFAULT_ROLE_PERMISSIONS = exports.ALL_PERMISSIONS = exports.ALL_PASS_TYPES = void 0;
+exports.PASS_TYPE_LABELS = exports.ROLE_LABELS = exports.SYSTEM_ROLES = exports.DEFAULT_ROLE_PERMISSIONS = exports.ALL_PERMISSIONS = exports.ALL_PASS_TYPES = void 0;
 exports.ALL_PASS_TYPES = ['visitor', 'parking', 'delivery', 'contractor'];
 exports.ALL_PERMISSIONS = [
     { key: 'passes.create', label: 'Заказ пропусков', group: 'Пропуска' },
@@ -31,6 +31,7 @@ exports.DEFAULT_ROLE_PERMISSIONS = {
     ],
     admin: exports.ALL_PERMISSIONS.map((p) => p.key),
 };
+exports.SYSTEM_ROLES = ['tenant', 'security', 'bc_admin', 'admin'];
 exports.ROLE_LABELS = {
     tenant: 'Арендатор',
     security: 'Ресепшн / Охрана',

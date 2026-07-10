@@ -10,6 +10,7 @@ import { Office, OfficeDocument, Pass, PassDocument, Property, PropertyDocument,
 import { PropertyType } from '../schemas/enums';
 import { deriveVisitPurpose, normalizePassport, normalizePersonName, normalizePhone } from '../common/pass-helpers';
 import { resolveTenantOwnerId, tenantOwnerObjectId } from '../common/tenant-owner';
+import { isTenantCompanyUser } from '../common/tenant-account';
 import { userHasPermission } from '../common/user-permissions';
 import { assertVisitDateBookable, parseClosedWeekdays } from '../common/bookable-visit-dates';
 import { isValidVisitDateString } from '../common/visit-date';
@@ -136,7 +137,7 @@ export class PassesService implements OnModuleInit {
   private async buildAccessFilter(user?: any) {
     if (!user?.role) return { _id: null };
 
-    if (user.role === 'tenant') {
+    if (isTenantCompanyUser(user)) {
       const teamIds = await this.getTenantTeamIds(user);
       if (!teamIds.length) return { _id: null };
 
@@ -150,7 +151,7 @@ export class PassesService implements OnModuleInit {
       return this.createdByTeamFilter(teamIds);
     }
 
-    if (await this.accessConfigService.canViewAllPasses(user.role)) {
+    if (await this.accessConfigService.canViewAllPasses(user.role, user.parentTenantId)) {
       return {};
     }
 
@@ -255,7 +256,7 @@ export class PassesService implements OnModuleInit {
       creatorCompany: resolved.companyName || passDto.companyName || creator?.company,
     });
 
-    if (user?.role === 'tenant') {
+    if (isTenantCompanyUser(user)) {
       await this.passTemplatesService.upsertFromPass(doc.toObject(), user.userId);
     }
 
@@ -667,7 +668,7 @@ export class PassesService implements OnModuleInit {
   private async resolveOfficeFields(dto: CreatePassDto, user: any) {
     const tenantOwnerId = tenantOwnerObjectId(user);
 
-    if (user?.role === 'tenant') {
+    if (isTenantCompanyUser(user)) {
       if (!tenantOwnerId) {
         throw new ForbiddenException('Заказ пропусков недоступен');
       }
@@ -691,7 +692,7 @@ export class PassesService implements OnModuleInit {
         throw new NotFoundException('Офис не найден');
       }
 
-      if (user.role === 'tenant') {
+      if (isTenantCompanyUser(user)) {
         const ownsOffice = office.tenantId?.toString() === tenantOwnerId?.toString();
         if (!ownsOffice) {
           throw new ForbiddenException('Вы можете заказывать пропуска только в свои офисы');
@@ -709,7 +710,7 @@ export class PassesService implements OnModuleInit {
       };
     }
 
-    if (user?.role === 'tenant') {
+    if (isTenantCompanyUser(user)) {
       throw new BadRequestException('Выберите офис из списка');
     }
 
@@ -778,7 +779,7 @@ export class PassesService implements OnModuleInit {
   private async ensurePassAccess(pass: any, user?: any) {
     if (!user?.role) throw new ForbiddenException('Нет доступа к этому пропуску');
 
-    if (user.role === 'tenant') {
+    if (isTenantCompanyUser(user)) {
       const teamIds = await this.getTenantTeamIds(user);
       const createdBy = pass.createdBy?.toString();
       const hasAccess = teamIds.some((id) => id.toString() === createdBy);
@@ -790,7 +791,7 @@ export class PassesService implements OnModuleInit {
       return;
     }
 
-    if (await this.accessConfigService.canViewAllPasses(user.role)) return;
+    if (await this.accessConfigService.canViewAllPasses(user.role, user.parentTenantId)) return;
 
     const isCreator = pass.createdBy?.toString() === user.userId;
     if (isCreator && await this.accessConfigService.hasPermission(user.role, 'passes.view_own')) return;
@@ -831,7 +832,7 @@ export class PassesService implements OnModuleInit {
   }
 
   private async enrichCreatorFields(docs: any[], viewer?: any) {
-    if (!docs.length || viewer?.role === 'tenant') return docs;
+    if (!docs.length || isTenantCompanyUser(viewer)) return docs;
 
     const creatorIds = [
       ...new Set(
@@ -861,7 +862,7 @@ export class PassesService implements OnModuleInit {
   }
 
   private mapToFrontend(doc: any, user?: any) {
-    const isTenant = user?.role === 'tenant';
+    const isTenant = isTenantCompanyUser(user);
     const isOwner = !!user?.userId && doc.createdBy?.toString() === user.userId;
     return {
       id: doc._id.toString(),

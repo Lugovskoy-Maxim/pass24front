@@ -1,13 +1,13 @@
 import { ConfigService } from '@nestjs/config';
 import { Model } from 'mongoose';
+import { AccessConfigService } from '../access/access-config.service';
 import { UserDocument } from '../schemas';
-import { TenantEmployeePositionService } from './tenant-employee-position.service';
 declare const JwtStrategy_base: new (...args: any) => any;
 export declare class JwtStrategy extends JwtStrategy_base {
     private configService;
     private userModel;
-    private positionService;
-    constructor(configService: ConfigService, userModel: Model<UserDocument>, positionService: TenantEmployeePositionService);
+    private accessConfigService;
+    constructor(configService: ConfigService, userModel: Model<UserDocument>, accessConfigService: AccessConfigService);
     validate(payload: any): Promise<{
         userId: any;
         email: any;

@@ -28,21 +28,16 @@ const update_access_config_dto_1 = require("./dto/update-access-config.dto");
 const update_business_center_dto_1 = require("./dto/update-business-center.dto");
 const update_site_settings_dto_1 = require("./dto/update-site-settings.dto");
 const site_settings_service_1 = require("../site-settings/site-settings.service");
-const create_tenant_employee_position_dto_1 = require("../auth/dto/create-tenant-employee-position.dto");
-const update_tenant_employee_position_dto_1 = require("../auth/dto/update-tenant-employee-position.dto");
-const tenant_employee_position_service_1 = require("../auth/tenant-employee-position.service");
 let AdminController = class AdminController {
     adminService;
     accessConfigService;
     auditService;
     siteSettingsService;
-    positionService;
-    constructor(adminService, accessConfigService, auditService, siteSettingsService, positionService) {
+    constructor(adminService, accessConfigService, auditService, siteSettingsService) {
         this.adminService = adminService;
         this.accessConfigService = accessConfigService;
         this.auditService = auditService;
         this.siteSettingsService = siteSettingsService;
-        this.positionService = positionService;
     }
     dashboard() {
         return this.adminService.dashboard();
@@ -53,19 +48,13 @@ let AdminController = class AdminController {
     getAccessConfig() {
         return this.accessConfigService.getConfig();
     }
-    listTenantEmployeePositions() {
-        return this.positionService.listPositions();
-    }
-    createTenantEmployeePosition(req, dto) {
-        return this.positionService.createPosition(req.user.userId, dto);
-    }
-    updateTenantEmployeePosition(req, id, dto) {
-        return this.positionService.updatePosition(req.user.userId, id, dto);
-    }
-    deleteTenantEmployeePosition(req, id) {
-        return this.positionService.deletePosition(req.user.userId, id);
-    }
     async updateAccessConfig(dto, req) {
+        if (dto.rolePermissions) {
+            const current = await this.accessConfigService.getConfig();
+            const nextRoles = new Set(Object.keys(dto.rolePermissions));
+            const removedRoles = current.roles.filter((role) => !nextRoles.has(role));
+            await this.adminService.assertRolesDeletable(removedRoles);
+        }
         const result = await this.accessConfigService.updateConfig(dto);
         await this.auditService.log({
             action: 'permissions.update',
@@ -206,41 +195,6 @@ __decorate([
     __metadata("design:paramtypes", []),
     __metadata("design:returntype", void 0)
 ], AdminController.prototype, "getAccessConfig", null);
-__decorate([
-    (0, common_1.Get)('tenant-employee-positions'),
-    (0, permissions_decorator_1.RequireAllPermissions)('admin.permissions'),
-    __metadata("design:type", Function),
-    __metadata("design:paramtypes", []),
-    __metadata("design:returntype", void 0)
-], AdminController.prototype, "listTenantEmployeePositions", null);
-__decorate([
-    (0, common_1.Post)('tenant-employee-positions'),
-    (0, permissions_decorator_1.RequireAllPermissions)('admin.permissions'),
-    __param(0, (0, common_1.Req)()),
-    __param(1, (0, common_1.Body)()),
-    __metadata("design:type", Function),
-    __metadata("design:paramtypes", [Object, create_tenant_employee_position_dto_1.CreateTenantEmployeePositionDto]),
-    __metadata("design:returntype", void 0)
-], AdminController.prototype, "createTenantEmployeePosition", null);
-__decorate([
-    (0, common_1.Patch)('tenant-employee-positions/:id'),
-    (0, permissions_decorator_1.RequireAllPermissions)('admin.permissions'),
-    __param(0, (0, common_1.Req)()),
-    __param(1, (0, common_1.Param)('id')),
-    __param(2, (0, common_1.Body)()),
-    __metadata("design:type", Function),
-    __metadata("design:paramtypes", [Object, String, update_tenant_employee_position_dto_1.UpdateTenantEmployeePositionDto]),
-    __metadata("design:returntype", void 0)
-], AdminController.prototype, "updateTenantEmployeePosition", null);
-__decorate([
-    (0, common_1.Delete)('tenant-employee-positions/:id'),
-    (0, permissions_decorator_1.RequireAllPermissions)('admin.permissions'),
-    __param(0, (0, common_1.Req)()),
-    __param(1, (0, common_1.Param)('id')),
-    __metadata("design:type", Function),
-    __metadata("design:paramtypes", [Object, String]),
-    __metadata("design:returntype", void 0)
-], AdminController.prototype, "deleteTenantEmployeePosition", null);
 __decorate([
     (0, common_1.Patch)('access-config'),
     (0, permissions_decorator_1.RequireAllPermissions)('admin.permissions'),
@@ -460,7 +414,6 @@ exports.AdminController = AdminController = __decorate([
     __metadata("design:paramtypes", [admin_service_1.AdminService,
         access_config_service_1.AccessConfigService,
         audit_service_1.AuditService,
-        site_settings_service_1.SiteSettingsService,
-        tenant_employee_position_service_1.TenantEmployeePositionService])
+        site_settings_service_1.SiteSettingsService])
 ], AdminController);
 //# sourceMappingURL=admin.controller.js.map

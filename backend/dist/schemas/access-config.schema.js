@@ -15,6 +15,7 @@ let AccessConfig = class AccessConfig {
     key;
     enabledPassTypes;
     rolePermissions;
+    roleLabels;
 };
 exports.AccessConfig = AccessConfig;
 __decorate([
@@ -59,6 +60,10 @@ __decorate([
     }),
     __metadata("design:type", Object)
 ], AccessConfig.prototype, "rolePermissions", void 0);
+__decorate([
+    (0, mongoose_1.Prop)({ type: Object, default: {} }),
+    __metadata("design:type", Object)
+], AccessConfig.prototype, "roleLabels", void 0);
 exports.AccessConfig = AccessConfig = __decorate([
     (0, mongoose_1.Schema)({ timestamps: true, collection: 'access_config' })
 ], AccessConfig);

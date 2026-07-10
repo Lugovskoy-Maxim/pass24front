@@ -14,7 +14,7 @@ import { useConfig } from '@/hooks/useConfig';
 import { getUiLabels } from '@/lib/ui-labels';
 import { useTheme } from '@/components/ThemeProvider';
 import { ThemeToggle } from '@/components/ThemeToggle';
-import { canManageTicketScan, canViewPasses, getHomePath } from '@/lib/permissions';
+import { canManageTicketScan, canViewPasses, getHomePath, isTenantCompanyUser } from '@/lib/permissions';
 
 export default function PassTicketPage() {
   const params = useParams();
@@ -33,7 +33,7 @@ export default function PassTicketPage() {
   const backHref = user && canViewPasses(user) ? '/passes' : homePath;
   const backLabel = user && canViewPasses(user)
     ? labels.buttons.backToPasses
-    : user?.role === 'tenant'
+    : isTenantCompanyUser(user)
       ? labels.buttons.backToTemplates
       : labels.buttons.backToPasses;
 

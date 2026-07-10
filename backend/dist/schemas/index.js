@@ -27,5 +27,4 @@ __exportStar(require("./authorization.schema"), exports);
 __exportStar(require("./audit-log.schema"), exports);
 __exportStar(require("./app-settings.schema"), exports);
 __exportStar(require("./registration-pending.schema"), exports);
-__exportStar(require("./tenant-employee-position.schema"), exports);
 //# sourceMappingURL=index.js.map

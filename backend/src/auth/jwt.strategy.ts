@@ -4,16 +4,16 @@ import { ExtractJwt, Strategy } from 'passport-jwt';
 import { ConfigService } from '@nestjs/config';
 import { InjectModel } from '@nestjs/mongoose';
 import { Model } from 'mongoose';
+import { AccessConfigService } from '../access/access-config.service';
 import { AUTH_CONNECTION } from '../database/auth-database.constants';
 import { User, UserDocument } from '../schemas';
-import { TenantEmployeePositionService } from './tenant-employee-position.service';
 
 @Injectable()
 export class JwtStrategy extends PassportStrategy(Strategy) {
   constructor(
     private configService: ConfigService,
     @InjectModel(User.name, AUTH_CONNECTION) private userModel: Model<UserDocument>,
-    private positionService: TenantEmployeePositionService,
+    private accessConfigService: AccessConfigService,
   ) {
     super({
       jwtFromRequest: ExtractJwt.fromAuthHeaderAsBearerToken(),
@@ -27,7 +27,7 @@ export class JwtStrategy extends PassportStrategy(Strategy) {
     if (!user || user.isActive === false) {
       throw new UnauthorizedException();
     }
-    const permissions = await this.positionService.resolveUserPermissions(user);
+    const permissions = await this.accessConfigService.getPermissionsForRole(user.role || 'tenant');
     return {
       userId: payload.sub,
       email: payload.email,

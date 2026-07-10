@@ -15,19 +15,19 @@ Object.defineProperty(exports, "__esModule", { value: true });
 exports.AuthController = void 0;
 const common_1 = require("@nestjs/common");
 const passport_1 = require("@nestjs/passport");
+const access_config_service_1 = require("../access/access-config.service");
 const auth_service_1 = require("./auth.service");
 const login_dto_1 = require("./dto/login.dto");
 const confirm_registration_dto_1 = require("./dto/confirm-registration.dto");
 const create_tenant_employee_dto_1 = require("./dto/create-tenant-employee.dto");
 const register_dto_1 = require("./dto/register.dto");
 const update_profile_dto_1 = require("./dto/update-profile.dto");
-const tenant_employee_position_service_1 = require("./tenant-employee-position.service");
 let AuthController = class AuthController {
     authService;
-    positionService;
-    constructor(authService, positionService) {
+    accessConfigService;
+    constructor(authService, accessConfigService) {
         this.authService = authService;
-        this.positionService = positionService;
+        this.accessConfigService = accessConfigService;
     }
     async login(dto) {
         return this.authService.login(dto);
@@ -62,8 +62,8 @@ let AuthController = class AuthController {
     removeTenantEmployee(req, id) {
         return this.authService.removeTenantEmployee(req.user.userId, id);
     }
-    listEmployeePositions(req) {
-        return this.positionService.listPositionsForTenantOwner(req.user.userId);
+    listEmployeeRoles() {
+        return this.accessConfigService.getEmployeeAssignableRoles();
     }
 };
 exports.AuthController = AuthController;
@@ -154,15 +154,14 @@ __decorate([
 ], AuthController.prototype, "removeTenantEmployee", null);
 __decorate([
     (0, common_1.UseGuards)((0, passport_1.AuthGuard)('jwt')),
-    (0, common_1.Get)('tenant/employee-positions'),
-    __param(0, (0, common_1.Req)()),
+    (0, common_1.Get)('tenant/employee-roles'),
     __metadata("design:type", Function),
-    __metadata("design:paramtypes", [Object]),
+    __metadata("design:paramtypes", []),
     __metadata("design:returntype", void 0)
-], AuthController.prototype, "listEmployeePositions", null);
+], AuthController.prototype, "listEmployeeRoles", null);
 exports.AuthController = AuthController = __decorate([
     (0, common_1.Controller)('auth'),
     __metadata("design:paramtypes", [auth_service_1.AuthService,
-        tenant_employee_position_service_1.TenantEmployeePositionService])
+        access_config_service_1.AccessConfigService])
 ], AuthController);
 //# sourceMappingURL=auth.controller.js.map

@@ -19,14 +19,14 @@ const passport_jwt_1 = require("passport-jwt");
 const config_1 = require("@nestjs/config");
 const mongoose_1 = require("@nestjs/mongoose");
 const mongoose_2 = require("mongoose");
+const access_config_service_1 = require("../access/access-config.service");
 const auth_database_constants_1 = require("../database/auth-database.constants");
 const schemas_1 = require("../schemas");
-const tenant_employee_position_service_1 = require("./tenant-employee-position.service");
 let JwtStrategy = class JwtStrategy extends (0, passport_1.PassportStrategy)(passport_jwt_1.Strategy) {
     configService;
     userModel;
-    positionService;
-    constructor(configService, userModel, positionService) {
+    accessConfigService;
+    constructor(configService, userModel, accessConfigService) {
         super({
             jwtFromRequest: passport_jwt_1.ExtractJwt.fromAuthHeaderAsBearerToken(),
             ignoreExpiration: false,
@@ -34,14 +34,14 @@ let JwtStrategy = class JwtStrategy extends (0, passport_1.PassportStrategy)(pas
         });
         this.configService = configService;
         this.userModel = userModel;
-        this.positionService = positionService;
+        this.accessConfigService = accessConfigService;
     }
     async validate(payload) {
         const user = await this.userModel.findById(payload.sub);
         if (!user || user.isActive === false) {
             throw new common_1.UnauthorizedException();
         }
-        const permissions = await this.positionService.resolveUserPermissions(user);
+        const permissions = await this.accessConfigService.getPermissionsForRole(user.role || 'tenant');
         return {
             userId: payload.sub,
             email: payload.email,
@@ -58,6 +58,6 @@ exports.JwtStrategy = JwtStrategy = __decorate([
     __param(1, (0, mongoose_1.InjectModel)(schemas_1.User.name, auth_database_constants_1.AUTH_CONNECTION)),
     __metadata("design:paramtypes", [config_1.ConfigService,
         mongoose_2.Model,
-        tenant_employee_position_service_1.TenantEmployeePositionService])
+        access_config_service_1.AccessConfigService])
 ], JwtStrategy);
 //# sourceMappingURL=jwt.strategy.js.map

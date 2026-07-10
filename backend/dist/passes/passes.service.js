@@ -25,6 +25,7 @@ const schemas_1 = require("../schemas");
 const enums_1 = require("../schemas/enums");
 const pass_helpers_1 = require("../common/pass-helpers");
 const tenant_owner_1 = require("../common/tenant-owner");
+const tenant_account_1 = require("../common/tenant-account");
 const user_permissions_1 = require("../common/user-permissions");
 const bookable_visit_dates_1 = require("../common/bookable-visit-dates");
 const visit_date_1 = require("../common/visit-date");
@@ -131,7 +132,7 @@ let PassesService = class PassesService {
     async buildAccessFilter(user) {
         if (!user?.role)
             return { _id: null };
-        if (user.role === 'tenant') {
+        if ((0, tenant_account_1.isTenantCompanyUser)(user)) {
             const teamIds = await this.getTenantTeamIds(user);
             if (!teamIds.length)
                 return { _id: null };
@@ -143,7 +144,7 @@ let PassesService = class PassesService {
             }
             return this.createdByTeamFilter(teamIds);
         }
-        if (await this.accessConfigService.canViewAllPasses(user.role)) {
+        if (await this.accessConfigService.canViewAllPasses(user.role, user.parentTenantId)) {
             return {};
         }
         if (user.permissions?.length) {
@@ -239,7 +240,7 @@ let PassesService = class PassesService {
             creatorPhone: creator?.phone,
             creatorCompany: resolved.companyName || passDto.companyName || creator?.company,
         });
-        if (user?.role === 'tenant') {
+        if ((0, tenant_account_1.isTenantCompanyUser)(user)) {
             await this.passTemplatesService.upsertFromPass(doc.toObject(), user.userId);
         }
         await this.auditService.log({
@@ -609,7 +610,7 @@ let PassesService = class PassesService {
     }
     async resolveOfficeFields(dto, user) {
         const tenantOwnerId = (0, tenant_owner_1.tenantOwnerObjectId)(user);
-        if (user?.role === 'tenant') {
+        if ((0, tenant_account_1.isTenantCompanyUser)(user)) {
             if (!tenantOwnerId) {
                 throw new common_1.ForbiddenException('Заказ пропусков недоступен');
             }
@@ -629,7 +630,7 @@ let PassesService = class PassesService {
             if (!office || !office.isActive) {
                 throw new common_1.NotFoundException('Офис не найден');
             }
-            if (user.role === 'tenant') {
+            if ((0, tenant_account_1.isTenantCompanyUser)(user)) {
                 const ownsOffice = office.tenantId?.toString() === tenantOwnerId?.toString();
                 if (!ownsOffice) {
                     throw new common_1.ForbiddenException('Вы можете заказывать пропуска только в свои офисы');
@@ -645,7 +646,7 @@ let PassesService = class PassesService {
                 companyName: dto.companyName || office.company,
             };
         }
-        if (user?.role === 'tenant') {
+        if ((0, tenant_account_1.isTenantCompanyUser)(user)) {
             throw new common_1.BadRequestException('Выберите офис из списка');
         }
         if (!dto.office?.trim()) {
@@ -708,7 +709,7 @@ let PassesService = class PassesService {
     async ensurePassAccess(pass, user) {
         if (!user?.role)
             throw new common_1.ForbiddenException('Нет доступа к этому пропуску');
-        if (user.role === 'tenant') {
+        if ((0, tenant_account_1.isTenantCompanyUser)(user)) {
             const teamIds = await this.getTenantTeamIds(user);
             const createdBy = pass.createdBy?.toString();
             const hasAccess = teamIds.some((id) => id.toString() === createdBy);
@@ -719,7 +720,7 @@ let PassesService = class PassesService {
             }
             return;
         }
-        if (await this.accessConfigService.canViewAllPasses(user.role))
+        if (await this.accessConfigService.canViewAllPasses(user.role, user.parentTenantId))
             return;
         const isCreator = pass.createdBy?.toString() === user.userId;
         if (isCreator && await this.accessConfigService.hasPermission(user.role, 'passes.view_own'))
@@ -757,7 +758,7 @@ let PassesService = class PassesService {
         };
     }
     async enrichCreatorFields(docs, viewer) {
-        if (!docs.length || viewer?.role === 'tenant')
+        if (!docs.length || (0, tenant_account_1.isTenantCompanyUser)(viewer))
             return docs;
         const creatorIds = [
             ...new Set(docs
@@ -784,7 +785,7 @@ let PassesService = class PassesService {
         });
     }
     mapToFrontend(doc, user) {
-        const isTenant = user?.role === 'tenant';
+        const isTenant = (0, tenant_account_1.isTenantCompanyUser)(user);
         const isOwner = !!user?.userId && doc.createdBy?.toString() === user.userId;
         return {
             id: doc._id.toString(),

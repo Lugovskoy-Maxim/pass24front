@@ -14,4 +14,4 @@ export * from './authorization.schema';
 export * from './audit-log.schema';
 export * from './app-settings.schema';
 export * from './registration-pending.schema';
-export * from './tenant-employee-position.schema';
+

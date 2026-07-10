@@ -8,7 +8,10 @@ import {
   DEFAULT_ROLE_PERMISSIONS,
   PASS_TYPE_LABELS,
   ROLE_LABELS,
+  SYSTEM_ROLES,
 } from './access.constants';
+
+const ROLE_KEY_PATTERN = /^[a-z][a-z0-9_]*$/;
 
 @Injectable()
 export class AccessConfigService implements OnModuleInit {
@@ -27,12 +30,18 @@ export class AccessConfigService implements OnModuleInit {
         key: 'default',
         enabledPassTypes: [...ALL_PASS_TYPES],
         rolePermissions: { ...DEFAULT_ROLE_PERMISSIONS },
+        roleLabels: {},
       });
       return;
     }
 
     let changed = false;
     const validKeys = new Set<string>(ALL_PERMISSIONS.map((p) => p.key));
+
+    if (!existing.roleLabels) {
+      existing.roleLabels = {};
+      changed = true;
+    }
 
     for (const [role, defaults] of Object.entries(DEFAULT_ROLE_PERMISSIONS)) {
       if (!existing.rolePermissions[role]) {
@@ -65,6 +74,7 @@ export class AccessConfigService implements OnModuleInit {
 
     if (changed) {
       existing.markModified('rolePermissions');
+      existing.markModified('roleLabels');
       await existing.save();
     }
   }
@@ -78,6 +88,7 @@ export class AccessConfigService implements OnModuleInit {
   async updateConfig(data: {
     enabledPassTypes?: string[];
     rolePermissions?: Record<string, string[]>;
+    roleLabels?: Record<string, string>;
   }) {
     await this.ensureDefaults();
     const doc = await this.accessConfigModel.findOne({ key: 'default' });
@@ -96,9 +107,23 @@ export class AccessConfigService implements OnModuleInit {
 
     if (data.rolePermissions) {
       const validKeys = new Set<string>(ALL_PERMISSIONS.map((p) => p.key));
+
+      for (const role of SYSTEM_ROLES) {
+        if (!data.rolePermissions[role]) {
+          throw new BadRequestException(`Нельзя удалить системную роль: ${role}`);
+        }
+      }
+
+      for (const role of Object.keys(data.rolePermissions)) {
+        if (!ROLE_KEY_PATTERN.test(role)) {
+          throw new BadRequestException(`Некорректный код роли: ${role}`);
+        }
+      }
+
       for (const [role, perms] of Object.entries(data.rolePermissions)) {
         doc.rolePermissions[role] = (perms || []).filter((p) => validKeys.has(p));
       }
+
       for (const [role, defaults] of Object.entries(DEFAULT_ROLE_PERMISSIONS)) {
         const current = doc.rolePermissions[role] || [];
         if (current.includes('admin.panel')) {
@@ -108,12 +133,28 @@ export class AccessConfigService implements OnModuleInit {
           doc.rolePermissions[role] = current;
         }
       }
+
       if (!doc.rolePermissions.admin?.includes('admin.permissions')) {
         doc.rolePermissions.admin = [
           ...new Set([...(doc.rolePermissions.admin || []), 'admin.permissions']),
         ];
       }
+
       doc.markModified('rolePermissions');
+    }
+
+    if (data.roleLabels) {
+      const labels: Record<string, string> = { ...(doc.roleLabels || {}) };
+      for (const [role, label] of Object.entries(data.roleLabels)) {
+        const trimmed = label?.trim();
+        if (trimmed) labels[role] = trimmed;
+        else delete labels[role];
+      }
+      for (const role of SYSTEM_ROLES) {
+        labels[role] = ROLE_LABELS[role];
+      }
+      doc.roleLabels = labels;
+      doc.markModified('roleLabels');
     }
 
     await doc.save();
@@ -123,6 +164,28 @@ export class AccessConfigService implements OnModuleInit {
   async getPermissionsForRole(role: string): Promise<string[]> {
     const { rolePermissions } = await this.getConfig();
     return rolePermissions[role] || [];
+  }
+
+  async getEmployeeAssignableRoles() {
+    const config = await this.getConfig();
+    const roles = config.roles.filter((role) => !SYSTEM_ROLES.includes(role as any));
+    return {
+      roles: roles.map((role) => ({
+        key: role,
+        label: config.roleLabels?.[role] || role,
+        permissions: config.rolePermissions[role] || [],
+      })),
+    };
+  }
+
+  async assertEmployeeRole(role: string) {
+    const config = await this.getConfig();
+    if (SYSTEM_ROLES.includes(role as any)) {
+      throw new BadRequestException('Нельзя назначить системную роль сотруднику компании');
+    }
+    if (!config.rolePermissions[role]) {
+      throw new BadRequestException('Неизвестный тип пользователя');
+    }
   }
 
   async isPassTypeEnabled(passType: string): Promise<boolean> {
@@ -135,8 +198,8 @@ export class AccessConfigService implements OnModuleInit {
     return perms.includes(permission);
   }
 
-  async canViewAllPasses(role: string): Promise<boolean> {
-    if (role === 'tenant') return false;
+  async canViewAllPasses(role: string, parentTenantId?: string): Promise<boolean> {
+    if (role === 'tenant' || parentTenantId) return false;
     if (await this.hasPermission(role, 'passes.view_all')) return true;
     return this.hasPermission(role, 'admin.panel');
   }
@@ -152,8 +215,12 @@ export class AccessConfigService implements OnModuleInit {
       rolePermissions: doc.rolePermissions,
       permissions: ALL_PERMISSIONS,
       passTypeLabels: PASS_TYPE_LABELS,
-      roleLabels: ROLE_LABELS,
+      roleLabels: {
+        ...ROLE_LABELS,
+        ...(doc.roleLabels || {}),
+      },
       roles: Object.keys(mergedRoles),
+      systemRoles: [...SYSTEM_ROLES],
     };
   }
 }

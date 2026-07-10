@@ -36,7 +36,6 @@ let User = class User {
     bitrix24Domain;
     bitrix24Meta;
     parentTenantId;
-    employeePositionId;
     profileChangeRequest;
 };
 exports.User = User;
@@ -132,10 +131,6 @@ __decorate([
     (0, mongoose_1.Prop)({ type: mongoose_2.Types.ObjectId, ref: 'User' }),
     __metadata("design:type", mongoose_2.Types.ObjectId)
 ], User.prototype, "parentTenantId", void 0);
-__decorate([
-    (0, mongoose_1.Prop)({ type: mongoose_2.Types.ObjectId, ref: 'TenantEmployeePosition' }),
-    __metadata("design:type", mongoose_2.Types.ObjectId)
-], User.prototype, "employeePositionId", void 0);
 __decorate([
     (0, mongoose_1.Prop)({ type: Object, default: null }),
     __metadata("design:type", Object)

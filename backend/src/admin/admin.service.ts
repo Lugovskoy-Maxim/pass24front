@@ -26,6 +26,7 @@ import { CreateUserDto } from './dto/create-user.dto';
 import { UpdateBusinessCenterDto } from './dto/update-business-center.dto';
 import { BusinessCenterPassSettingsDto } from './dto/business-center-pass-settings.dto';
 import { TestDataSeedService } from '../database/test-data-seed.service';
+import { SYSTEM_ROLES } from '../access/access.constants';
 
 const STAFF_ROLES = ['security', 'bc_admin', 'admin'] as const;
 
@@ -50,6 +51,18 @@ export class AdminService {
     private passesService: PassesService,
     private testDataSeedService: TestDataSeedService,
   ) {}
+
+  async assertRolesDeletable(roles: string[]) {
+    for (const role of roles) {
+      if ((SYSTEM_ROLES as readonly string[]).includes(role)) {
+        throw new BadRequestException(`Нельзя удалить системную роль: ${role}`);
+      }
+      const count = await this.userModel.countDocuments({ role, isActive: { $ne: false } });
+      if (count > 0) {
+        throw new BadRequestException(`Нельзя удалить роль «${role}»: к ней привязаны пользователи`);
+      }
+    }
+  }
 
   async dashboard() {
     await this.passesService.expirePastPasses();

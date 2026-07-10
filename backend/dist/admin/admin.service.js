@@ -58,6 +58,7 @@ const schemas_1 = require("../schemas");
 const auth_database_constants_1 = require("../database/auth-database.constants");
 const enums_1 = require("../schemas/enums");
 const test_data_seed_service_1 = require("../database/test-data-seed.service");
+const access_constants_1 = require("../access/access.constants");
 const STAFF_ROLES = ['security', 'bc_admin', 'admin'];
 let AdminService = class AdminService {
     userModel;
@@ -77,6 +78,17 @@ let AdminService = class AdminService {
         this.auditService = auditService;
         this.passesService = passesService;
         this.testDataSeedService = testDataSeedService;
+    }
+    async assertRolesDeletable(roles) {
+        for (const role of roles) {
+            if (access_constants_1.SYSTEM_ROLES.includes(role)) {
+                throw new common_1.BadRequestException(`Нельзя удалить системную роль: ${role}`);
+            }
+            const count = await this.userModel.countDocuments({ role, isActive: { $ne: false } });
+            if (count > 0) {
+                throw new common_1.BadRequestException(`Нельзя удалить роль «${role}»: к ней привязаны пользователи`);
+            }
+        }
     }
     async dashboard() {
         await this.passesService.expirePastPasses();

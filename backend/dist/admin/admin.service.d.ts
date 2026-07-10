@@ -25,6 +25,7 @@ export declare class AdminService {
     private passesService;
     private testDataSeedService;
     constructor(userModel: Model<UserDocument>, propertyModel: Model<PropertyDocument>, officeModel: Model<OfficeDocument>, passModel: Model<PassDocument>, passTemplateModel: Model<PassTemplateDocument>, auditService: AuditService, passesService: PassesService, testDataSeedService: TestDataSeedService);
+    assertRolesDeletable(roles: string[]): Promise<void>;
     dashboard(): Promise<{
         stats: {
             users: {

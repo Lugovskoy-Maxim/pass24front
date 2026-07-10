@@ -59,12 +59,14 @@ export declare class AccessConfigService implements OnModuleInit {
             readonly group: "Администрирование";
         }];
         passTypeLabels: Record<string, string>;
-        roleLabels: Record<string, string>;
+        roleLabels: any;
         roles: string[];
+        systemRoles: ("tenant" | "security" | "admin" | "bc_admin")[];
     }>;
     updateConfig(data: {
         enabledPassTypes?: string[];
         rolePermissions?: Record<string, string[]>;
+        roleLabels?: Record<string, string>;
     }): Promise<{
         config: {
             enabledPassTypes: any;
@@ -119,13 +121,22 @@ export declare class AccessConfigService implements OnModuleInit {
                 readonly group: "Администрирование";
             }];
             passTypeLabels: Record<string, string>;
-            roleLabels: Record<string, string>;
+            roleLabels: any;
             roles: string[];
+            systemRoles: ("tenant" | "security" | "admin" | "bc_admin")[];
         };
     }>;
     getPermissionsForRole(role: string): Promise<string[]>;
+    getEmployeeAssignableRoles(): Promise<{
+        roles: {
+            key: string;
+            label: any;
+            permissions: any;
+        }[];
+    }>;
+    assertEmployeeRole(role: string): Promise<void>;
     isPassTypeEnabled(passType: string): Promise<boolean>;
     hasPermission(role: string, permission: string): Promise<boolean>;
-    canViewAllPasses(role: string): Promise<boolean>;
+    canViewAllPasses(role: string, parentTenantId?: string): Promise<boolean>;
     private mapConfig;
 }

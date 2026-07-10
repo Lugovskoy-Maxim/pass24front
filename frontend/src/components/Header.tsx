@@ -6,7 +6,8 @@ import { AlertCircle, LogOut, Plus, List, ClipboardList, Settings, User } from '
 import { useAuth } from '@/lib/auth';
 import { useConfig } from '@/hooks/useConfig';
 import { SiteBrand } from '@/components/SiteBrand';
-import { ROLE_LABELS, formatTenantOffices } from '@/lib/api';
+import { formatTenantOffices } from '@/lib/api';
+import { getUserRoleLabel } from '@/lib/permissions';
 import { canOrderPasses, canSeeOverdueAlerts, canUseReception, canViewPasses, getHomePath, hasPermission } from '@/lib/permissions';
 import { getUiLabels } from '@/lib/ui-labels';
 import { useOverdueGuests } from '@/hooks/useOverdueGuests';
@@ -97,7 +98,7 @@ export function Header() {
               {user.full_name}
             </Link>
             <div className="text-xs" style={{ color: 'var(--header-muted)' }}>
-              {ROLE_LABELS[user.role]}
+              {getUserRoleLabel(user)}
               {user.company && ` · ${user.company}`}
               {user.offices?.length
                 ? ` · ${formatTenantOffices(user.offices)}`

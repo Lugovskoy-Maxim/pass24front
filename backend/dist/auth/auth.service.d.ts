@@ -9,7 +9,6 @@ import { CreateTenantEmployeeDto } from './dto/create-tenant-employee.dto';
 import { LoginDto } from './dto/login.dto';
 import { RegisterDto } from './dto/register.dto';
 import { UpdateProfileDto } from './dto/update-profile.dto';
-import { TenantEmployeePositionService } from './tenant-employee-position.service';
 export declare class AuthService {
     private userModel;
     private pendingModel;
@@ -19,8 +18,7 @@ export declare class AuthService {
     private accessConfigService;
     private auditService;
     private mailService;
-    private positionService;
-    constructor(userModel: Model<UserDocument>, pendingModel: Model<RegistrationPendingDocument>, officeModel: Model<OfficeDocument>, propertyModel: Model<PropertyDocument>, jwtService: JwtService, accessConfigService: AccessConfigService, auditService: AuditService, mailService: MailService, positionService: TenantEmployeePositionService);
+    constructor(userModel: Model<UserDocument>, pendingModel: Model<RegistrationPendingDocument>, officeModel: Model<OfficeDocument>, propertyModel: Model<PropertyDocument>, jwtService: JwtService, accessConfigService: AccessConfigService, auditService: AuditService, mailService: MailService);
     requestRegistrationCode(dto: RegisterDto): Promise<{
         verificationRequired: boolean;
         message: string;
@@ -47,6 +45,7 @@ export declare class AuthService {
             phone: any;
             company: any;
             role: any;
+            role_label: any;
             office: any;
             floor: any;
             offices: any[];
@@ -78,6 +77,7 @@ export declare class AuthService {
             phone: any;
             company: any;
             role: any;
+            role_label: any;
             office: any;
             floor: any;
             offices: any[];
@@ -108,6 +108,7 @@ export declare class AuthService {
             phone: any;
             company: any;
             role: any;
+            role_label: any;
             office: any;
             floor: any;
             offices: any[];
@@ -138,6 +139,7 @@ export declare class AuthService {
             phone: any;
             company: any;
             role: any;
+            role_label: any;
             office: any;
             floor: any;
             offices: any[];
@@ -166,8 +168,8 @@ export declare class AuthService {
             middle_name: string | undefined;
             phone: string | undefined;
             is_active: boolean;
-            position_id: any;
-            position_name: string | undefined;
+            role: string;
+            role_label: any;
             created_at: any;
         }[];
     }>;
@@ -181,8 +183,8 @@ export declare class AuthService {
             middle_name: string | undefined;
             phone: string | undefined;
             is_active: boolean;
-            position_id: string;
-            position_name: string;
+            role: string;
+            role_label: any;
             created_at: any;
         };
     }>;

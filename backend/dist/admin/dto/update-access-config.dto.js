@@ -15,6 +15,7 @@ const access_constants_1 = require("../../access/access.constants");
 class UpdateAccessConfigDto {
     enabledPassTypes;
     rolePermissions;
+    roleLabels;
 }
 exports.UpdateAccessConfigDto = UpdateAccessConfigDto;
 __decorate([
@@ -27,4 +28,9 @@ __decorate([
     (0, class_validator_1.IsOptional)(),
     __metadata("design:type", Object)
 ], UpdateAccessConfigDto.prototype, "rolePermissions", void 0);
+__decorate([
+    (0, class_validator_1.IsOptional)(),
+    (0, class_validator_1.IsObject)(),
+    __metadata("design:type", Object)
+], UpdateAccessConfigDto.prototype, "roleLabels", void 0);
 //# sourceMappingURL=update-access-config.dto.js.map

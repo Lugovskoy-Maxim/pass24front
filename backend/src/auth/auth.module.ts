@@ -8,6 +8,7 @@ import { AuthService } from './auth.service';
 import { JwtStrategy } from './jwt.strategy';
 import { PermissionsGuard } from './permissions.guard';
 import { AuthDatabaseModule } from '../database/auth-database.module';
+import { AccessConfigModule } from '../access/access-config.module';
 import {
   Office,
   OfficeSchema,
@@ -15,19 +16,16 @@ import {
   PropertySchema,
   RegistrationPending,
   RegistrationPendingSchema,
-  TenantEmployeePosition,
-  TenantEmployeePositionSchema,
   User,
   UserSchema,
 } from '../schemas';
-import { TenantEmployeePositionService } from './tenant-employee-position.service';
 
 @Module({
   imports: [
+    AccessConfigModule,
     AuthDatabaseModule.forFeature([
       { name: User.name, schema: UserSchema },
       { name: RegistrationPending.name, schema: RegistrationPendingSchema },
-      { name: TenantEmployeePosition.name, schema: TenantEmployeePositionSchema },
     ]),
     MongooseModule.forFeature([
       { name: Office.name, schema: OfficeSchema },
@@ -44,7 +42,7 @@ import { TenantEmployeePositionService } from './tenant-employee-position.servic
     }),
   ],
   controllers: [AuthController],
-  providers: [AuthService, TenantEmployeePositionService, JwtStrategy, PermissionsGuard],
-  exports: [AuthService, TenantEmployeePositionService, JwtModule, PermissionsGuard],
+  providers: [AuthService, JwtStrategy, PermissionsGuard],
+  exports: [AuthService, JwtModule, PermissionsGuard],
 })
 export class AuthModule {}

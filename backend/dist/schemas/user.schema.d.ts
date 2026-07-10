@@ -24,7 +24,6 @@ export declare class User {
     bitrix24Domain?: string;
     bitrix24Meta?: Record<string, unknown> | null;
     parentTenantId?: Types.ObjectId;
-    employeePositionId?: Types.ObjectId;
     profileChangeRequest?: {
         lastName?: string;
         firstName?: string;
@@ -243,15 +242,6 @@ export declare const UserSchema: import("mongoose").Schema<User, import("mongoos
         id: string;
     }> | undefined;
     parentTenantId?: import("mongoose").SchemaDefinitionProperty<Types.ObjectId | undefined, User, Document<unknown, {}, User, {
-        id: string;
-    }, import("mongoose").DefaultSchemaOptions> & Omit<User & {
-        _id: Types.ObjectId;
-    } & {
-        __v: number;
-    }, "id"> & {
-        id: string;
-    }> | undefined;
-    employeePositionId?: import("mongoose").SchemaDefinitionProperty<Types.ObjectId | undefined, User, Document<unknown, {}, User, {
         id: string;
     }, import("mongoose").DefaultSchemaOptions> & Omit<User & {
         _id: Types.ObjectId;

@@ -10,7 +10,8 @@ export { ApiError, getErrorMessage, getErrorStatus, isNetworkError } from './api
 
 const API_URL = process.env.NEXT_PUBLIC_API_URL || 'http://127.0.0.1:4000/api';
 
-export type UserRole = 'tenant' | 'security' | 'bc_admin' | 'admin';
+export type SystemUserRole = 'tenant' | 'security' | 'bc_admin' | 'admin';
+export type UserRole = SystemUserRole | (string & {});
 
 export const VISIT_PURPOSES = ['Гость', 'Встреча', 'Доставка', 'Рабочий', 'Сотрудник'] as const;
 
@@ -69,6 +70,7 @@ export interface User {
   enabledPassTypes?: PassType[];
   parent_tenant_id?: string;
   is_tenant_owner?: boolean;
+  role_label?: string;
 }
 
 export interface TenantEmployee {
@@ -80,18 +82,15 @@ export interface TenantEmployee {
   middle_name?: string;
   phone?: string;
   is_active: boolean;
-  position_id?: string;
-  position_name?: string;
+  role: string;
+  role_label: string;
   created_at: string;
 }
 
-export interface TenantEmployeePosition {
-  id: string;
-  name: string;
+export interface EmployeeRole {
+  key: string;
+  label: string;
   permissions: string[];
-  is_default: boolean;
-  created_at: string;
-  updated_at: string;
 }
 
 export interface PermissionMeta {
@@ -107,6 +106,7 @@ export interface AccessConfig {
   passTypeLabels: Record<PassType, string>;
   roleLabels?: Record<string, string>;
   roles: string[];
+  systemRoles?: string[];
 }
 
 export type PassStatus = 'pending' | 'approved' | 'rejected' | 'active' | 'completed' | 'expired' | 'cancelled';
@@ -321,7 +321,7 @@ export const api = {
     middleName?: string;
     password: string;
     phone?: string;
-    positionId?: string;
+    role?: string;
   }) =>
     request<{ employee: TenantEmployee }>('/auth/tenant/employees', {
       method: 'POST',
@@ -331,10 +331,8 @@ export const api = {
   removeTenantEmployee: (id: string) =>
     request<{ message: string }>(`/auth/tenant/employees/${id}`, { method: 'DELETE' }),
 
-  getTenantEmployeePositions: () =>
-    request<{ positions: TenantEmployeePosition[]; assignablePermissions: PermissionMeta[] }>(
-      '/auth/tenant/employee-positions',
-    ),
+  getTenantEmployeeRoles: () =>
+    request<{ roles: EmployeeRole[] }>('/auth/tenant/employee-roles'),
 
   getPasses: (params?: { status?: string; date?: string; search?: string }) => {
     const q = new URLSearchParams();
@@ -579,35 +577,8 @@ export const api = {
 
     getAccessConfig: () => request<AccessConfig>('/admin/access-config'),
 
-    updateAccessConfig: (data: Partial<Pick<AccessConfig, 'enabledPassTypes' | 'rolePermissions'>>) =>
+    updateAccessConfig: (data: Partial<Pick<AccessConfig, 'enabledPassTypes' | 'rolePermissions' | 'roleLabels'>>) =>
       request<{ config: AccessConfig }>('/admin/access-config', { method: 'PATCH', body: JSON.stringify(data) }),
-
-    getTenantEmployeePositions: () =>
-      request<{ positions: TenantEmployeePosition[]; assignablePermissions: PermissionMeta[] }>(
-        '/admin/tenant-employee-positions',
-      ),
-
-    createTenantEmployeePosition: (data: {
-      name: string;
-      permissions: string[];
-      isDefault?: boolean;
-    }) =>
-      request<{ position: TenantEmployeePosition }>('/admin/tenant-employee-positions', {
-        method: 'POST',
-        body: JSON.stringify(data),
-      }),
-
-    updateTenantEmployeePosition: (
-      id: string,
-      data: { name?: string; permissions?: string[]; isDefault?: boolean },
-    ) =>
-      request<{ position: TenantEmployeePosition }>(`/admin/tenant-employee-positions/${id}`, {
-        method: 'PATCH',
-        body: JSON.stringify(data),
-      }),
-
-    deleteTenantEmployeePosition: (id: string) =>
-      request<{ message: string }>(`/admin/tenant-employee-positions/${id}`, { method: 'DELETE' }),
 
     getAudit: (filters: AuditFilters = {}) => {
       const qs = buildAuditQuery(filters);
@@ -974,12 +945,16 @@ export const TYPE_LABELS: Record<PassType, string> = {
   contractor: 'Подрядчик',
 };
 
-export const ROLE_LABELS: Record<UserRole, string> = {
+export const ROLE_LABELS: Record<SystemUserRole, string> = {
   tenant: 'Арендатор',
   security: 'Ресепшн / Охрана',
   bc_admin: 'Администратор БЦ',
   admin: 'Супер-администратор',
 };
+
+export function getRoleLabel(role: string): string {
+  return ROLE_LABELS[role as SystemUserRole] || role;
+}
 
 export const AUDIT_LABELS: Record<string, string> = {
   'pass.create': 'Создание пропуска',

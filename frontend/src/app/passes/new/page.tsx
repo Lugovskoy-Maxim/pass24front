@@ -14,7 +14,7 @@ import { FieldErrors, hasFieldErrors, validateNewPassForm } from '@/lib/form-val
 import { getBookableVisitDates, parseClosedWeekdays } from '@/lib/bookable-visit-dates';
 import { getLocalDateString } from '@/lib/local-date';
 import { getVisitorNameLabel } from '@/lib/person-name';
-import { canOrderPasses, hasPermission } from '@/lib/permissions';
+import { canOrderPasses, hasPermission, isTenantCompanyUser } from '@/lib/permissions';
 
 function NewPassForm() {
   const { user } = useAuth();
@@ -47,7 +47,7 @@ function NewPassForm() {
   const [selectedTemplateId, setSelectedTemplateId] = useState<string | null>(null);
 
   const tenantOffices = user?.offices || [];
-  const isTenant = user?.role === 'tenant';
+  const tenantCompanyUser = isTenantCompanyUser(user);
   const canUseTemplates = hasPermission(user, 'passes.templates');
   const bcOptions = [...new Map(
     tenantOffices.map((o) => [o.propertyId, o.businessCenterName || 'Бизнес-центр']),
@@ -335,7 +335,7 @@ function NewPassForm() {
           />
         </FormField>
 
-        {isTenant || tenantOffices.length > 0 ? (
+        {tenantCompanyUser || tenantOffices.length > 0 ? (
           <div className="space-y-3">
             {bcOptions.length > 1 && (
               <FormField id="propertyId" label="Бизнес-центр" required error={fieldErrors.propertyId}>

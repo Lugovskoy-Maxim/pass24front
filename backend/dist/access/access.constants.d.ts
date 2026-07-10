@@ -49,5 +49,6 @@ export declare const ALL_PERMISSIONS: readonly [{
     readonly group: "Администрирование";
 }];
 export declare const DEFAULT_ROLE_PERMISSIONS: Record<string, string[]>;
+export declare const SYSTEM_ROLES: readonly ["tenant", "security", "bc_admin", "admin"];
 export declare const ROLE_LABELS: Record<string, string>;
 export declare const PASS_TYPE_LABELS: Record<string, string>;

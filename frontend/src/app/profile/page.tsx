@@ -10,12 +10,17 @@ import { useToast } from '@/components/Toast';
 import { useAuth } from '@/lib/auth';
 import {
   api,
+  EmployeeRole,
   formatTenantOffices,
   getErrorMessage,
-  ROLE_LABELS,
   TenantEmployee,
-  TenantEmployeePosition,
 } from '@/lib/api';
+import {
+  getUserRoleLabel,
+  isTenantCompanyUser,
+  isTenantEmployee,
+  isTenantOwner,
+} from '@/lib/permissions';
 import {
   buildFullName,
   getUserNameLabels,
@@ -60,12 +65,12 @@ export default function ProfilePage() {
   const [employeeEmail, setEmployeeEmail] = useState('');
   const [employeePhone, setEmployeePhone] = useState('');
   const [employeePassword, setEmployeePassword] = useState('');
-  const [employeePositionId, setEmployeePositionId] = useState('');
-  const [positions, setPositions] = useState<TenantEmployeePosition[]>([]);
+  const [employeeRole, setEmployeeRole] = useState('');
+  const [employeeRoles, setEmployeeRoles] = useState<EmployeeRole[]>([]);
 
-  const isTenant = user?.role === 'tenant';
-  const isTenantOwner = isTenant && user?.is_tenant_owner;
-  const isTenantEmployee = isTenant && !!user?.parent_tenant_id;
+  const tenantOwner = isTenantOwner(user);
+  const tenantEmployee = isTenantEmployee(user);
+  const tenantCompanyUser = isTenantCompanyUser(user);
   const pending = user?.profile_change_request;
 
   useEffect(() => {
@@ -91,21 +96,20 @@ export default function ProfilePage() {
   }, [user, pending]);
 
   useEffect(() => {
-    if (!isTenantOwner) return;
+    if (!tenantOwner) return;
     setEmployeesLoading(true);
     Promise.all([
       api.getTenantEmployees(),
-      api.getTenantEmployeePositions(),
+      api.getTenantEmployeeRoles(),
     ])
-      .then(([{ employees: list }, { positions: posList }]) => {
+      .then(([{ employees: list }, { roles }]) => {
         setEmployees(list.filter((e) => e.is_active));
-        setPositions(posList);
-        const defaultPosition = posList.find((p) => p.is_default);
-        setEmployeePositionId((prev) => prev || defaultPosition?.id || posList[0]?.id || '');
+        setEmployeeRoles(roles);
+        setEmployeeRole((prev) => prev || roles[0]?.key || '');
       })
       .catch(() => setEmployees([]))
       .finally(() => setEmployeesLoading(false));
-  }, [isTenantOwner]);
+  }, [tenantOwner]);
 
   if (!user) return null;
 
@@ -162,7 +166,7 @@ export default function ProfilePage() {
         middleName: employeeNameParts.middleName.trim() || undefined,
         password: employeePassword,
         phone: employeePhone.trim() || undefined,
-        positionId: employeePositionId || undefined,
+        role: employeeRole || undefined,
       });
       setEmployees((prev) => [employee, ...prev]);
       setEmployeeEmail('');
@@ -208,16 +212,16 @@ export default function ProfilePage() {
       <div className="max-w-2xl mx-auto">
         <h1 className="page-title mb-2">Мой профиль</h1>
         <p className="text-sm text-[var(--muted)] mb-6">
-          {isTenantEmployee
+          {tenantEmployee
             ? 'Вы вошли как сотрудник компании и можете заказывать пропуска от её имени'
-            : isTenantOwner
+            : tenantOwner
               ? 'Изменения ФИО, телефона и компании вступают в силу после подтверждения администратором'
-              : isTenant
+              : tenantCompanyUser
                 ? 'Данные учётной записи арендатора'
                 : 'Данные учётной записи. Для изменения обратитесь к администратору'}
         </p>
 
-        {isTenant && pending && (
+        {tenantOwner && pending && (
           <div className="card p-4 mb-6 border-amber-200 bg-amber-50/80">
             <div className="flex items-start gap-3">
               <Clock className="w-5 h-5 text-amber-700 shrink-0 mt-0.5" />
@@ -249,7 +253,7 @@ export default function ProfilePage() {
           {(user.email || user.username) && (
             <ProfileInfoRow icon={Mail} label={user.email ? 'Email' : 'Логин'} value={user.email || user.username || ''} />
           )}
-          <ProfileInfoRow icon={Shield} label="Роль" value={ROLE_LABELS[user.role]} />
+          <ProfileInfoRow icon={Shield} label="Роль" value={getUserRoleLabel(user)} />
           {user.company && <ProfileInfoRow icon={Building2} label="Компания" value={user.company} />}
           {user.phone && <ProfileInfoRow icon={Phone} label="Телефон" value={user.phone} />}
           {user.offices?.length ? (
@@ -259,7 +263,7 @@ export default function ProfilePage() {
           ) : null}
         </div>
 
-        {isTenantOwner ? (
+        {tenantOwner ? (
           <form onSubmit={handleSubmit} className="card p-6 space-y-5" noValidate>
             <div>
               <h2 className="font-semibold mb-1">Запросить изменения</h2>
@@ -289,17 +293,17 @@ export default function ProfilePage() {
               {saving ? 'Отправка...' : pending ? 'Обновить заявку' : 'Отправить на подтверждение'}
             </button>
           </form>
-        ) : isTenantEmployee ? (
+        ) : tenantEmployee ? (
           <div className="card p-5 text-sm text-[var(--muted)]">
             Изменение профиля недоступно для сотрудников компании. Обратитесь к владельцу аккаунта арендатора.
           </div>
-        ) : !isTenant ? (
+        ) : !tenantCompanyUser ? (
           <div className="card p-5 text-sm text-[var(--muted)]">
             Редактирование профиля доступно арендаторам. Сотрудники БЦ и администраторы могут изменить данные через раздел «Пользователи» в админке.
           </div>
         ) : null}
 
-        {isTenantOwner && (
+        {tenantOwner && (
           <div className="card p-6 space-y-5 mt-6">
             <div className="flex items-start gap-3">
               <Users className="w-5 h-5 text-[var(--accent)] shrink-0 mt-0.5" />
@@ -320,8 +324,8 @@ export default function ProfilePage() {
                     <div className="min-w-0">
                       <div className="font-medium">{employee.full_name}</div>
                       <div className="text-[var(--muted)] truncate">{employee.email}</div>
-                      {employee.position_name && (
-                        <div className="text-xs text-[var(--muted)] mt-0.5">{employee.position_name}</div>
+                      {employee.role_label && (
+                        <div className="text-xs text-[var(--muted)] mt-0.5">{employee.role_label}</div>
                       )}
                     </div>
                     <button
@@ -380,23 +384,27 @@ export default function ProfilePage() {
                   invalid={!!fieldErrors.password}
                 />
               </FormField>
-              {positions.length > 0 && (
-                <FormField id="employeePosition" label="Должность">
+              {employeeRoles.length > 0 ? (
+                <FormField id="employeeRole" label="Тип пользователя">
                   <select
-                    id="employeePosition"
+                    id="employeeRole"
                     className="form-input w-full"
-                    value={employeePositionId}
-                    onChange={(e) => setEmployeePositionId(e.target.value)}
+                    value={employeeRole}
+                    onChange={(e) => setEmployeeRole(e.target.value)}
                   >
-                    {positions.map((position) => (
-                      <option key={position.id} value={position.id}>
-                        {position.name}{position.is_default ? ' (по умолчанию)' : ''}
+                    {employeeRoles.map((role) => (
+                      <option key={role.key} value={role.key}>
+                        {role.label}
                       </option>
                     ))}
                   </select>
                 </FormField>
+              ) : (
+                <p className="text-sm text-amber-700 bg-amber-50 border border-amber-200 rounded-lg px-3 py-2">
+                  Сначала создайте тип пользователя в разделе «Права и типы пропусков» (Права по ролям).
+                </p>
               )}
-              <button type="submit" className="btn btn-primary" disabled={employeeSaving}>
+              <button type="submit" className="btn btn-primary" disabled={employeeSaving || employeeRoles.length === 0}>
                 {employeeSaving ? 'Добавление...' : 'Добавить сотрудника'}
               </button>
             </form>

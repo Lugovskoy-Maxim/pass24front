@@ -43,6 +43,9 @@ export class AccessConfig {
     },
   })
   rolePermissions: Record<string, string[]>;
+
+  @Prop({ type: Object, default: {} })
+  roleLabels: Record<string, string>;
 }
 
 export const AccessConfigSchema = SchemaFactory.createForClass(AccessConfig);

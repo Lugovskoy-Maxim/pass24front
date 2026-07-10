@@ -3,7 +3,7 @@
 import { useEffect, useState, useCallback, FormEvent } from 'react';
 import { Plus, Search, Pencil, Link2, X, Users, Building2, UserCog, Check, Clock } from 'lucide-react';
 import { AdminLayout } from '@/components/AdminLayout';
-import { api, AdminUser, BusinessCenter, CreateUserData, Office, ProfileChangeRequest, ROLE_LABELS, UserCategory, UserFilters, UserRole, formatTenantOffices, getErrorMessage } from '@/lib/api';
+import { api, AdminUser, BusinessCenter, CreateUserData, Office, ProfileChangeRequest, ROLE_LABELS, UserCategory, UserFilters, UserRole, formatTenantOffices, getErrorMessage, getRoleLabel } from '@/lib/api';
 import { PageError } from '@/components/PageError';
 import { useToast } from '@/components/Toast';
 import { useDebounce } from '@/hooks/useDebounce';
@@ -394,7 +394,7 @@ export default function AdminUsersPage() {
               >
                 <option value="">Все роли</option>
                 {STAFF_ROLES.map((role) => (
-                  <option key={role} value={role}>{ROLE_LABELS[role]}</option>
+                  <option key={role} value={role}>{getRoleLabel(role)}</option>
                 ))}
               </select>
             </div>
@@ -542,7 +542,7 @@ export default function AdminUsersPage() {
                 >
                   {category === 'tenants'
                     ? <option value="tenant">{ROLE_LABELS.tenant}</option>
-                    : STAFF_ROLES.map((role) => <option key={role} value={role}>{ROLE_LABELS[role]}</option>)}
+                    : STAFF_ROLES.map((role) => <option key={role} value={role}>{getRoleLabel(role)}</option>)}
                   {category === 'staff' && <option value="tenant">{ROLE_LABELS.tenant}</option>}
                 </select>
               </div>
@@ -679,7 +679,7 @@ export default function AdminUsersPage() {
                   <td className="p-3 hidden md:table-cell text-[var(--muted)]">{u.company || '—'}</td>
                 )}
                 {category === 'staff' && (
-                  <td className="p-3">{ROLE_LABELS[u.role]}</td>
+                  <td className="p-3">{getRoleLabel(u.role)}</td>
                 )}
                 <td className="p-3 hidden sm:table-cell text-[var(--muted)] max-w-xs text-xs">
                   {formatBindings(u)}
