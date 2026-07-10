@@ -80,7 +80,10 @@ function NewPassForm() {
     || (officeId ? tenantOffices.find((o) => o.id === officeId)?.propertyId : undefined)
     || (bcOptions.length === 1 ? bcOptions[0].id : config?.businessCenters?.[0]?.id);
 
-  const selectedBcHours = selectedBcId ? bcHoursById.get(selectedBcId) : undefined;
+  const selectedOffice = officeId ? tenantOffices.find((o) => o.id === officeId) : undefined;
+  const selectedOfficeHours = selectedOffice?.propertyId
+    ? bcHoursById.get(selectedOffice.propertyId)
+    : undefined;
 
   const closedWeekdays = useMemo(() => {
     if (selectedBcId) {
@@ -250,24 +253,6 @@ function NewPassForm() {
           </Link>
         )}
       </div>
-      {bcHoursById.size > 0 && (
-        <p className="text-sm text-[var(--muted)] mb-6">
-          {selectedBcHours ? (
-            <>Визит в рабочие часы {selectedBcHours.name}: {selectedBcHours.from}–{selectedBcHours.to}</>
-          ) : (
-            <>
-              Визит в рабочие часы:{' '}
-              {[...bcHoursById.entries()].map(([id, bc], i) => (
-                <span key={id}>
-                  {i > 0 && ' · '}
-                  {bc.name} {bc.from}–{bc.to}
-                </span>
-              ))}
-            </>
-          )}
-        </p>
-      )}
-
       <form onSubmit={handleSubmit} className="card p-6 max-w-xl space-y-5" noValidate>
         <div>
           <label className="label">Тип пропуска</label>
@@ -374,6 +359,11 @@ function NewPassForm() {
                   <option key={o.id} value={o.id}>офис {o.number}</option>
                 ))}
               </FormSelect>
+              {selectedOfficeHours && (
+                <p className="text-xs text-[var(--muted)] mt-2">
+                  Рабочие часы {selectedOfficeHours.name}: {selectedOfficeHours.from}–{selectedOfficeHours.to}
+                </p>
+              )}
             </FormField>
             {bcOptions.length === 1 && (
               <p className="text-xs text-[var(--muted)]">БЦ: {bcOptions[0].name}</p>
