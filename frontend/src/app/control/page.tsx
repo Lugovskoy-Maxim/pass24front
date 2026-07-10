@@ -19,6 +19,7 @@ import { buildHistoryHref } from '@/lib/visit-history';
 import { useAuth } from '@/lib/auth';
 import { getGuestOverdueKind, getUiLabels } from '@/lib/ui-labels';
 import { isAwaitingEntry } from '@/lib/pass-entry';
+import { passRequiresCheckout } from '@/lib/pass-checkout';
 import { getAccentStatClass, getSectionHeadingClass } from '@/lib/pass-status';
 // Графики временно отключены
 // import { StatusDonutChart } from '@/components/charts/StatusDonutChart';
@@ -219,7 +220,7 @@ function ControlPageContent() {
         </>
       );
     }
-    if (pass.status === 'active') {
+    if (pass.status === 'active' && passRequiresCheckout(pass)) {
       return (
         <button
           className="btn btn-primary w-full"

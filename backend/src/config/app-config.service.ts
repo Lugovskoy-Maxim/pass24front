@@ -44,6 +44,7 @@ export class AppConfigService {
           name: p.name,
           workingHoursFrom: ps.working_hours_from || '08:00',
           workingHoursTo: ps.working_hours_to || '20:00',
+          requireCheckout: ps.require_checkout !== 'false',
         };
       }),
       contactPhone: s.contact_phone || site.sitePhone,

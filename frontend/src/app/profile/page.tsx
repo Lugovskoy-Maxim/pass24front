@@ -1,14 +1,14 @@
 'use client';
 
 import { FormEvent, useEffect, useState } from 'react';
-import { Building2, Clock, Mail, Phone, Shield, User as UserIcon } from 'lucide-react';
+import { Building2, Clock, Mail, Phone, Shield, User as UserIcon, UserPlus, Users } from 'lucide-react';
 import { ProtectedLayout } from '@/components/ProtectedLayout';
 import { PersonNameFields } from '@/components/PersonNameFields';
 import { FormField, FormInput } from '@/components/FormField';
 import { FieldErrors, hasFieldErrors, validateProfileForm } from '@/lib/form-validation';
 import { useToast } from '@/components/Toast';
 import { useAuth } from '@/lib/auth';
-import { api, formatTenantOffices, ROLE_LABELS } from '@/lib/api';
+import { api, formatTenantOffices, getErrorMessage, ROLE_LABELS, TenantEmployee } from '@/lib/api';
 import {
   buildFullName,
   getUserNameLabels,
@@ -45,8 +45,18 @@ export default function ProfilePage() {
   const [saving, setSaving] = useState(false);
   const [cancelling, setCancelling] = useState(false);
   const [fieldErrors, setFieldErrors] = useState<FieldErrors>({});
+  const [employees, setEmployees] = useState<TenantEmployee[]>([]);
+  const [employeesLoading, setEmployeesLoading] = useState(false);
+  const [employeeSaving, setEmployeeSaving] = useState(false);
+  const [removingEmployeeId, setRemovingEmployeeId] = useState<string | null>(null);
+  const [employeeNameParts, setEmployeeNameParts] = useState<PersonNameParts>({ lastName: '', firstName: '', middleName: '' });
+  const [employeeEmail, setEmployeeEmail] = useState('');
+  const [employeePhone, setEmployeePhone] = useState('');
+  const [employeePassword, setEmployeePassword] = useState('');
 
   const isTenant = user?.role === 'tenant';
+  const isTenantOwner = isTenant && user?.is_tenant_owner;
+  const isTenantEmployee = isTenant && !!user?.parent_tenant_id;
   const pending = user?.profile_change_request;
 
   useEffect(() => {
@@ -70,6 +80,15 @@ export default function ProfilePage() {
     setPhone((pending?.phone ?? user.phone) || '');
     setCompany((pending?.company ?? user.company) || '');
   }, [user, pending]);
+
+  useEffect(() => {
+    if (!isTenantOwner) return;
+    setEmployeesLoading(true);
+    api.getTenantEmployees()
+      .then(({ employees: list }) => setEmployees(list.filter((e) => e.is_active)))
+      .catch(() => setEmployees([]))
+      .finally(() => setEmployeesLoading(false));
+  }, [isTenantOwner]);
 
   if (!user) return null;
 
@@ -109,6 +128,50 @@ export default function ProfilePage() {
     }
   };
 
+  const handleAddEmployee = async (e: FormEvent) => {
+    e.preventDefault();
+    const errors = validateProfileForm(employeeNameParts);
+    if (!employeeEmail.trim()) errors.email = 'Укажите email';
+    if (!employeePassword || employeePassword.length < 6) errors.password = 'Минимум 6 символов';
+    setFieldErrors(errors);
+    if (hasFieldErrors(errors)) return;
+
+    setEmployeeSaving(true);
+    try {
+      const { employee } = await api.addTenantEmployee({
+        email: employeeEmail.trim(),
+        lastName: employeeNameParts.lastName.trim(),
+        firstName: employeeNameParts.firstName.trim(),
+        middleName: employeeNameParts.middleName.trim() || undefined,
+        password: employeePassword,
+        phone: employeePhone.trim() || undefined,
+      });
+      setEmployees((prev) => [employee, ...prev]);
+      setEmployeeEmail('');
+      setEmployeePhone('');
+      setEmployeePassword('');
+      setEmployeeNameParts({ lastName: '', firstName: '', middleName: '' });
+      toast('Сотрудник добавлен', 'success');
+    } catch (err) {
+      toast(getErrorMessage(err, 'Ошибка'), 'error');
+    } finally {
+      setEmployeeSaving(false);
+    }
+  };
+
+  const handleRemoveEmployee = async (id: string) => {
+    setRemovingEmployeeId(id);
+    try {
+      await api.removeTenantEmployee(id);
+      setEmployees((prev) => prev.filter((e) => e.id !== id));
+      toast('Сотрудник удалён', 'success');
+    } catch (err) {
+      toast(getErrorMessage(err, 'Ошибка'), 'error');
+    } finally {
+      setRemovingEmployeeId(null);
+    }
+  };
+
   const handleCancel = async () => {
     setCancelling(true);
     try {
@@ -127,9 +190,13 @@ export default function ProfilePage() {
       <div className="max-w-2xl mx-auto">
         <h1 className="page-title mb-2">Мой профиль</h1>
         <p className="text-sm text-[var(--muted)] mb-6">
-          {isTenant
-            ? 'Изменения ФИО, телефона и компании вступают в силу после подтверждения администратором'
-            : 'Данные учётной записи. Для изменения обратитесь к администратору'}
+          {isTenantEmployee
+            ? 'Вы вошли как сотрудник компании и можете заказывать пропуска от её имени'
+            : isTenantOwner
+              ? 'Изменения ФИО, телефона и компании вступают в силу после подтверждения администратором'
+              : isTenant
+                ? 'Данные учётной записи арендатора'
+                : 'Данные учётной записи. Для изменения обратитесь к администратору'}
         </p>
 
         {isTenant && pending && (
@@ -174,7 +241,7 @@ export default function ProfilePage() {
           ) : null}
         </div>
 
-        {isTenant ? (
+        {isTenantOwner ? (
           <form onSubmit={handleSubmit} className="card p-6 space-y-5" noValidate>
             <div>
               <h2 className="font-semibold mb-1">Запросить изменения</h2>
@@ -204,9 +271,98 @@ export default function ProfilePage() {
               {saving ? 'Отправка...' : pending ? 'Обновить заявку' : 'Отправить на подтверждение'}
             </button>
           </form>
-        ) : (
+        ) : isTenantEmployee ? (
+          <div className="card p-5 text-sm text-[var(--muted)]">
+            Изменение профиля недоступно для сотрудников компании. Обратитесь к владельцу аккаунта арендатора.
+          </div>
+        ) : !isTenant ? (
           <div className="card p-5 text-sm text-[var(--muted)]">
             Редактирование профиля доступно арендаторам. Сотрудники БЦ и администраторы могут изменить данные через раздел «Пользователи» в админке.
+          </div>
+        ) : null}
+
+        {isTenantOwner && (
+          <div className="card p-6 space-y-5 mt-6">
+            <div className="flex items-start gap-3">
+              <Users className="w-5 h-5 text-[var(--accent)] shrink-0 mt-0.5" />
+              <div>
+                <h2 className="font-semibold">Сотрудники компании</h2>
+                <p className="text-sm text-[var(--muted)] mt-1">
+                  Добавленные сотрудники смогут входить в систему и заказывать пропуска от лица {user.company || 'вашей компании'}.
+                </p>
+              </div>
+            </div>
+
+            {employeesLoading ? (
+              <p className="text-sm text-[var(--muted)] animate-pulse">Загрузка...</p>
+            ) : employees.length > 0 ? (
+              <ul className="divide-y divide-[var(--border)] border border-[var(--border)] rounded-lg">
+                {employees.map((employee) => (
+                  <li key={employee.id} className="flex items-center justify-between gap-3 px-4 py-3 text-sm">
+                    <div className="min-w-0">
+                      <div className="font-medium">{employee.full_name}</div>
+                      <div className="text-[var(--muted)] truncate">{employee.email}</div>
+                    </div>
+                    <button
+                      type="button"
+                      className="btn btn-secondary text-xs shrink-0"
+                      disabled={removingEmployeeId === employee.id}
+                      onClick={() => handleRemoveEmployee(employee.id)}
+                    >
+                      {removingEmployeeId === employee.id ? 'Удаление...' : 'Удалить'}
+                    </button>
+                  </li>
+                ))}
+              </ul>
+            ) : (
+              <p className="text-sm text-[var(--muted)]">Пока нет добавленных сотрудников</p>
+            )}
+
+            <form onSubmit={handleAddEmployee} className="border-t border-[var(--border)] pt-5 space-y-4" noValidate>
+              <div className="flex items-center gap-2 text-sm font-medium">
+                <UserPlus className="w-4 h-4" />
+                Добавить сотрудника
+              </div>
+              <PersonNameFields
+                value={employeeNameParts}
+                labels={getUserNameLabels('tenant')}
+                onChange={setEmployeeNameParts}
+                errors={fieldErrors}
+                onClearError={clearFieldError}
+              />
+              <div className="form-grid-2">
+                <FormField id="employeeEmail" label="Email" required error={fieldErrors.email}>
+                  <FormInput
+                    id="employeeEmail"
+                    type="email"
+                    value={employeeEmail}
+                    onChange={(e) => { setEmployeeEmail(e.target.value); clearFieldError('email'); }}
+                    invalid={!!fieldErrors.email}
+                  />
+                </FormField>
+                <FormField id="employeePhone" label="Телефон">
+                  <FormInput
+                    id="employeePhone"
+                    type="tel"
+                    value={employeePhone}
+                    onChange={(e) => setEmployeePhone(e.target.value)}
+                    placeholder="+7 900 000-00-00"
+                  />
+                </FormField>
+              </div>
+              <FormField id="employeePassword" label="Пароль для входа" required error={fieldErrors.password} hint="Минимум 6 символов">
+                <FormInput
+                  id="employeePassword"
+                  type="password"
+                  value={employeePassword}
+                  onChange={(e) => { setEmployeePassword(e.target.value); clearFieldError('password'); }}
+                  invalid={!!fieldErrors.password}
+                />
+              </FormField>
+              <button type="submit" className="btn btn-primary" disabled={employeeSaving}>
+                {employeeSaving ? 'Добавление...' : 'Добавить сотрудника'}
+              </button>
+            </form>
           </div>
         )}
       </div>

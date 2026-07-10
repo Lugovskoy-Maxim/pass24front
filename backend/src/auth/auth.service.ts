@@ -1,4 +1,11 @@
-import { BadRequestException, ForbiddenException, Injectable, UnauthorizedException, ConflictException } from '@nestjs/common';
+import {
+  BadRequestException,
+  ConflictException,
+  ForbiddenException,
+  Injectable,
+  NotFoundException,
+  UnauthorizedException,
+} from '@nestjs/common';
 import { resolvePersonName, splitFullName } from '../common/person-name';
 import { mapProfileChangeRequest, profileFieldsEqual } from '../common/profile-change';
 import { InjectModel } from '@nestjs/mongoose';
@@ -19,7 +26,9 @@ import {
   User,
   UserDocument,
 } from '../schemas';
+import { resolveTenantOwnerId } from '../common/tenant-owner';
 import { ConfirmRegistrationDto } from './dto/confirm-registration.dto';
+import { CreateTenantEmployeeDto } from './dto/create-tenant-employee.dto';
 import { LoginDto } from './dto/login.dto';
 import { RegisterDto } from './dto/register.dto';
 import { UpdateProfileDto } from './dto/update-profile.dto';
@@ -177,7 +186,7 @@ export class AuthService {
       );
     }
 
-    const offices = await this.getUserOffices(user._id.toString());
+    const offices = await this.getUserOffices(user._id.toString(), user.parentTenantId?.toString());
     const token = this.generateToken(user);
     return { user: await this.toUserDto(user, offices), token };
   }
@@ -188,7 +197,7 @@ export class AuthService {
     if (user.isActive === false) {
       throw new ForbiddenException('Учётная запись не активирована');
     }
-    const offices = await this.getUserOffices(userId);
+    const offices = await this.getUserOffices(userId, user.parentTenantId?.toString());
     return { user: await this.toUserDto(user, offices) };
   }
 
@@ -197,6 +206,9 @@ export class AuthService {
     if (!user) throw new UnauthorizedException();
     if (user.role !== 'tenant') {
       throw new ForbiddenException('Редактирование профиля доступно только арендаторам');
+    }
+    if (user.parentTenantId) {
+      throw new ForbiddenException('Сотрудники компании не могут изменять профиль — обратитесь к владельцу аккаунта');
     }
 
     let personName;
@@ -270,12 +282,132 @@ export class AuthService {
     user.profileChangeRequest = null;
     user.markModified('profileChangeRequest');
     await user.save();
-    const offices = await this.getUserOffices(userId);
+    const offices = await this.getUserOffices(userId, user.parentTenantId?.toString());
     return { user: await this.toUserDto(user, offices) };
   }
 
-  async getUserOffices(userId: string) {
-    const offices = await this.officeModel.find({ tenantId: new Types.ObjectId(userId), isActive: true }).lean();
+  async listTenantEmployees(userId: string) {
+    const owner = await this.userModel.findById(userId);
+    if (!owner) throw new UnauthorizedException();
+    if (owner.role !== 'tenant' || owner.parentTenantId) {
+      throw new ForbiddenException('Управление сотрудниками доступно только владельцу компании');
+    }
+
+    const employees = await this.userModel
+      .find({ parentTenantId: owner._id, role: 'tenant' })
+      .sort({ createdAt: -1 })
+      .lean();
+
+    return {
+      employees: employees.map((e) => ({
+        id: e._id.toString(),
+        email: e.email,
+        full_name: e.fullName,
+        last_name: e.lastName,
+        first_name: e.firstName,
+        middle_name: e.middleName,
+        phone: e.phone,
+        is_active: e.isActive !== false,
+        created_at: (e as any).createdAt,
+      })),
+    };
+  }
+
+  async addTenantEmployee(userId: string, dto: CreateTenantEmployeeDto) {
+    const owner = await this.userModel.findById(userId);
+    if (!owner) throw new UnauthorizedException();
+    if (owner.role !== 'tenant' || owner.parentTenantId) {
+      throw new ForbiddenException('Добавлять сотрудников может только владелец компании');
+    }
+
+    const email = dto.email.toLowerCase().trim();
+    const existing = await this.userModel.findOne({ email });
+    if (existing) {
+      throw new ConflictException('Пользователь с таким email уже существует');
+    }
+
+    let personName;
+    try {
+      personName = resolvePersonName({
+        lastName: dto.lastName,
+        firstName: dto.firstName,
+        middleName: dto.middleName,
+      });
+    } catch {
+      throw new BadRequestException('Укажите фамилию и имя');
+    }
+
+    const passwordHash = await bcrypt.hash(dto.password, 10);
+    const employee = await this.userModel.create({
+      email,
+      fullName: personName.fullName,
+      lastName: personName.lastName,
+      firstName: personName.firstName,
+      middleName: personName.middleName,
+      phone: dto.phone?.trim() || undefined,
+      company: owner.company,
+      role: 'tenant',
+      parentTenantId: owner._id,
+      password: passwordHash,
+      isActive: true,
+    } as any);
+
+    await this.auditService.log({
+      action: 'tenant.employee_added',
+      entityType: 'user',
+      entityId: employee._id,
+      actor: { userId, email: owner.email, role: owner.role },
+      details: {
+        employeeEmail: email,
+        employeeName: personName.fullName,
+        ownerCompany: owner.company,
+      },
+    });
+
+    return {
+      employee: {
+        id: employee._id.toString(),
+        email: employee.email,
+        full_name: employee.fullName,
+        last_name: employee.lastName,
+        first_name: employee.firstName,
+        middle_name: employee.middleName,
+        phone: employee.phone,
+        is_active: true,
+        created_at: (employee as any).createdAt,
+      },
+    };
+  }
+
+  async removeTenantEmployee(userId: string, employeeId: string) {
+    const owner = await this.userModel.findById(userId);
+    if (!owner) throw new UnauthorizedException();
+    if (owner.role !== 'tenant' || owner.parentTenantId) {
+      throw new ForbiddenException('Удалять сотрудников может только владелец компании');
+    }
+
+    const employee = await this.userModel.findById(employeeId);
+    if (!employee || employee.parentTenantId?.toString() !== owner._id.toString()) {
+      throw new NotFoundException('Сотрудник не найден');
+    }
+
+    employee.isActive = false;
+    await employee.save();
+
+    await this.auditService.log({
+      action: 'tenant.employee_removed',
+      entityType: 'user',
+      entityId: employee._id,
+      actor: { userId, email: owner.email, role: owner.role },
+      details: { employeeEmail: employee.email, employeeName: employee.fullName },
+    });
+
+    return { message: 'Сотрудник деактивирован' };
+  }
+
+  async getUserOffices(userId: string, parentTenantId?: string) {
+    const ownerId = resolveTenantOwnerId({ userId, parentTenantId }) || userId;
+    const offices = await this.officeModel.find({ tenantId: new Types.ObjectId(ownerId), isActive: true }).lean();
     if (!offices.length) return [];
 
     const propertyIds = [...new Set(offices.map((o) => o.property.toString()))];
@@ -325,6 +457,8 @@ export class AuthService {
       offices,
       permissions,
       enabledPassTypes,
+      parent_tenant_id: user.parentTenantId?.toString(),
+      is_tenant_owner: user.role === 'tenant' && !user.parentTenantId,
       profile_change_request: mapProfileChangeRequest(user.profileChangeRequest),
     };
   }
@@ -366,7 +500,7 @@ export class AuthService {
       } as any);
     }
 
-    const offices = await this.getUserOffices(user._id.toString());
+    const offices = await this.getUserOffices(user._id.toString(), user.parentTenantId?.toString());
     const token = this.generateToken(user);
     return { user: await this.toUserDto(user, offices), token };
   }

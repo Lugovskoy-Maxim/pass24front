@@ -962,6 +962,7 @@ export class AdminService {
       contact_phone: s.contact_phone || '+7 (495) 000-00-00',
       contact_email: s.contact_email || 'reception@pass24.local',
       reception_floor: s.reception_floor || '1',
+      require_checkout: s.require_checkout !== 'false' ? 'true' : 'false',
     };
   }
 
@@ -976,6 +977,7 @@ export class AdminService {
     if (dto.contact_phone !== undefined) settings.contact_phone = dto.contact_phone;
     if (dto.contact_email !== undefined) settings.contact_email = dto.contact_email;
     if (dto.reception_floor !== undefined) settings.reception_floor = dto.reception_floor;
+    if (dto.require_checkout !== undefined) settings.require_checkout = dto.require_checkout;
     return settings;
   }
 

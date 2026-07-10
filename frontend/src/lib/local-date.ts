@@ -20,9 +20,29 @@ export function isPastVisitDate(value: string, today = getLocalDateString()): bo
   return value < today;
 }
 
-export function validateVisitDate(value: string, today = getLocalDateString()): string | undefined {
+export function addDays(dateStr: string, days: number): string {
+  const [y, m, d] = dateStr.split('-').map(Number);
+  const dt = new Date(y, m - 1, d);
+  dt.setDate(dt.getDate() + days);
+  return getLocalDateString(dt);
+}
+
+export function getMaxVisitDate(maxDaysAhead = 1, today = getLocalDateString()): string {
+  return addDays(today, maxDaysAhead);
+}
+
+export function validateVisitDate(
+  value: string,
+  today = getLocalDateString(),
+  maxDaysAhead = 1,
+): string | undefined {
   if (!value?.trim()) return 'Укажите дату визита';
   if (!isValidVisitDateString(value)) return 'Некорректная дата';
   if (isPastVisitDate(value, today)) return 'Нельзя заказать пропуск на прошедшую дату';
+  if (value > getMaxVisitDate(maxDaysAhead, today)) {
+    return maxDaysAhead === 1
+      ? 'Можно заказать пропуск только на сегодня или завтра'
+      : `Дата не позже чем через ${maxDaysAhead} дн.`;
+  }
   return undefined;
 }

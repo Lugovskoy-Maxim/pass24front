@@ -35,6 +35,7 @@ export interface PublicBusinessCenter {
   name: string;
   workingHoursFrom: string;
   workingHoursTo: string;
+  requireCheckout?: boolean;
 }
 
 export interface ProfileChangeRequest {
@@ -64,6 +65,20 @@ export interface User {
   offices?: TenantOffice[];
   permissions?: string[];
   enabledPassTypes?: PassType[];
+  parent_tenant_id?: string;
+  is_tenant_owner?: boolean;
+}
+
+export interface TenantEmployee {
+  id: string;
+  email: string;
+  full_name: string;
+  last_name?: string;
+  first_name?: string;
+  middle_name?: string;
+  phone?: string;
+  is_active: boolean;
+  created_at: string;
 }
 
 export interface PermissionMeta {
@@ -146,6 +161,7 @@ export interface Pass {
   checkedOutAt?: string;
   checkedOutBy?: string;
   checkerOutName?: string;
+  requireCheckout?: boolean;
   createdAt: string;
   updatedAt: string;
 }
@@ -280,6 +296,25 @@ export const api = {
 
   cancelProfileRequest: () =>
     request<{ user: User }>('/auth/profile/request', { method: 'DELETE' }),
+
+  getTenantEmployees: () =>
+    request<{ employees: TenantEmployee[] }>('/auth/tenant/employees'),
+
+  addTenantEmployee: (data: {
+    email: string;
+    lastName: string;
+    firstName: string;
+    middleName?: string;
+    password: string;
+    phone?: string;
+  }) =>
+    request<{ employee: TenantEmployee }>('/auth/tenant/employees', {
+      method: 'POST',
+      body: JSON.stringify(data),
+    }),
+
+  removeTenantEmployee: (id: string) =>
+    request<{ message: string }>(`/auth/tenant/employees/${id}`, { method: 'DELETE' }),
 
   getPasses: (params?: { status?: string; date?: string; search?: string }) => {
     const q = new URLSearchParams();
@@ -784,6 +819,7 @@ export interface BcPassSettings {
   contact_phone: string;
   contact_email: string;
   reception_floor: string;
+  require_checkout: string;
 }
 
 export const DEFAULT_BC_PASS_SETTINGS: BcPassSettings = {
@@ -793,6 +829,7 @@ export const DEFAULT_BC_PASS_SETTINGS: BcPassSettings = {
   contact_phone: '+7 (495) 000-00-00',
   contact_email: 'reception@pass24.local',
   reception_floor: '1',
+  require_checkout: 'true',
 };
 
 export interface BusinessCenter {

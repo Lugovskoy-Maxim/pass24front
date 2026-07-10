@@ -9,7 +9,8 @@ import { AUTH_CONNECTION } from '../database/auth-database.constants';
 import { Office, OfficeDocument, Pass, PassDocument, Property, PropertyDocument, User, UserDocument } from '../schemas';
 import { PropertyType } from '../schemas/enums';
 import { deriveVisitPurpose, normalizePassport, normalizePersonName, normalizePhone } from '../common/pass-helpers';
-import { assertVisitDateNotPast, isValidVisitDateString } from '../common/visit-date';
+import { resolveTenantOwnerId, tenantOwnerObjectId } from '../common/tenant-owner';
+import { assertVisitDateWithinWindow, isValidVisitDateString } from '../common/visit-date';
 import { CreatePassDto } from './dto/create-pass.dto';
 import { PassHistoryQueryDto } from './dto/pass-history-query.dto';
 import { UpdatePassVisitorDto } from './dto/update-pass-visitor.dto';
@@ -109,11 +110,34 @@ export class PassesService implements OnModuleInit {
     };
   }
 
+  private createdByTeamFilter(userIds: Types.ObjectId[]) {
+    return { createdBy: { $in: userIds } };
+  }
+
+  private async getTenantTeamIds(user?: { userId?: string; parentTenantId?: string }) {
+    const ownerId = resolveTenantOwnerId(user);
+    if (!ownerId) return [];
+
+    const team = await this.userModel
+      .find({
+        $or: [
+          { _id: new Types.ObjectId(ownerId) },
+          { parentTenantId: new Types.ObjectId(ownerId), isActive: { $ne: false } },
+        ],
+      })
+      .select('_id')
+      .lean();
+
+    return team.map((member) => member._id as Types.ObjectId);
+  }
+
   private async buildAccessFilter(user?: any) {
     if (!user?.role) return { _id: null };
 
     if (user.role === 'tenant') {
-      return this.createdByFilter(user.userId);
+      const teamIds = await this.getTenantTeamIds(user);
+      if (!teamIds.length) return { _id: null };
+      return this.createdByTeamFilter(teamIds);
     }
 
     if (await this.accessConfigService.canViewAllPasses(user.role)) {
@@ -150,7 +174,8 @@ export class PassesService implements OnModuleInit {
     }
 
     const passes = await this.passModel.find(filter).sort({ createdAt: -1 }).lean();
-    const enriched = await this.enrichCreatorFields(passes, user);
+    const withCheckout = await this.enrichPassCheckoutSettings(passes);
+    const enriched = await this.enrichCreatorFields(withCheckout, user);
     return { passes: enriched.map((p) => this.mapToFrontend(p, user)) };
   }
 
@@ -159,7 +184,8 @@ export class PassesService implements OnModuleInit {
     const pass = await this.passModel.findById(id).lean();
     if (!pass) throw new NotFoundException('Пропуск не найден');
     await this.ensurePassAccess(pass, user);
-    const [enriched] = await this.enrichCreatorFields([pass], user);
+    const [withCheckout] = await this.enrichPassCheckoutSettings([pass]);
+    const [enriched] = await this.enrichCreatorFields([withCheckout], user);
     return { pass: this.mapToFrontend(enriched, user) };
   }
 
@@ -178,15 +204,21 @@ export class PassesService implements OnModuleInit {
       throw new BadRequestException('Некорректная дата визита');
     }
     try {
-      assertVisitDateNotPast(passDto.visitDate, this.getTodayDate());
+      assertVisitDateWithinWindow(passDto.visitDate, this.getTodayDate(), 1);
     } catch (e) {
       if (e instanceof Error && e.message === 'PAST_DATE') {
         throw new BadRequestException('Нельзя заказать пропуск на прошедшую дату');
+      }
+      if (e instanceof Error && e.message === 'TOO_FAR_AHEAD') {
+        throw new BadRequestException('Можно заказать пропуск только на сегодня или завтра');
       }
       throw new BadRequestException('Некорректная дата визита');
     }
 
     const resolved = await this.resolveOfficeFields(passDto, user);
+    const workingHours = await this.resolveWorkingHours(resolved.property, passDto);
+    passDto.visitTimeFrom = workingHours.from;
+    passDto.visitTimeTo = workingHours.to;
     const creator = user?.userId
       ? await this.userModel.findById(user.userId).select('fullName phone company email').lean()
       : null;
@@ -334,8 +366,15 @@ export class PassesService implements OnModuleInit {
       pass.approvedAt = new Date().toISOString();
     }
 
-    pass.status = 'active';
-    pass.checkedInAt = new Date().toISOString();
+    const requireCheckout = await this.getRequireCheckoutForPass(pass);
+    const now = new Date().toISOString();
+    pass.checkedInAt = now;
+    if (requireCheckout) {
+      pass.status = 'active';
+    } else {
+      pass.status = 'completed';
+      pass.checkedOutAt = now;
+    }
     await pass.save();
 
     await this.auditService.log({
@@ -346,7 +385,8 @@ export class PassesService implements OnModuleInit {
       details: { passNumber: pass.passNumber, visitorName: pass.visitorName },
     });
 
-    return { pass: this.mapToFrontend(pass) };
+    const [withCheckout] = await this.enrichPassCheckoutSettings([pass.toObject()]);
+    return { pass: this.mapToFrontend(withCheckout) };
   }
 
   async checkOut(id: string, actor?: AuditActor) {
@@ -365,7 +405,8 @@ export class PassesService implements OnModuleInit {
       details: { passNumber: pass.passNumber, visitorName: pass.visitorName },
     });
 
-    return { pass: this.mapToFrontend(pass) };
+    const [withCheckout] = await this.enrichPassCheckoutSettings([pass.toObject()]);
+    return { pass: this.mapToFrontend(withCheckout) };
   }
 
   async getJournal(date?: string, user?: any) {
@@ -378,7 +419,8 @@ export class PassesService implements OnModuleInit {
       .sort({ createdAt: -1 })
       .lean();
 
-    const enriched = await this.enrichCreatorFields(passes, user);
+    const withCheckout = await this.enrichPassCheckoutSettings(passes);
+    const enriched = await this.enrichCreatorFields(withCheckout, user);
     const mapped = enriched.map((p) => this.mapToFrontend(p, user));
     const stats = {
       total: mapped.length,
@@ -445,7 +487,8 @@ export class PassesService implements OnModuleInit {
       .limit(limit)
       .lean();
 
-    const enriched = await this.enrichCreatorFields(passes, user);
+    const withCheckout = await this.enrichPassCheckoutSettings(passes);
+    const enriched = await this.enrichCreatorFields(withCheckout, user);
     return {
       scope: query.scope,
       total: enriched.length,
@@ -503,7 +546,8 @@ export class PassesService implements OnModuleInit {
     await this.expirePastPasses();
     const pass = await this.passModel.findOne({ passNumber }).lean();
     if (!pass) throw new NotFoundException('Пропуск не найден');
-    const [enriched] = await this.enrichCreatorFields([pass], user || { role: 'security' });
+    const [withCheckout] = await this.enrichPassCheckoutSettings([pass]);
+    const [enriched] = await this.enrichCreatorFields([withCheckout], user || { role: 'security' });
     return { pass: this.mapToFrontend(enriched, user) };
   }
 
@@ -524,7 +568,8 @@ export class PassesService implements OnModuleInit {
       .lean();
 
     const overdue = passes.filter((p) => this.isPassOverdueInBuilding(p));
-    const enriched = await this.enrichCreatorFields(overdue, user);
+    const withCheckout = await this.enrichPassCheckoutSettings(overdue);
+    const enriched = await this.enrichCreatorFields(withCheckout, user);
     return {
       count: enriched.length,
       passes: enriched.map((p) => this.mapToFrontend(p, user)),
@@ -547,10 +592,63 @@ export class PassesService implements OnModuleInit {
     };
   }
 
+  private async resolveWorkingHours(propertyId: Types.ObjectId | undefined, dto: CreatePassDto) {
+    if (dto.visitTimeFrom && dto.visitTimeTo) {
+      return { from: dto.visitTimeFrom, to: dto.visitTimeTo };
+    }
+
+    if (propertyId) {
+      const property = await this.propertyModel.findById(propertyId).lean();
+      const ps = property?.settings || {};
+      return {
+        from: dto.visitTimeFrom || ps.working_hours_from || '08:00',
+        to: dto.visitTimeTo || ps.working_hours_to || '20:00',
+      };
+    }
+
+    return {
+      from: dto.visitTimeFrom || '08:00',
+      to: dto.visitTimeTo || '20:00',
+    };
+  }
+
+  private async getRequireCheckoutForPass(pass: { property?: Types.ObjectId }) {
+    if (!pass.property) return true;
+    const property = await this.propertyModel.findById(pass.property).select('settings').lean();
+    return property?.settings?.require_checkout !== 'false';
+  }
+
+  private async enrichPassCheckoutSettings(docs: any[]) {
+    const propertyIds = [
+      ...new Set(docs.map((doc) => doc.property?.toString()).filter((id): id is string => !!id)),
+    ];
+    if (!propertyIds.length) return docs;
+
+    const properties = await this.propertyModel
+      .find({ _id: { $in: propertyIds.map((id) => new Types.ObjectId(id)) } })
+      .select('settings')
+      .lean();
+    const checkoutMap = new Map(
+      properties.map((p) => [p._id.toString(), p.settings?.require_checkout !== 'false']),
+    );
+
+    return docs.map((doc) => ({
+      ...doc,
+      requireCheckout: doc.property
+        ? checkoutMap.get(doc.property.toString()) ?? true
+        : true,
+    }));
+  }
+
   private async resolveOfficeFields(dto: CreatePassDto, user: any) {
+    const tenantOwnerId = tenantOwnerObjectId(user);
+
     if (user?.role === 'tenant') {
+      if (!tenantOwnerId) {
+        throw new ForbiddenException('Заказ пропусков недоступен');
+      }
       const assignedOffices = await this.officeModel.countDocuments({
-        tenantId: new Types.ObjectId(user.userId),
+        tenantId: tenantOwnerId,
         isActive: true,
       });
       if (!assignedOffices) {
@@ -570,8 +668,7 @@ export class PassesService implements OnModuleInit {
       }
 
       if (user.role === 'tenant') {
-        const ownsOffice =
-          office.tenantId?.toString() === user.userId;
+        const ownsOffice = office.tenantId?.toString() === tenantOwnerId?.toString();
         if (!ownsOffice) {
           throw new ForbiddenException('Вы можете заказывать пропуска только в свои офисы');
         }
@@ -658,8 +755,10 @@ export class PassesService implements OnModuleInit {
     if (!user?.role) throw new ForbiddenException('Нет доступа к этому пропуску');
 
     if (user.role === 'tenant') {
-      const isCreator = pass.createdBy?.toString() === user.userId;
-      if (!isCreator) throw new ForbiddenException('Нет доступа к этому пропуску');
+      const teamIds = await this.getTenantTeamIds(user);
+      const createdBy = pass.createdBy?.toString();
+      const hasAccess = teamIds.some((id) => id.toString() === createdBy);
+      if (!hasAccess) throw new ForbiddenException('Нет доступа к этому пропуску');
       return;
     }
 
@@ -773,6 +872,7 @@ export class PassesService implements OnModuleInit {
       checkedOutAt: doc.checkedOutAt,
       checkedOutBy: doc.checkedOutBy,
       checkerOutName: doc.checkerOutName,
+      requireCheckout: doc.requireCheckout !== false,
       createdAt: doc.createdAt,
       updatedAt: doc.updatedAt,
     };

@@ -22,3 +22,22 @@ export function assertVisitDateNotPast(visitDate: string, today = getLocalDateSt
     throw new Error('PAST_DATE');
   }
 }
+
+export function addDays(dateStr: string, days: number): string {
+  const [y, m, d] = dateStr.split('-').map(Number);
+  const dt = new Date(y, m - 1, d);
+  dt.setDate(dt.getDate() + days);
+  return getLocalDateString(dt);
+}
+
+export function assertVisitDateWithinWindow(
+  visitDate: string,
+  today = getLocalDateString(),
+  maxDaysAhead = 1,
+): void {
+  assertVisitDateNotPast(visitDate, today);
+  const maxDate = addDays(today, maxDaysAhead);
+  if (visitDate > maxDate) {
+    throw new Error('TOO_FAR_AHEAD');
+  }
+}

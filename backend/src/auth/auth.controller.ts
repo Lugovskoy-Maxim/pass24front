@@ -1,8 +1,9 @@
-import { Body, Controller, Delete, Get, Patch, Post, Req, UseGuards } from '@nestjs/common';
+import { Body, Controller, Delete, Get, Param, Patch, Post, Req, UseGuards } from '@nestjs/common';
 import { AuthGuard } from '@nestjs/passport';
 import { AuthService } from './auth.service';
 import { LoginDto } from './dto/login.dto';
 import { ConfirmRegistrationDto } from './dto/confirm-registration.dto';
+import { CreateTenantEmployeeDto } from './dto/create-tenant-employee.dto';
 import { RegisterDto } from './dto/register.dto';
 import { UpdateProfileDto } from './dto/update-profile.dto';
 
@@ -51,5 +52,23 @@ export class AuthController {
   @Delete('profile/request')
   async cancelProfileChange(@Req() req: any) {
     return this.authService.cancelProfileChange(req.user.userId);
+  }
+
+  @UseGuards(AuthGuard('jwt'))
+  @Get('tenant/employees')
+  listTenantEmployees(@Req() req: any) {
+    return this.authService.listTenantEmployees(req.user.userId);
+  }
+
+  @UseGuards(AuthGuard('jwt'))
+  @Post('tenant/employees')
+  addTenantEmployee(@Req() req: any, @Body() dto: CreateTenantEmployeeDto) {
+    return this.authService.addTenantEmployee(req.user.userId, dto);
+  }
+
+  @UseGuards(AuthGuard('jwt'))
+  @Delete('tenant/employees/:id')
+  removeTenantEmployee(@Req() req: any, @Param('id') id: string) {
+    return this.authService.removeTenantEmployee(req.user.userId, id);
   }
 }

@@ -75,8 +75,6 @@ export function validateNewPassForm(data: {
   visitDate: string;
   passType: PassType;
   vehiclePlate: string;
-  visitTimeFrom: string;
-  visitTimeTo: string;
   propertyId: string;
   officeId: string;
   office: string;
@@ -91,12 +89,6 @@ export function validateNewPassForm(data: {
 
   const dateError = validateVisitDate(data.visitDate);
   if (dateError) errors.visitDate = dateError;
-
-  const timeError = validateTimeRange(data.visitTimeFrom, data.visitTimeTo);
-  if (timeError) {
-    errors.visitTimeFrom = timeError;
-    errors.visitTimeTo = timeError;
-  }
 
   if (data.passType === 'parking' && isBlank(data.vehiclePlate)) {
     errors.vehiclePlate = 'Укажите гос. номер';

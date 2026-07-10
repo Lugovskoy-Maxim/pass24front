@@ -555,6 +555,20 @@ export default function AdminOfficesPage() {
                       <label className="flex items-center gap-2 text-sm">
                         <input
                           type="checkbox"
+                          checked={bcPassSettings.require_checkout === 'true'}
+                          onChange={(e) => setBcPassSettings({
+                            ...bcPassSettings,
+                            require_checkout: e.target.checked ? 'true' : 'false',
+                          })}
+                        />
+                        Требовать подтверждение выхода гостя
+                      </label>
+                      <p className="text-xs text-[var(--muted)] -mt-1">
+                        Если выключено — ресепшн только фиксирует приход по пропуску, без этапа «выход»
+                      </p>
+                      <label className="flex items-center gap-2 text-sm">
+                        <input
+                          type="checkbox"
                           checked={bcPassSettings.auto_approve_delivery === 'true'}
                           onChange={(e) => setBcPassSettings({
                             ...bcPassSettings,

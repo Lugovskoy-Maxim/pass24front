@@ -9,7 +9,7 @@ import { useToast } from '@/components/Toast';
 import { api, PassType, TYPE_LABELS, getErrorMessage } from '@/lib/api';
 import { FormErrorBanner, FormField, FormInput, FormSelect, FormTextarea } from '@/components/FormField';
 import { FieldErrors, hasFieldErrors, validateNewPassForm } from '@/lib/form-validation';
-import { getLocalDateString } from '@/lib/local-date';
+import { getLocalDateString, getMaxVisitDate } from '@/lib/local-date';
 import { getVisitorNameLabel } from '@/lib/person-name';
 import { canOrderPasses } from '@/lib/permissions';
 
@@ -26,7 +26,6 @@ function NewPassForm() {
 
   const [visitorName, setVisitorName] = useState('');
   const [visitorPhone, setVisitorPhone] = useState('');
-  const [companyName, setCompanyName] = useState('');
   const [propertyId, setPropertyId] = useState('');
   const enabledTypes = (Object.keys(TYPE_LABELS) as PassType[]).filter(
     (key) => !user?.enabledPassTypes?.length || user.enabledPassTypes.includes(key),
@@ -35,9 +34,8 @@ function NewPassForm() {
   const [vehiclePlate, setVehiclePlate] = useState('');
   const [vehicleModel, setVehicleModel] = useState('');
   const todayLocal = getLocalDateString();
+  const maxVisitDate = getMaxVisitDate(1, todayLocal);
   const [visitDate, setVisitDate] = useState(todayLocal);
-  const [visitTimeFrom, setVisitTimeFrom] = useState('09:00');
-  const [visitTimeTo, setVisitTimeTo] = useState('18:00');
   const [officeId, setOfficeId] = useState('');
   const [office, setOffice] = useState('');
   const [floor, setFloor] = useState('');
@@ -47,7 +45,6 @@ function NewPassForm() {
 
   const tenantOffices = user?.offices || [];
   const isTenant = user?.role === 'tenant';
-  const tenantBlocked = isTenant && tenantOffices.length === 0;
   const bcOptions = [...new Map(
     tenantOffices.map((o) => [o.propertyId, o.businessCenterName || 'Бизнес-центр']),
   ).entries()].map(([id, name]) => ({ id, name }));
@@ -87,7 +84,6 @@ function NewPassForm() {
 
   useEffect(() => {
     if (!user) return;
-    if (!companyName && user.company) setCompanyName(user.company);
     if (bcOptions.length === 1 && !propertyId) {
       setPropertyId(bcOptions[0].id);
     }
@@ -98,7 +94,7 @@ function NewPassForm() {
       setOffice(o.number);
       setFloor(o.floor);
     }
-  }, [user, tenantOffices, officeId, companyName, bcOptions, propertyId]);
+  }, [user, tenantOffices, officeId, bcOptions, propertyId]);
 
   useEffect(() => {
     if (!templateId) return;
@@ -106,12 +102,9 @@ function NewPassForm() {
       .then(({ template }) => {
         setVisitorName(template.visitorName);
         setVisitorPhone(template.visitorPhone || '');
-        setCompanyName(template.companyName || user?.company || '');
         if (enabledTypes.includes(template.passType)) setPassType(template.passType);
         setVehiclePlate(template.vehiclePlate || '');
         setVehicleModel(template.vehicleModel || '');
-        setVisitTimeFrom(template.visitTimeFrom || '09:00');
-        setVisitTimeTo(template.visitTimeTo || '18:00');
         setComment(template.comment || '');
         if (template.officeId) {
           const matched = tenantOffices.find((o) => o.id === template.officeId);
@@ -143,7 +136,6 @@ function NewPassForm() {
       setPropertyId(selected.propertyId);
       setOffice(selected.number);
       setFloor(selected.floor);
-      if (!companyName && selected.company) setCompanyName(selected.company);
     }
   };
 
@@ -165,8 +157,6 @@ function NewPassForm() {
       visitDate,
       passType,
       vehiclePlate,
-      visitTimeFrom,
-      visitTimeTo,
       propertyId,
       officeId,
       office,
@@ -183,13 +173,11 @@ function NewPassForm() {
       const { pass, emailSent } = await api.createPass({
         visitorName: visitorName.trim(),
         visitorPhone: visitorPhone.trim() || undefined,
-        companyName: companyName.trim() || undefined,
+        companyName: user?.company || undefined,
         passType,
         vehiclePlate: passType === 'parking' ? vehiclePlate.trim().toUpperCase() : undefined,
         vehicleModel: passType === 'parking' ? vehicleModel.trim() || undefined : undefined,
         visitDate,
-        visitTimeFrom,
-        visitTimeTo,
         officeId: officeId || undefined,
         office: office.trim() || undefined,
         floor: floor.trim() || undefined,
@@ -229,10 +217,10 @@ function NewPassForm() {
       {bcHoursById.size > 0 && (
         <p className="text-sm text-[var(--muted)] mb-6">
           {selectedBcHours ? (
-            <>Рабочие часы {selectedBcHours.name}: {selectedBcHours.from}–{selectedBcHours.to}</>
+            <>Визит в рабочие часы {selectedBcHours.name}: {selectedBcHours.from}–{selectedBcHours.to}</>
           ) : (
             <>
-              Рабочие часы:{' '}
+              Визит в рабочие часы:{' '}
               {[...bcHoursById.entries()].map(([id, bc], i) => (
                 <span key={id}>
                   {i > 0 && ' · '}
@@ -274,25 +262,15 @@ function NewPassForm() {
           />
         </FormField>
 
-        <div className="form-grid-2">
-          <FormField id="companyName" label="Компания посетителя">
-            <FormInput
-              id="companyName"
-              value={companyName}
-              onChange={(e) => setCompanyName(e.target.value)}
-              placeholder={user?.company || 'ООО «...»'}
-            />
-          </FormField>
-          <FormField id="visitorPhone" label="Телефон">
-            <FormInput
-              id="visitorPhone"
-              type="tel"
-              value={visitorPhone}
-              onChange={(e) => setVisitorPhone(e.target.value)}
-              placeholder="+7 900 000-00-00"
-            />
-          </FormField>
-        </div>
+        <FormField id="visitorPhone" label="Телефон">
+          <FormInput
+            id="visitorPhone"
+            type="tel"
+            value={visitorPhone}
+            onChange={(e) => setVisitorPhone(e.target.value)}
+            placeholder="+7 900 000-00-00"
+          />
+        </FormField>
 
         {passType === 'parking' && (
           <div className="form-grid-2">
@@ -312,39 +290,26 @@ function NewPassForm() {
           </div>
         )}
 
-        <div className="form-grid-3">
-          <FormField id="visitDate" label="Дата визита" required error={fieldErrors.visitDate}>
-            <FormInput
-              id="visitDate"
-              type="date"
-              value={visitDate}
-              min={todayLocal}
-              onChange={(e) => {
-                setVisitDate(e.target.value);
-                clearFieldError('visitDate');
-              }}
-              invalid={!!fieldErrors.visitDate}
-            />
-          </FormField>
-          <FormField id="visitTimeFrom" label="С" error={fieldErrors.visitTimeFrom}>
-            <FormInput
-              id="visitTimeFrom"
-              type="time"
-              value={visitTimeFrom}
-              onChange={(e) => { setVisitTimeFrom(e.target.value); clearFieldError('visitTimeFrom'); clearFieldError('visitTimeTo'); }}
-              invalid={!!fieldErrors.visitTimeFrom}
-            />
-          </FormField>
-          <FormField id="visitTimeTo" label="До" error={fieldErrors.visitTimeTo}>
-            <FormInput
-              id="visitTimeTo"
-              type="time"
-              value={visitTimeTo}
-              onChange={(e) => { setVisitTimeTo(e.target.value); clearFieldError('visitTimeFrom'); clearFieldError('visitTimeTo'); }}
-              invalid={!!fieldErrors.visitTimeTo}
-            />
-          </FormField>
-        </div>
+        <FormField
+          id="visitDate"
+          label="Дата визита"
+          required
+          error={fieldErrors.visitDate}
+          hint="Доступны только сегодня и завтра"
+        >
+          <FormInput
+            id="visitDate"
+            type="date"
+            value={visitDate}
+            min={todayLocal}
+            max={maxVisitDate}
+            onChange={(e) => {
+              setVisitDate(e.target.value);
+              clearFieldError('visitDate');
+            }}
+            invalid={!!fieldErrors.visitDate}
+          />
+        </FormField>
 
         {isTenant || tenantOffices.length > 0 ? (
           <div className="space-y-3">
@@ -363,50 +328,34 @@ function NewPassForm() {
                 </FormSelect>
               </FormField>
             )}
-            <div className="form-grid-2">
-              <FormField id="officeId" label="Офис (куда)" required error={fieldErrors.officeId}>
-                <FormSelect
-                  id="officeId"
-                  value={officeId}
-                  onChange={(e) => { handleOfficeSelect(e.target.value); clearFieldError('officeId'); }}
-                  invalid={!!fieldErrors.officeId}
-                  disabled={bcOptions.length > 1 && !propertyId}
-                >
-                  <option value="">Выберите офис</option>
-                  {officesInBc.map((o) => (
-                    <option key={o.id} value={o.id}>офис {o.number}</option>
-                  ))}
-                </FormSelect>
-              </FormField>
-              <FormField id="floor" label="Этаж" hint="Подставляется из выбранного офиса">
-                <FormInput
-                  id="floor"
-                  value={floor}
-                  readOnly
-                  disabled
-                  placeholder="—"
-                />
-              </FormField>
-            </div>
+            <FormField id="officeId" label="Офис (куда)" required error={fieldErrors.officeId}>
+              <FormSelect
+                id="officeId"
+                value={officeId}
+                onChange={(e) => { handleOfficeSelect(e.target.value); clearFieldError('officeId'); }}
+                invalid={!!fieldErrors.officeId}
+                disabled={bcOptions.length > 1 && !propertyId}
+              >
+                <option value="">Выберите офис</option>
+                {officesInBc.map((o) => (
+                  <option key={o.id} value={o.id}>офис {o.number}</option>
+                ))}
+              </FormSelect>
+            </FormField>
             {bcOptions.length === 1 && (
               <p className="text-xs text-[var(--muted)]">БЦ: {bcOptions[0].name}</p>
             )}
           </div>
         ) : (
-          <div className="form-grid-2">
-            <FormField id="office" label="Офис (куда)" required error={fieldErrors.office}>
-              <FormInput
-                id="office"
-                value={office}
-                onChange={(e) => { setOffice(e.target.value); clearFieldError('office'); }}
-                invalid={!!fieldErrors.office}
-                placeholder="401"
-              />
-            </FormField>
-            <FormField id="floorManual" label="Этаж" hint="Подставляется из офиса, если указан в реестре">
-              <FormInput id="floorManual" value={floor} readOnly disabled placeholder="—" />
-            </FormField>
-          </div>
+          <FormField id="office" label="Офис (куда)" required error={fieldErrors.office}>
+            <FormInput
+              id="office"
+              value={office}
+              onChange={(e) => { setOffice(e.target.value); clearFieldError('office'); }}
+              invalid={!!fieldErrors.office}
+              placeholder="401"
+            />
+          </FormField>
         )}
 
         <FormField id="comment" label="Комментарий для ресепшн">

@@ -17,6 +17,7 @@ import { api, Pass, PassStatus, getErrorMessage } from '@/lib/api';
 import { PageError } from '@/components/PageError';
 import { canOrderPasses, canViewAllPasses, canViewPasses, hasPermission } from '@/lib/permissions';
 import { isAwaitingEntry } from '@/lib/pass-entry';
+import { passRequiresCheckout } from '@/lib/pass-checkout';
 
 
 
@@ -99,20 +100,18 @@ function PassesPageContent() {
   useEffect(() => {
     if (loading) return;
     const idFromUrl = searchParams.get('id');
-    const isTenant = user?.role === 'tenant';
     setSelected((prev) => {
       if (idFromUrl) {
         const fromUrl = passes.find((p) => p.id === idFromUrl);
-        if (fromUrl && (!isTenant || fromUrl.isOwner)) return fromUrl;
+        if (fromUrl) return fromUrl;
       }
       if (prev) {
         const updated = passes.find((p) => p.id === prev.id);
-        if (updated && (!isTenant || updated.isOwner)) return updated;
+        if (updated) return updated;
       }
-      const firstOwn = isTenant ? passes.find((p) => p.isOwner) : passes[0];
-      return firstOwn || null;
+      return passes[0] || null;
     });
-  }, [passes, loading, searchParams, user?.role]);
+  }, [passes, loading, searchParams]);
 
   const handleAction = async (id: string, action: 'reject' | 'checkin' | 'checkout' | 'cancel', reason?: string) => {
     setActionLoading(true);
@@ -159,7 +158,7 @@ function PassesPageContent() {
           </button>
         </>
       )}
-      {canReception && pass.status === 'active' && (
+      {canReception && pass.status === 'active' && passRequiresCheckout(pass) && (
         <button className="btn btn-primary w-full" disabled={actionLoading} onClick={() => handleAction(pass.id, 'checkout')}>
           {labels.buttons.checkOut}
         </button>

@@ -24,4 +24,8 @@ export class BusinessCenterPassSettingsDto {
   @IsOptional()
   @IsString()
   reception_floor?: string;
+
+  @IsOptional()
+  @IsString()
+  require_checkout?: string;
 }

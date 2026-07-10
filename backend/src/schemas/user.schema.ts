@@ -74,6 +74,10 @@ export class User {
   @Prop({ type: Object, default: null })
   bitrix24Meta?: Record<string, unknown> | null;
 
+  /** Владелец компании-арендатора (для сотрудников, заказывающих пропуска от лица компании) */
+  @Prop({ type: Types.ObjectId, ref: 'User' })
+  parentTenantId?: Types.ObjectId;
+
   @Prop({ type: Object, default: null })
   profileChangeRequest?: {
     lastName?: string;
@@ -93,3 +97,4 @@ UserSchema.index({ properties: 1 });
 UserSchema.index({ role: 1, isActive: 1 });
 UserSchema.index({ fullName: 'text' });
 UserSchema.index({ bitrix24UserId: 1, bitrix24Domain: 1 }, { unique: true, sparse: true });
+UserSchema.index({ parentTenantId: 1 });

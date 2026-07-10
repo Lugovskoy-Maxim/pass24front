@@ -8,6 +8,7 @@ import { useAuth } from '@/lib/auth';
 import { useConfig } from '@/hooks/useConfig';
 import { canManageTicketScan, hasPermission, isAdminPanelUser } from '@/lib/permissions';
 import { isAwaitingEntry } from '@/lib/pass-entry';
+import { passRequiresCheckout } from '@/lib/pass-checkout';
 import { getUiLabels } from '@/lib/ui-labels';
 import { useToast } from '@/components/Toast';
 import { PassVisitorDataForm } from '@/components/PassVisitorDataForm';
@@ -74,7 +75,7 @@ export function PassTicketStaffPanel({ passNumber, onPassUpdated }: PassTicketSt
   };
 
   const hasActions = pass && canReception && (
-    isAwaitingEntry(pass.status) || pass.status === 'active'
+    isAwaitingEntry(pass.status) || (pass.status === 'active' && passRequiresCheckout(pass))
   );
 
   return (
@@ -119,7 +120,7 @@ export function PassTicketStaffPanel({ passNumber, onPassUpdated }: PassTicketSt
                     </button>
                   </>
                 )}
-                {pass.status === 'active' && (
+                {pass.status === 'active' && passRequiresCheckout(pass) && (
                   <button
                     type="button"
                     className="btn btn-primary w-full text-sm"
