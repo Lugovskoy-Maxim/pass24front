@@ -52,42 +52,71 @@ const config_1 = require("@nestjs/config");
 const mongoose_1 = require("@nestjs/mongoose");
 const bcrypt = __importStar(require("bcryptjs"));
 const mongoose_2 = require("mongoose");
+const auth_database_constants_1 = require("./auth-database.constants");
 const schemas_1 = require("../schemas");
 const enums_1 = require("../schemas/enums");
 const test_data_seed_service_1 = require("./test-data-seed.service");
 let SeedService = SeedService_1 = class SeedService {
     userModel;
+    mainConnection;
     configService;
     testDataSeedService;
     logger = new common_1.Logger(SeedService_1.name);
-    constructor(userModel, configService, testDataSeedService) {
+    constructor(userModel, mainConnection, configService, testDataSeedService) {
         this.userModel = userModel;
+        this.mainConnection = mainConnection;
         this.configService = configService;
         this.testDataSeedService = testDataSeedService;
     }
     async onModuleInit() {
+        await this.migrateUsersFromMainDbIfNeeded();
         await this.seedAdminUser();
         await this.seedDevTestData();
     }
+    async migrateUsersFromMainDbIfNeeded() {
+        const authCount = await this.userModel.estimatedDocumentCount();
+        if (authCount > 0)
+            return;
+        const mainDb = this.mainConnection.db;
+        if (!mainDb)
+            return;
+        const legacyUsers = await mainDb.collection('users').find({}).toArray();
+        if (!legacyUsers.length)
+            return;
+        try {
+            await this.userModel.insertMany(legacyUsers, { ordered: false });
+            this.logger.log(`Мигрировано ${legacyUsers.length} пользователей в auth-базу (pass24_auth)`);
+        }
+        catch (err) {
+            this.logger.warn(`Миграция users в auth-базу: ${err.message}`);
+        }
+    }
     async seedAdminUser() {
-        const email = this.configService.get('ADMIN_EMAIL', 'admin@pass24.local').toLowerCase();
-        const password = this.configService.get('ADMIN_PASSWORD', 'admin123');
-        const fullName = this.configService.get('ADMIN_FULL_NAME', 'Супер-администратор');
+        const username = this.configService.get('ADMIN_USERNAME', 'admin').toLowerCase();
+        const password = this.configService.get('ADMIN_PASSWORD', '01.03.1986');
+        const fullName = this.configService.get('ADMIN_FULL_NAME', 'Админ');
         const role = this.configService.get('ADMIN_ROLE', enums_1.UserRole.ADMIN);
-        const existing = await this.userModel.findOne({ email });
+        const legacyEmail = this.configService.get('ADMIN_EMAIL', '')?.trim().toLowerCase();
+        const existing = await this.userModel.findOne({
+            $or: [
+                { username },
+                ...(legacyEmail ? [{ email: legacyEmail }] : []),
+            ],
+        });
         if (existing) {
-            this.logger.log(`Супер-администратор уже существует: ${email}`);
+            this.logger.log(`Супер-администратор уже существует: ${existing.username || existing.email}`);
             return;
         }
         const hashed = await bcrypt.hash(password, 10);
         await this.userModel.create({
-            email,
+            username,
             fullName,
             role,
             password: hashed,
             isActive: true,
+            ...(legacyEmail ? { email: legacyEmail } : {}),
         });
-        this.logger.log(`Супер-администратор создан: ${email} (роль: ${role})`);
+        this.logger.log(`Супер-администратор создан: ${username} (роль: ${role})`);
     }
     async seedDevTestData() {
         const seedEnabled = this.configService.get('SEED_DEV_DATA', process.env.NODE_ENV === 'production' ? 'false' : 'true');
@@ -100,8 +129,10 @@ let SeedService = SeedService_1 = class SeedService {
 exports.SeedService = SeedService;
 exports.SeedService = SeedService = SeedService_1 = __decorate([
     (0, common_1.Injectable)(),
-    __param(0, (0, mongoose_1.InjectModel)(schemas_1.User.name)),
+    __param(0, (0, mongoose_1.InjectModel)(schemas_1.User.name, auth_database_constants_1.AUTH_CONNECTION)),
+    __param(1, (0, mongoose_1.InjectConnection)()),
     __metadata("design:paramtypes", [mongoose_2.Model,
+        mongoose_2.Connection,
         config_1.ConfigService,
         test_data_seed_service_1.TestDataSeedService])
 ], SeedService);

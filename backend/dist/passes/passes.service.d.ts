@@ -21,7 +21,6 @@ export declare class PassesService implements OnModuleInit {
     private mailService;
     private configService;
     constructor(passModel: Model<PassDocument>, officeModel: Model<OfficeDocument>, propertyModel: Model<PropertyDocument>, userModel: Model<UserDocument>, accessConfigService: AccessConfigService, passTemplatesService: PassTemplatesService, auditService: AuditService, mailService: MailService, configService: ConfigService);
-    private readonly passTypeLabels;
     private generatePassNumber;
     onModuleInit(): Promise<void>;
     private getTodayDate;
@@ -30,6 +29,8 @@ export declare class PassesService implements OnModuleInit {
     private isPassOverdueInBuilding;
     expirePastPasses(): Promise<number>;
     private createdByFilter;
+    private createdByTeamFilter;
+    private getTenantTeamIds;
     private buildAccessFilter;
     findAll(params: {
         status?: string;
@@ -74,6 +75,7 @@ export declare class PassesService implements OnModuleInit {
             checkedOutAt: any;
             checkedOutBy: any;
             checkerOutName: any;
+            requireCheckout: boolean;
             createdAt: any;
             updatedAt: any;
         }[];
@@ -117,6 +119,7 @@ export declare class PassesService implements OnModuleInit {
             checkedOutAt: any;
             checkedOutBy: any;
             checkerOutName: any;
+            requireCheckout: boolean;
             createdAt: any;
             updatedAt: any;
         };
@@ -160,6 +163,7 @@ export declare class PassesService implements OnModuleInit {
             checkedOutAt: any;
             checkedOutBy: any;
             checkerOutName: any;
+            requireCheckout: boolean;
             createdAt: any;
             updatedAt: any;
         };
@@ -209,6 +213,7 @@ export declare class PassesService implements OnModuleInit {
             checkedOutAt: any;
             checkedOutBy: any;
             checkerOutName: any;
+            requireCheckout: boolean;
             createdAt: any;
             updatedAt: any;
         };
@@ -252,6 +257,7 @@ export declare class PassesService implements OnModuleInit {
             checkedOutAt: any;
             checkedOutBy: any;
             checkerOutName: any;
+            requireCheckout: boolean;
             createdAt: any;
             updatedAt: any;
         };
@@ -295,6 +301,7 @@ export declare class PassesService implements OnModuleInit {
             checkedOutAt: any;
             checkedOutBy: any;
             checkerOutName: any;
+            requireCheckout: boolean;
             createdAt: any;
             updatedAt: any;
         };
@@ -346,6 +353,7 @@ export declare class PassesService implements OnModuleInit {
             checkedOutAt: any;
             checkedOutBy: any;
             checkerOutName: any;
+            requireCheckout: boolean;
             createdAt: any;
             updatedAt: any;
         }[];
@@ -391,6 +399,7 @@ export declare class PassesService implements OnModuleInit {
             checkedOutAt: any;
             checkedOutBy: any;
             checkerOutName: any;
+            requireCheckout: boolean;
             createdAt: any;
             updatedAt: any;
         }[];
@@ -434,6 +443,7 @@ export declare class PassesService implements OnModuleInit {
             checkedOutAt: any;
             checkedOutBy: any;
             checkerOutName: any;
+            requireCheckout: boolean;
             createdAt: any;
             updatedAt: any;
         };
@@ -478,6 +488,7 @@ export declare class PassesService implements OnModuleInit {
             checkedOutAt: any;
             checkedOutBy: any;
             checkerOutName: any;
+            requireCheckout: boolean;
             createdAt: any;
             updatedAt: any;
         };
@@ -502,6 +513,7 @@ export declare class PassesService implements OnModuleInit {
             checkedInAt: any;
             checkedOutAt: any;
             rejectionReason: any;
+            requireCheckout: boolean;
         };
     }>;
     getOverdueActive(user?: any): Promise<{
@@ -544,6 +556,7 @@ export declare class PassesService implements OnModuleInit {
             checkedOutAt: any;
             checkedOutBy: any;
             checkerOutName: any;
+            requireCheckout: boolean;
             createdAt: any;
             updatedAt: any;
         }[];
@@ -555,6 +568,10 @@ export declare class PassesService implements OnModuleInit {
         byStatus: any;
         todayByType: any;
     }>;
+    private getClosedWeekdaysForProperty;
+    private resolveWorkingHours;
+    private getRequireCheckoutForPass;
+    private enrichPassCheckoutSettings;
     private resolveOfficeFields;
     private getDefaultBusinessCenter;
     private resolveBusinessCenterName;

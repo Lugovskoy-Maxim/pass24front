@@ -12,12 +12,23 @@ Object.defineProperty(exports, "__esModule", { value: true });
 exports.LoginDto = void 0;
 const class_validator_1 = require("class-validator");
 class LoginDto {
+    login;
     email;
     password;
 }
 exports.LoginDto = LoginDto;
 __decorate([
-    (0, class_validator_1.IsEmail)(),
+    (0, class_validator_1.ValidateIf)((o) => !o.email),
+    (0, class_validator_1.IsString)(),
+    (0, class_validator_1.IsNotEmpty)(),
+    (0, class_validator_1.MinLength)(2),
+    __metadata("design:type", String)
+], LoginDto.prototype, "login", void 0);
+__decorate([
+    (0, class_validator_1.ValidateIf)((o) => !o.login),
+    (0, class_validator_1.IsString)(),
+    (0, class_validator_1.IsNotEmpty)(),
+    (0, class_validator_1.MinLength)(2),
     __metadata("design:type", String)
 ], LoginDto.prototype, "email", void 0);
 __decorate([

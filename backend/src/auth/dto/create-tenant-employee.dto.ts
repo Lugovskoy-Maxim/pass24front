@@ -26,5 +26,5 @@ export class CreateTenantEmployeeDto {
 
   @IsOptional()
   @IsMongoId()
-  categoryId?: string;
+  positionId?: string;
 }

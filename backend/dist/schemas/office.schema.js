@@ -31,7 +31,7 @@ __decorate([
     __metadata("design:type", String)
 ], Office.prototype, "number", void 0);
 __decorate([
-    (0, mongoose_1.Prop)({ required: true, trim: true }),
+    (0, mongoose_1.Prop)({ trim: true }),
     __metadata("design:type", String)
 ], Office.prototype, "floor", void 0);
 __decorate([

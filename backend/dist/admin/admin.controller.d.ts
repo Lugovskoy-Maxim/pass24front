@@ -4,17 +4,22 @@ import { AuditService } from '../audit/audit.service';
 import { AdminService } from './admin.service';
 import { CreateBusinessCenterDto } from './dto/create-business-center.dto';
 import { CreateOfficeDto } from './dto/create-office.dto';
+import { ImportOfficesDto } from './dto/import-offices.dto';
 import { CreateUserDto } from './dto/create-user.dto';
 import { UpdateAccessConfigDto } from './dto/update-access-config.dto';
 import { UpdateBusinessCenterDto } from './dto/update-business-center.dto';
 import { UpdateSiteSettingsDto } from './dto/update-site-settings.dto';
 import { SiteSettingsService } from '../site-settings/site-settings.service';
+import { CreateTenantEmployeePositionDto } from '../auth/dto/create-tenant-employee-position.dto';
+import { UpdateTenantEmployeePositionDto } from '../auth/dto/update-tenant-employee-position.dto';
+import { TenantEmployeePositionService } from '../auth/tenant-employee-position.service';
 export declare class AdminController {
     private readonly adminService;
     private readonly accessConfigService;
     private readonly auditService;
     private readonly siteSettingsService;
-    constructor(adminService: AdminService, accessConfigService: AccessConfigService, auditService: AuditService, siteSettingsService: SiteSettingsService);
+    private readonly positionService;
+    constructor(adminService: AdminService, accessConfigService: AccessConfigService, auditService: AuditService, siteSettingsService: SiteSettingsService, positionService: TenantEmployeePositionService);
     dashboard(): Promise<{
         stats: {
             users: {
@@ -107,6 +112,88 @@ export declare class AdminController {
         passTypeLabels: Record<string, string>;
         roleLabels: Record<string, string>;
         roles: string[];
+    }>;
+    listTenantEmployeePositions(): Promise<{
+        positions: {
+            id: any;
+            name: any;
+            permissions: any;
+            is_default: boolean;
+            created_at: any;
+            updated_at: any;
+        }[];
+        assignablePermissions: ({
+            readonly key: "passes.create";
+            readonly label: "Заказ пропусков";
+            readonly group: "Пропуска";
+        } | {
+            readonly key: "passes.templates";
+            readonly label: "Шаблоны пропусков";
+            readonly group: "Пропуска";
+        } | {
+            readonly key: "passes.view_own";
+            readonly label: "Просмотр своих пропусков";
+            readonly group: "Пропуска";
+        } | {
+            readonly key: "passes.view_all";
+            readonly label: "Просмотр всех пропусков";
+            readonly group: "Пропуска";
+        } | {
+            readonly key: "passes.approve";
+            readonly label: "Одобрение и отклонение";
+            readonly group: "Пропуска";
+        } | {
+            readonly key: "passes.reception";
+            readonly label: "Вход / выход посетителей";
+            readonly group: "Ресепшн";
+        } | {
+            readonly key: "passes.lookup";
+            readonly label: "Поиск пропуска по номеру";
+            readonly group: "Ресепшн";
+        } | {
+            readonly key: "admin.panel";
+            readonly label: "Панель администратора";
+            readonly group: "Администрирование";
+        } | {
+            readonly key: "admin.users";
+            readonly label: "Управление пользователями";
+            readonly group: "Администрирование";
+        } | {
+            readonly key: "admin.offices";
+            readonly label: "Управление офисами";
+            readonly group: "Администрирование";
+        } | {
+            readonly key: "admin.settings";
+            readonly label: "Базовые настройки сайта";
+            readonly group: "Администрирование";
+        } | {
+            readonly key: "admin.permissions";
+            readonly label: "Права и типы пропусков";
+            readonly group: "Администрирование";
+        })[];
+    }>;
+    createTenantEmployeePosition(req: any, dto: CreateTenantEmployeePositionDto): Promise<{
+        position: {
+            id: any;
+            name: any;
+            permissions: any;
+            is_default: boolean;
+            created_at: any;
+            updated_at: any;
+        };
+    }>;
+    updateTenantEmployeePosition(req: any, id: string, dto: UpdateTenantEmployeePositionDto): Promise<{
+        position: {
+            id: any;
+            name: any;
+            permissions: any;
+            is_default: boolean;
+            created_at: any;
+            updated_at: any;
+        };
+    }>;
+    deleteTenantEmployeePosition(req: any, id: string): Promise<{
+        message: string;
     }>;
     updateAccessConfig(dto: UpdateAccessConfigDto, req: any): Promise<{
         config: {
@@ -467,6 +554,8 @@ export declare class AdminController {
                 contact_phone: any;
                 contact_email: any;
                 reception_floor: any;
+                require_checkout: string;
+                closed_weekdays: any;
             };
         }[];
     }>;
@@ -486,6 +575,8 @@ export declare class AdminController {
                 contact_phone: any;
                 contact_email: any;
                 reception_floor: any;
+                require_checkout: string;
+                closed_weekdays: any;
             };
         };
     }>;
@@ -504,6 +595,8 @@ export declare class AdminController {
                 contact_phone: any;
                 contact_email: any;
                 reception_floor: any;
+                require_checkout: string;
+                closed_weekdays: any;
             };
         };
     }>;
@@ -525,6 +618,12 @@ export declare class AdminController {
             isActive: any;
             createdAt: any;
         }[];
+    }>;
+    exportOffices(res: Response): Promise<void>;
+    importOffices(dto: ImportOfficesDto, req: any): Promise<{
+        created: number;
+        skipped: number;
+        errors: string[];
     }>;
     createOffice(dto: CreateOfficeDto, req: any): Promise<{
         office: {

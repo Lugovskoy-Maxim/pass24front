@@ -22,6 +22,7 @@ export declare class PassesPublicController {
             checkedInAt: any;
             checkedOutAt: any;
             rejectionReason: any;
+            requireCheckout: boolean;
         };
     }>;
 }

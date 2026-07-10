@@ -55,29 +55,40 @@ const bcrypt = __importStar(require("bcryptjs"));
 const jwt_1 = require("@nestjs/jwt");
 const access_config_service_1 = require("../access/access-config.service");
 const audit_service_1 = require("../audit/audit.service");
+const auth_database_constants_1 = require("../database/auth-database.constants");
+const mail_service_1 = require("../mail/mail.service");
 const schemas_1 = require("../schemas");
+const bookable_visit_dates_1 = require("../common/bookable-visit-dates");
+const tenant_owner_1 = require("../common/tenant-owner");
+const tenant_employee_position_service_1 = require("./tenant-employee-position.service");
 const dev_test_accounts_1 = require("../database/dev-test-accounts");
 let AuthService = class AuthService {
     userModel;
+    pendingModel;
     officeModel;
     propertyModel;
     jwtService;
     accessConfigService;
     auditService;
-    constructor(userModel, officeModel, propertyModel, jwtService, accessConfigService, auditService) {
+    mailService;
+    positionService;
+    constructor(userModel, pendingModel, officeModel, propertyModel, jwtService, accessConfigService, auditService, mailService, positionService) {
         this.userModel = userModel;
+        this.pendingModel = pendingModel;
         this.officeModel = officeModel;
         this.propertyModel = propertyModel;
         this.jwtService = jwtService;
         this.accessConfigService = accessConfigService;
         this.auditService = auditService;
+        this.mailService = mailService;
+        this.positionService = positionService;
     }
-    async register(dto) {
-        const existing = await this.userModel.findOne({ email: dto.email.toLowerCase() });
+    async requestRegistrationCode(dto) {
+        const email = dto.email.toLowerCase().trim();
+        const existing = await this.userModel.findOne({ email });
         if (existing) {
             throw new common_1.ConflictException('Пользователь с таким email уже существует');
         }
-        const hashed = await bcrypt.hash(dto.password, 10);
         let personName;
         try {
             personName = (0, person_name_1.resolvePersonName)(dto);
@@ -85,18 +96,64 @@ let AuthService = class AuthService {
         catch {
             throw new common_1.BadRequestException('Укажите фамилию и имя');
         }
-        const user = await this.userModel.create({
-            email: dto.email.toLowerCase(),
+        const code = String(Math.floor(100000 + Math.random() * 900000));
+        const codeHash = await bcrypt.hash(code, 10);
+        const passwordHash = await bcrypt.hash(dto.password, 10);
+        const expiresAt = new Date(Date.now() + 15 * 60 * 1000);
+        await this.pendingModel.findOneAndUpdate({ email }, {
+            email,
+            codeHash,
+            expiresAt,
+            password: passwordHash,
             fullName: personName.fullName,
             lastName: personName.lastName,
             firstName: personName.firstName,
             middleName: personName.middleName,
             phone: dto.phone?.trim() || undefined,
             company: dto.company.trim(),
+        }, { upsert: true, new: true, setDefaultsOnInsert: true });
+        await this.mailService.sendRegistrationCode(email, code);
+        return {
+            verificationRequired: true,
+            message: `Код подтверждения отправлен на ${email}`,
+            expiresInMinutes: 15,
+        };
+    }
+    async confirmRegistration(dto) {
+        const email = dto.email.toLowerCase().trim();
+        const pending = await this.pendingModel
+            .findOne({ email })
+            .select('+codeHash +password')
+            .lean();
+        if (!pending) {
+            throw new common_1.BadRequestException('Код не найден. Запросите новый код регистрации.');
+        }
+        if (pending.expiresAt.getTime() < Date.now()) {
+            await this.pendingModel.deleteOne({ email });
+            throw new common_1.BadRequestException('Код истёк. Запросите новый код регистрации.');
+        }
+        const codeOk = await bcrypt.compare(dto.code, pending.codeHash);
+        if (!codeOk) {
+            throw new common_1.BadRequestException('Неверный код подтверждения');
+        }
+        const existing = await this.userModel.findOne({ email });
+        if (existing) {
+            await this.pendingModel.deleteOne({ email });
+            throw new common_1.ConflictException('Пользователь с таким email уже существует');
+        }
+        const user = await this.userModel.create({
+            email,
+            fullName: pending.fullName,
+            lastName: pending.lastName,
+            firstName: pending.firstName,
+            middleName: pending.middleName,
+            phone: pending.phone,
+            company: pending.company,
             role: 'tenant',
-            password: hashed,
+            password: pending.password,
             isActive: false,
         });
+        await this.pendingModel.deleteOne({ email });
         await this.auditService.log({
             action: 'user.registration_request',
             entityType: 'user',
@@ -106,6 +163,7 @@ let AuthService = class AuthService {
                 fullName: user.fullName,
                 company: user.company,
                 phone: user.phone,
+                emailVerified: true,
             },
         });
         return {
@@ -113,11 +171,20 @@ let AuthService = class AuthService {
             message: 'Заявка отправлена. Доступ будет открыт после подтверждения администратором.',
         };
     }
+    async register(dto) {
+        return this.requestRegistrationCode(dto);
+    }
     async login(dto) {
-        const user = await this.userModel.findOne({ email: dto.email.toLowerCase() }).select('+password');
+        const login = (dto.login || dto.email || '').trim().toLowerCase();
+        if (!login) {
+            throw new common_1.UnauthorizedException('Неверные учетные данные');
+        }
+        const user = await this.userModel.findOne({
+            $or: [{ username: login }, { email: login }],
+        }).select('+password');
         if (!user) {
-            if (dev_test_accounts_1.DEV_TEST_ACCOUNT_EMAILS.has(dto.email.toLowerCase())) {
-                return this.createTestUser(dto.email, dto.password);
+            if (dev_test_accounts_1.DEV_TEST_ACCOUNT_EMAILS.has(login)) {
+                return this.createTestUser(login, dto.password);
             }
             throw new common_1.UnauthorizedException('Неверные учетные данные');
         }
@@ -128,7 +195,7 @@ let AuthService = class AuthService {
         if (user.isActive === false) {
             throw new common_1.ForbiddenException('Учётная запись ожидает подтверждения администратором. Вход будет доступен после одобрения заявки.');
         }
-        const offices = await this.getUserOffices(user._id.toString());
+        const offices = await this.getUserOffices(user._id.toString(), user.parentTenantId?.toString());
         const token = this.generateToken(user);
         return { user: await this.toUserDto(user, offices), token };
     }
@@ -139,7 +206,7 @@ let AuthService = class AuthService {
         if (user.isActive === false) {
             throw new common_1.ForbiddenException('Учётная запись не активирована');
         }
-        const offices = await this.getUserOffices(userId);
+        const offices = await this.getUserOffices(userId, user.parentTenantId?.toString());
         return { user: await this.toUserDto(user, offices) };
     }
     async requestProfileChange(userId, dto) {
@@ -148,6 +215,9 @@ let AuthService = class AuthService {
             throw new common_1.UnauthorizedException();
         if (user.role !== 'tenant') {
             throw new common_1.ForbiddenException('Редактирование профиля доступно только арендаторам');
+        }
+        if (user.parentTenantId) {
+            throw new common_1.ForbiddenException('Сотрудники компании не могут изменять профиль — обратитесь к владельцу аккаунта');
         }
         let personName;
         try {
@@ -212,24 +282,154 @@ let AuthService = class AuthService {
         user.profileChangeRequest = null;
         user.markModified('profileChangeRequest');
         await user.save();
-        const offices = await this.getUserOffices(userId);
+        const offices = await this.getUserOffices(userId, user.parentTenantId?.toString());
         return { user: await this.toUserDto(user, offices) };
     }
-    async getUserOffices(userId) {
-        const offices = await this.officeModel.find({ tenantId: new mongoose_2.Types.ObjectId(userId), isActive: true }).lean();
+    async listTenantEmployees(userId) {
+        const owner = await this.userModel.findById(userId);
+        if (!owner)
+            throw new common_1.UnauthorizedException();
+        if (owner.role !== 'tenant' || owner.parentTenantId) {
+            throw new common_1.ForbiddenException('Управление сотрудниками доступно только владельцу компании');
+        }
+        const employees = await this.userModel
+            .find({ parentTenantId: owner._id, role: 'tenant' })
+            .sort({ createdAt: -1 })
+            .lean();
+        const positionMap = await this.positionService.getPositionMap();
+        return {
+            employees: employees.map((e) => {
+                const positionId = (e.employeePositionId || e.employeeCategoryId)?.toString();
+                const position = positionId ? positionMap.get(positionId) : undefined;
+                return {
+                    id: e._id.toString(),
+                    email: e.email,
+                    full_name: e.fullName,
+                    last_name: e.lastName,
+                    first_name: e.firstName,
+                    middle_name: e.middleName,
+                    phone: e.phone,
+                    is_active: e.isActive !== false,
+                    position_id: positionId,
+                    position_name: position?.name,
+                    created_at: e.createdAt,
+                };
+            }),
+        };
+    }
+    async addTenantEmployee(userId, dto) {
+        const owner = await this.userModel.findById(userId);
+        if (!owner)
+            throw new common_1.UnauthorizedException();
+        if (owner.role !== 'tenant' || owner.parentTenantId) {
+            throw new common_1.ForbiddenException('Добавлять сотрудников может только владелец компании');
+        }
+        const email = dto.email.toLowerCase().trim();
+        const existing = await this.userModel.findOne({ email });
+        if (existing) {
+            throw new common_1.ConflictException('Пользователь с таким email уже существует');
+        }
+        let personName;
+        try {
+            personName = (0, person_name_1.resolvePersonName)({
+                lastName: dto.lastName,
+                firstName: dto.firstName,
+                middleName: dto.middleName,
+            });
+        }
+        catch {
+            throw new common_1.BadRequestException('Укажите фамилию и имя');
+        }
+        const passwordHash = await bcrypt.hash(dto.password, 10);
+        const position = await this.positionService.resolvePositionForEmployee(dto.positionId);
+        const employee = await this.userModel.create({
+            email,
+            fullName: personName.fullName,
+            lastName: personName.lastName,
+            firstName: personName.firstName,
+            middleName: personName.middleName,
+            phone: dto.phone?.trim() || undefined,
+            company: owner.company,
+            role: 'tenant',
+            parentTenantId: owner._id,
+            employeePositionId: position._id,
+            password: passwordHash,
+            isActive: true,
+        });
+        await this.auditService.log({
+            action: 'tenant.employee_added',
+            entityType: 'user',
+            entityId: employee._id,
+            actor: { userId, email: owner.email, role: owner.role },
+            details: {
+                employeeEmail: email,
+                employeeName: personName.fullName,
+                ownerCompany: owner.company,
+                positionId: position._id.toString(),
+                positionName: position.name,
+            },
+        });
+        return {
+            employee: {
+                id: employee._id.toString(),
+                email: employee.email,
+                full_name: employee.fullName,
+                last_name: employee.lastName,
+                first_name: employee.firstName,
+                middle_name: employee.middleName,
+                phone: employee.phone,
+                is_active: true,
+                position_id: position._id.toString(),
+                position_name: position.name,
+                created_at: employee.createdAt,
+            },
+        };
+    }
+    async removeTenantEmployee(userId, employeeId) {
+        const owner = await this.userModel.findById(userId);
+        if (!owner)
+            throw new common_1.UnauthorizedException();
+        if (owner.role !== 'tenant' || owner.parentTenantId) {
+            throw new common_1.ForbiddenException('Удалять сотрудников может только владелец компании');
+        }
+        const employee = await this.userModel.findById(employeeId);
+        if (!employee || employee.parentTenantId?.toString() !== owner._id.toString()) {
+            throw new common_1.NotFoundException('Сотрудник не найден');
+        }
+        employee.isActive = false;
+        await employee.save();
+        await this.auditService.log({
+            action: 'tenant.employee_removed',
+            entityType: 'user',
+            entityId: employee._id,
+            actor: { userId, email: owner.email, role: owner.role },
+            details: { employeeEmail: employee.email, employeeName: employee.fullName },
+        });
+        return { message: 'Сотрудник деактивирован' };
+    }
+    async getUserOffices(userId, parentTenantId) {
+        const ownerId = (0, tenant_owner_1.resolveTenantOwnerId)({ userId, parentTenantId }) || userId;
+        const offices = await this.officeModel.find({ tenantId: new mongoose_2.Types.ObjectId(ownerId), isActive: true }).lean();
         if (!offices.length)
             return [];
         const propertyIds = [...new Set(offices.map((o) => o.property.toString()))];
         const properties = await this.propertyModel.find({ _id: { $in: propertyIds } }).lean();
         const propertyMap = new Map(properties.map((p) => [p._id.toString(), p]));
-        return offices.map((o) => ({
-            id: o._id.toString(),
-            propertyId: o.property.toString(),
-            businessCenterName: propertyMap.get(o.property.toString())?.name,
-            number: o.number,
-            floor: o.floor,
-            company: o.company,
-        }));
+        return offices.map((o) => {
+            const property = propertyMap.get(o.property.toString());
+            const ps = property?.settings || {};
+            return {
+                id: o._id.toString(),
+                propertyId: o.property.toString(),
+                businessCenterName: property?.name,
+                number: o.number,
+                floor: o.floor,
+                company: o.company,
+                workingHoursFrom: ps.working_hours_from || '08:00',
+                workingHoursTo: ps.working_hours_to || '20:00',
+                closedWeekdays: (0, bookable_visit_dates_1.parseClosedWeekdays)(ps.closed_weekdays),
+            };
+        });
     }
     generateToken(user) {
         return this.jwtService.sign({
@@ -239,10 +439,11 @@ let AuthService = class AuthService {
         });
     }
     async toUserDto(user, offices = []) {
-        const permissions = await this.accessConfigService.getPermissionsForRole(user.role || 'tenant');
+        const permissions = await this.positionService.resolveUserPermissions(user);
         const { enabledPassTypes } = await this.accessConfigService.getConfig();
         return {
             id: user._id.toString(),
+            username: user.username,
             email: user.email,
             full_name: user.fullName,
             last_name: user.lastName,
@@ -256,6 +457,8 @@ let AuthService = class AuthService {
             offices,
             permissions,
             enabledPassTypes,
+            parent_tenant_id: user.parentTenantId?.toString(),
+            is_tenant_owner: user.role === 'tenant' && !user.parentTenantId,
             profile_change_request: (0, profile_change_1.mapProfileChangeRequest)(user.profileChangeRequest),
         };
     }
@@ -291,7 +494,7 @@ let AuthService = class AuthService {
                 isActive: true,
             });
         }
-        const offices = await this.getUserOffices(user._id.toString());
+        const offices = await this.getUserOffices(user._id.toString(), user.parentTenantId?.toString());
         const token = this.generateToken(user);
         return { user: await this.toUserDto(user, offices), token };
     }
@@ -299,14 +502,18 @@ let AuthService = class AuthService {
 exports.AuthService = AuthService;
 exports.AuthService = AuthService = __decorate([
     (0, common_1.Injectable)(),
-    __param(0, (0, mongoose_1.InjectModel)(schemas_1.User.name)),
-    __param(1, (0, mongoose_1.InjectModel)(schemas_1.Office.name)),
-    __param(2, (0, mongoose_1.InjectModel)(schemas_1.Property.name)),
+    __param(0, (0, mongoose_1.InjectModel)(schemas_1.User.name, auth_database_constants_1.AUTH_CONNECTION)),
+    __param(1, (0, mongoose_1.InjectModel)(schemas_1.RegistrationPending.name, auth_database_constants_1.AUTH_CONNECTION)),
+    __param(2, (0, mongoose_1.InjectModel)(schemas_1.Office.name)),
+    __param(3, (0, mongoose_1.InjectModel)(schemas_1.Property.name)),
     __metadata("design:paramtypes", [mongoose_2.Model,
+        mongoose_2.Model,
         mongoose_2.Model,
         mongoose_2.Model,
         jwt_1.JwtService,
         access_config_service_1.AccessConfigService,
-        audit_service_1.AuditService])
+        audit_service_1.AuditService,
+        mail_service_1.MailService,
+        tenant_employee_position_service_1.TenantEmployeePositionService])
 ], AuthService);
 //# sourceMappingURL=auth.service.js.map

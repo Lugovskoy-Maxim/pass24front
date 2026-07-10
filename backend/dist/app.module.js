@@ -33,6 +33,9 @@ exports.AppModule = AppModule = __decorate([
                     if (!env.MONGODB_URI) {
                         console.warn('⚠️  MONGODB_URI not set — using default or will fail at runtime');
                     }
+                    if (!env.MONGODB_AUTH_URI) {
+                        console.log('ℹ️  MONGODB_AUTH_URI not set — using pass24_auth on the same MongoDB host');
+                    }
                     return env;
                 },
             }),

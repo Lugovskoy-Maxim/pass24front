@@ -1,7 +1,7 @@
 'use client';
 
 import { FormEvent, useEffect, useState } from 'react';
-import { Building2, Clock, Mail, Pencil, Phone, Shield, Tag, Trash2, User as UserIcon, UserPlus, Users, X } from 'lucide-react';
+import { Building2, Clock, Mail, Phone, Shield, User as UserIcon, UserPlus, Users } from 'lucide-react';
 import { ProtectedLayout } from '@/components/ProtectedLayout';
 import { PersonNameFields } from '@/components/PersonNameFields';
 import { FormField, FormInput } from '@/components/FormField';
@@ -12,10 +12,9 @@ import {
   api,
   formatTenantOffices,
   getErrorMessage,
-  PermissionMeta,
   ROLE_LABELS,
   TenantEmployee,
-  TenantEmployeeCategory,
+  TenantEmployeePosition,
 } from '@/lib/api';
 import {
   buildFullName,
@@ -61,16 +60,8 @@ export default function ProfilePage() {
   const [employeeEmail, setEmployeeEmail] = useState('');
   const [employeePhone, setEmployeePhone] = useState('');
   const [employeePassword, setEmployeePassword] = useState('');
-  const [employeeCategoryId, setEmployeeCategoryId] = useState('');
-  const [categories, setCategories] = useState<TenantEmployeeCategory[]>([]);
-  const [assignablePermissions, setAssignablePermissions] = useState<PermissionMeta[]>([]);
-  const [categoriesLoading, setCategoriesLoading] = useState(false);
-  const [categorySaving, setCategorySaving] = useState(false);
-  const [deletingCategoryId, setDeletingCategoryId] = useState<string | null>(null);
-  const [editingCategoryId, setEditingCategoryId] = useState<string | null>(null);
-  const [categoryName, setCategoryName] = useState('');
-  const [categoryPermissions, setCategoryPermissions] = useState<string[]>([]);
-  const [categoryIsDefault, setCategoryIsDefault] = useState(false);
+  const [employeePositionId, setEmployeePositionId] = useState('');
+  const [positions, setPositions] = useState<TenantEmployeePosition[]>([]);
 
   const isTenant = user?.role === 'tenant';
   const isTenantOwner = isTenant && user?.is_tenant_owner;
@@ -99,128 +90,22 @@ export default function ProfilePage() {
     setCompany((pending?.company ?? user.company) || '');
   }, [user, pending]);
 
-  const loadCategories = () => {
-    setCategoriesLoading(true);
-    return api.getTenantEmployeeCategories()
-      .then(({ categories: list, assignablePermissions: perms }) => {
-        setCategories(list);
-        setAssignablePermissions(perms);
-        const defaultCategory = list.find((c) => c.is_default);
-        setEmployeeCategoryId((prev) => prev || defaultCategory?.id || list[0]?.id || '');
-      })
-      .catch(() => {
-        setCategories([]);
-        setAssignablePermissions([]);
-      })
-      .finally(() => setCategoriesLoading(false));
-  };
-
   useEffect(() => {
     if (!isTenantOwner) return;
     setEmployeesLoading(true);
     Promise.all([
       api.getTenantEmployees(),
-      loadCategories(),
+      api.getTenantEmployeePositions(),
     ])
-      .then(([{ employees: list }]) => setEmployees(list.filter((e) => e.is_active)))
+      .then(([{ employees: list }, { positions: posList }]) => {
+        setEmployees(list.filter((e) => e.is_active));
+        setPositions(posList);
+        const defaultPosition = posList.find((p) => p.is_default);
+        setEmployeePositionId((prev) => prev || defaultPosition?.id || posList[0]?.id || '');
+      })
       .catch(() => setEmployees([]))
       .finally(() => setEmployeesLoading(false));
   }, [isTenantOwner]);
-
-  const resetCategoryForm = () => {
-    setEditingCategoryId(null);
-    setCategoryName('');
-    setCategoryPermissions([]);
-    setCategoryIsDefault(false);
-  };
-
-  const startEditCategory = (category: TenantEmployeeCategory) => {
-    setEditingCategoryId(category.id);
-    setCategoryName(category.name);
-    setCategoryPermissions([...category.permissions]);
-    setCategoryIsDefault(category.is_default);
-  };
-
-  const toggleCategoryPermission = (key: string) => {
-    setCategoryPermissions((prev) =>
-      prev.includes(key) ? prev.filter((p) => p !== key) : [...prev, key],
-    );
-  };
-
-  const handleSaveCategory = async (e: FormEvent) => {
-    e.preventDefault();
-    if (!categoryName.trim()) {
-      toast('Укажите название категории', 'error');
-      return;
-    }
-    if (!categoryPermissions.length) {
-      toast('Выберите хотя бы одно право', 'error');
-      return;
-    }
-
-    setCategorySaving(true);
-    try {
-      if (editingCategoryId) {
-        const { category } = await api.updateTenantEmployeeCategory(editingCategoryId, {
-          name: categoryName.trim(),
-          permissions: categoryPermissions,
-          isDefault: categoryIsDefault,
-        });
-        setCategories((prev) => prev.map((c) => {
-          if (c.id === category.id) return category;
-          if (category.is_default) return { ...c, is_default: false };
-          return c;
-        }));
-        toast('Категория обновлена', 'success');
-      } else {
-        const { category } = await api.createTenantEmployeeCategory({
-          name: categoryName.trim(),
-          permissions: categoryPermissions,
-          isDefault: categoryIsDefault,
-        });
-        setCategories((prev) => {
-          const next = category.is_default
-            ? prev.map((c) => ({ ...c, is_default: false }))
-            : prev;
-          return [...next, category].sort((a, b) => {
-            if (a.is_default !== b.is_default) return a.is_default ? -1 : 1;
-            return a.name.localeCompare(b.name, 'ru');
-          });
-        });
-        if (!employeeCategoryId) setEmployeeCategoryId(category.id);
-        toast('Категория создана', 'success');
-      }
-      resetCategoryForm();
-    } catch (err) {
-      toast(getErrorMessage(err, 'Ошибка'), 'error');
-    } finally {
-      setCategorySaving(false);
-    }
-  };
-
-  const handleDeleteCategory = async (id: string) => {
-    setDeletingCategoryId(id);
-    try {
-      await api.deleteTenantEmployeeCategory(id);
-      setCategories((prev) => {
-        const removed = prev.find((c) => c.id === id);
-        const next = prev.filter((c) => c.id !== id);
-        if (removed?.is_default && next.length) {
-          next[0] = { ...next[0], is_default: true };
-        }
-        if (employeeCategoryId === id) {
-          setEmployeeCategoryId(next.find((c) => c.is_default)?.id || next[0]?.id || '');
-        }
-        return next;
-      });
-      if (editingCategoryId === id) resetCategoryForm();
-      toast('Категория удалена', 'success');
-    } catch (err) {
-      toast(getErrorMessage(err, 'Ошибка'), 'error');
-    } finally {
-      setDeletingCategoryId(null);
-    }
-  };
 
   if (!user) return null;
 
@@ -277,7 +162,7 @@ export default function ProfilePage() {
         middleName: employeeNameParts.middleName.trim() || undefined,
         password: employeePassword,
         phone: employeePhone.trim() || undefined,
-        categoryId: employeeCategoryId || undefined,
+        positionId: employeePositionId || undefined,
       });
       setEmployees((prev) => [employee, ...prev]);
       setEmployeeEmail('');
@@ -417,127 +302,6 @@ export default function ProfilePage() {
         {isTenantOwner && (
           <div className="card p-6 space-y-5 mt-6">
             <div className="flex items-start gap-3">
-              <Tag className="w-5 h-5 text-[var(--accent)] shrink-0 mt-0.5" />
-              <div>
-                <h2 className="font-semibold">Категории сотрудников</h2>
-                <p className="text-sm text-[var(--muted)] mt-1">
-                  Назначайте категории с разными правами: заказ пропусков, шаблоны, просмотр списка.
-                </p>
-              </div>
-            </div>
-
-            {categoriesLoading ? (
-              <p className="text-sm text-[var(--muted)] animate-pulse">Загрузка категорий...</p>
-            ) : categories.length > 0 ? (
-              <ul className="divide-y divide-[var(--border)] border border-[var(--border)] rounded-lg">
-                {categories.map((category) => (
-                  <li key={category.id} className="px-4 py-3 text-sm space-y-2">
-                    <div className="flex items-start justify-between gap-3">
-                      <div className="min-w-0">
-                        <div className="font-medium flex items-center gap-2 flex-wrap">
-                          {category.name}
-                          {category.is_default && (
-                            <span className="text-xs px-2 py-0.5 rounded-full bg-[var(--accent)]/10 text-[var(--accent)]">
-                              по умолчанию
-                            </span>
-                          )}
-                        </div>
-                        <div className="flex flex-wrap gap-1.5 mt-1.5">
-                          {category.permissions.map((perm) => {
-                            const meta = assignablePermissions.find((p) => p.key === perm);
-                            return (
-                              <span
-                                key={perm}
-                                className="text-xs px-2 py-0.5 rounded-full bg-[var(--surface)] border border-[var(--border)] text-[var(--muted)]"
-                              >
-                                {meta?.label || perm}
-                              </span>
-                            );
-                          })}
-                        </div>
-                      </div>
-                      <div className="flex gap-1 shrink-0">
-                        <button
-                          type="button"
-                          className="btn btn-secondary text-xs p-2"
-                          onClick={() => startEditCategory(category)}
-                          aria-label="Редактировать"
-                        >
-                          <Pencil className="w-3.5 h-3.5" />
-                        </button>
-                        <button
-                          type="button"
-                          className="btn btn-secondary text-xs p-2"
-                          disabled={deletingCategoryId === category.id}
-                          onClick={() => handleDeleteCategory(category.id)}
-                          aria-label="Удалить"
-                        >
-                          <Trash2 className="w-3.5 h-3.5" />
-                        </button>
-                      </div>
-                    </div>
-                  </li>
-                ))}
-              </ul>
-            ) : (
-              <p className="text-sm text-[var(--muted)]">Категории ещё не созданы — будет использована базовая</p>
-            )}
-
-            <form onSubmit={handleSaveCategory} className="border-t border-[var(--border)] pt-5 space-y-4" noValidate>
-              <div className="flex items-center justify-between gap-2">
-                <div className="text-sm font-medium">
-                  {editingCategoryId ? 'Редактировать категорию' : 'Новая категория'}
-                </div>
-                {editingCategoryId && (
-                  <button type="button" className="btn btn-secondary text-xs" onClick={resetCategoryForm}>
-                    <X className="w-3.5 h-3.5" />
-                    Отмена
-                  </button>
-                )}
-              </div>
-              <FormField id="categoryName" label="Название" required>
-                <FormInput
-                  id="categoryName"
-                  value={categoryName}
-                  onChange={(e) => setCategoryName(e.target.value)}
-                  placeholder="Менеджеры, Курьеры..."
-                />
-              </FormField>
-              <div>
-                <div className="text-sm font-medium mb-2">Права</div>
-                <div className="space-y-2">
-                  {assignablePermissions.map((perm) => (
-                    <label key={perm.key} className="flex items-center gap-2 text-sm cursor-pointer">
-                      <input
-                        type="checkbox"
-                        className="rounded border-[var(--border)]"
-                        checked={categoryPermissions.includes(perm.key)}
-                        onChange={() => toggleCategoryPermission(perm.key)}
-                      />
-                      <span>{perm.label}</span>
-                    </label>
-                  ))}
-                </div>
-              </div>
-              <label className="flex items-center gap-2 text-sm cursor-pointer">
-                <input
-                  type="checkbox"
-                  className="rounded border-[var(--border)]"
-                  checked={categoryIsDefault}
-                  onChange={(e) => setCategoryIsDefault(e.target.checked)}
-                />
-                <span>Категория по умолчанию для новых сотрудников</span>
-              </label>
-              <button type="submit" className="btn btn-primary" disabled={categorySaving}>
-                {categorySaving ? 'Сохранение...' : editingCategoryId ? 'Сохранить' : 'Создать категорию'}
-              </button>
-            </form>
-          </div>
-        )}
-
-        {isTenantOwner && (
-          <div className="card p-6 space-y-5 mt-6">
-            <div className="flex items-start gap-3">
               <Users className="w-5 h-5 text-[var(--accent)] shrink-0 mt-0.5" />
               <div>
                 <h2 className="font-semibold">Сотрудники компании</h2>
@@ -556,8 +320,8 @@ export default function ProfilePage() {
                     <div className="min-w-0">
                       <div className="font-medium">{employee.full_name}</div>
                       <div className="text-[var(--muted)] truncate">{employee.email}</div>
-                      {employee.category_name && (
-                        <div className="text-xs text-[var(--muted)] mt-0.5">{employee.category_name}</div>
+                      {employee.position_name && (
+                        <div className="text-xs text-[var(--muted)] mt-0.5">{employee.position_name}</div>
                       )}
                     </div>
                     <button
@@ -616,17 +380,17 @@ export default function ProfilePage() {
                   invalid={!!fieldErrors.password}
                 />
               </FormField>
-              {categories.length > 0 && (
-                <FormField id="employeeCategory" label="Категория">
+              {positions.length > 0 && (
+                <FormField id="employeePosition" label="Должность">
                   <select
-                    id="employeeCategory"
+                    id="employeePosition"
                     className="form-input w-full"
-                    value={employeeCategoryId}
-                    onChange={(e) => setEmployeeCategoryId(e.target.value)}
+                    value={employeePositionId}
+                    onChange={(e) => setEmployeePositionId(e.target.value)}
                   >
-                    {categories.map((category) => (
-                      <option key={category.id} value={category.id}>
-                        {category.name}{category.is_default ? ' (по умолчанию)' : ''}
+                    {positions.map((position) => (
+                      <option key={position.id} value={position.id}>
+                        {position.name}{position.is_default ? ' (по умолчанию)' : ''}
                       </option>
                     ))}
                   </select>

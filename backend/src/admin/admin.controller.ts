@@ -16,6 +16,9 @@ import { UpdateBusinessCenterDto } from './dto/update-business-center.dto';
 
 import { UpdateSiteSettingsDto } from './dto/update-site-settings.dto';
 import { SiteSettingsService } from '../site-settings/site-settings.service';
+import { CreateTenantEmployeePositionDto } from '../auth/dto/create-tenant-employee-position.dto';
+import { UpdateTenantEmployeePositionDto } from '../auth/dto/update-tenant-employee-position.dto';
+import { TenantEmployeePositionService } from '../auth/tenant-employee-position.service';
 
 @Controller('admin')
 @UseGuards(AuthGuard('jwt'), PermissionsGuard)
@@ -26,6 +29,7 @@ export class AdminController {
     private readonly accessConfigService: AccessConfigService,
     private readonly auditService: AuditService,
     private readonly siteSettingsService: SiteSettingsService,
+    private readonly positionService: TenantEmployeePositionService,
   ) {}
 
   @Get('dashboard')
@@ -42,6 +46,34 @@ export class AdminController {
   @RequireAllPermissions('admin.permissions')
   getAccessConfig() {
     return this.accessConfigService.getConfig();
+  }
+
+  @Get('tenant-employee-positions')
+  @RequireAllPermissions('admin.permissions')
+  listTenantEmployeePositions() {
+    return this.positionService.listPositions();
+  }
+
+  @Post('tenant-employee-positions')
+  @RequireAllPermissions('admin.permissions')
+  createTenantEmployeePosition(@Req() req: any, @Body() dto: CreateTenantEmployeePositionDto) {
+    return this.positionService.createPosition(req.user.userId, dto);
+  }
+
+  @Patch('tenant-employee-positions/:id')
+  @RequireAllPermissions('admin.permissions')
+  updateTenantEmployeePosition(
+    @Req() req: any,
+    @Param('id') id: string,
+    @Body() dto: UpdateTenantEmployeePositionDto,
+  ) {
+    return this.positionService.updatePosition(req.user.userId, id, dto);
+  }
+
+  @Delete('tenant-employee-positions/:id')
+  @RequireAllPermissions('admin.permissions')
+  deleteTenantEmployeePosition(@Req() req: any, @Param('id') id: string) {
+    return this.positionService.deletePosition(req.user.userId, id);
   }
 
   @Patch('access-config')

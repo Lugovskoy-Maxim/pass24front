@@ -29,7 +29,9 @@ let PermissionsGuard = class PermissionsGuard {
         const { user } = context.switchToHttp().getRequest();
         if (!user?.role)
             throw new common_1.ForbiddenException('Нет доступа');
-        const permissions = await this.accessConfigService.getPermissionsForRole(user.role);
+        const permissions = user.permissions?.length
+            ? user.permissions
+            : await this.accessConfigService.getPermissionsForRole(user.role);
         if (allRequired.length && !allRequired.every((p) => permissions.includes(p))) {
             throw new common_1.ForbiddenException('Недостаточно прав');
         }

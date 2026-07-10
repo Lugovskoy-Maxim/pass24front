@@ -11,12 +11,12 @@ const common_1 = require("@nestjs/common");
 const config_1 = require("@nestjs/config");
 const mongoose_1 = require("@nestjs/mongoose");
 const schemas_1 = require("../schemas");
+const auth_database_module_1 = require("./auth-database.module");
 const seed_service_1 = require("./seed.service");
 const test_data_seed_service_1 = require("./test-data-seed.service");
-const ALL_FEATURES = [
+const APP_FEATURES = [
     { name: schemas_1.Property.name, schema: schemas_1.PropertySchema },
     { name: schemas_1.Office.name, schema: schemas_1.OfficeSchema },
-    { name: schemas_1.User.name, schema: schemas_1.UserSchema },
     { name: schemas_1.Vehicle.name, schema: schemas_1.VehicleSchema },
     { name: schemas_1.Pass.name, schema: schemas_1.PassSchema },
     { name: schemas_1.PassTemplate.name, schema: schemas_1.PassTemplateSchema },
@@ -28,7 +28,7 @@ const ALL_FEATURES = [
 ];
 let DatabaseModule = class DatabaseModule {
     static forFeature() {
-        return mongoose_1.MongooseModule.forFeature(ALL_FEATURES);
+        return mongoose_1.MongooseModule.forFeature(APP_FEATURES);
     }
     static forFeatureOnly(models) {
         return mongoose_1.MongooseModule.forFeature(models);
@@ -38,6 +38,8 @@ exports.DatabaseModule = DatabaseModule;
 exports.DatabaseModule = DatabaseModule = __decorate([
     (0, common_1.Module)({
         imports: [
+            auth_database_module_1.AuthDatabaseModule,
+            auth_database_module_1.AuthDatabaseModule.forFeature([{ name: schemas_1.User.name, schema: schemas_1.UserSchema }]),
             mongoose_1.MongooseModule.forRootAsync({
                 imports: [config_1.ConfigModule],
                 useFactory: (configService) => {
@@ -52,13 +54,12 @@ exports.DatabaseModule = DatabaseModule = __decorate([
                 inject: [config_1.ConfigService],
             }),
             mongoose_1.MongooseModule.forFeature([
-                { name: schemas_1.User.name, schema: schemas_1.UserSchema },
                 { name: schemas_1.Property.name, schema: schemas_1.PropertySchema },
                 { name: schemas_1.Office.name, schema: schemas_1.OfficeSchema },
             ]),
         ],
         providers: [seed_service_1.SeedService, test_data_seed_service_1.TestDataSeedService],
-        exports: [mongoose_1.MongooseModule, test_data_seed_service_1.TestDataSeedService],
+        exports: [mongoose_1.MongooseModule, auth_database_module_1.AuthDatabaseModule, test_data_seed_service_1.TestDataSeedService],
     })
 ], DatabaseModule);
 //# sourceMappingURL=database.module.js.map

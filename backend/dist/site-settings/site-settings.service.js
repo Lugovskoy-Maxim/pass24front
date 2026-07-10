@@ -47,14 +47,23 @@ let SiteSettingsService = class SiteSettingsService {
         return this.map(doc);
     }
     async update(data) {
-        if (data.siteIcon !== undefined && data.siteIcon.length > MAX_ICON_LENGTH) {
-            throw new common_1.BadRequestException('Иконка слишком большая. Загрузите файл до 80 КБ.');
+        for (const field of ['siteIcon', 'siteIconLight', 'siteIconDark']) {
+            const value = data[field];
+            if (value !== undefined && value.length > MAX_ICON_LENGTH) {
+                throw new common_1.BadRequestException('Иконка слишком большая. Загрузите файл до 80 КБ.');
+            }
         }
         const update = {};
         if (data.siteName !== undefined)
             update.siteName = data.siteName.trim() || brand_defaults_1.MSTYLE_BRAND_DEFAULTS.siteName;
         if (data.siteIcon !== undefined)
             update.siteIcon = data.siteIcon.trim();
+        if (data.siteIconLight !== undefined) {
+            update.siteIconLight = data.siteIconLight.trim();
+            update.siteIcon = data.siteIconLight.trim();
+        }
+        if (data.siteIconDark !== undefined)
+            update.siteIconDark = data.siteIconDark.trim();
         if (data.siteTagline !== undefined)
             update.siteTagline = data.siteTagline.trim();
         if (data.sitePhone !== undefined)
@@ -74,6 +83,12 @@ let SiteSettingsService = class SiteSettingsService {
         if (data.uiIconSelectChevron !== undefined) {
             update.uiIconSelectChevron = data.uiIconSelectChevron.trim() || brand_defaults_1.MSTYLE_BRAND_DEFAULTS.uiIconSelectChevron;
         }
+        if (data.themePrimary !== undefined) {
+            update.themePrimary = this.normalizeHexColor(data.themePrimary, brand_defaults_1.MSTYLE_BRAND_DEFAULTS.themePrimary);
+        }
+        if (data.themePrimaryHover !== undefined) {
+            update.themePrimaryHover = this.normalizeHexColor(data.themePrimaryHover, brand_defaults_1.MSTYLE_BRAND_DEFAULTS.themePrimaryHover);
+        }
         if (data.uiLabels !== undefined) {
             update.uiLabels = (0, ui_labels_defaults_1.deepMergeUiLabels)(data.uiLabels);
         }
@@ -83,9 +98,14 @@ let SiteSettingsService = class SiteSettingsService {
         return this.map(doc);
     }
     map(doc) {
+        const legacyIcon = doc?.siteIcon?.trim() || '';
+        const siteIconLight = doc?.siteIconLight?.trim() || legacyIcon || brand_defaults_1.MSTYLE_BRAND_DEFAULTS.siteIconLight;
+        const siteIconDark = doc?.siteIconDark?.trim() || legacyIcon || brand_defaults_1.MSTYLE_BRAND_DEFAULTS.siteIconDark;
         return {
             siteName: doc?.siteName?.trim() || brand_defaults_1.MSTYLE_BRAND_DEFAULTS.siteName,
-            siteIcon: doc?.siteIcon?.trim() || brand_defaults_1.MSTYLE_BRAND_DEFAULTS.siteIcon,
+            siteIcon: siteIconLight,
+            siteIconLight,
+            siteIconDark,
             siteTagline: doc?.siteTagline?.trim() || brand_defaults_1.MSTYLE_BRAND_DEFAULTS.siteTagline,
             sitePhone: doc?.sitePhone?.trim() || brand_defaults_1.MSTYLE_BRAND_DEFAULTS.sitePhone,
             siteEmail: doc?.siteEmail?.trim() || brand_defaults_1.MSTYLE_BRAND_DEFAULTS.siteEmail,
@@ -94,8 +114,14 @@ let SiteSettingsService = class SiteSettingsService {
             brandShowName: doc?.brandShowName !== false,
             brandNameBeforeMark: doc?.brandNameBeforeMark !== false,
             uiIconSelectChevron: doc?.uiIconSelectChevron?.trim() || brand_defaults_1.MSTYLE_BRAND_DEFAULTS.uiIconSelectChevron,
+            themePrimary: this.normalizeHexColor(doc?.themePrimary, brand_defaults_1.MSTYLE_BRAND_DEFAULTS.themePrimary),
+            themePrimaryHover: this.normalizeHexColor(doc?.themePrimaryHover, brand_defaults_1.MSTYLE_BRAND_DEFAULTS.themePrimaryHover),
             uiLabels: (0, ui_labels_defaults_1.deepMergeUiLabels)(doc?.uiLabels),
         };
+    }
+    normalizeHexColor(value, fallback) {
+        const trimmed = value?.trim() || '';
+        return /^#[0-9A-Fa-f]{6}$/.test(trimmed) ? trimmed.toLowerCase() : fallback;
     }
 };
 exports.SiteSettingsService = SiteSettingsService;

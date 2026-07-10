@@ -6,14 +6,14 @@ import { InjectModel } from '@nestjs/mongoose';
 import { Model } from 'mongoose';
 import { AUTH_CONNECTION } from '../database/auth-database.constants';
 import { User, UserDocument } from '../schemas';
-import { TenantEmployeeCategoryService } from './tenant-employee-category.service';
+import { TenantEmployeePositionService } from './tenant-employee-position.service';
 
 @Injectable()
 export class JwtStrategy extends PassportStrategy(Strategy) {
   constructor(
     private configService: ConfigService,
     @InjectModel(User.name, AUTH_CONNECTION) private userModel: Model<UserDocument>,
-    private categoryService: TenantEmployeeCategoryService,
+    private positionService: TenantEmployeePositionService,
   ) {
     super({
       jwtFromRequest: ExtractJwt.fromAuthHeaderAsBearerToken(),
@@ -27,7 +27,7 @@ export class JwtStrategy extends PassportStrategy(Strategy) {
     if (!user || user.isActive === false) {
       throw new UnauthorizedException();
     }
-    const permissions = await this.categoryService.resolveUserPermissions(user);
+    const permissions = await this.positionService.resolveUserPermissions(user);
     return {
       userId: payload.sub,
       email: payload.email,

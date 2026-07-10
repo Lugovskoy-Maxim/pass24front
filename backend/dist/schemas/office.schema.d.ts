@@ -3,7 +3,7 @@ export type OfficeDocument = Office & Document;
 export declare class Office {
     property: Types.ObjectId;
     number: string;
-    floor: string;
+    floor?: string;
     areaSqm?: number;
     company?: string;
     tenantId?: Types.ObjectId;
@@ -36,7 +36,7 @@ export declare const OfficeSchema: import("mongoose").Schema<Office, import("mon
     }, "id"> & {
         id: string;
     }> | undefined;
-    floor?: import("mongoose").SchemaDefinitionProperty<string, Office, Document<unknown, {}, Office, {
+    floor?: import("mongoose").SchemaDefinitionProperty<string | undefined, Office, Document<unknown, {}, Office, {
         id: string;
     }, import("mongoose").DefaultSchemaOptions> & Omit<Office & {
         _id: Types.ObjectId;

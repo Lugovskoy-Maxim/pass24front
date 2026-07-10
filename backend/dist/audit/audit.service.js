@@ -16,6 +16,7 @@ exports.AuditService = void 0;
 const common_1 = require("@nestjs/common");
 const mongoose_1 = require("@nestjs/mongoose");
 const mongoose_2 = require("mongoose");
+const auth_database_constants_1 = require("../database/auth-database.constants");
 const schemas_1 = require("../schemas");
 const EXPORT_LIMIT = 10_000;
 const ACTION_LABELS = {
@@ -236,7 +237,7 @@ exports.AuditService = AuditService;
 exports.AuditService = AuditService = __decorate([
     (0, common_1.Injectable)(),
     __param(0, (0, mongoose_1.InjectModel)(schemas_1.AuditLog.name)),
-    __param(1, (0, mongoose_1.InjectModel)(schemas_1.User.name)),
+    __param(1, (0, mongoose_1.InjectModel)(schemas_1.User.name, auth_database_constants_1.AUTH_CONNECTION)),
     __metadata("design:paramtypes", [mongoose_2.Model,
         mongoose_2.Model])
 ], AuditService);

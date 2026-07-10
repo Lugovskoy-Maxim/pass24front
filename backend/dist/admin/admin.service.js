@@ -55,6 +55,7 @@ const mongoose_2 = require("mongoose");
 const audit_service_1 = require("../audit/audit.service");
 const passes_service_1 = require("../passes/passes.service");
 const schemas_1 = require("../schemas");
+const auth_database_constants_1 = require("../database/auth-database.constants");
 const enums_1 = require("../schemas/enums");
 const test_data_seed_service_1 = require("../database/test-data-seed.service");
 const STAFF_ROLES = ['security', 'bc_admin', 'admin'];
@@ -576,6 +577,89 @@ let AdminService = class AdminService {
             },
         };
     }
+    async exportOfficesCsv() {
+        const { offices } = await this.getOffices();
+        const { buildOfficeCsv } = await import('../common/office-csv.js');
+        const tenantIds = offices.filter((o) => o.tenantId).map((o) => new mongoose_2.Types.ObjectId(o.tenantId));
+        const tenants = tenantIds.length
+            ? await this.userModel.find({ _id: { $in: tenantIds } }).lean()
+            : [];
+        const tenantEmailMap = new Map(tenants.map((t) => [t._id.toString(), t.email || '']));
+        return buildOfficeCsv(offices.map((office) => ({
+            businessCenterName: office.businessCenterName || '',
+            number: office.number,
+            floor: office.floor,
+            areaSqm: office.areaSqm,
+            company: office.company,
+            tenantEmail: office.tenantId ? tenantEmailMap.get(office.tenantId) : undefined,
+            isActive: office.isActive,
+        })));
+    }
+    async importOfficesCsv(csv, actor) {
+        const { parseOfficeCsv } = await import('../common/office-csv.js');
+        const parsed = parseOfficeCsv(csv);
+        if (!parsed.rows.length && parsed.errors.length) {
+            throw new common_1.BadRequestException(parsed.errors.join('; '));
+        }
+        const properties = await this.propertyModel.find({ isActive: true }).lean();
+        const propertyByName = new Map(properties.map((p) => [p.name.trim().toLowerCase(), p]));
+        const tenantEmails = [...new Set(parsed.rows.map((r) => r.tenantEmail).filter(Boolean))];
+        const tenants = tenantEmails.length
+            ? await this.userModel.find({ email: { $in: tenantEmails } }).lean()
+            : [];
+        const tenantByEmail = new Map(tenants.map((t) => [t.email.toLowerCase(), t]));
+        const result = {
+            created: 0,
+            skipped: 0,
+            errors: [...parsed.errors],
+        };
+        for (const [index, row] of parsed.rows.entries()) {
+            const rowNum = index + 2;
+            const property = propertyByName.get(row.businessCenter.toLowerCase());
+            if (!property) {
+                result.errors.push(`Строка ${rowNum}: БЦ «${row.businessCenter}» не найден`);
+                continue;
+            }
+            const existing = await this.officeModel.findOne({
+                property: property._id,
+                number: row.number.trim(),
+            });
+            if (existing) {
+                result.skipped += 1;
+                continue;
+            }
+            let tenantId;
+            if (row.tenantEmail) {
+                const tenant = tenantByEmail.get(row.tenantEmail);
+                if (!tenant) {
+                    result.errors.push(`Строка ${rowNum}: арендатор ${row.tenantEmail} не найден`);
+                    continue;
+                }
+                tenantId = tenant._id;
+            }
+            const office = await this.officeModel.create({
+                property: property._id,
+                number: row.number.trim(),
+                floor: row.floor,
+                areaSqm: row.areaSqm,
+                company: row.company,
+                tenantId,
+                isActive: row.isActive,
+            });
+            if (tenantId) {
+                await this.syncTenantProperties(tenantId.toString());
+            }
+            await this.auditService.log({
+                action: 'office.import',
+                entityType: 'office',
+                entityId: office._id,
+                actor,
+                details: { number: office.number, propertyId: property._id.toString(), source: 'csv' },
+            });
+            result.created += 1;
+        }
+        return result;
+    }
     async getOffices() {
         const offices = await this.officeModel.find().sort({ createdAt: -1 }).lean();
         const propertyIds = [...new Set(offices.map((o) => o.property.toString()))];
@@ -801,6 +885,8 @@ let AdminService = class AdminService {
             contact_phone: s.contact_phone || '+7 (495) 000-00-00',
             contact_email: s.contact_email || 'reception@pass24.local',
             reception_floor: s.reception_floor || '1',
+            require_checkout: s.require_checkout !== 'false' ? 'true' : 'false',
+            closed_weekdays: s.closed_weekdays || '',
         };
     }
     mergeBcPassSettings(current, dto) {
@@ -817,6 +903,10 @@ let AdminService = class AdminService {
             settings.contact_email = dto.contact_email;
         if (dto.reception_floor !== undefined)
             settings.reception_floor = dto.reception_floor;
+        if (dto.require_checkout !== undefined)
+            settings.require_checkout = dto.require_checkout;
+        if (dto.closed_weekdays !== undefined)
+            settings.closed_weekdays = dto.closed_weekdays;
         return settings;
     }
     countBy(arr, key) {
@@ -830,7 +920,7 @@ let AdminService = class AdminService {
 exports.AdminService = AdminService;
 exports.AdminService = AdminService = __decorate([
     (0, common_1.Injectable)(),
-    __param(0, (0, mongoose_1.InjectModel)(schemas_1.User.name)),
+    __param(0, (0, mongoose_1.InjectModel)(schemas_1.User.name, auth_database_constants_1.AUTH_CONNECTION)),
     __param(1, (0, mongoose_1.InjectModel)(schemas_1.Property.name)),
     __param(2, (0, mongoose_1.InjectModel)(schemas_1.Office.name)),
     __param(3, (0, mongoose_1.InjectModel)(schemas_1.Pass.name)),

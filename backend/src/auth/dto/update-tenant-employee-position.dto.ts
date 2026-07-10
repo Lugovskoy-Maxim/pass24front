@@ -1,6 +1,6 @@
 import { IsArray, IsBoolean, IsOptional, IsString } from 'class-validator';
 
-export class UpdateTenantEmployeeCategoryDto {
+export class UpdateTenantEmployeePositionDto {
   @IsOptional()
   @IsString()
   name?: string;

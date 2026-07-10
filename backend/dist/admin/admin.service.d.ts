@@ -374,6 +374,8 @@ export declare class AdminService {
                 contact_phone: any;
                 contact_email: any;
                 reception_floor: any;
+                require_checkout: string;
+                closed_weekdays: any;
             };
         };
     }>;
@@ -393,6 +395,8 @@ export declare class AdminService {
                 contact_phone: any;
                 contact_email: any;
                 reception_floor: any;
+                require_checkout: string;
+                closed_weekdays: any;
             };
         }[];
     }>;
@@ -415,8 +419,16 @@ export declare class AdminService {
                 contact_phone: any;
                 contact_email: any;
                 reception_floor: any;
+                require_checkout: string;
+                closed_weekdays: any;
             };
         };
+    }>;
+    exportOfficesCsv(): Promise<string>;
+    importOfficesCsv(csv: string, actor?: AuditActor): Promise<{
+        created: number;
+        skipped: number;
+        errors: string[];
     }>;
     getOffices(): Promise<{
         offices: {

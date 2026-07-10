@@ -17,6 +17,7 @@ const common_1 = require("@nestjs/common");
 const mongoose_1 = require("@nestjs/mongoose");
 const mongoose_2 = require("mongoose");
 const property_schema_1 = require("../schemas/property.schema");
+const bookable_visit_dates_1 = require("../common/bookable-visit-dates");
 const enums_1 = require("../schemas/enums");
 const site_settings_service_1 = require("../site-settings/site-settings.service");
 let AppConfigService = class AppConfigService {
@@ -28,14 +29,17 @@ let AppConfigService = class AppConfigService {
     }
     async getPublicConfig() {
         const site = await this.siteSettingsService.get();
-        const property = await this.propertyModel
-            .findOne({ type: enums_1.PropertyType.BUSINESS_CENTER, isActive: true })
+        const properties = await this.propertyModel
+            .find({ type: enums_1.PropertyType.BUSINESS_CENTER, isActive: true })
             .sort({ createdAt: 1 })
             .lean();
+        const property = properties[0];
         const s = property?.settings || {};
         return {
             siteName: site.siteName,
             siteIcon: site.siteIcon,
+            siteIconLight: site.siteIconLight,
+            siteIconDark: site.siteIconDark,
             siteTagline: site.siteTagline,
             sitePhone: site.sitePhone,
             siteEmail: site.siteEmail,
@@ -44,9 +48,20 @@ let AppConfigService = class AppConfigService {
             brandShowName: site.brandShowName,
             brandNameBeforeMark: site.brandNameBeforeMark,
             uiIconSelectChevron: site.uiIconSelectChevron,
+            themePrimary: site.themePrimary,
+            themePrimaryHover: site.themePrimaryHover,
             businessCenterName: property?.name || site.siteName,
-            workingHoursFrom: s.working_hours_from || '08:00',
-            workingHoursTo: s.working_hours_to || '20:00',
+            businessCenters: properties.map((p) => {
+                const ps = p.settings || {};
+                return {
+                    id: p._id.toString(),
+                    name: p.name,
+                    workingHoursFrom: ps.working_hours_from || '08:00',
+                    workingHoursTo: ps.working_hours_to || '20:00',
+                    requireCheckout: ps.require_checkout !== 'false',
+                    closedWeekdays: (0, bookable_visit_dates_1.parseClosedWeekdays)(ps.closed_weekdays),
+                };
+            }),
             contactPhone: s.contact_phone || site.sitePhone,
             contactEmail: s.contact_email || site.siteEmail,
             receptionFloor: s.reception_floor || '1',

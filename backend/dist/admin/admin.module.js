@@ -9,8 +9,10 @@ Object.defineProperty(exports, "__esModule", { value: true });
 exports.AdminModule = void 0;
 const common_1 = require("@nestjs/common");
 const auth_module_1 = require("../auth/auth.module");
+const auth_database_module_1 = require("../database/auth-database.module");
 const database_module_1 = require("../database/database.module");
 const passes_module_1 = require("../passes/passes.module");
+const schemas_1 = require("../schemas");
 const admin_controller_1 = require("./admin.controller");
 const admin_service_1 = require("./admin.service");
 let AdminModule = class AdminModule {
@@ -18,7 +20,13 @@ let AdminModule = class AdminModule {
 exports.AdminModule = AdminModule;
 exports.AdminModule = AdminModule = __decorate([
     (0, common_1.Module)({
-        imports: [database_module_1.DatabaseModule, database_module_1.DatabaseModule.forFeature(), auth_module_1.AuthModule, passes_module_1.PassesModule],
+        imports: [
+            database_module_1.DatabaseModule,
+            database_module_1.DatabaseModule.forFeature(),
+            auth_database_module_1.AuthDatabaseModule.forFeature([{ name: schemas_1.User.name, schema: schemas_1.UserSchema }]),
+            auth_module_1.AuthModule,
+            passes_module_1.PassesModule,
+        ],
         controllers: [admin_controller_1.AdminController],
         providers: [admin_service_1.AdminService],
         exports: [admin_service_1.AdminService],

@@ -15,6 +15,8 @@ let AppSettings = class AppSettings {
     key;
     siteName;
     siteIcon;
+    siteIconLight;
+    siteIconDark;
     siteTagline;
     sitePhone;
     siteEmail;
@@ -23,6 +25,8 @@ let AppSettings = class AppSettings {
     brandShowName;
     brandNameBeforeMark;
     uiIconSelectChevron;
+    themePrimary;
+    themePrimaryHover;
     uiLabels;
 };
 exports.AppSettings = AppSettings;
@@ -35,9 +39,17 @@ __decorate([
     __metadata("design:type", String)
 ], AppSettings.prototype, "siteName", void 0);
 __decorate([
-    (0, mongoose_1.Prop)({ default: '/brand/mstyle-logo.svg' }),
+    (0, mongoose_1.Prop)({ default: '/brand/mstyle-logo-light.svg' }),
     __metadata("design:type", String)
 ], AppSettings.prototype, "siteIcon", void 0);
+__decorate([
+    (0, mongoose_1.Prop)({ default: '/brand/mstyle-logo-light.svg' }),
+    __metadata("design:type", String)
+], AppSettings.prototype, "siteIconLight", void 0);
+__decorate([
+    (0, mongoose_1.Prop)({ default: '/brand/mstyle-logo.svg' }),
+    __metadata("design:type", String)
+], AppSettings.prototype, "siteIconDark", void 0);
 __decorate([
     (0, mongoose_1.Prop)({ default: 'Пропуска для арендаторов бизнес-центра' }),
     __metadata("design:type", String)
@@ -70,6 +82,14 @@ __decorate([
     (0, mongoose_1.Prop)({ default: 'chevron-down' }),
     __metadata("design:type", String)
 ], AppSettings.prototype, "uiIconSelectChevron", void 0);
+__decorate([
+    (0, mongoose_1.Prop)({ default: '#eb711c' }),
+    __metadata("design:type", String)
+], AppSettings.prototype, "themePrimary", void 0);
+__decorate([
+    (0, mongoose_1.Prop)({ default: '#d55700' }),
+    __metadata("design:type", String)
+], AppSettings.prototype, "themePrimaryHover", void 0);
 __decorate([
     (0, mongoose_1.Prop)({ type: Object, default: {} }),
     __metadata("design:type", Object)

@@ -47,6 +47,7 @@ exports.MailService = void 0;
 const common_1 = require("@nestjs/common");
 const config_1 = require("@nestjs/config");
 const nodemailer = __importStar(require("nodemailer"));
+const PASS_FROM_DISPLAY_NAME = 'Пропуск.М-Стиль';
 let MailService = MailService_1 = class MailService {
     configService;
     logger = new common_1.Logger(MailService_1.name);
@@ -62,8 +63,8 @@ let MailService = MailService_1 = class MailService {
         if (!this.transporter) {
             throw new common_1.BadRequestException('Почтовый сервер не настроен. Укажите SMTP_HOST, SMTP_PORT и SMTP_FROM в настройках сервера.');
         }
-        const from = this.configService.get('SMTP_FROM') || 'PASS24 <noreply@pass24.local>';
-        const qrUrl = `https://api.qrserver.com/v1/create-qr-code/?size=220x220&color=2B2A29&bgcolor=FEFEFE&margin=12&data=${encodeURIComponent(data.ticketUrl)}`;
+        const from = this.getPassFromAddress();
+        const qrUrl = `https://api.qrserver.com/v1/create-qr-code/?size=220x220&data=${encodeURIComponent(data.ticketUrl)}`;
         const visitTime = data.visitTimeFrom
             ? `${data.visitTimeFrom}${data.visitTimeTo ? `–${data.visitTimeTo}` : ''}`
             : '';
@@ -89,7 +90,6 @@ let MailService = MailService_1 = class MailService {
             ${data.companyName ? `<tr><td style="color:#64748b;padding:6px 0">Компания</td><td style="text-align:right;padding:6px 0">${data.companyName}</td></tr>` : ''}
             <tr><td style="color:#64748b;padding:6px 0">Дата визита</td><td style="text-align:right;padding:6px 0">${data.visitDate}${visitTime ? ` · ${visitTime}` : ''}</td></tr>
             <tr><td style="color:#64748b;padding:6px 0">Офис</td><td style="text-align:right;padding:6px 0">${officeLine}</td></tr>
-            ${data.passTypeLabel ? `<tr><td style="color:#64748b;padding:6px 0">Тип</td><td style="text-align:right;padding:6px 0">${data.passTypeLabel}</td></tr>` : ''}
             ${data.visitPurpose ? `<tr><td style="color:#64748b;padding:6px 0">Цель</td><td style="text-align:right;padding:6px 0">${data.visitPurpose}</td></tr>` : ''}
           </table>
           <div style="text-align:center;margin-top:24px">
@@ -132,6 +132,55 @@ let MailService = MailService_1 = class MailService {
             this.logger.error(`SMTP send failed to ${data.to}: ${message}${response ? ` | ${response}` : ''}`);
             throw new common_1.InternalServerErrorException(response ? `Почтовый сервер отклонил отправку: ${response}` : `Не удалось отправить письмо: ${message}`);
         }
+    }
+    async sendRegistrationCode(to, code) {
+        if (!this.transporter) {
+            throw new common_1.BadRequestException('Почтовый сервер не настроен. Регистрация по email временно недоступна.');
+        }
+        const from = this.getPassFromAddress();
+        const appHost = (this.configService.get('PUBLIC_APP_URL') || 'https://pass.mstyle.ru')
+            .replace(/^https?:\/\//, '')
+            .replace(/\/$/, '');
+        const html = `
+      <div style="font-family:Inter,Arial,sans-serif;max-width:480px;margin:0 auto;color:#0f172a">
+        <div style="padding:24px;border:1px solid #e2e8f0;border-radius:12px;background:#fff">
+          <h2 style="margin:0 0 12px;font-size:20px">Подтверждение регистрации</h2>
+          <p style="margin:0 0 16px;line-height:1.5;color:#475569">
+            Введите этот код на странице регистрации ${appHost}:
+          </p>
+          <div style="font-size:32px;font-weight:700;letter-spacing:0.35em;text-align:center;padding:16px;background:#f8fafc;border-radius:8px">
+            ${code}
+          </div>
+          <p style="margin:16px 0 0;font-size:13px;color:#64748b">
+            Код действует 15 минут. Если вы не запрашивали регистрацию, просто проигнорируйте письмо.
+          </p>
+        </div>
+      </div>
+    `;
+        try {
+            await this.transporter.sendMail({
+                from,
+                to,
+                subject: `Код подтверждения: ${code}`,
+                text: `Код подтверждения регистрации на ${appHost}: ${code}\nКод действует 15 минут.`,
+                html,
+            });
+            this.logger.log(`Registration code emailed to ${to}`);
+            return { sent: true };
+        }
+        catch (err) {
+            const message = err instanceof Error ? err.message : 'Неизвестная ошибка SMTP';
+            this.logger.error(`Registration code email failed to ${to}: ${message}`);
+            throw new common_1.InternalServerErrorException('Не удалось отправить код подтверждения на почту');
+        }
+    }
+    getPassFromAddress() {
+        const configured = this.configService.get('SMTP_FROM');
+        const user = this.configService.get('SMTP_USER');
+        const emailFromConfigured = configured?.match(/<([^>]+)>/)?.[1];
+        const bareEmail = configured && !configured.includes('<') ? configured.trim() : undefined;
+        const email = emailFromConfigured || bareEmail || user || 'pass@mstyle.ru';
+        return `${PASS_FROM_DISPLAY_NAME} <${email}>`;
     }
     initTransporter() {
         const host = this.configService.get('SMTP_HOST');

@@ -3,7 +3,7 @@
 import Link from 'next/link';
 import { usePathname } from 'next/navigation';
 import {
-  LayoutDashboard, Users, ScrollText, ArrowLeft, Shield, DoorOpen, KeyRound, Globe,
+  LayoutDashboard, Users, ScrollText, ArrowLeft, Shield, DoorOpen, KeyRound, Globe, Briefcase,
 } from 'lucide-react';
 import { ProtectedLayout } from './ProtectedLayout';
 import { useAuth } from '@/lib/auth';
@@ -14,6 +14,7 @@ const NAV = [
   { href: '/admin/users', label: 'Пользователи', icon: Users, permission: 'admin.users' },
   { href: '/admin/offices', label: 'Офисы', icon: DoorOpen, permission: 'admin.offices' },
   { href: '/admin/permissions', label: 'Права и пропуска', icon: KeyRound, permission: 'admin.permissions' },
+  { href: '/admin/positions', label: 'Должности', icon: Briefcase, permission: 'admin.permissions' },
   { href: '/admin/audit', label: 'Журнал действий', icon: ScrollText },
   { href: '/admin/site', label: 'Базовые настройки', icon: Globe, permission: 'admin.settings' },
 ];

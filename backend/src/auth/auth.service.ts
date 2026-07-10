@@ -33,7 +33,7 @@ import { CreateTenantEmployeeDto } from './dto/create-tenant-employee.dto';
 import { LoginDto } from './dto/login.dto';
 import { RegisterDto } from './dto/register.dto';
 import { UpdateProfileDto } from './dto/update-profile.dto';
-import { TenantEmployeeCategoryService } from './tenant-employee-category.service';
+import { TenantEmployeePositionService } from './tenant-employee-position.service';
 import { DEV_TEST_ACCOUNTS, DEV_TEST_ACCOUNT_EMAILS } from '../database/dev-test-accounts';
 
 @Injectable()
@@ -48,7 +48,7 @@ export class AuthService {
     private accessConfigService: AccessConfigService,
     private auditService: AuditService,
     private mailService: MailService,
-    private categoryService: TenantEmployeeCategoryService,
+    private positionService: TenantEmployeePositionService,
   ) {}
 
   async requestRegistrationCode(dto: RegisterDto) {
@@ -301,12 +301,12 @@ export class AuthService {
       .sort({ createdAt: -1 })
       .lean();
 
-    const categoryMap = await this.categoryService.getCategoryMap(owner._id);
+    const positionMap = await this.positionService.getPositionMap();
 
     return {
       employees: employees.map((e) => {
-        const categoryId = e.employeeCategoryId?.toString();
-        const category = categoryId ? categoryMap.get(categoryId) : undefined;
+        const positionId = (e.employeePositionId || (e as any).employeeCategoryId)?.toString();
+        const position = positionId ? positionMap.get(positionId) : undefined;
         return {
           id: e._id.toString(),
           email: e.email,
@@ -316,8 +316,8 @@ export class AuthService {
           middle_name: e.middleName,
           phone: e.phone,
           is_active: e.isActive !== false,
-          category_id: categoryId,
-          category_name: category?.name,
+          position_id: positionId,
+          position_name: position?.name,
           created_at: (e as any).createdAt,
         };
       }),
@@ -349,7 +349,7 @@ export class AuthService {
     }
 
     const passwordHash = await bcrypt.hash(dto.password, 10);
-    const category = await this.categoryService.resolveCategoryForEmployee(owner._id, dto.categoryId);
+    const position = await this.positionService.resolvePositionForEmployee(dto.positionId);
     const employee = await this.userModel.create({
       email,
       fullName: personName.fullName,
@@ -360,7 +360,7 @@ export class AuthService {
       company: owner.company,
       role: 'tenant',
       parentTenantId: owner._id,
-      employeeCategoryId: category._id,
+      employeePositionId: position._id,
       password: passwordHash,
       isActive: true,
     } as any);
@@ -374,8 +374,8 @@ export class AuthService {
         employeeEmail: email,
         employeeName: personName.fullName,
         ownerCompany: owner.company,
-        categoryId: category._id.toString(),
-        categoryName: category.name,
+        positionId: position._id.toString(),
+        positionName: position.name,
       },
     });
 
@@ -389,8 +389,8 @@ export class AuthService {
         middle_name: employee.middleName,
         phone: employee.phone,
         is_active: true,
-        category_id: category._id.toString(),
-        category_name: category.name,
+        position_id: position._id.toString(),
+        position_name: position.name,
         created_at: (employee as any).createdAt,
       },
     };
@@ -457,7 +457,7 @@ export class AuthService {
   }
 
   private async toUserDto(user: any, offices: any[] = []) {
-    const permissions = await this.categoryService.resolveUserPermissions(user);
+    const permissions = await this.positionService.resolveUserPermissions(user);
     const { enabledPassTypes } = await this.accessConfigService.getConfig();
     return {
       id: user._id.toString(),

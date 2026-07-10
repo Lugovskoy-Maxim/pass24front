@@ -5,6 +5,8 @@ import { UiLabels } from './ui-labels.defaults';
 export interface SiteSettingsDto {
     siteName: string;
     siteIcon: string;
+    siteIconLight: string;
+    siteIconDark: string;
     siteTagline: string;
     sitePhone: string;
     siteEmail: string;
@@ -13,6 +15,8 @@ export interface SiteSettingsDto {
     brandShowName: boolean;
     brandNameBeforeMark: boolean;
     uiIconSelectChevron: string;
+    themePrimary: string;
+    themePrimaryHover: string;
     uiLabels: UiLabels;
 }
 export declare class SiteSettingsService implements OnModuleInit {
@@ -25,4 +29,5 @@ export declare class SiteSettingsService implements OnModuleInit {
         uiLabels?: Record<string, unknown>;
     }): Promise<SiteSettingsDto>;
     private map;
+    private normalizeHexColor;
 }

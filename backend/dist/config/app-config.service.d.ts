@@ -8,6 +8,8 @@ export declare class AppConfigService {
     getPublicConfig(): Promise<{
         siteName: string;
         siteIcon: string;
+        siteIconLight: string;
+        siteIconDark: string;
         siteTagline: string;
         sitePhone: string;
         siteEmail: string;
@@ -16,9 +18,17 @@ export declare class AppConfigService {
         brandShowName: boolean;
         brandNameBeforeMark: boolean;
         uiIconSelectChevron: string;
+        themePrimary: string;
+        themePrimaryHover: string;
         businessCenterName: string;
-        workingHoursFrom: any;
-        workingHoursTo: any;
+        businessCenters: {
+            id: string;
+            name: string;
+            workingHoursFrom: any;
+            workingHoursTo: any;
+            requireCheckout: boolean;
+            closedWeekdays: number[];
+        }[];
         contactPhone: any;
         contactEmail: any;
         receptionFloor: any;
@@ -86,7 +96,18 @@ export declare class AppConfigService {
                 readonly order: "Заказать пропуск";
                 readonly save: "Сохранить";
                 readonly share: "Поделиться";
-                readonly copyLink: "Скопировать ссылку на пропуск";
+                readonly copyLink: "Скопировать ссылку";
+                readonly shareSocial: "В приложения и соцсети";
+                readonly sendToEmail: "Отправить на почту";
+                readonly sendEmailTitle: "Отправить пропуск на почту";
+                readonly sendEmailHint: "На указанный адрес придёт письмо со ссылкой на пропуск и QR-кодом";
+                readonly sendEmailSubmit: "Отправить";
+                readonly sendEmailSending: "Отправка…";
+                readonly sendEmailSuccess: "Письмо отправлено";
+                readonly sendEmailSuccessHint: "Если письма нет во «Входящих», проверьте папку «Спам».";
+                readonly sendEmailError: "Не удалось отправить письмо";
+                readonly sendEmailClose: "Закрыть";
+                readonly sendEmailRetry: "Повторить";
                 readonly linkCopied: "Ссылка скопирована";
                 readonly lookup: "Найти";
                 readonly allPasses: "Все пропуска";

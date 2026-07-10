@@ -4,6 +4,8 @@ export declare class AppSettings {
     key: string;
     siteName: string;
     siteIcon: string;
+    siteIconLight: string;
+    siteIconDark: string;
     siteTagline: string;
     sitePhone: string;
     siteEmail: string;
@@ -12,6 +14,8 @@ export declare class AppSettings {
     brandShowName: boolean;
     brandNameBeforeMark: boolean;
     uiIconSelectChevron: string;
+    themePrimary: string;
+    themePrimaryHover: string;
     uiLabels: Record<string, unknown>;
 }
 export declare const AppSettingsSchema: import("mongoose").Schema<AppSettings, import("mongoose").Model<AppSettings, any, any, any, any, any, AppSettings>, {}, {}, {}, {}, import("mongoose").DefaultSchemaOptions, AppSettings, import("mongoose").Document<unknown, {}, AppSettings, {
@@ -42,6 +46,24 @@ export declare const AppSettingsSchema: import("mongoose").Schema<AppSettings, i
         id: string;
     }> | undefined;
     siteIcon?: import("mongoose").SchemaDefinitionProperty<string, AppSettings, import("mongoose").Document<unknown, {}, AppSettings, {
+        id: string;
+    }, import("mongoose").DefaultSchemaOptions> & Omit<AppSettings & {
+        _id: import("mongoose").Types.ObjectId;
+    } & {
+        __v: number;
+    }, "id"> & {
+        id: string;
+    }> | undefined;
+    siteIconLight?: import("mongoose").SchemaDefinitionProperty<string, AppSettings, import("mongoose").Document<unknown, {}, AppSettings, {
+        id: string;
+    }, import("mongoose").DefaultSchemaOptions> & Omit<AppSettings & {
+        _id: import("mongoose").Types.ObjectId;
+    } & {
+        __v: number;
+    }, "id"> & {
+        id: string;
+    }> | undefined;
+    siteIconDark?: import("mongoose").SchemaDefinitionProperty<string, AppSettings, import("mongoose").Document<unknown, {}, AppSettings, {
         id: string;
     }, import("mongoose").DefaultSchemaOptions> & Omit<AppSettings & {
         _id: import("mongoose").Types.ObjectId;
@@ -114,6 +136,24 @@ export declare const AppSettingsSchema: import("mongoose").Schema<AppSettings, i
         id: string;
     }> | undefined;
     uiIconSelectChevron?: import("mongoose").SchemaDefinitionProperty<string, AppSettings, import("mongoose").Document<unknown, {}, AppSettings, {
+        id: string;
+    }, import("mongoose").DefaultSchemaOptions> & Omit<AppSettings & {
+        _id: import("mongoose").Types.ObjectId;
+    } & {
+        __v: number;
+    }, "id"> & {
+        id: string;
+    }> | undefined;
+    themePrimary?: import("mongoose").SchemaDefinitionProperty<string, AppSettings, import("mongoose").Document<unknown, {}, AppSettings, {
+        id: string;
+    }, import("mongoose").DefaultSchemaOptions> & Omit<AppSettings & {
+        _id: import("mongoose").Types.ObjectId;
+    } & {
+        __v: number;
+    }, "id"> & {
+        id: string;
+    }> | undefined;
+    themePrimaryHover?: import("mongoose").SchemaDefinitionProperty<string, AppSettings, import("mongoose").Document<unknown, {}, AppSettings, {
         id: string;
     }, import("mongoose").DefaultSchemaOptions> & Omit<AppSettings & {
         _id: import("mongoose").Types.ObjectId;

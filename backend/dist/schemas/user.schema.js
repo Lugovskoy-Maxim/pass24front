@@ -18,6 +18,7 @@ let User = class User {
     lastName;
     firstName;
     middleName;
+    username;
     email;
     password;
     role;
@@ -31,6 +32,11 @@ let User = class User {
     isBlocked;
     lastLoginAt;
     pushTokens;
+    bitrix24UserId;
+    bitrix24Domain;
+    bitrix24Meta;
+    parentTenantId;
+    employeePositionId;
     profileChangeRequest;
 };
 exports.User = User;
@@ -54,6 +60,10 @@ __decorate([
     (0, mongoose_1.Prop)({ trim: true }),
     __metadata("design:type", String)
 ], User.prototype, "middleName", void 0);
+__decorate([
+    (0, mongoose_1.Prop)({ trim: true, lowercase: true, unique: true, sparse: true }),
+    __metadata("design:type", String)
+], User.prototype, "username", void 0);
 __decorate([
     (0, mongoose_1.Prop)({ trim: true, lowercase: true, unique: true, sparse: true }),
     __metadata("design:type", String)
@@ -107,6 +117,26 @@ __decorate([
     __metadata("design:type", Array)
 ], User.prototype, "pushTokens", void 0);
 __decorate([
+    (0, mongoose_1.Prop)({ trim: true, sparse: true }),
+    __metadata("design:type", String)
+], User.prototype, "bitrix24UserId", void 0);
+__decorate([
+    (0, mongoose_1.Prop)({ trim: true, lowercase: true }),
+    __metadata("design:type", String)
+], User.prototype, "bitrix24Domain", void 0);
+__decorate([
+    (0, mongoose_1.Prop)({ type: Object, default: null }),
+    __metadata("design:type", Object)
+], User.prototype, "bitrix24Meta", void 0);
+__decorate([
+    (0, mongoose_1.Prop)({ type: mongoose_2.Types.ObjectId, ref: 'User' }),
+    __metadata("design:type", mongoose_2.Types.ObjectId)
+], User.prototype, "parentTenantId", void 0);
+__decorate([
+    (0, mongoose_1.Prop)({ type: mongoose_2.Types.ObjectId, ref: 'TenantEmployeePosition' }),
+    __metadata("design:type", mongoose_2.Types.ObjectId)
+], User.prototype, "employeePositionId", void 0);
+__decorate([
     (0, mongoose_1.Prop)({ type: Object, default: null }),
     __metadata("design:type", Object)
 ], User.prototype, "profileChangeRequest", void 0);
@@ -114,7 +144,10 @@ exports.User = User = __decorate([
     (0, mongoose_1.Schema)({ timestamps: true, collection: 'users' })
 ], User);
 exports.UserSchema = mongoose_1.SchemaFactory.createForClass(User);
+exports.UserSchema.index({ username: 1 }, { unique: true, sparse: true });
 exports.UserSchema.index({ properties: 1 });
 exports.UserSchema.index({ role: 1, isActive: 1 });
 exports.UserSchema.index({ fullName: 'text' });
+exports.UserSchema.index({ bitrix24UserId: 1, bitrix24Domain: 1 }, { unique: true, sparse: true });
+exports.UserSchema.index({ parentTenantId: 1 });
 //# sourceMappingURL=user.schema.js.map

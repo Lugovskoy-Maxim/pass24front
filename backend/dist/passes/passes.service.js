@@ -24,6 +24,9 @@ const auth_database_constants_1 = require("../database/auth-database.constants")
 const schemas_1 = require("../schemas");
 const enums_1 = require("../schemas/enums");
 const pass_helpers_1 = require("../common/pass-helpers");
+const tenant_owner_1 = require("../common/tenant-owner");
+const user_permissions_1 = require("../common/user-permissions");
+const bookable_visit_dates_1 = require("../common/bookable-visit-dates");
 const visit_date_1 = require("../common/visit-date");
 const pass_templates_service_1 = require("./pass-templates.service");
 let PassesService = class PassesService {
@@ -47,12 +50,6 @@ let PassesService = class PassesService {
         this.mailService = mailService;
         this.configService = configService;
     }
-    passTypeLabels = {
-        visitor: 'Посетитель',
-        parking: 'Парковка',
-        delivery: 'Доставка',
-        contractor: 'Подрядчик',
-    };
     generatePassNumber() {
         const year = new Date().getFullYear();
         const random = Math.floor(1000 + Math.random() * 9000);
@@ -113,14 +110,47 @@ let PassesService = class PassesService {
             ],
         };
     }
+    createdByTeamFilter(userIds) {
+        return { createdBy: { $in: userIds } };
+    }
+    async getTenantTeamIds(user) {
+        const ownerId = (0, tenant_owner_1.resolveTenantOwnerId)(user);
+        if (!ownerId)
+            return [];
+        const team = await this.userModel
+            .find({
+            $or: [
+                { _id: new mongoose_2.Types.ObjectId(ownerId) },
+                { parentTenantId: new mongoose_2.Types.ObjectId(ownerId), isActive: { $ne: false } },
+            ],
+        })
+            .select('_id')
+            .lean();
+        return team.map((member) => member._id);
+    }
     async buildAccessFilter(user) {
         if (!user?.role)
             return { _id: null };
         if (user.role === 'tenant') {
-            return this.createdByFilter(user.userId);
+            const teamIds = await this.getTenantTeamIds(user);
+            if (!teamIds.length)
+                return { _id: null };
+            if (user.parentTenantId) {
+                if ((0, user_permissions_1.userHasPermission)(user, 'passes.view_own')) {
+                    return this.createdByFilter(user.userId);
+                }
+                return { _id: null };
+            }
+            return this.createdByTeamFilter(teamIds);
         }
         if (await this.accessConfigService.canViewAllPasses(user.role)) {
             return {};
+        }
+        if (user.permissions?.length) {
+            if ((0, user_permissions_1.userHasPermission)(user, 'passes.view_own')) {
+                return this.createdByFilter(user.userId);
+            }
+            return { _id: null };
         }
         if (await this.accessConfigService.hasPermission(user.role, 'passes.view_own')) {
             return this.createdByFilter(user.userId);
@@ -149,7 +179,8 @@ let PassesService = class PassesService {
             });
         }
         const passes = await this.passModel.find(filter).sort({ createdAt: -1 }).lean();
-        const enriched = await this.enrichCreatorFields(passes, user);
+        const withCheckout = await this.enrichPassCheckoutSettings(passes);
+        const enriched = await this.enrichCreatorFields(withCheckout, user);
         return { passes: enriched.map((p) => this.mapToFrontend(p, user)) };
     }
     async findOne(id, user) {
@@ -158,7 +189,8 @@ let PassesService = class PassesService {
         if (!pass)
             throw new common_1.NotFoundException('Пропуск не найден');
         await this.ensurePassAccess(pass, user);
-        const [enriched] = await this.enrichCreatorFields([pass], user);
+        const [withCheckout] = await this.enrichPassCheckoutSettings([pass]);
+        const [enriched] = await this.enrichCreatorFields([withCheckout], user);
         return { pass: this.mapToFrontend(enriched, user) };
     }
     async create(dto, user) {
@@ -173,16 +205,23 @@ let PassesService = class PassesService {
         if (!(0, visit_date_1.isValidVisitDateString)(passDto.visitDate)) {
             throw new common_1.BadRequestException('Некорректная дата визита');
         }
+        const resolved = await this.resolveOfficeFields(passDto, user);
+        const closedWeekdays = await this.getClosedWeekdaysForProperty(resolved.property);
         try {
-            (0, visit_date_1.assertVisitDateNotPast)(passDto.visitDate, this.getTodayDate());
+            (0, bookable_visit_dates_1.assertVisitDateBookable)(passDto.visitDate, this.getTodayDate(), closedWeekdays);
         }
         catch (e) {
             if (e instanceof Error && e.message === 'PAST_DATE') {
                 throw new common_1.BadRequestException('Нельзя заказать пропуск на прошедшую дату');
             }
+            if (e instanceof Error && e.message === 'NOT_BOOKABLE') {
+                throw new common_1.BadRequestException('Выберите одну из доступных дат визита');
+            }
             throw new common_1.BadRequestException('Некорректная дата визита');
         }
-        const resolved = await this.resolveOfficeFields(passDto, user);
+        const workingHours = await this.resolveWorkingHours(resolved.property, passDto);
+        passDto.visitTimeFrom = workingHours.from;
+        passDto.visitTimeTo = workingHours.to;
         const creator = user?.userId
             ? await this.userModel.findById(user.userId).select('fullName phone company email').lean()
             : null;
@@ -239,7 +278,6 @@ let PassesService = class PassesService {
             floor: pass.floor,
             companyName: pass.companyName,
             visitPurpose: pass.visitPurpose,
-            passTypeLabel: this.passTypeLabels[pass.passType] || pass.passType,
             ticketUrl,
         });
         return { sent: true, email: email.trim().toLowerCase() };
@@ -317,8 +355,16 @@ let PassesService = class PassesService {
         if (pass.status === 'pending' && !pass.approvedAt) {
             pass.approvedAt = new Date().toISOString();
         }
-        pass.status = 'active';
-        pass.checkedInAt = new Date().toISOString();
+        const requireCheckout = await this.getRequireCheckoutForPass(pass);
+        const now = new Date().toISOString();
+        pass.checkedInAt = now;
+        if (requireCheckout) {
+            pass.status = 'active';
+        }
+        else {
+            pass.status = 'completed';
+            pass.checkedOutAt = now;
+        }
         await pass.save();
         await this.auditService.log({
             action: 'pass.check_in',
@@ -327,7 +373,8 @@ let PassesService = class PassesService {
             actor,
             details: { passNumber: pass.passNumber, visitorName: pass.visitorName },
         });
-        return { pass: this.mapToFrontend(pass) };
+        const [withCheckout] = await this.enrichPassCheckoutSettings([pass.toObject()]);
+        return { pass: this.mapToFrontend(withCheckout) };
     }
     async checkOut(id, actor) {
         const pass = await this.passModel.findById(id);
@@ -343,7 +390,8 @@ let PassesService = class PassesService {
             actor,
             details: { passNumber: pass.passNumber, visitorName: pass.visitorName },
         });
-        return { pass: this.mapToFrontend(pass) };
+        const [withCheckout] = await this.enrichPassCheckoutSettings([pass.toObject()]);
+        return { pass: this.mapToFrontend(withCheckout) };
     }
     async getJournal(date, user) {
         await this.expirePastPasses();
@@ -353,7 +401,8 @@ let PassesService = class PassesService {
             .find({ visitDate: targetDate, ...accessFilter })
             .sort({ createdAt: -1 })
             .lean();
-        const enriched = await this.enrichCreatorFields(passes, user);
+        const withCheckout = await this.enrichPassCheckoutSettings(passes);
+        const enriched = await this.enrichCreatorFields(withCheckout, user);
         const mapped = enriched.map((p) => this.mapToFrontend(p, user));
         const stats = {
             total: mapped.length,
@@ -418,7 +467,8 @@ let PassesService = class PassesService {
             .sort({ visitDate: -1, createdAt: -1 })
             .limit(limit)
             .lean();
-        const enriched = await this.enrichCreatorFields(passes, user);
+        const withCheckout = await this.enrichPassCheckoutSettings(passes);
+        const enriched = await this.enrichCreatorFields(withCheckout, user);
         return {
             scope: query.scope,
             total: enriched.length,
@@ -468,7 +518,8 @@ let PassesService = class PassesService {
         const pass = await this.passModel.findOne({ passNumber }).lean();
         if (!pass)
             throw new common_1.NotFoundException('Пропуск не найден');
-        const [enriched] = await this.enrichCreatorFields([pass], user || { role: 'security' });
+        const [withCheckout] = await this.enrichPassCheckoutSettings([pass]);
+        const [enriched] = await this.enrichCreatorFields([withCheckout], user || { role: 'security' });
         return { pass: this.mapToFrontend(enriched, user) };
     }
     async getPublicTicket(passNumber) {
@@ -476,8 +527,9 @@ let PassesService = class PassesService {
         const pass = await this.passModel.findOne({ passNumber }).lean();
         if (!pass)
             throw new common_1.NotFoundException('Пропуск не найден');
+        const [withCheckout] = await this.enrichPassCheckoutSettings([pass]);
         const businessCenterName = await this.resolveBusinessCenterName(pass);
-        return { ticket: { ...this.mapToPublicTicket(pass), businessCenterName } };
+        return { ticket: { ...this.mapToPublicTicket(withCheckout), businessCenterName } };
     }
     async getOverdueActive(user) {
         await this.expirePastPasses();
@@ -487,7 +539,8 @@ let PassesService = class PassesService {
             .sort({ visitDate: 1, visitTimeTo: 1 })
             .lean();
         const overdue = passes.filter((p) => this.isPassOverdueInBuilding(p));
-        const enriched = await this.enrichCreatorFields(overdue, user);
+        const withCheckout = await this.enrichPassCheckoutSettings(overdue);
+        const enriched = await this.enrichCreatorFields(withCheckout, user);
         return {
             count: enriched.length,
             passes: enriched.map((p) => this.mapToFrontend(p, user)),
@@ -507,14 +560,77 @@ let PassesService = class PassesService {
             todayByType: this.countBy(todayPasses, 'passType'),
         };
     }
+    async getClosedWeekdaysForProperty(propertyId) {
+        if (!propertyId)
+            return [];
+        const property = await this.propertyModel.findById(propertyId).select('settings').lean();
+        return (0, bookable_visit_dates_1.parseClosedWeekdays)(property?.settings?.closed_weekdays);
+    }
+    async resolveWorkingHours(propertyId, dto) {
+        if (dto.visitTimeFrom && dto.visitTimeTo) {
+            return { from: dto.visitTimeFrom, to: dto.visitTimeTo };
+        }
+        if (propertyId) {
+            const property = await this.propertyModel.findById(propertyId).lean();
+            const ps = property?.settings || {};
+            return {
+                from: dto.visitTimeFrom || ps.working_hours_from || '08:00',
+                to: dto.visitTimeTo || ps.working_hours_to || '20:00',
+            };
+        }
+        return {
+            from: dto.visitTimeFrom || '08:00',
+            to: dto.visitTimeTo || '20:00',
+        };
+    }
+    async getRequireCheckoutForPass(pass) {
+        if (!pass.property)
+            return true;
+        const property = await this.propertyModel.findById(pass.property).select('settings').lean();
+        return property?.settings?.require_checkout !== 'false';
+    }
+    async enrichPassCheckoutSettings(docs) {
+        const propertyIds = [
+            ...new Set(docs.map((doc) => doc.property?.toString()).filter((id) => !!id)),
+        ];
+        if (!propertyIds.length)
+            return docs;
+        const properties = await this.propertyModel
+            .find({ _id: { $in: propertyIds.map((id) => new mongoose_2.Types.ObjectId(id)) } })
+            .select('settings')
+            .lean();
+        const checkoutMap = new Map(properties.map((p) => [p._id.toString(), p.settings?.require_checkout !== 'false']));
+        return docs.map((doc) => ({
+            ...doc,
+            requireCheckout: doc.property
+                ? checkoutMap.get(doc.property.toString()) ?? true
+                : true,
+        }));
+    }
     async resolveOfficeFields(dto, user) {
+        const tenantOwnerId = (0, tenant_owner_1.tenantOwnerObjectId)(user);
+        if (user?.role === 'tenant') {
+            if (!tenantOwnerId) {
+                throw new common_1.ForbiddenException('Заказ пропусков недоступен');
+            }
+            const assignedOffices = await this.officeModel.countDocuments({
+                tenantId: tenantOwnerId,
+                isActive: true,
+            });
+            if (!assignedOffices) {
+                throw new common_1.ForbiddenException('Заказ пропусков недоступен: офис не назначен. Обратитесь к администратору.');
+            }
+            if (!dto.officeId) {
+                throw new common_1.BadRequestException('Выберите офис из списка');
+            }
+        }
         if (dto.officeId) {
             const office = await this.officeModel.findById(dto.officeId).lean();
             if (!office || !office.isActive) {
                 throw new common_1.NotFoundException('Офис не найден');
             }
             if (user.role === 'tenant') {
-                const ownsOffice = office.tenantId?.toString() === user.userId;
+                const ownsOffice = office.tenantId?.toString() === tenantOwnerId?.toString();
                 if (!ownsOffice) {
                     throw new common_1.ForbiddenException('Вы можете заказывать пропуска только в свои офисы');
                 }
@@ -528,6 +644,9 @@ let PassesService = class PassesService {
                 floor: office.floor,
                 companyName: dto.companyName || office.company,
             };
+        }
+        if (user?.role === 'tenant') {
+            throw new common_1.BadRequestException('Выберите офис из списка');
         }
         if (!dto.office?.trim()) {
             throw new common_1.BadRequestException('Укажите офис из реестра');
@@ -590,9 +709,14 @@ let PassesService = class PassesService {
         if (!user?.role)
             throw new common_1.ForbiddenException('Нет доступа к этому пропуску');
         if (user.role === 'tenant') {
-            const isCreator = pass.createdBy?.toString() === user.userId;
-            if (!isCreator)
+            const teamIds = await this.getTenantTeamIds(user);
+            const createdBy = pass.createdBy?.toString();
+            const hasAccess = teamIds.some((id) => id.toString() === createdBy);
+            if (!hasAccess)
                 throw new common_1.ForbiddenException('Нет доступа к этому пропуску');
+            if (user.parentTenantId && createdBy !== user.userId) {
+                throw new common_1.ForbiddenException('Нет доступа к этому пропуску');
+            }
             return;
         }
         if (await this.accessConfigService.canViewAllPasses(user.role))
@@ -629,6 +753,7 @@ let PassesService = class PassesService {
             checkedInAt: doc.checkedInAt,
             checkedOutAt: doc.checkedOutAt,
             rejectionReason: doc.rejectionReason,
+            requireCheckout: doc.requireCheckout !== false,
         };
     }
     async enrichCreatorFields(docs, viewer) {
@@ -699,6 +824,7 @@ let PassesService = class PassesService {
             checkedOutAt: doc.checkedOutAt,
             checkedOutBy: doc.checkedOutBy,
             checkerOutName: doc.checkerOutName,
+            requireCheckout: doc.requireCheckout !== false,
             createdAt: doc.createdAt,
             updatedAt: doc.updatedAt,
         };

@@ -1,6 +1,6 @@
 import { IsArray, IsBoolean, IsNotEmpty, IsOptional, IsString } from 'class-validator';
 
-export class CreateTenantEmployeeCategoryDto {
+export class CreateTenantEmployeePositionDto {
   @IsNotEmpty()
   @IsString()
   name: string;

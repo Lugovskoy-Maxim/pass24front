@@ -9,6 +9,7 @@ Object.defineProperty(exports, "__esModule", { value: true });
 exports.AuditModule = void 0;
 const common_1 = require("@nestjs/common");
 const mongoose_1 = require("@nestjs/mongoose");
+const auth_database_module_1 = require("../database/auth-database.module");
 const schemas_1 = require("../schemas");
 const audit_service_1 = require("./audit.service");
 let AuditModule = class AuditModule {
@@ -18,10 +19,8 @@ exports.AuditModule = AuditModule = __decorate([
     (0, common_1.Global)(),
     (0, common_1.Module)({
         imports: [
-            mongoose_1.MongooseModule.forFeature([
-                { name: schemas_1.AuditLog.name, schema: schemas_1.AuditLogSchema },
-                { name: schemas_1.User.name, schema: schemas_1.UserSchema },
-            ]),
+            mongoose_1.MongooseModule.forFeature([{ name: schemas_1.AuditLog.name, schema: schemas_1.AuditLogSchema }]),
+            auth_database_module_1.AuthDatabaseModule.forFeature([{ name: schemas_1.User.name, schema: schemas_1.UserSchema }]),
         ],
         providers: [audit_service_1.AuditService],
         exports: [audit_service_1.AuditService],

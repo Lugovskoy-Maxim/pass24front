@@ -80,12 +80,12 @@ export interface TenantEmployee {
   middle_name?: string;
   phone?: string;
   is_active: boolean;
-  category_id?: string;
-  category_name?: string;
+  position_id?: string;
+  position_name?: string;
   created_at: string;
 }
 
-export interface TenantEmployeeCategory {
+export interface TenantEmployeePosition {
   id: string;
   name: string;
   permissions: string[];
@@ -321,7 +321,7 @@ export const api = {
     middleName?: string;
     password: string;
     phone?: string;
-    categoryId?: string;
+    positionId?: string;
   }) =>
     request<{ employee: TenantEmployee }>('/auth/tenant/employees', {
       method: 'POST',
@@ -331,32 +331,10 @@ export const api = {
   removeTenantEmployee: (id: string) =>
     request<{ message: string }>(`/auth/tenant/employees/${id}`, { method: 'DELETE' }),
 
-  getTenantEmployeeCategories: () =>
-    request<{ categories: TenantEmployeeCategory[]; assignablePermissions: PermissionMeta[] }>(
-      '/auth/tenant/employee-categories',
+  getTenantEmployeePositions: () =>
+    request<{ positions: TenantEmployeePosition[]; assignablePermissions: PermissionMeta[] }>(
+      '/auth/tenant/employee-positions',
     ),
-
-  createTenantEmployeeCategory: (data: {
-    name: string;
-    permissions: string[];
-    isDefault?: boolean;
-  }) =>
-    request<{ category: TenantEmployeeCategory }>('/auth/tenant/employee-categories', {
-      method: 'POST',
-      body: JSON.stringify(data),
-    }),
-
-  updateTenantEmployeeCategory: (
-    id: string,
-    data: { name?: string; permissions?: string[]; isDefault?: boolean },
-  ) =>
-    request<{ category: TenantEmployeeCategory }>(`/auth/tenant/employee-categories/${id}`, {
-      method: 'PATCH',
-      body: JSON.stringify(data),
-    }),
-
-  deleteTenantEmployeeCategory: (id: string) =>
-    request<{ message: string }>(`/auth/tenant/employee-categories/${id}`, { method: 'DELETE' }),
 
   getPasses: (params?: { status?: string; date?: string; search?: string }) => {
     const q = new URLSearchParams();
@@ -603,6 +581,33 @@ export const api = {
 
     updateAccessConfig: (data: Partial<Pick<AccessConfig, 'enabledPassTypes' | 'rolePermissions'>>) =>
       request<{ config: AccessConfig }>('/admin/access-config', { method: 'PATCH', body: JSON.stringify(data) }),
+
+    getTenantEmployeePositions: () =>
+      request<{ positions: TenantEmployeePosition[]; assignablePermissions: PermissionMeta[] }>(
+        '/admin/tenant-employee-positions',
+      ),
+
+    createTenantEmployeePosition: (data: {
+      name: string;
+      permissions: string[];
+      isDefault?: boolean;
+    }) =>
+      request<{ position: TenantEmployeePosition }>('/admin/tenant-employee-positions', {
+        method: 'POST',
+        body: JSON.stringify(data),
+      }),
+
+    updateTenantEmployeePosition: (
+      id: string,
+      data: { name?: string; permissions?: string[]; isDefault?: boolean },
+    ) =>
+      request<{ position: TenantEmployeePosition }>(`/admin/tenant-employee-positions/${id}`, {
+        method: 'PATCH',
+        body: JSON.stringify(data),
+      }),
+
+    deleteTenantEmployeePosition: (id: string) =>
+      request<{ message: string }>(`/admin/tenant-employee-positions/${id}`, { method: 'DELETE' }),
 
     getAudit: (filters: AuditFilters = {}) => {
       const qs = buildAuditQuery(filters);

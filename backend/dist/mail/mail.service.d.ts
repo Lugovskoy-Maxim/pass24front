@@ -11,7 +11,6 @@ export interface PassTicketEmailData {
     floor?: string;
     companyName?: string;
     visitPurpose?: string;
-    passTypeLabel?: string;
     ticketUrl: string;
 }
 export declare class MailService {
@@ -25,5 +24,9 @@ export declare class MailService {
         to: string;
         messageId: any;
     }>;
+    sendRegistrationCode(to: string, code: string): Promise<{
+        sent: boolean;
+    }>;
+    private getPassFromAddress;
     private initTransporter;
 }

@@ -17,6 +17,7 @@ const common_1 = require("@nestjs/common");
 const mongoose_1 = require("@nestjs/mongoose");
 const mongoose_2 = require("mongoose");
 const schemas_1 = require("../schemas");
+const tenant_owner_1 = require("../common/tenant-owner");
 let PassTemplatesService = class PassTemplatesService {
     templateModel;
     passModel;
@@ -170,6 +171,22 @@ let PassTemplatesService = class PassTemplatesService {
         return this.templateModel.findOneAndUpdate(filter, { $set: update, $setOnInsert: { createdBy: new mongoose_2.Types.ObjectId(userId) } }, { upsert: true, new: true });
     }
     async resolveOfficeFields(dto, user) {
+        const tenantOwnerId = (0, tenant_owner_1.tenantOwnerObjectId)(user);
+        if (user?.role === 'tenant') {
+            if (!tenantOwnerId) {
+                throw new common_1.ForbiddenException('Создание шаблонов недоступно');
+            }
+            const assignedOffices = await this.officeModel.countDocuments({
+                tenantId: tenantOwnerId,
+                isActive: true,
+            });
+            if (!assignedOffices) {
+                throw new common_1.ForbiddenException('Создание шаблонов недоступно: офис не назначен. Обратитесь к администратору.');
+            }
+            if (!dto.officeId) {
+                throw new common_1.BadRequestException('Выберите офис из списка');
+            }
+        }
         if (!dto.officeId) {
             return {
                 office: dto.office?.trim(),
@@ -179,7 +196,7 @@ let PassTemplatesService = class PassTemplatesService {
         const office = await this.officeModel.findById(dto.officeId).lean();
         if (!office || !office.isActive)
             throw new common_1.NotFoundException('Офис не найден');
-        if (user.role === 'tenant' && office.tenantId?.toString() !== user.userId) {
+        if (user.role === 'tenant' && office.tenantId?.toString() !== tenantOwnerId?.toString()) {
             throw new common_1.ForbiddenException('Вы можете использовать только свои офисы');
         }
         const property = await this.propertyModel.findById(office.property).lean();

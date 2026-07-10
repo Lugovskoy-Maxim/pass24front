@@ -4,17 +4,15 @@ import { AuthService } from './auth.service';
 import { LoginDto } from './dto/login.dto';
 import { ConfirmRegistrationDto } from './dto/confirm-registration.dto';
 import { CreateTenantEmployeeDto } from './dto/create-tenant-employee.dto';
-import { CreateTenantEmployeeCategoryDto } from './dto/create-tenant-employee-category.dto';
 import { RegisterDto } from './dto/register.dto';
 import { UpdateProfileDto } from './dto/update-profile.dto';
-import { UpdateTenantEmployeeCategoryDto } from './dto/update-tenant-employee-category.dto';
-import { TenantEmployeeCategoryService } from './tenant-employee-category.service';
+import { TenantEmployeePositionService } from './tenant-employee-position.service';
 
 @Controller('auth')
 export class AuthController {
   constructor(
     private readonly authService: AuthService,
-    private readonly categoryService: TenantEmployeeCategoryService,
+    private readonly positionService: TenantEmployeePositionService,
   ) {}
 
   @Post('login')
@@ -79,30 +77,8 @@ export class AuthController {
   }
 
   @UseGuards(AuthGuard('jwt'))
-  @Get('tenant/employee-categories')
-  listEmployeeCategories(@Req() req: any) {
-    return this.categoryService.listCategories(req.user.userId);
-  }
-
-  @UseGuards(AuthGuard('jwt'))
-  @Post('tenant/employee-categories')
-  createEmployeeCategory(@Req() req: any, @Body() dto: CreateTenantEmployeeCategoryDto) {
-    return this.categoryService.createCategory(req.user.userId, dto);
-  }
-
-  @UseGuards(AuthGuard('jwt'))
-  @Patch('tenant/employee-categories/:id')
-  updateEmployeeCategory(
-    @Req() req: any,
-    @Param('id') id: string,
-    @Body() dto: UpdateTenantEmployeeCategoryDto,
-  ) {
-    return this.categoryService.updateCategory(req.user.userId, id, dto);
-  }
-
-  @UseGuards(AuthGuard('jwt'))
-  @Delete('tenant/employee-categories/:id')
-  deleteEmployeeCategory(@Req() req: any, @Param('id') id: string) {
-    return this.categoryService.deleteCategory(req.user.userId, id);
+  @Get('tenant/employee-positions')
+  listEmployeePositions(@Req() req: any) {
+    return this.positionService.listPositionsForTenantOwner(req.user.userId);
   }
 }

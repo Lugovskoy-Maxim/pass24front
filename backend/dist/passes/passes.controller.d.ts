@@ -50,6 +50,7 @@ export declare class PassesController {
             checkedOutAt: any;
             checkedOutBy: any;
             checkerOutName: any;
+            requireCheckout: boolean;
             createdAt: any;
             updatedAt: any;
         }[];
@@ -101,6 +102,7 @@ export declare class PassesController {
             checkedOutAt: any;
             checkedOutBy: any;
             checkerOutName: any;
+            requireCheckout: boolean;
             createdAt: any;
             updatedAt: any;
         }[];
@@ -152,6 +154,7 @@ export declare class PassesController {
             checkedOutAt: any;
             checkedOutBy: any;
             checkerOutName: any;
+            requireCheckout: boolean;
             createdAt: any;
             updatedAt: any;
         }[];
@@ -197,6 +200,7 @@ export declare class PassesController {
             checkedOutAt: any;
             checkedOutBy: any;
             checkerOutName: any;
+            requireCheckout: boolean;
             createdAt: any;
             updatedAt: any;
         }[];
@@ -240,6 +244,7 @@ export declare class PassesController {
             checkedOutAt: any;
             checkedOutBy: any;
             checkerOutName: any;
+            requireCheckout: boolean;
             createdAt: any;
             updatedAt: any;
         };
@@ -283,6 +288,7 @@ export declare class PassesController {
             checkedOutAt: any;
             checkedOutBy: any;
             checkerOutName: any;
+            requireCheckout: boolean;
             createdAt: any;
             updatedAt: any;
         };
@@ -326,6 +332,7 @@ export declare class PassesController {
             checkedOutAt: any;
             checkedOutBy: any;
             checkerOutName: any;
+            requireCheckout: boolean;
             createdAt: any;
             updatedAt: any;
         };
@@ -370,6 +377,7 @@ export declare class PassesController {
             checkedOutAt: any;
             checkedOutBy: any;
             checkerOutName: any;
+            requireCheckout: boolean;
             createdAt: any;
             updatedAt: any;
         };
@@ -413,6 +421,7 @@ export declare class PassesController {
             checkedOutAt: any;
             checkedOutBy: any;
             checkerOutName: any;
+            requireCheckout: boolean;
             createdAt: any;
             updatedAt: any;
         };
@@ -460,6 +469,7 @@ export declare class PassesController {
             checkedOutAt: any;
             checkedOutBy: any;
             checkerOutName: any;
+            requireCheckout: boolean;
             createdAt: any;
             updatedAt: any;
         };
@@ -503,6 +513,7 @@ export declare class PassesController {
             checkedOutAt: any;
             checkedOutBy: any;
             checkerOutName: any;
+            requireCheckout: boolean;
             createdAt: any;
             updatedAt: any;
         };

@@ -14,6 +14,8 @@ const class_validator_1 = require("class-validator");
 class UpdateSiteSettingsDto {
     siteName;
     siteIcon;
+    siteIconLight;
+    siteIconDark;
     siteTagline;
     sitePhone;
     siteEmail;
@@ -22,6 +24,8 @@ class UpdateSiteSettingsDto {
     brandShowName;
     brandNameBeforeMark;
     uiIconSelectChevron;
+    themePrimary;
+    themePrimaryHover;
     uiLabels;
 }
 exports.UpdateSiteSettingsDto = UpdateSiteSettingsDto;
@@ -37,6 +41,18 @@ __decorate([
     (0, class_validator_1.MaxLength)(120000),
     __metadata("design:type", String)
 ], UpdateSiteSettingsDto.prototype, "siteIcon", void 0);
+__decorate([
+    (0, class_validator_1.IsOptional)(),
+    (0, class_validator_1.IsString)(),
+    (0, class_validator_1.MaxLength)(120000),
+    __metadata("design:type", String)
+], UpdateSiteSettingsDto.prototype, "siteIconLight", void 0);
+__decorate([
+    (0, class_validator_1.IsOptional)(),
+    (0, class_validator_1.IsString)(),
+    (0, class_validator_1.MaxLength)(120000),
+    __metadata("design:type", String)
+], UpdateSiteSettingsDto.prototype, "siteIconDark", void 0);
 __decorate([
     (0, class_validator_1.IsOptional)(),
     (0, class_validator_1.IsString)(),
@@ -82,6 +98,18 @@ __decorate([
     (0, class_validator_1.MaxLength)(40),
     __metadata("design:type", String)
 ], UpdateSiteSettingsDto.prototype, "uiIconSelectChevron", void 0);
+__decorate([
+    (0, class_validator_1.IsOptional)(),
+    (0, class_validator_1.IsString)(),
+    (0, class_validator_1.Matches)(/^#[0-9A-Fa-f]{6}$/),
+    __metadata("design:type", String)
+], UpdateSiteSettingsDto.prototype, "themePrimary", void 0);
+__decorate([
+    (0, class_validator_1.IsOptional)(),
+    (0, class_validator_1.IsString)(),
+    (0, class_validator_1.Matches)(/^#[0-9A-Fa-f]{6}$/),
+    __metadata("design:type", String)
+], UpdateSiteSettingsDto.prototype, "themePrimaryHover", void 0);
 __decorate([
     (0, class_validator_1.IsOptional)(),
     (0, class_validator_1.IsObject)(),
