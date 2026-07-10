@@ -1517,8 +1517,25 @@ input[type="checkbox"]:not(.checkbox) {
   color: var(--muted) !important;
 }
 
+.print-pass-host {
+  position: absolute;
+  width: 1px;
+  height: 1px;
+  overflow: hidden;
+  clip-path: inset(50%);
+  white-space: nowrap;
+}
+
 @media print {
   body * { visibility: hidden; }
+  .print-pass-host {
+    position: static;
+    width: auto;
+    height: auto;
+    overflow: visible;
+    clip-path: none;
+    white-space: normal;
+  }
   .print-pass, .print-pass * { visibility: visible; }
   .print-pass {
     position: absolute;

@@ -12,6 +12,7 @@ import { StatusBadge } from './StatusBadge';
 interface PassPrintCardProps {
   pass: Pass;
   businessCenterName?: string;
+  hidePrintButton?: boolean;
 }
 
 function PrintDetailRow({ label, value }: { label: string; value?: string | null }) {
@@ -24,7 +25,7 @@ function PrintDetailRow({ label, value }: { label: string; value?: string | null
   );
 }
 
-export function PassPrintCard({ pass, businessCenterName }: PassPrintCardProps) {
+export function PassPrintCard({ pass, businessCenterName, hidePrintButton }: PassPrintCardProps) {
   const config = useConfig();
   const labels = getUiLabels(config);
   const bcName = pass.businessCenterName || businessCenterName || labels.ticket.defaultBcName;
@@ -90,10 +91,12 @@ export function PassPrintCard({ pass, businessCenterName }: PassPrintCardProps) 
         </dl>
       </div>
 
-      <button className="btn btn-secondary mt-4 mx-auto flex print:hidden" onClick={handlePrint}>
-        <Printer className="w-4 h-4" />
-        {labels.print.printButton}
-      </button>
+      {!hidePrintButton && (
+        <button className="btn btn-secondary mt-4 mx-auto flex print:hidden" onClick={handlePrint}>
+          <Printer className="w-4 h-4" />
+          {labels.print.printButton}
+        </button>
+      )}
     </div>
   );
 }

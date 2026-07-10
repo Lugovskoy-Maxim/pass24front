@@ -3,7 +3,7 @@
 import { Suspense, useEffect, useState, useCallback } from 'react';
 import { useRouter, useSearchParams } from 'next/navigation';
 import Link from 'next/link';
-import { Inbox, Plus, Search } from 'lucide-react';
+import { Inbox, Plus, Printer, Search } from 'lucide-react';
 import { ProtectedLayout } from '@/components/ProtectedLayout';
 import { PassListCard } from '@/components/PassListCard';
 import { PassDetailModal } from '@/components/PassDetailModal';
@@ -74,7 +74,7 @@ function PassesPageContent() {
     }
   }, [user, canViewPassesList, canCreate, router]);
 
-  const canPrint = selected && (isAwaitingEntry(selected.status) || selected.status === 'active');
+  const canPrintPass = (pass: Pass) => isAwaitingEntry(pass.status) || pass.status === 'active';
 
   const load = useCallback(() => {
     setLoading(true);
@@ -169,6 +169,12 @@ function PassesPageContent() {
       {canReception && pass.status === 'active' && passRequiresCheckout(pass) && (
         <button className="btn btn-primary w-full" disabled={actionLoading} onClick={() => handleAction(pass.id, 'checkout')}>
           {labels.buttons.checkOut}
+        </button>
+      )}
+      {canPrintPass(pass) && (
+        <button type="button" className="btn btn-secondary w-full" onClick={() => window.print()}>
+          <Printer className="w-4 h-4" />
+          {labels.print.printButton}
         </button>
       )}
       {canSharePass(pass) && (
@@ -273,8 +279,14 @@ function PassesPageContent() {
       >
         {selected && (
           <div className="space-y-3">
-            {canPrint && (
-              <PassPrintCard pass={selected} businessCenterName={selected.businessCenterName || config?.businessCenterName} />
+            {canPrintPass(selected) && (
+              <div className="print-pass-host" aria-hidden="true">
+                <PassPrintCard
+                  pass={selected}
+                  businessCenterName={selected.businessCenterName || config?.businessCenterName}
+                  hidePrintButton
+                />
+              </div>
             )}
             <PassDetailPanel
               pass={selected}

@@ -55,16 +55,6 @@ function HistoryLink({ href, label }: { href: string; label: string }) {
   );
 }
 
-function formatDateTime(iso?: string) {
-  if (!iso) return undefined;
-  return new Date(iso).toLocaleString('ru-RU', {
-    day: '2-digit',
-    month: '2-digit',
-    hour: '2-digit',
-    minute: '2-digit',
-  });
-}
-
 function formatPassport(pass: Pass) {
   if (!pass.visitorPassportSeries && !pass.visitorPassportNumber) return undefined;
   const base = [pass.visitorPassportSeries, pass.visitorPassportNumber].filter(Boolean).join(' ');
@@ -214,7 +204,6 @@ export function PassDetailPanel({
                 </dd>
               </div>
             )}
-            <DetailRow label={labels.card.type} value={TYPE_LABELS[pass.passType as PassType] || pass.passType} />
             <DetailRow label={labels.card.phone} value={pass.visitorPhone && (
               <span className="flex flex-col">
                 <a href={`tel:${pass.visitorPhone}`} className="text-link hover:underline">{pass.visitorPhone}</a>
@@ -260,12 +249,6 @@ export function PassDetailPanel({
                   )}
                 </dd>
               </div>
-            )}
-            {passShowsVisitTimeline(pass) && (
-              <>
-                <DetailRow label={labels.card.checkIn} value={formatDateTime(pass.checkedInAt)} />
-                <DetailRow label={labels.card.checkOut} value={formatDateTime(pass.checkedOutAt)} />
-              </>
             )}
             {pass.comment && (
               <div className="py-2 border-b border-[var(--border)]">
