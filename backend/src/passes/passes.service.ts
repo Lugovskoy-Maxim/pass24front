@@ -14,11 +14,15 @@ import { isTenantCompanyUser } from '../common/tenant-account';
 import { userHasPermission } from '../common/user-permissions';
 import { assertVisitDateBookable, parseClosedWeekdays } from '../common/bookable-visit-dates';
 import { isValidVisitDateString } from '../common/visit-date';
+import { buildPassCsv } from '../common/pass-csv';
 import { CreatePassDto } from './dto/create-pass.dto';
+import { PassExportQueryDto } from './dto/pass-export-query.dto';
 import { PassHistoryQueryDto } from './dto/pass-history-query.dto';
 import { UpdatePassVisitorDto } from './dto/update-pass-visitor.dto';
 import { UpdateStatusDto } from './dto/update-status.dto';
 import { PassTemplatesService } from './pass-templates.service';
+
+const PASS_EXPORT_LIMIT = 10_000;
 
 @Injectable()
 export class PassesService implements OnModuleInit {
@@ -169,32 +173,220 @@ export class PassesService implements OnModuleInit {
     return { _id: null };
   }
 
-  async findAll(params: { status?: string; date?: string; search?: string }, user?: any) {
-    await this.expirePastPasses();
+  private appendSearchFilter(filter: any, search?: string) {
+    if (!search?.trim()) return;
+    filter.$and = filter.$and || [];
+    filter.$and.push({
+      $or: [
+        { visitorName: new RegExp(search, 'i') },
+        { visitorPhone: new RegExp(search, 'i') },
+        { visitorPassportSeries: new RegExp(search, 'i') },
+        { visitorPassportNumber: new RegExp(search, 'i') },
+        { vehiclePlate: new RegExp(search, 'i') },
+        { companyName: new RegExp(search, 'i') },
+        { businessCenterName: new RegExp(search, 'i') },
+      ],
+    });
+  }
+
+  private async assertTenantExportScope(user: any, params: { propertyId?: string; officeId?: string }) {
+    const ownerId = resolveTenantOwnerId(user);
+    if (!ownerId) throw new ForbiddenException('Нет доступа');
+
+    const offices = await this.officeModel
+      .find({ tenantId: new Types.ObjectId(ownerId), isActive: true })
+      .select('_id property')
+      .lean();
+
+    const officeIds = new Set(offices.map((o) => o._id.toString()));
+    const propertyIds = new Set(
+      offices.map((o) => o.property?.toString()).filter((id): id is string => !!id),
+    );
+
+    if (params.officeId && !officeIds.has(params.officeId)) {
+      throw new ForbiddenException('Нет доступа к выбранному офису');
+    }
+    if (params.propertyId && !propertyIds.has(params.propertyId)) {
+      throw new ForbiddenException('Нет доступа к выбранному БЦ');
+    }
+  }
+
+  private async buildListFilter(
+    params: {
+      status?: string;
+      date?: string;
+      dateFrom?: string;
+      dateTo?: string;
+      search?: string;
+      passType?: string;
+      propertyId?: string;
+      officeId?: string;
+      tenantId?: string;
+    },
+    user?: any,
+  ) {
     const filter: any = { ...(await this.buildAccessFilter(user)) };
 
     if (params.status) filter.status = params.status;
-    if (params.date) filter.visitDate = params.date;
+    if (params.passType) filter.passType = params.passType;
 
-    if (params.search) {
-      filter.$and = filter.$and || [];
-      filter.$and.push({
-        $or: [
-          { visitorName: new RegExp(params.search, 'i') },
-          { visitorPhone: new RegExp(params.search, 'i') },
-          { visitorPassportSeries: new RegExp(params.search, 'i') },
-          { visitorPassportNumber: new RegExp(params.search, 'i') },
-          { vehiclePlate: new RegExp(params.search, 'i') },
-          { companyName: new RegExp(params.search, 'i') },
-          { businessCenterName: new RegExp(params.search, 'i') },
-        ],
-      });
+    if (params.dateFrom || params.dateTo) {
+      if (params.dateFrom && !isValidVisitDateString(params.dateFrom)) {
+        throw new BadRequestException('Некорректная дата «с»');
+      }
+      if (params.dateTo && !isValidVisitDateString(params.dateTo)) {
+        throw new BadRequestException('Некорректная дата «по»');
+      }
+      if (params.dateFrom && params.dateTo && params.dateFrom > params.dateTo) {
+        throw new BadRequestException('Дата «с» не может быть позже даты «по»');
+      }
+      filter.visitDate = {};
+      if (params.dateFrom) filter.visitDate.$gte = params.dateFrom;
+      if (params.dateTo) filter.visitDate.$lte = params.dateTo;
+    } else if (params.date) {
+      if (!isValidVisitDateString(params.date)) {
+        throw new BadRequestException('Некорректная дата визита');
+      }
+      filter.visitDate = params.date;
     }
+
+    this.appendSearchFilter(filter, params.search);
+
+    if (params.propertyId || params.officeId) {
+      if (isTenantCompanyUser(user)) {
+        await this.assertTenantExportScope(user, params);
+      }
+      if (params.propertyId) filter.property = new Types.ObjectId(params.propertyId);
+      if (params.officeId) filter.officeId = new Types.ObjectId(params.officeId);
+    }
+
+    if (params.tenantId) {
+      if (isTenantCompanyUser(user)) {
+        throw new ForbiddenException('Фильтр по арендатору недоступен');
+      }
+      if (!(await this.accessConfigService.canViewAllPasses(user.role, user.parentTenantId))) {
+        throw new ForbiddenException('Нет доступа к фильтру по арендатору');
+      }
+      filter.createdBy = new Types.ObjectId(params.tenantId);
+    }
+
+    return filter;
+  }
+
+  async findAll(params: { status?: string; date?: string; search?: string }, user?: any) {
+    await this.expirePastPasses();
+    const filter = await this.buildListFilter(params, user);
 
     const passes = await this.passModel.find(filter).sort({ createdAt: -1 }).lean();
     const withCheckout = await this.enrichPassCheckoutSettings(passes);
     const enriched = await this.enrichCreatorFields(withCheckout, user);
     return { passes: enriched.map((p) => this.mapToFrontend(p, user)) };
+  }
+
+  async getExportFilters(user?: any) {
+    const canFilterTenants = !isTenantCompanyUser(user)
+      && !!(await this.accessConfigService.canViewAllPasses(user?.role, user?.parentTenantId));
+
+    if (isTenantCompanyUser(user)) {
+      const ownerId = resolveTenantOwnerId(user);
+      const offices = ownerId
+        ? await this.officeModel.find({ tenantId: new Types.ObjectId(ownerId), isActive: true }).lean()
+        : [];
+      const propertyIds = [...new Set(offices.map((o) => o.property?.toString()).filter((id): id is string => !!id))];
+      const properties = propertyIds.length
+        ? await this.propertyModel.find({ _id: { $in: propertyIds.map((id) => new Types.ObjectId(id)) } }).select('name').lean()
+        : [];
+      const propertyMap = new Map(properties.map((p) => [p._id.toString(), p.name]));
+
+      return {
+        scope: 'own' as const,
+        businessCenters: propertyIds.map((id) => ({ id, name: propertyMap.get(id) || 'БЦ' })),
+        offices: offices.map((o) => ({
+          id: o._id.toString(),
+          propertyId: o.property?.toString(),
+          number: o.number,
+          businessCenterName: propertyMap.get(o.property?.toString() || '') || '',
+          company: o.company,
+        })),
+        tenants: [] as Array<{ id: string; company: string; email?: string }>,
+      };
+    }
+
+    const [properties, offices, tenants] = await Promise.all([
+      this.propertyModel.find({ type: PropertyType.BUSINESS_CENTER, isActive: true }).sort({ name: 1 }).lean(),
+      this.officeModel.find({ isActive: true }).sort({ number: 1 }).lean(),
+      canFilterTenants
+        ? this.userModel
+            .find({ role: 'tenant', parentTenantId: null, isActive: { $ne: false } })
+            .select('fullName company email')
+            .sort({ company: 1, fullName: 1 })
+            .lean()
+        : Promise.resolve([]),
+    ]);
+
+    const propertyMap = new Map(properties.map((p) => [p._id.toString(), p.name]));
+
+    return {
+      scope: 'all' as const,
+      businessCenters: properties.map((p) => ({ id: p._id.toString(), name: p.name })),
+      offices: offices.map((o) => ({
+        id: o._id.toString(),
+        propertyId: o.property?.toString(),
+        number: o.number,
+        businessCenterName: propertyMap.get(o.property?.toString() || '') || '',
+        company: o.company,
+      })),
+      tenants: tenants.map((t) => ({
+        id: t._id.toString(),
+        company: t.company || t.fullName,
+        email: t.email,
+      })),
+    };
+  }
+
+  async exportCsv(query: PassExportQueryDto, user?: any) {
+    await this.expirePastPasses();
+    const filter = await this.buildListFilter(query, user);
+    const limit = Math.min(query.limit || PASS_EXPORT_LIMIT, PASS_EXPORT_LIMIT);
+
+    const passes = await this.passModel
+      .find(filter)
+      .sort({ visitDate: -1, createdAt: -1 })
+      .limit(limit)
+      .lean();
+
+    const withCheckout = await this.enrichPassCheckoutSettings(passes);
+    const enriched = await this.enrichCreatorFields(withCheckout, user);
+    const includeCreator = !isTenantCompanyUser(user);
+
+    return buildPassCsv(
+      enriched.map((doc) => ({
+        passNumber: doc.passNumber,
+        status: doc.status,
+        passType: doc.passType,
+        visitDate: doc.visitDate,
+        visitTimeFrom: doc.visitTimeFrom,
+        visitTimeTo: doc.visitTimeTo,
+        visitorName: doc.visitorName,
+        visitorPhone: doc.visitorPhone,
+        companyName: doc.companyName,
+        visitPurpose: doc.visitPurpose,
+        businessCenterName: doc.businessCenterName,
+        office: doc.office,
+        floor: doc.floor,
+        vehiclePlate: doc.vehiclePlate,
+        vehicleModel: doc.vehicleModel,
+        creatorName: doc.creatorName,
+        creatorCompany: doc.creatorCompany,
+        creatorPhone: doc.creatorPhone,
+        approverName: doc.approverName,
+        checkedInAt: doc.checkedInAt,
+        checkedOutAt: doc.checkedOutAt,
+        comment: doc.comment,
+        createdAt: doc.createdAt,
+      })),
+      { includeCreator },
+    );
   }
 
   async findOne(id: string, user?: any) {

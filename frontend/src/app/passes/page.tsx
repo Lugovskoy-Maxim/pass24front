@@ -3,7 +3,7 @@
 import { Suspense, useEffect, useState, useCallback } from 'react';
 import { useRouter, useSearchParams } from 'next/navigation';
 import Link from 'next/link';
-import { Inbox, Plus, Printer, Search } from 'lucide-react';
+import { Download, Inbox, Plus, Printer, Search } from 'lucide-react';
 import { ProtectedLayout } from '@/components/ProtectedLayout';
 import { PassListCard } from '@/components/PassListCard';
 import { PassDetailModal } from '@/components/PassDetailModal';
@@ -25,6 +25,7 @@ import { passRequiresCheckout } from '@/lib/pass-checkout';
 import { getStatusLabel, getUiLabels, UiLabels } from '@/lib/ui-labels';
 // Графики временно отключены
 // import { PassesStatsBar } from '@/components/PassesStatsBar';
+import { PassExportPanel } from '@/components/PassExportPanel';
 import { ListSkeleton } from '@/components/ui/Skeleton';
 import { EmptyState } from '@/components/ui/EmptyState';
 
@@ -55,6 +56,7 @@ function PassesPageContent() {
   const [loadErrorCause, setLoadErrorCause] = useState<unknown>(null);
   const [actionLoading, setActionLoading] = useState(false);
   const [rejectReason, setRejectReason] = useState('');
+  const [exportOpen, setExportOpen] = useState(false);
 
   const labels = getUiLabels(config);
 
@@ -226,8 +228,26 @@ function PassesPageContent() {
               ))}
             </select>
           </div>
+          <button
+            type="button"
+            className="btn btn-secondary shrink-0"
+            onClick={() => setExportOpen(true)}
+          >
+            <Download className="w-4 h-4" />
+            {labels.buttons.export}
+          </button>
         </div>
       </div>
+
+      <PassExportPanel
+        open={exportOpen}
+        onClose={() => setExportOpen(false)}
+        initialFilters={{
+          status: statusFilter,
+          date: dateFilter,
+          search: debouncedSearch,
+        }}
+      />
 
       {/* Графики временно отключены
       {canViewPassCharts(user) && <PassesStatsBar />}

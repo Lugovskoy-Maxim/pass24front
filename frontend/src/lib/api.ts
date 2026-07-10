@@ -343,6 +343,32 @@ export const api = {
     return request<{ passes: Pass[] }>(`/passes${qs ? `?${qs}` : ''}`);
   },
 
+  getPassExportFilters: () =>
+    request<PassExportFilters>('/passes/export-filters'),
+
+  exportPasses: async (filters: PassExportFiltersInput = {}) => {
+    const qs = buildPassExportQuery(filters);
+    const token = getToken();
+    const datePart = filters.dateFrom && filters.dateTo
+      ? `${filters.dateFrom}_${filters.dateTo}`
+      : filters.date || new Date().toISOString().slice(0, 10);
+    let res: Response;
+    try {
+      res = await fetch(`${API_URL}/passes/export${qs ? `?${qs}` : ''}`, {
+        headers: {
+          Accept: 'text/csv',
+          ...(token ? { Authorization: `Bearer ${token}` } : {}),
+        },
+      });
+    } catch (error) {
+      throw new ApiError(
+        getErrorMessage(error, 'Сервер недоступен. Проверьте подключение к сети и что backend запущен.'),
+        { isNetworkError: true },
+      );
+    }
+    await downloadFileResponse(res, `passes-${datePart}.csv`);
+  },
+
   getJournal: (date?: string) =>
     request<{ date: string; stats: { total: number; pending: number; active: number; completed: number; approved: number }; passes: Pass[] }>(
       `/passes/journal${date ? `?date=${date}` : ''}`,
@@ -678,6 +704,53 @@ export interface BcConfig extends SiteSettings {
   contactPhone: string;
   contactEmail: string;
   receptionFloor: string;
+}
+
+export interface PassExportOfficeOption {
+  id: string;
+  propertyId?: string;
+  number: string;
+  businessCenterName?: string;
+  company?: string;
+}
+
+export interface PassExportTenantOption {
+  id: string;
+  company: string;
+  email?: string;
+}
+
+export interface PassExportFilters {
+  scope: 'own' | 'all';
+  businessCenters: Array<{ id: string; name: string }>;
+  offices: PassExportOfficeOption[];
+  tenants: PassExportTenantOption[];
+}
+
+export interface PassExportFiltersInput {
+  status?: string;
+  date?: string;
+  dateFrom?: string;
+  dateTo?: string;
+  search?: string;
+  passType?: PassType | '';
+  propertyId?: string;
+  officeId?: string;
+  tenantId?: string;
+}
+
+function buildPassExportQuery(filters: PassExportFiltersInput = {}) {
+  const q = new URLSearchParams();
+  if (filters.status) q.set('status', filters.status);
+  if (filters.date) q.set('date', filters.date);
+  if (filters.dateFrom) q.set('dateFrom', filters.dateFrom);
+  if (filters.dateTo) q.set('dateTo', filters.dateTo);
+  if (filters.search) q.set('search', filters.search);
+  if (filters.passType) q.set('passType', filters.passType);
+  if (filters.propertyId) q.set('propertyId', filters.propertyId);
+  if (filters.officeId) q.set('officeId', filters.officeId);
+  if (filters.tenantId) q.set('tenantId', filters.tenantId);
+  return q.toString();
 }
 
 export interface PassStats {

@@ -1,9 +1,11 @@
-import { Body, Controller, Get, HttpCode, Param, Patch, Post, Query, Req, UseGuards } from '@nestjs/common';
+import { Body, Controller, Get, HttpCode, Param, Patch, Post, Query, Req, Res, UseGuards } from '@nestjs/common';
+import type { Response } from 'express';
 import { AuthGuard } from '@nestjs/passport';
 import { RequirePermissions } from '../auth/permissions.decorator';
 import { PermissionsGuard } from '../auth/permissions.guard';
 import { PassesService } from './passes.service';
 import { CreatePassDto } from './dto/create-pass.dto';
+import { PassExportQueryDto } from './dto/pass-export-query.dto';
 import { PassHistoryQueryDto } from './dto/pass-history-query.dto';
 import { SendPassEmailDto } from './dto/send-pass-email.dto';
 import { UpdatePassVisitorDto } from './dto/update-pass-visitor.dto';
@@ -42,6 +44,25 @@ export class PassesController {
   @RequirePermissions('passes.view_all', 'passes.reception', 'admin.panel')
   getHistory(@Query() query: PassHistoryQueryDto, @Req() req: any) {
     return this.passesService.getHistory(query, req.user);
+  }
+
+  @Get('export-filters')
+  @RequirePermissions('passes.view_own', 'passes.view_all', 'admin.panel')
+  getExportFilters(@Req() req: any) {
+    return this.passesService.getExportFilters(req.user);
+  }
+
+  @Get('export')
+  @RequirePermissions('passes.view_own', 'passes.view_all', 'admin.panel')
+  async exportPasses(@Query() query: PassExportQueryDto, @Req() req: any, @Res() res: Response) {
+    const csv = await this.passesService.exportCsv(query, req.user);
+    const datePart = query.dateFrom && query.dateTo
+      ? `${query.dateFrom}_${query.dateTo}`
+      : query.date || new Date().toISOString().slice(0, 10);
+    const filename = `passes-${datePart}.csv`;
+    res.setHeader('Content-Type', 'text/csv; charset=utf-8');
+    res.setHeader('Content-Disposition', `attachment; filename="${filename}"`);
+    res.send(Buffer.from(`\uFEFF${csv}`, 'utf-8'));
   }
 
   @Get('lookup/:passNumber')
