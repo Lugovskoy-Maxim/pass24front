@@ -19,7 +19,9 @@ export class PermissionsGuard implements CanActivate {
     const { user } = context.switchToHttp().getRequest();
     if (!user?.role) throw new ForbiddenException('Нет доступа');
 
-    const permissions = await this.accessConfigService.getPermissionsForRole(user.role);
+    const permissions = user.permissions?.length
+      ? user.permissions
+      : await this.accessConfigService.getPermissionsForRole(user.role);
 
     if (allRequired.length && !allRequired.every((p) => permissions.includes(p))) {
       throw new ForbiddenException('Недостаточно прав');

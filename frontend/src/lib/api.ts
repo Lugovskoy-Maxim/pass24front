@@ -80,7 +80,18 @@ export interface TenantEmployee {
   middle_name?: string;
   phone?: string;
   is_active: boolean;
+  category_id?: string;
+  category_name?: string;
   created_at: string;
+}
+
+export interface TenantEmployeeCategory {
+  id: string;
+  name: string;
+  permissions: string[];
+  is_default: boolean;
+  created_at: string;
+  updated_at: string;
 }
 
 export interface PermissionMeta {
@@ -310,6 +321,7 @@ export const api = {
     middleName?: string;
     password: string;
     phone?: string;
+    categoryId?: string;
   }) =>
     request<{ employee: TenantEmployee }>('/auth/tenant/employees', {
       method: 'POST',
@@ -318,6 +330,33 @@ export const api = {
 
   removeTenantEmployee: (id: string) =>
     request<{ message: string }>(`/auth/tenant/employees/${id}`, { method: 'DELETE' }),
+
+  getTenantEmployeeCategories: () =>
+    request<{ categories: TenantEmployeeCategory[]; assignablePermissions: PermissionMeta[] }>(
+      '/auth/tenant/employee-categories',
+    ),
+
+  createTenantEmployeeCategory: (data: {
+    name: string;
+    permissions: string[];
+    isDefault?: boolean;
+  }) =>
+    request<{ category: TenantEmployeeCategory }>('/auth/tenant/employee-categories', {
+      method: 'POST',
+      body: JSON.stringify(data),
+    }),
+
+  updateTenantEmployeeCategory: (
+    id: string,
+    data: { name?: string; permissions?: string[]; isDefault?: boolean },
+  ) =>
+    request<{ category: TenantEmployeeCategory }>(`/auth/tenant/employee-categories/${id}`, {
+      method: 'PATCH',
+      body: JSON.stringify(data),
+    }),
+
+  deleteTenantEmployeeCategory: (id: string) =>
+    request<{ message: string }>(`/auth/tenant/employee-categories/${id}`, { method: 'DELETE' }),
 
   getPasses: (params?: { status?: string; date?: string; search?: string }) => {
     const q = new URLSearchParams();

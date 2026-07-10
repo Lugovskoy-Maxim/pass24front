@@ -78,6 +78,10 @@ export class User {
   @Prop({ type: Types.ObjectId, ref: 'User' })
   parentTenantId?: Types.ObjectId;
 
+  /** Категория сотрудника арендатора (набор прав) */
+  @Prop({ type: Types.ObjectId, ref: 'TenantEmployeeCategory' })
+  employeeCategoryId?: Types.ObjectId;
+
   @Prop({ type: Object, default: null })
   profileChangeRequest?: {
     lastName?: string;

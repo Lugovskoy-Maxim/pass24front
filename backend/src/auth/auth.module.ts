@@ -15,15 +15,19 @@ import {
   PropertySchema,
   RegistrationPending,
   RegistrationPendingSchema,
+  TenantEmployeeCategory,
+  TenantEmployeeCategorySchema,
   User,
   UserSchema,
 } from '../schemas';
+import { TenantEmployeeCategoryService } from './tenant-employee-category.service';
 
 @Module({
   imports: [
     AuthDatabaseModule.forFeature([
       { name: User.name, schema: UserSchema },
       { name: RegistrationPending.name, schema: RegistrationPendingSchema },
+      { name: TenantEmployeeCategory.name, schema: TenantEmployeeCategorySchema },
     ]),
     MongooseModule.forFeature([
       { name: Office.name, schema: OfficeSchema },
@@ -40,7 +44,7 @@ import {
     }),
   ],
   controllers: [AuthController],
-  providers: [AuthService, JwtStrategy, PermissionsGuard],
-  exports: [AuthService, JwtModule, PermissionsGuard],
+  providers: [AuthService, TenantEmployeeCategoryService, JwtStrategy, PermissionsGuard],
+  exports: [AuthService, TenantEmployeeCategoryService, JwtModule, PermissionsGuard],
 })
 export class AuthModule {}

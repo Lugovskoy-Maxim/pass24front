@@ -10,6 +10,7 @@ import { Office, OfficeDocument, Pass, PassDocument, Property, PropertyDocument,
 import { PropertyType } from '../schemas/enums';
 import { deriveVisitPurpose, normalizePassport, normalizePersonName, normalizePhone } from '../common/pass-helpers';
 import { resolveTenantOwnerId, tenantOwnerObjectId } from '../common/tenant-owner';
+import { userHasPermission } from '../common/user-permissions';
 import { assertVisitDateBookable, parseClosedWeekdays } from '../common/bookable-visit-dates';
 import { isValidVisitDateString } from '../common/visit-date';
 import { CreatePassDto } from './dto/create-pass.dto';
@@ -138,11 +139,26 @@ export class PassesService implements OnModuleInit {
     if (user.role === 'tenant') {
       const teamIds = await this.getTenantTeamIds(user);
       if (!teamIds.length) return { _id: null };
+
+      if (user.parentTenantId) {
+        if (userHasPermission(user, 'passes.view_own')) {
+          return this.createdByFilter(user.userId);
+        }
+        return { _id: null };
+      }
+
       return this.createdByTeamFilter(teamIds);
     }
 
     if (await this.accessConfigService.canViewAllPasses(user.role)) {
       return {};
+    }
+
+    if (user.permissions?.length) {
+      if (userHasPermission(user, 'passes.view_own')) {
+        return this.createdByFilter(user.userId);
+      }
+      return { _id: null };
     }
 
     if (await this.accessConfigService.hasPermission(user.role, 'passes.view_own')) {
@@ -767,6 +783,10 @@ export class PassesService implements OnModuleInit {
       const createdBy = pass.createdBy?.toString();
       const hasAccess = teamIds.some((id) => id.toString() === createdBy);
       if (!hasAccess) throw new ForbiddenException('Нет доступа к этому пропуску');
+
+      if (user.parentTenantId && createdBy !== user.userId) {
+        throw new ForbiddenException('Нет доступа к этому пропуску');
+      }
       return;
     }
 
