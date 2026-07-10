@@ -251,4 +251,5 @@ export type PassCardData = {
   checkedInAt?: string;
   checkedOutAt?: string;
   rejectionReason?: string;
+  requireCheckout?: boolean;
 };

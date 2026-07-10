@@ -18,6 +18,7 @@ import {
   getPassStatusTopStripeClass,
 } from '@/lib/pass-status';
 import { SharePassActions } from './SharePassActions';
+import { passShowsVisitTimeline } from '@/lib/pass-checkout';
 import { PassVisitTimeline } from './PassVisitTimeline';
 
 interface PassTicketViewProps {
@@ -143,9 +144,11 @@ export function PassTicketView({
           )}
         </section>
 
-        <section className={`pass-ticket__timeline pass-card__timeline ${isTerminal ? 'bg-[var(--surface-muted)]' : 'bg-[var(--surface)]'}`}>
-          <PassVisitTimeline pass={ticket} labels={labels} compact />
-        </section>
+        {passShowsVisitTimeline(ticket) && (
+          <section className={`pass-ticket__timeline pass-card__timeline ${isTerminal ? 'bg-[var(--surface-muted)]' : 'bg-[var(--surface)]'}`}>
+            <PassVisitTimeline pass={ticket} labels={labels} compact />
+          </section>
+        )}
 
         <footer className="pass-ticket__footer border-t border-[var(--border)] bg-[var(--surface)]">
           <SharePassActions

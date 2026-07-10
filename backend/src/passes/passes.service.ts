@@ -555,8 +555,9 @@ export class PassesService implements OnModuleInit {
     await this.expirePastPasses();
     const pass = await this.passModel.findOne({ passNumber }).lean();
     if (!pass) throw new NotFoundException('Пропуск не найден');
+    const [withCheckout] = await this.enrichPassCheckoutSettings([pass]);
     const businessCenterName = await this.resolveBusinessCenterName(pass);
-    return { ticket: { ...this.mapToPublicTicket(pass), businessCenterName } };
+    return { ticket: { ...this.mapToPublicTicket(withCheckout), businessCenterName } };
   }
 
   async getOverdueActive(user?: any) {
@@ -798,6 +799,7 @@ export class PassesService implements OnModuleInit {
       checkedInAt: doc.checkedInAt,
       checkedOutAt: doc.checkedOutAt,
       rejectionReason: doc.rejectionReason,
+      requireCheckout: doc.requireCheckout !== false,
     };
   }
 

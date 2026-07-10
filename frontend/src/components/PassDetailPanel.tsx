@@ -28,6 +28,7 @@ import { useConfig } from '@/hooks/useConfig';
 import { useAuth } from '@/lib/auth';
 import { canViewAllPasses, canUseReception, hasPermission } from '@/lib/permissions';
 import { buildHistoryHref } from '@/lib/visit-history';
+import { passShowsVisitTimeline } from '@/lib/pass-checkout';
 import { PassVisitTimeline } from './PassVisitTimeline';
 import { PassVisitorDataForm } from './PassVisitorDataForm';
 import { OverdueBadge } from './StatusBadge';
@@ -180,10 +181,12 @@ export function PassDetailPanel({
             </div>
           )}
 
-          <div className={`pass-card__timeline px-4 py-4 border-b border-[var(--border)] ${isTerminal ? 'bg-[var(--surface-muted)]' : 'bg-[var(--surface)]'}`}>
-            <p className="text-[10px] uppercase tracking-wide text-[var(--muted)] mb-3">{labels.passes.detailTimeline}</p>
-            <PassVisitTimeline pass={pass} labels={labels} overdue={stillInside} />
-          </div>
+          {passShowsVisitTimeline(pass) && (
+            <div className={`pass-card__timeline px-4 py-4 border-b border-[var(--border)] ${isTerminal ? 'bg-[var(--surface-muted)]' : 'bg-[var(--surface)]'}`}>
+              <p className="text-[10px] uppercase tracking-wide text-[var(--muted)] mb-3">{labels.passes.detailTimeline}</p>
+              <PassVisitTimeline pass={pass} labels={labels} overdue={stillInside} />
+            </div>
+          )}
 
           <dl className="px-4 py-2 divide-y divide-[var(--border)]">
             {pass.companyName && (
@@ -258,8 +261,12 @@ export function PassDetailPanel({
                 </dd>
               </div>
             )}
-            <DetailRow label={labels.card.checkIn} value={formatDateTime(pass.checkedInAt)} />
-            <DetailRow label={labels.card.checkOut} value={formatDateTime(pass.checkedOutAt)} />
+            {passShowsVisitTimeline(pass) && (
+              <>
+                <DetailRow label={labels.card.checkIn} value={formatDateTime(pass.checkedInAt)} />
+                <DetailRow label={labels.card.checkOut} value={formatDateTime(pass.checkedOutAt)} />
+              </>
+            )}
             {pass.comment && (
               <div className="py-2 border-b border-[var(--border)]">
                 <dt className="text-[10px] uppercase tracking-wide text-[var(--muted)] mb-1 flex items-center gap-1">

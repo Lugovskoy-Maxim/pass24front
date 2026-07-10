@@ -10,6 +10,7 @@ import {
   LogOut,
 } from 'lucide-react';
 import { PassStatus, PassTimelineData } from '@/lib/api';
+import { passShowsVisitTimeline } from '@/lib/pass-checkout';
 import { getPassTimelineCurrentClasses } from '@/lib/pass-status';
 import { mergeUiLabels, UiLabels } from '@/lib/ui-labels';
 
@@ -171,6 +172,8 @@ export function PassVisitTimeline({
     const id = window.setInterval(() => setNow(Date.now()), 30_000);
     return () => window.clearInterval(id);
   }, [pass.status, pass.checkedInAt]);
+
+  if (!passShowsVisitTimeline(pass)) return null;
 
   const steps = buildSteps(pass, now, L.timeline);
   const currentStyles = getPassTimelineCurrentClasses(pass.status, overdue);

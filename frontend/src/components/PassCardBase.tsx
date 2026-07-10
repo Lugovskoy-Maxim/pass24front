@@ -30,6 +30,7 @@ import {
   getPassIconTileClass,
   getPassStatusStripeClass,
 } from '@/lib/pass-status';
+import { passShowsVisitTimeline } from '@/lib/pass-checkout';
 import { PassVisitTimeline } from './PassVisitTimeline';
 import { OverdueBadge, StatusBadge } from './StatusBadge';
 
@@ -107,7 +108,7 @@ export function PassCardBase({
   const isTerminal = ['rejected', 'cancelled', 'expired', 'completed'].includes(pass.status);
   const overdueKind = getGuestOverdueKind(pass);
   const stillInside = overdueKind !== null;
-  const useTimeline = showTimeline ?? !isCompact;
+  const useTimeline = (showTimeline ?? !isCompact) && passShowsVisitTimeline(pass);
   const useBadge = showStatusBadge ?? true;
 
   const content = (

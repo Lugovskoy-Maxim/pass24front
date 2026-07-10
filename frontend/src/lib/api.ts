@@ -106,6 +106,7 @@ export interface PassTimelineData {
   checkedInAt?: string;
   checkedOutAt?: string;
   rejectionReason?: string;
+  requireCheckout?: boolean;
 }
 
 export interface PublicPassTicket extends PassTimelineData {

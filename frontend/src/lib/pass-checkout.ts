@@ -4,3 +4,8 @@ import { Pass } from './api';
 export function passRequiresCheckout(pass: Pick<Pass, 'requireCheckout'>): boolean {
   return pass.requireCheckout !== false;
 }
+
+/** Показывать ли блок «Ход визита» (только при режиме с выходом). */
+export function passShowsVisitTimeline(pass: Pick<Pass, 'requireCheckout'>): boolean {
+  return passRequiresCheckout(pass);
+}
