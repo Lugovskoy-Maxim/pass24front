@@ -104,6 +104,8 @@ export const DEFAULT_UI_LABELS = {
     cancelled: 'Отменён',
   },
   reception: {
+    showStats: 'Статистика',
+    hideStats: 'Скрыть статистику',
     statTotal: 'Всего',
     statPending: 'Новые',
     statApproved: 'Ожидают',

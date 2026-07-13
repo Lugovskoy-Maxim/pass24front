@@ -2,7 +2,7 @@
 
 import { Suspense, useEffect, useState, useCallback, FormEvent } from 'react';
 import { useRouter, useSearchParams } from 'next/navigation';
-import { LogIn, LogOut, Users, CheckCircle, Clock, AlertCircle, Search, X } from 'lucide-react';
+import { BarChart3, LogIn, LogOut, Users, CheckCircle, Clock, AlertCircle, Search, X } from 'lucide-react';
 import { ProtectedLayout } from '@/components/ProtectedLayout';
 import { PassListCard } from '@/components/PassListCard';
 import { PassDetailPanel } from '@/components/PassDetailPanel';
@@ -50,6 +50,7 @@ function ControlPageContent() {
   const [lookupLoading, setLookupLoading] = useState(false);
   const [selected, setSelected] = useState<Pass | null>(null);
   const [overdueSectionEl, setOverdueSectionEl] = useState<HTMLElement | null>(null);
+  const [statsOpen, setStatsOpen] = useState(false);
   const overdueSectionInView = useElementInView(overdueSectionEl);
 
   const load = useCallback(() => {
@@ -334,27 +335,41 @@ function ControlPageContent() {
         />
       )}
 
-      <div className="grid grid-cols-2 sm:grid-cols-3 lg:grid-cols-6 gap-3 mb-6">
-        {statCards.map(({ key, label, value, icon: Icon, onClick }) => {
-          const clickable = !!onClick && value > 0;
-          const Tag = clickable ? 'button' : 'div';
-          return (
-            <Tag
-              key={key}
-              type={clickable ? 'button' : undefined}
-              onClick={clickable ? onClick : undefined}
-              className={[
-                'card p-3 text-center',
-                getAccentStatClass(key),
-                clickable ? 'cursor-pointer accent-stat--interactive' : '',
-              ].filter(Boolean).join(' ')}
-            >
-              <Icon className={`w-5 h-5 mx-auto mb-1 accent-stat__icon--${key}`} />
-              <div className={`text-xl font-bold accent-stat__value--${key}`}>{value}</div>
-              <div className="text-xs text-[var(--muted)]">{label}</div>
-            </Tag>
-          );
-        })}
+      <div className="mb-6">
+        <button
+          type="button"
+          className="btn btn-secondary text-sm"
+          onClick={() => setStatsOpen((open) => !open)}
+          aria-expanded={statsOpen}
+        >
+          <BarChart3 className="w-4 h-4" />
+          {statsOpen ? labels.reception.hideStats : labels.reception.showStats}
+        </button>
+
+        {statsOpen && (
+          <div className="grid grid-cols-2 sm:grid-cols-3 lg:grid-cols-6 gap-3 mt-3">
+            {statCards.map(({ key, label, value, icon: Icon, onClick }) => {
+              const clickable = !!onClick && value > 0;
+              const Tag = clickable ? 'button' : 'div';
+              return (
+                <Tag
+                  key={key}
+                  type={clickable ? 'button' : undefined}
+                  onClick={clickable ? onClick : undefined}
+                  className={[
+                    'card p-3 text-center',
+                    getAccentStatClass(key),
+                    clickable ? 'cursor-pointer accent-stat--interactive' : '',
+                  ].filter(Boolean).join(' ')}
+                >
+                  <Icon className={`w-5 h-5 mx-auto mb-1 accent-stat__icon--${key}`} />
+                  <div className={`text-xl font-bold accent-stat__value--${key}`}>{value}</div>
+                  <div className="text-xs text-[var(--muted)]">{label}</div>
+                </Tag>
+              );
+            })}
+          </div>
+        )}
       </div>
 
       {/* Графики временно отключены
