@@ -33,6 +33,18 @@ export const DEFAULT_ROLE_PERMISSIONS: Record<string, string[]> = {
 
 export const SYSTEM_ROLES = ['tenant', 'security', 'bc_admin', 'admin'] as const;
 
+/** Встроенные роли для сотрудников арендаторов — создаются автоматически, нельзя удалить */
+export const BUILTIN_EMPLOYEE_ROLE = 'tenant_employee';
+export const BUILTIN_EMPLOYEE_ROLES = [BUILTIN_EMPLOYEE_ROLE] as const;
+
+export const DEFAULT_EMPLOYEE_ROLE_PERMISSIONS: Record<string, string[]> = {
+  [BUILTIN_EMPLOYEE_ROLE]: ['passes.create', 'passes.templates', 'passes.view_own'],
+};
+
+export const BUILTIN_EMPLOYEE_ROLE_LABELS: Record<string, string> = {
+  [BUILTIN_EMPLOYEE_ROLE]: 'Сотрудник компании',
+};
+
 export const ROLE_LABELS: Record<string, string> = {
   tenant: 'Арендатор',
   security: 'Ресепшн / Охрана',

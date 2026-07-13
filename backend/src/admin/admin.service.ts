@@ -26,7 +26,7 @@ import { CreateUserDto } from './dto/create-user.dto';
 import { UpdateBusinessCenterDto } from './dto/update-business-center.dto';
 import { BusinessCenterPassSettingsDto } from './dto/business-center-pass-settings.dto';
 import { TestDataSeedService } from '../database/test-data-seed.service';
-import { SYSTEM_ROLES } from '../access/access.constants';
+import { BUILTIN_EMPLOYEE_ROLES, SYSTEM_ROLES } from '../access/access.constants';
 
 const STAFF_ROLES = ['security', 'bc_admin', 'admin'] as const;
 
@@ -56,6 +56,9 @@ export class AdminService {
     for (const role of roles) {
       if ((SYSTEM_ROLES as readonly string[]).includes(role)) {
         throw new BadRequestException(`Нельзя удалить системную роль: ${role}`);
+      }
+      if ((BUILTIN_EMPLOYEE_ROLES as readonly string[]).includes(role)) {
+        throw new BadRequestException(`Нельзя удалить встроенную роль сотрудника: ${role}`);
       }
       const count = await this.userModel.countDocuments({ role, isActive: { $ne: false } });
       if (count > 0) {

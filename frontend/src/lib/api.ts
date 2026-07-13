@@ -107,6 +107,7 @@ export interface AccessConfig {
   roleLabels?: Record<string, string>;
   roles: string[];
   systemRoles?: string[];
+  builtinEmployeeRoles?: string[];
 }
 
 export type PassStatus = 'pending' | 'approved' | 'rejected' | 'active' | 'completed' | 'expired' | 'cancelled';

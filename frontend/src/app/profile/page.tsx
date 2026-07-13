@@ -401,7 +401,7 @@ export default function ProfilePage() {
                 </FormField>
               ) : (
                 <p className="text-sm text-amber-700 bg-amber-50 border border-amber-200 rounded-lg px-3 py-2">
-                  Сначала создайте тип пользователя в разделе «Права и типы пропусков» (Права по ролям).
+                  Нет доступных типов сотрудников. Обратитесь к администратору системы.
                 </p>
               )}
               <button type="submit" className="btn btn-primary" disabled={employeeSaving || employeeRoles.length === 0}>

@@ -5,6 +5,9 @@ import { AccessConfig, AccessConfigDocument } from '../schemas/access-config.sch
 import {
   ALL_PASS_TYPES,
   ALL_PERMISSIONS,
+  BUILTIN_EMPLOYEE_ROLE_LABELS,
+  BUILTIN_EMPLOYEE_ROLES,
+  DEFAULT_EMPLOYEE_ROLE_PERMISSIONS,
   DEFAULT_ROLE_PERMISSIONS,
   PASS_TYPE_LABELS,
   ROLE_LABELS,
@@ -29,8 +32,8 @@ export class AccessConfigService implements OnModuleInit {
       await this.accessConfigModel.create({
         key: 'default',
         enabledPassTypes: [...ALL_PASS_TYPES],
-        rolePermissions: { ...DEFAULT_ROLE_PERMISSIONS },
-        roleLabels: {},
+        rolePermissions: { ...DEFAULT_ROLE_PERMISSIONS, ...DEFAULT_EMPLOYEE_ROLE_PERMISSIONS },
+        roleLabels: { ...BUILTIN_EMPLOYEE_ROLE_LABELS },
       });
       return;
     }
@@ -43,16 +46,26 @@ export class AccessConfigService implements OnModuleInit {
       changed = true;
     }
 
-    for (const [role, defaults] of Object.entries(DEFAULT_ROLE_PERMISSIONS)) {
+    for (const [role, defaults] of Object.entries({
+      ...DEFAULT_ROLE_PERMISSIONS,
+      ...DEFAULT_EMPLOYEE_ROLE_PERMISSIONS,
+    })) {
       if (!existing.rolePermissions[role]) {
         existing.rolePermissions[role] = [...defaults];
         changed = true;
       }
     }
 
+    for (const [role, label] of Object.entries(BUILTIN_EMPLOYEE_ROLE_LABELS)) {
+      if (!existing.roleLabels[role]) {
+        existing.roleLabels[role] = label;
+        changed = true;
+      }
+    }
+
     for (const [role, perms] of Object.entries(existing.rolePermissions)) {
       const sanitized = [...new Set((perms || []).filter((p) => validKeys.has(p)))];
-      const defaults = DEFAULT_ROLE_PERMISSIONS[role] || [];
+      const defaults = DEFAULT_ROLE_PERMISSIONS[role] || DEFAULT_EMPLOYEE_ROLE_PERMISSIONS[role] || [];
 
       for (const perm of defaults) {
         if (!sanitized.includes(perm)) {
@@ -114,6 +127,12 @@ export class AccessConfigService implements OnModuleInit {
         }
       }
 
+      for (const role of BUILTIN_EMPLOYEE_ROLES) {
+        if (!data.rolePermissions[role]) {
+          throw new BadRequestException(`Нельзя удалить встроенную роль сотрудника: ${role}`);
+        }
+      }
+
       for (const role of Object.keys(data.rolePermissions)) {
         if (!ROLE_KEY_PATTERN.test(role)) {
           throw new BadRequestException(`Некорректный код роли: ${role}`);
@@ -152,6 +171,9 @@ export class AccessConfigService implements OnModuleInit {
       }
       for (const role of SYSTEM_ROLES) {
         labels[role] = ROLE_LABELS[role];
+      }
+      for (const role of BUILTIN_EMPLOYEE_ROLES) {
+        if (!labels[role]) labels[role] = BUILTIN_EMPLOYEE_ROLE_LABELS[role];
       }
       doc.roleLabels = labels;
       doc.markModified('roleLabels');
@@ -207,6 +229,7 @@ export class AccessConfigService implements OnModuleInit {
   private mapConfig(doc: any) {
     const mergedRoles = {
       ...DEFAULT_ROLE_PERMISSIONS,
+      ...DEFAULT_EMPLOYEE_ROLE_PERMISSIONS,
       ...doc.rolePermissions,
     };
 
@@ -217,10 +240,12 @@ export class AccessConfigService implements OnModuleInit {
       passTypeLabels: PASS_TYPE_LABELS,
       roleLabels: {
         ...ROLE_LABELS,
+        ...BUILTIN_EMPLOYEE_ROLE_LABELS,
         ...(doc.roleLabels || {}),
       },
       roles: Object.keys(mergedRoles),
       systemRoles: [...SYSTEM_ROLES],
+      builtinEmployeeRoles: [...BUILTIN_EMPLOYEE_ROLES],
     };
   }
 }

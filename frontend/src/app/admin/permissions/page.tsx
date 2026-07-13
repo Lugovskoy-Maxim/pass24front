@@ -35,8 +35,11 @@ function roleLabel(config: AccessConfig, role: string) {
   return config.roleLabels?.[role] || ROLE_LABELS[role as keyof typeof ROLE_LABELS] || role;
 }
 
-function isSystemRole(config: AccessConfig, role: string) {
-  return (config.systemRoles || Object.keys(ROLE_LABELS)).includes(role);
+function isProtectedRole(config: AccessConfig, role: string) {
+  return (
+    (config.systemRoles || Object.keys(ROLE_LABELS)).includes(role)
+    || (config.builtinEmployeeRoles || []).includes(role)
+  );
 }
 
 export default function AdminPermissionsPage() {
@@ -118,7 +121,7 @@ export default function AdminPermissionsPage() {
   };
 
   const handleRemoveRole = (role: string) => {
-    if (!config || isSystemRole(config, role)) return;
+    if (!config || isProtectedRole(config, role)) return;
     const label = roleLabel(config, role);
     if (!window.confirm(`Удалить тип пользователя «${label}»?`)) return;
 
@@ -139,7 +142,7 @@ export default function AdminPermissionsPage() {
     try {
       const customLabels = Object.fromEntries(
         config.roles
-          .filter((role) => !isSystemRole(config, role))
+          .filter((role) => !isProtectedRole(config, role))
           .map((role) => [role, config.roleLabels?.[role] || role]),
       );
       const { config: updated } = await api.admin.updateAccessConfig({
@@ -243,7 +246,7 @@ export default function AdminPermissionsPage() {
                   <th key={role} className="text-center p-3 font-medium whitespace-nowrap">
                     <div className="flex flex-col items-center gap-1">
                       <span>{roleLabel(config, role)}</span>
-                      {!isSystemRole(config, role) && (
+                      {!isProtectedRole(config, role) && (
                         <button
                           type="button"
                           className="text-[var(--muted)] hover:text-red-600 p-0.5"
