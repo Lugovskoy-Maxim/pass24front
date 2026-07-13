@@ -346,6 +346,11 @@ export const api = {
   getPassExportFilters: () =>
     request<PassExportFilters>('/passes/export-filters'),
 
+  getPassReport: (filters: PassExportFiltersInput = {}) => {
+    const qs = buildPassExportQuery(filters);
+    return request<PassReportResult>(`/passes/report${qs ? `?${qs}` : ''}`);
+  },
+
   exportPasses: async (filters: PassExportFiltersInput = {}) => {
     const qs = buildPassExportQuery(filters);
     const token = getToken();
@@ -737,6 +742,17 @@ export interface PassExportFiltersInput {
   propertyId?: string;
   officeId?: string;
   tenantId?: string;
+  offset?: number;
+  limit?: number;
+}
+
+export interface PassReportResult {
+  passes: Pass[];
+  total: number;
+  offset: number;
+  limit: number;
+  dateFrom?: string;
+  dateTo?: string;
 }
 
 function buildPassExportQuery(filters: PassExportFiltersInput = {}) {
@@ -750,6 +766,8 @@ function buildPassExportQuery(filters: PassExportFiltersInput = {}) {
   if (filters.propertyId) q.set('propertyId', filters.propertyId);
   if (filters.officeId) q.set('officeId', filters.officeId);
   if (filters.tenantId) q.set('tenantId', filters.tenantId);
+  if (filters.offset !== undefined) q.set('offset', String(filters.offset));
+  if (filters.limit !== undefined) q.set('limit', String(filters.limit));
   return q.toString();
 }
 

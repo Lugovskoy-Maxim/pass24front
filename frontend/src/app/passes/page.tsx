@@ -3,7 +3,7 @@
 import { Suspense, useEffect, useState, useCallback } from 'react';
 import { useRouter, useSearchParams } from 'next/navigation';
 import Link from 'next/link';
-import { Download, Inbox, Plus, Printer, Search } from 'lucide-react';
+import { Download, Inbox, Plus, Printer, Search, Table2 } from 'lucide-react';
 import { ProtectedLayout } from '@/components/ProtectedLayout';
 import { PassListCard } from '@/components/PassListCard';
 import { PassDetailModal } from '@/components/PassDetailModal';
@@ -228,6 +228,10 @@ function PassesPageContent() {
               ))}
             </select>
           </div>
+          <Link href="/passes/report" className="btn btn-secondary shrink-0">
+            <Table2 className="w-4 h-4" />
+            Отчёт
+          </Link>
           <button
             type="button"
             className="btn btn-secondary shrink-0"

@@ -52,6 +52,12 @@ export class PassesController {
     return this.passesService.getExportFilters(req.user);
   }
 
+  @Get('report')
+  @RequirePermissions('passes.view_own', 'passes.view_all', 'admin.panel')
+  getReport(@Query() query: PassExportQueryDto, @Req() req: any) {
+    return this.passesService.findReport(query, req.user);
+  }
+
   @Get('export')
   @RequirePermissions('passes.view_own', 'passes.view_all', 'admin.panel')
   async exportPasses(@Query() query: PassExportQueryDto, @Req() req: any, @Res() res: Response) {

@@ -15,6 +15,8 @@ export const DEFAULT_UI_LABELS = {
     passesTitle: 'Пропуска',
     passesSubtitleAll: 'Все заявки пользователей системы',
     passesSubtitleOwn: 'Ваши заказанные пропуска',
+    passesReportTitle: 'Отчёт по пропускам',
+    passesReportSubtitle: 'Таблица заказанных пропусков с фильтром по периоду, офису и арендатору',
     receptionTitle: 'Панель ресепшн',
     receptionSubtitle: 'Журнал посетителей на выбранную дату',
     dashboardRecentAll: 'Последние пропуска всех пользователей',

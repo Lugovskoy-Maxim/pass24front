@@ -23,6 +23,7 @@ import { UpdateStatusDto } from './dto/update-status.dto';
 import { PassTemplatesService } from './pass-templates.service';
 
 const PASS_EXPORT_LIMIT = 10_000;
+const PASS_REPORT_PAGE_SIZE = 50;
 
 @Injectable()
 export class PassesService implements OnModuleInit {
@@ -341,6 +342,44 @@ export class PassesService implements OnModuleInit {
         company: t.company || t.fullName,
         email: t.email,
       })),
+    };
+  }
+
+  async findReport(query: PassExportQueryDto, user?: any) {
+    await this.expirePastPasses();
+
+    const reportQuery = { ...query };
+    if (!reportQuery.dateFrom && !reportQuery.dateTo && !reportQuery.date) {
+      const today = this.getLocalDateString();
+      reportQuery.dateTo = today;
+      const monthStart = `${today.slice(0, 8)}01`;
+      reportQuery.dateFrom = monthStart;
+    }
+
+    const filter = await this.buildListFilter(reportQuery, user);
+    const limit = Math.min(reportQuery.limit || PASS_REPORT_PAGE_SIZE, PASS_REPORT_PAGE_SIZE);
+    const offset = Math.max(reportQuery.offset || 0, 0);
+
+    const [passes, total] = await Promise.all([
+      this.passModel
+        .find(filter)
+        .sort({ visitDate: -1, createdAt: -1 })
+        .skip(offset)
+        .limit(limit)
+        .lean(),
+      this.passModel.countDocuments(filter),
+    ]);
+
+    const withCheckout = await this.enrichPassCheckoutSettings(passes);
+    const enriched = await this.enrichCreatorFields(withCheckout, user);
+
+    return {
+      passes: enriched.map((p) => this.mapToFrontend(p, user)),
+      total,
+      offset,
+      limit,
+      dateFrom: reportQuery.dateFrom,
+      dateTo: reportQuery.dateTo,
     };
   }
 
