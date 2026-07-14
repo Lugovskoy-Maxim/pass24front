@@ -11,7 +11,8 @@ import { SiteBrand } from '@/components/SiteBrand';
 import { PersonNameFields } from '@/components/PersonNameFields';
 import { FormErrorBanner, FormField, FormInput, PasswordInput } from '@/components/FormField';
 import { buildFullName, getUserNameLabels, PersonNameParts } from '@/lib/person-name';
-import { FieldErrors, hasFieldErrors, validateLoginRegister, validateRegistrationCode } from '@/lib/form-validation';
+import { FieldErrors, hasFieldErrors, normalizeRuMobilePhone, validateLoginRegister, validateRegistrationCode } from '@/lib/form-validation';
+import { formatRuMobilePhone } from '@/lib/phone';
 import { ThemeToggle } from '@/components/ThemeToggle';
 import { useTheme } from '@/components/ThemeProvider';
 
@@ -32,19 +33,22 @@ export default function LoginPage() {
 
   const [mode, setMode] = useState<'login' | 'register'>('login');
   const [registerStep, setRegisterStep] = useState<'form' | 'verify'>('form');
+  const [verificationChannel, setVerificationChannel] = useState<'email' | 'phone'>('email');
+  const [login, setLogin] = useState('');
   const [email, setEmail] = useState('');
   const [password, setPassword] = useState('');
   const [verificationCode, setVerificationCode] = useState('');
   const [nameParts, setNameParts] = useState<PersonNameParts>({ lastName: '', firstName: '', middleName: '' });
   const [company, setCompany] = useState('');
   const [phone, setPhone] = useState('');
+  const [verifiedPhone, setVerifiedPhone] = useState('');
   const [formError, setFormError] = useState('');
   const [fieldErrors, setFieldErrors] = useState<FieldErrors>({});
   const [success, setSuccess] = useState('');
   const [infoMessage, setInfoMessage] = useState('');
   const [loading, setLoading] = useState(false);
   const [devAccounts, setDevAccounts] = useState<DevQuickLoginAccount[]>([]);
-  const { login, requestRegistrationCode, confirmRegistration } = useAuth();
+  const { login: authLogin, requestRegistrationCode, confirmRegistration } = useAuth();
   const config = useConfig();
   const { theme } = useTheme();
 
@@ -71,12 +75,13 @@ export default function LoginPage() {
     );
   }
 
-  const performLogin = async (loginEmail: string, loginPassword: string) => {
+  const performLogin = async (loginValue: string, loginPassword: string) => {
     setFormError('');
     setFieldErrors({});
     setLoading(true);
     try {
-      const loggedIn = await login(loginEmail, loginPassword);
+      const normalizedLogin = normalizeRuMobilePhone(loginValue) || loginValue.trim().toLowerCase();
+      const loggedIn = await authLogin(normalizedLogin, loginPassword);
       router.push(getHomePath(loggedIn));
     } catch (err) {
       setFormError(getErrorMessage(err, 'Ошибка входа'));
@@ -85,32 +90,53 @@ export default function LoginPage() {
     }
   };
 
+  const buildRegisterPayload = () => {
+    const normalizedPhone = normalizeRuMobilePhone(phone) || undefined;
+    const trimmedEmail = email.trim().toLowerCase() || undefined;
+    return {
+      email: verificationChannel === 'email' ? trimmedEmail : trimmedEmail,
+      phone: verificationChannel === 'phone' ? normalizedPhone : normalizedPhone,
+      verificationChannel,
+      password,
+      lastName: nameParts.lastName.trim(),
+      firstName: nameParts.firstName.trim(),
+      middleName: nameParts.middleName.trim() || undefined,
+      fullName: buildFullName(nameParts),
+      company: company.trim(),
+    };
+  };
+
   const handleSubmit = async (e: FormEvent) => {
     e.preventDefault();
     const errors = validateLoginRegister({
       mode,
-      email,
+      email: mode === 'login' ? login : email,
       password,
       nameParts: mode === 'register' ? nameParts : undefined,
       company: mode === 'register' ? company : undefined,
+      phone: mode === 'register' ? phone : undefined,
+      verificationChannel: mode === 'register' ? verificationChannel : undefined,
     });
     setFieldErrors(errors);
     if (hasFieldErrors(errors)) return;
 
     if (mode === 'login') {
-      await performLogin(email.trim().toLowerCase(), password);
+      await performLogin(login, password);
       return;
     }
 
     if (registerStep === 'verify') {
-      const codeErrors = validateRegistrationCode(verificationCode);
+      const codeErrors = validateRegistrationCode(verificationCode, verificationChannel);
       setFieldErrors(codeErrors);
       if (hasFieldErrors(codeErrors)) return;
 
       setFormError('');
       setLoading(true);
       try {
-        const message = await confirmRegistration(email.trim().toLowerCase(), verificationCode.trim());
+        const confirmPayload = verificationChannel === 'phone'
+          ? { phone: verifiedPhone, code: verificationCode.trim() }
+          : { email: email.trim().toLowerCase(), code: verificationCode.trim() };
+        const message = await confirmRegistration(confirmPayload);
         setSuccess(message);
         setInfoMessage('');
         setRegisterStep('form');
@@ -120,6 +146,8 @@ export default function LoginPage() {
         setNameParts({ lastName: '', firstName: '', middleName: '' });
         setCompany('');
         setPhone('');
+        setVerifiedPhone('');
+        setEmail('');
         setFieldErrors({});
       } catch (err) {
         setFormError(getErrorMessage(err, 'Неверный код подтверждения'));
@@ -134,17 +162,13 @@ export default function LoginPage() {
     setInfoMessage('');
     setLoading(true);
     try {
-      const message = await requestRegistrationCode({
-        email: email.trim().toLowerCase(),
-        password,
-        lastName: nameParts.lastName.trim(),
-        firstName: nameParts.firstName.trim(),
-        middleName: nameParts.middleName.trim() || undefined,
-        fullName: buildFullName(nameParts),
-        company: company.trim(),
-        phone: phone.trim() || undefined,
-      });
-      setInfoMessage(message);
+      const payload = buildRegisterPayload();
+      const result = await requestRegistrationCode(payload);
+      setInfoMessage(result.message);
+      setVerificationChannel(result.verificationChannel);
+      if (result.verificationChannel === 'phone') {
+        setVerifiedPhone(payload.phone || '');
+      }
       setRegisterStep('verify');
       setVerificationCode('');
       setFieldErrors({});
@@ -160,17 +184,8 @@ export default function LoginPage() {
     setFieldErrors({});
     setLoading(true);
     try {
-      const message = await requestRegistrationCode({
-        email: email.trim().toLowerCase(),
-        password,
-        lastName: nameParts.lastName.trim(),
-        firstName: nameParts.firstName.trim(),
-        middleName: nameParts.middleName.trim() || undefined,
-        fullName: buildFullName(nameParts),
-        company: company.trim(),
-        phone: phone.trim() || undefined,
-      });
-      setInfoMessage(message);
+      const result = await requestRegistrationCode(buildRegisterPayload());
+      setInfoMessage(result.message);
       setVerificationCode('');
     } catch (err) {
       setFormError(getErrorMessage(err, 'Не удалось отправить код'));
@@ -179,8 +194,13 @@ export default function LoginPage() {
     }
   };
 
+  const handlePhoneBlur = () => {
+    const normalized = normalizeRuMobilePhone(phone);
+    if (normalized) setPhone(formatRuMobilePhone(normalized));
+  };
+
   const handleQuickLogin = (loginEmail: string, loginPassword: string) => {
-    setEmail(loginEmail);
+    setLogin(loginEmail);
     setPassword(loginPassword);
     void performLogin(loginEmail, loginPassword);
   };
@@ -202,6 +222,10 @@ export default function LoginPage() {
     setFieldErrors({});
     setInfoMessage('');
   };
+
+  const verificationTarget = verificationChannel === 'phone'
+    ? formatRuMobilePhone(verifiedPhone || phone)
+    : email;
 
   return (
     <div className="min-h-screen flex items-center justify-center p-4 bg-[var(--bg)] relative">
@@ -268,25 +292,90 @@ export default function LoginPage() {
                     placeholder="ООО «Название»"
                   />
                 </FormField>
-                <FormField id="phone" label="Телефон" hint="Необязательно">
-                  <FormInput
-                    id="phone"
-                    type="tel"
-                    value={phone}
-                    onChange={(e) => setPhone(e.target.value)}
-                    placeholder="+7 (999) 000-00-00"
-                  />
-                </FormField>
-                <p className="text-xs text-[var(--muted)]">
-                  На email придёт код подтверждения. После регистрации заявка отправится администратору — офис назначит он.
-                </p>
+
+                <div className="space-y-2">
+                  <p className="text-sm font-medium text-[var(--text)]">Подтверждение регистрации</p>
+                  <div className="flex gap-1 p-1 surface-muted rounded">
+                    <button
+                      type="button"
+                      className={`flex-1 py-2 text-sm rounded transition-colors ${verificationChannel === 'email' ? 'bg-[var(--surface-elevated)] shadow-sm font-medium text-[var(--text)]' : 'text-[var(--muted)]'}`}
+                      onClick={() => { setVerificationChannel('email'); clearFieldError('phone'); }}
+                    >
+                      По email
+                    </button>
+                    <button
+                      type="button"
+                      className={`flex-1 py-2 text-sm rounded transition-colors ${verificationChannel === 'phone' ? 'bg-[var(--surface-elevated)] shadow-sm font-medium text-[var(--text)]' : 'text-[var(--muted)]'}`}
+                      onClick={() => { setVerificationChannel('phone'); clearFieldError('email'); }}
+                    >
+                      По SMS
+                    </button>
+                  </div>
+                </div>
+
+                {verificationChannel === 'email' ? (
+                  <>
+                    <FormField id="email" label="Email" required error={fieldErrors.email}>
+                      <FormInput
+                        id="email"
+                        type="email"
+                        value={email}
+                        onChange={(e) => { setEmail(e.target.value); clearFieldError('email'); }}
+                        invalid={!!fieldErrors.email}
+                        autoComplete="email"
+                      />
+                    </FormField>
+                    <FormField id="phone" label="Телефон" hint="Необязательно" error={fieldErrors.phone}>
+                      <FormInput
+                        id="phone"
+                        type="tel"
+                        value={phone}
+                        onChange={(e) => { setPhone(e.target.value); clearFieldError('phone'); }}
+                        onBlur={handlePhoneBlur}
+                        invalid={!!fieldErrors.phone}
+                        placeholder="+7 (999) 000-00-00"
+                      />
+                    </FormField>
+                    <p className="text-xs text-[var(--muted)]">
+                      На email придёт код подтверждения. После регистрации заявка отправится администратору.
+                    </p>
+                  </>
+                ) : (
+                  <>
+                    <FormField id="phone" label="Телефон" required error={fieldErrors.phone}>
+                      <FormInput
+                        id="phone"
+                        type="tel"
+                        value={phone}
+                        onChange={(e) => { setPhone(e.target.value); clearFieldError('phone'); }}
+                        onBlur={handlePhoneBlur}
+                        invalid={!!fieldErrors.phone}
+                        placeholder="+7 (999) 000-00-00"
+                      />
+                    </FormField>
+                    <FormField id="email" label="Email" hint="Необязательно" error={fieldErrors.email}>
+                      <FormInput
+                        id="email"
+                        type="email"
+                        value={email}
+                        onChange={(e) => { setEmail(e.target.value); clearFieldError('email'); }}
+                        invalid={!!fieldErrors.email}
+                        autoComplete="email"
+                      />
+                    </FormField>
+                    <p className="text-xs text-[var(--muted)]">
+                      На номер +79… придёт SMS с кодом. Начните ввод с 8 или +7 — мы приведём номер к формату +7.
+                    </p>
+                  </>
+                )}
               </>
             )}
 
             {mode === 'register' && registerStep === 'verify' && (
               <div className="space-y-3">
                 <p className="text-sm text-[var(--text)]">
-                  Введите 6-значный код, отправленный на <span className="font-medium">{email}</span>
+                  Введите 6-значный код, отправленный на{' '}
+                  <span className="font-medium">{verificationTarget}</span>
                 </p>
                 <FormField id="verificationCode" label="Код подтверждения" required error={fieldErrors.code}>
                   <FormInput
@@ -303,33 +392,52 @@ export default function LoginPage() {
                     className="tracking-[0.3em] text-center text-lg font-mono"
                   />
                 </FormField>
-                <p className="text-xs text-[var(--muted)]">Код действует 15 минут. Проверьте папку «Спам», если письма нет.</p>
+                <p className="text-xs text-[var(--muted)]">
+                  Код действует 15 минут.
+                  {verificationChannel === 'email' ? ' Проверьте папку «Спам», если письма нет.' : ' Если SMS не пришло, запросите код повторно.'}
+                </p>
               </div>
             )}
 
-            {(mode === 'login' || (mode === 'register' && registerStep === 'form')) && (
+            {mode === 'login' && (
               <>
-                <FormField id="email" label={mode === 'login' ? 'Логин или email' : 'Email'} required error={fieldErrors.email}>
+                <FormField id="login" label="Логин, email или телефон" required error={fieldErrors.email}>
                   <FormInput
-                    id="email"
-                    type={mode === 'login' ? 'text' : 'email'}
-                    value={email}
-                    onChange={(e) => { setEmail(e.target.value); clearFieldError('email'); }}
+                    id="login"
+                    type="text"
+                    value={login}
+                    onChange={(e) => { setLogin(e.target.value); clearFieldError('email'); }}
+                    onBlur={() => {
+                      const normalized = normalizeRuMobilePhone(login);
+                      if (normalized) setLogin(formatRuMobilePhone(normalized));
+                    }}
                     invalid={!!fieldErrors.email}
-                    autoComplete={mode === 'login' ? 'username' : 'email'}
-                    placeholder={mode === 'login' ? 'admin или email@example.com' : undefined}
+                    autoComplete="username"
+                    placeholder="admin, email@example.com или +7 (999) 000-00-00"
                   />
                 </FormField>
-                <FormField id="password" label="Пароль" required error={fieldErrors.password} hint={mode === 'register' ? 'Минимум 6 символов' : undefined}>
+                <FormField id="password" label="Пароль" required error={fieldErrors.password}>
                   <PasswordInput
                     id="password"
                     value={password}
                     onChange={(e) => { setPassword(e.target.value); clearFieldError('password'); }}
                     invalid={!!fieldErrors.password}
-                    autoComplete={mode === 'login' ? 'current-password' : 'new-password'}
+                    autoComplete="current-password"
                   />
                 </FormField>
               </>
+            )}
+
+            {mode === 'register' && registerStep === 'form' && (
+              <FormField id="password" label="Пароль" required error={fieldErrors.password} hint="Минимум 6 символов">
+                <PasswordInput
+                  id="password"
+                  value={password}
+                  onChange={(e) => { setPassword(e.target.value); clearFieldError('password'); }}
+                  invalid={!!fieldErrors.password}
+                  autoComplete="new-password"
+                />
+              </FormField>
             )}
 
             {success && mode === 'login' && (

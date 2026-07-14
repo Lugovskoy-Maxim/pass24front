@@ -10,6 +10,7 @@ import { AdminModule } from './admin/admin.module';
 import { AccessConfigModule } from './access/access-config.module';
 import { AuditModule } from './audit/audit.module';
 import { MailModule } from './mail/mail.module';
+import { SmsModule } from './sms/sms.module';
 import { SiteSettingsModule } from './site-settings/site-settings.module';
 
 @Module({
@@ -31,6 +32,7 @@ import { SiteSettingsModule } from './site-settings/site-settings.module';
     AccessConfigModule,
     AuditModule,
     MailModule,
+    SmsModule,
     SiteSettingsModule,
     AuthModule,
     PassesModule,

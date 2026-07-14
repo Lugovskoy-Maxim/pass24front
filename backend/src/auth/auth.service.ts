@@ -16,6 +16,8 @@ import { AccessConfigService } from '../access/access-config.service';
 import { AuditService } from '../audit/audit.service';
 import { AUTH_CONNECTION } from '../database/auth-database.constants';
 import { MailService } from '../mail/mail.service';
+import { SmsService } from '../sms/sms.service';
+import { normalizeRuMobilePhone } from '../common/phone';
 import {
   Office,
   OfficeDocument,
@@ -47,13 +49,32 @@ export class AuthService {
     private accessConfigService: AccessConfigService,
     private auditService: AuditService,
     private mailService: MailService,
+    private smsService: SmsService,
   ) {}
 
   async requestRegistrationCode(dto: RegisterDto) {
-    const email = dto.email.toLowerCase().trim();
-    const existing = await this.userModel.findOne({ email });
-    if (existing) {
-      throw new ConflictException('Пользователь с таким email уже существует');
+    const email = dto.email?.toLowerCase().trim() || undefined;
+    const phone = normalizeRuMobilePhone(dto.phone);
+    const channel = this.resolveVerificationChannel(dto, email, phone);
+
+    if (channel === 'email' && !email) {
+      throw new BadRequestException('Укажите email для подтверждения');
+    }
+    if (channel === 'phone' && !phone) {
+      throw new BadRequestException('Укажите номер телефона в формате +79XXXXXXXXX');
+    }
+
+    if (email) {
+      const existingEmail = await this.userModel.findOne({ email });
+      if (existingEmail) {
+        throw new ConflictException('Пользователь с таким email уже существует');
+      }
+    }
+    if (phone) {
+      const existingPhone = await this.userModel.findOne({ phone });
+      if (existingPhone) {
+        throw new ConflictException('Пользователь с таким телефоном уже существует');
+      }
     }
 
     let personName;
@@ -67,37 +88,54 @@ export class AuthService {
     const codeHash = await bcrypt.hash(code, 10);
     const passwordHash = await bcrypt.hash(dto.password, 10);
     const expiresAt = new Date(Date.now() + 15 * 60 * 1000);
+    const pendingKey = channel === 'phone' ? { phone } : { email };
+
+    const pendingData: Record<string, unknown> = {
+      verificationChannel: channel,
+      codeHash,
+      expiresAt,
+      password: passwordHash,
+      fullName: personName.fullName,
+      lastName: personName.lastName,
+      firstName: personName.firstName,
+      middleName: personName.middleName,
+      company: dto.company.trim(),
+    };
+    if (email) pendingData.email = email;
+    if (phone) pendingData.phone = phone;
 
     await this.pendingModel.findOneAndUpdate(
-      { email },
-      {
-        email,
-        codeHash,
-        expiresAt,
-        password: passwordHash,
-        fullName: personName.fullName,
-        lastName: personName.lastName,
-        firstName: personName.firstName,
-        middleName: personName.middleName,
-        phone: dto.phone?.trim() || undefined,
-        company: dto.company.trim(),
-      },
+      pendingKey,
+      pendingData,
       { upsert: true, new: true, setDefaultsOnInsert: true },
     );
 
-    await this.mailService.sendRegistrationCode(email, code);
+    if (channel === 'phone') {
+      await this.smsService.sendRegistrationCode(phone!, code);
+    } else {
+      await this.mailService.sendRegistrationCode(email!, code);
+    }
 
     return {
       verificationRequired: true,
-      message: `Код подтверждения отправлен на ${email}`,
+      verificationChannel: channel,
+      message: channel === 'phone'
+        ? `Код подтверждения отправлен на ${phone}`
+        : `Код подтверждения отправлен на ${email}`,
       expiresInMinutes: 15,
     };
   }
 
   async confirmRegistration(dto: ConfirmRegistrationDto) {
-    const email = dto.email.toLowerCase().trim();
+    const email = dto.email?.toLowerCase().trim() || undefined;
+    const phone = normalizeRuMobilePhone(dto.phone);
+    if (!email && !phone) {
+      throw new BadRequestException('Укажите email или телефон');
+    }
+
+    const pendingFilter = phone ? { phone } : { email };
     const pending = await this.pendingModel
-      .findOne({ email })
+      .findOne(pendingFilter)
       .select('+codeHash +password')
       .lean();
 
@@ -106,7 +144,7 @@ export class AuthService {
     }
 
     if (pending.expiresAt.getTime() < Date.now()) {
-      await this.pendingModel.deleteOne({ email });
+      await this.pendingModel.deleteOne(pendingFilter);
       throw new BadRequestException('Код истёк. Запросите новый код регистрации.');
     }
 
@@ -115,26 +153,35 @@ export class AuthService {
       throw new BadRequestException('Неверный код подтверждения');
     }
 
-    const existing = await this.userModel.findOne({ email });
-    if (existing) {
-      await this.pendingModel.deleteOne({ email });
-      throw new ConflictException('Пользователь с таким email уже существует');
+    if (pending.email) {
+      const existingEmail = await this.userModel.findOne({ email: pending.email });
+      if (existingEmail) {
+        await this.pendingModel.deleteOne(pendingFilter);
+        throw new ConflictException('Пользователь с таким email уже существует');
+      }
+    }
+    if (pending.phone) {
+      const existingPhone = await this.userModel.findOne({ phone: pending.phone });
+      if (existingPhone) {
+        await this.pendingModel.deleteOne(pendingFilter);
+        throw new ConflictException('Пользователь с таким телефоном уже существует');
+      }
     }
 
     const user = await this.userModel.create({
-      email,
+      email: pending.email,
+      phone: pending.phone,
       fullName: pending.fullName,
       lastName: pending.lastName,
       firstName: pending.firstName,
       middleName: pending.middleName,
-      phone: pending.phone,
       company: pending.company,
       role: 'tenant',
       password: pending.password,
       isActive: false,
     } as any);
 
-    await this.pendingModel.deleteOne({ email });
+    await this.pendingModel.deleteOne(pendingFilter);
 
     await this.auditService.log({
       action: 'user.registration_request',
@@ -145,7 +192,7 @@ export class AuthService {
         fullName: user.fullName,
         company: user.company,
         phone: user.phone,
-        emailVerified: true,
+        verificationChannel: pending.verificationChannel,
       },
     });
 
@@ -161,12 +208,18 @@ export class AuthService {
   }
 
   async login(dto: LoginDto) {
-    const login = (dto.login || dto.email || '').trim().toLowerCase();
-    if (!login) {
+    const loginRaw = (dto.login || dto.email || '').trim();
+    if (!loginRaw) {
       throw new UnauthorizedException('Неверные учетные данные');
     }
+
+    const login = loginRaw.toLowerCase();
+    const phone = normalizeRuMobilePhone(loginRaw);
+    const orConditions: Record<string, string>[] = [{ username: login }, { email: login }];
+    if (phone) orConditions.push({ phone });
+
     const user = await this.userModel.findOne({
-      $or: [{ username: login }, { email: login }],
+      $or: orConditions,
     }).select('+password') as any;
 
     if (!user) {
@@ -447,6 +500,24 @@ export class AuthService {
         closedWeekdays: parseClosedWeekdays(ps.closed_weekdays),
       };
     });
+  }
+
+  private resolveVerificationChannel(
+    dto: RegisterDto,
+    email?: string,
+    phone?: string | null,
+  ): 'email' | 'phone' {
+    if (dto.verificationChannel === 'phone') {
+      if (!phone) throw new BadRequestException('Укажите корректный номер телефона в формате +79XXXXXXXXX');
+      return 'phone';
+    }
+    if (dto.verificationChannel === 'email') {
+      if (!email) throw new BadRequestException('Укажите email');
+      return 'email';
+    }
+    if (phone && !email) return 'phone';
+    if (email) return 'email';
+    throw new BadRequestException('Укажите email или телефон для подтверждения регистрации');
   }
 
   private generateToken(user: any) {

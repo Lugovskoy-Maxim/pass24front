@@ -1,8 +1,16 @@
-import { IsEmail, IsNotEmpty, IsOptional, MinLength } from 'class-validator';
+import { IsEmail, IsIn, IsNotEmpty, IsOptional, MinLength } from 'class-validator';
 
 export class RegisterDto {
+  @IsOptional()
   @IsEmail()
-  email: string;
+  email?: string;
+
+  @IsOptional()
+  phone?: string;
+
+  @IsOptional()
+  @IsIn(['email', 'phone'])
+  verificationChannel?: 'email' | 'phone';
 
   @IsNotEmpty()
   @MinLength(6)
@@ -19,9 +27,6 @@ export class RegisterDto {
 
   @IsOptional()
   middleName?: string;
-
-  @IsOptional()
-  phone?: string;
 
   @IsNotEmpty({ message: 'Укажите название компании' })
   company: string;

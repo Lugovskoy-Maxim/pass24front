@@ -5,8 +5,14 @@ export type RegistrationPendingDocument = HydratedDocument<RegistrationPending>;
 
 @Schema({ timestamps: true, collection: 'registration_pending' })
 export class RegistrationPending {
-  @Prop({ required: true, unique: true, lowercase: true, trim: true })
-  email: string;
+  @Prop({ lowercase: true, trim: true, sparse: true, unique: true })
+  email?: string;
+
+  @Prop({ trim: true, sparse: true, unique: true })
+  phone?: string;
+
+  @Prop({ required: true, enum: ['email', 'phone'] })
+  verificationChannel: 'email' | 'phone';
 
   @Prop({ required: true, select: false })
   codeHash: string;
@@ -28,9 +34,6 @@ export class RegistrationPending {
 
   @Prop({ trim: true })
   middleName?: string;
-
-  @Prop({ trim: true })
-  phone?: string;
 
   @Prop({ required: true, trim: true })
   company: string;

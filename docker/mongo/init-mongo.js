@@ -24,7 +24,8 @@ authDb.createCollection('registration_pending');
 
 // Useful indexes
 authDb.users.createIndex({ username: 1 }, { unique: true, sparse: true });
-authDb.registration_pending.createIndex({ email: 1 }, { unique: true });
+authDb.registration_pending.createIndex({ email: 1 }, { unique: true, sparse: true });
+authDb.registration_pending.createIndex({ phone: 1 }, { unique: true, sparse: true });
 authDb.registration_pending.createIndex({ expiresAt: 1 }, { expireAfterSeconds: 0 });
 authDb.users.createIndex({ email: 1 }, { unique: true, sparse: true });
 authDb.users.createIndex({ phone: 1 }, { unique: true, sparse: true });

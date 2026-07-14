@@ -1,6 +1,7 @@
 import { isPersonNameValid, PersonNameParts } from './person-name';
 import { PassType } from './api';
 import { validateBookableVisitDate } from './bookable-visit-dates';
+import { isValidRuMobilePhone, looksLikePhoneInput, normalizeRuMobilePhone } from './phone';
 
 export type FieldErrors = Record<string, string | undefined>;
 
@@ -32,13 +33,30 @@ export function validateLoginRegister(data: {
   password: string;
   nameParts?: PersonNameParts;
   company?: string;
+  phone?: string;
+  verificationChannel?: 'email' | 'phone';
 }): FieldErrors {
   const errors: FieldErrors = {};
 
-  if (isBlank(data.email)) {
-    errors.email = data.mode === 'login' ? 'Укажите логин или email' : 'Укажите email';
-  } else if (data.mode !== 'login' && !isValidEmail(data.email)) {
-    errors.email = 'Некорректный email';
+  if (data.mode === 'login') {
+    if (isBlank(data.email)) {
+      errors.email = 'Укажите логин, email или телефон';
+    } else if (looksLikePhoneInput(data.email) && !isValidRuMobilePhone(data.email)) {
+      errors.email = 'Некорректный номер. Используйте формат +79XXXXXXXXX';
+    }
+  } else if (data.verificationChannel === 'phone') {
+    if (!isValidRuMobilePhone(data.phone)) {
+      errors.phone = 'Укажите номер в формате +79XXXXXXXXX';
+    }
+    if (!isBlank(data.email) && !isValidEmail(data.email)) {
+      errors.email = 'Некорректный email';
+    }
+  } else {
+    if (isBlank(data.email)) errors.email = 'Укажите email';
+    else if (!isValidEmail(data.email)) errors.email = 'Некорректный email';
+    if (!isBlank(data.phone) && !isValidRuMobilePhone(data.phone)) {
+      errors.phone = 'Некорректный номер. Используйте формат +79XXXXXXXXX';
+    }
   }
 
   if (isBlank(data.password)) errors.password = 'Укажите пароль';
@@ -53,10 +71,10 @@ export function validateLoginRegister(data: {
   return errors;
 }
 
-export function validateRegistrationCode(code: string): FieldErrors {
+export function validateRegistrationCode(code: string, channel: 'email' | 'phone' = 'email'): FieldErrors {
   const errors: FieldErrors = {};
   const trimmed = code.trim();
-  if (!trimmed) errors.code = 'Введите код из письма';
+  if (!trimmed) errors.code = channel === 'phone' ? 'Введите код из SMS' : 'Введите код из письма';
   else if (!/^\d{6}$/.test(trimmed)) errors.code = 'Код состоит из 6 цифр';
   return errors;
 }
@@ -135,3 +153,5 @@ export function validatePassTemplateForm(data: {
 
   return errors;
 }
+
+export { normalizeRuMobilePhone };

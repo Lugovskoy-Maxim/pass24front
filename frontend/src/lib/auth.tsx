@@ -6,18 +6,23 @@ import { api, User } from './api';
 interface AuthContextType {
   user: User | null;
   loading: boolean;
-  login: (email: string, password: string) => Promise<User>;
+  login: (login: string, password: string) => Promise<User>;
   requestRegistrationCode: (data: {
-    email: string;
+    email?: string;
+    phone?: string;
+    verificationChannel?: 'email' | 'phone';
     password: string;
     fullName?: string;
     lastName?: string;
     firstName?: string;
     middleName?: string;
-    phone?: string;
     company: string;
+  }) => Promise<{ message: string; verificationChannel: 'email' | 'phone' }>;
+  confirmRegistration: (data: {
+    email?: string;
+    phone?: string;
+    code: string;
   }) => Promise<string>;
-  confirmRegistration: (email: string, code: string) => Promise<string>;
   logout: () => void;
   refreshUser: () => Promise<void>;
 }
@@ -37,29 +42,37 @@ export function AuthProvider({ children }: { children: ReactNode }) {
       .finally(() => setLoading(false));
   }, []);
 
-  const login = async (email: string, password: string) => {
-    const { user, token } = await api.login(email, password);
+  const login = async (loginValue: string, password: string) => {
+    const { user, token } = await api.login(loginValue, password);
     localStorage.setItem('pass24_token', token);
     setUser(user);
     return user;
   };
 
   const requestRegistrationCode = async (data: {
-    email: string;
+    email?: string;
+    phone?: string;
+    verificationChannel?: 'email' | 'phone';
     password: string;
     fullName?: string;
     lastName?: string;
     firstName?: string;
     middleName?: string;
-    phone?: string;
     company: string;
   }) => {
     const result = await api.registerRequestCode(data);
-    return result.message;
+    return {
+      message: result.message,
+      verificationChannel: result.verificationChannel,
+    };
   };
 
-  const confirmRegistration = async (email: string, code: string) => {
-    const result = await api.registerConfirm(email, code);
+  const confirmRegistration = async (data: {
+    email?: string;
+    phone?: string;
+    code: string;
+  }) => {
+    const result = await api.registerConfirm(data);
     return result.message;
   };
 
