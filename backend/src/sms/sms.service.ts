@@ -47,11 +47,26 @@ export class SmsService {
         ? response.message
         : JSON.stringify(response.message);
       this.logger.error(`SMS Aero send failed for ${phone}: ${detail}`);
-      throw new InternalServerErrorException('Не удалось отправить SMS с кодом подтверждения');
+      const userMessage = this.mapSmsAeroError(detail);
+      throw new InternalServerErrorException(userMessage);
     }
 
     this.logger.log(`Registration code SMS sent to ${phone}`);
     return { sent: true };
+  }
+
+  private mapSmsAeroError(detail: string): string {
+    const lower = detail.toLowerCase();
+    if (lower.includes('not enough money')) {
+      return 'На балансе SMS Aero недостаточно средств для отправки SMS';
+    }
+    if (lower.includes('incorrect') && lower.includes('sign')) {
+      return 'Неверная подпись отправителя SMS. Проверьте SMSAERO_SIGN в настройках';
+    }
+    if (lower.includes('validation error')) {
+      return 'SMS-сервис отклонил запрос. Проверьте номер телефона и настройки SMS Aero';
+    }
+    return 'Не удалось отправить SMS с кодом подтверждения';
   }
 
   private async request(
