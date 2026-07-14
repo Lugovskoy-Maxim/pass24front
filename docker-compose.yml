@@ -52,6 +52,10 @@ services:
       - SMTP_PASS=
       - SMTP_SECURE=false
       - SMTP_FROM=Пропуск.М-Стиль <noreply@pass24.local>
+      - SMSAERO_EMAIL=${SMSAERO_EMAIL:-}
+      - SMSAERO_API_KEY=${SMSAERO_API_KEY:-}
+      - SMSAERO_SIGN=${SMSAERO_SIGN:-SMS Aero}
+      - SMS_ENABLED=${SMS_ENABLED:-false}
       - PUBLIC_APP_URL=http://127.0.0.1:3001
       - TZ=Europe/Moscow
     depends_on:

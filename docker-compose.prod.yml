@@ -37,6 +37,10 @@ services:
       - SMTP_PASS=${SMTP_PASS:-}
       - SMTP_SECURE=${SMTP_SECURE:-false}
       - SMTP_FROM=${SMTP_FROM:-Пропуск.М-Стиль <pass@mstyle.ru>}
+      - SMSAERO_EMAIL=${SMSAERO_EMAIL:-}
+      - SMSAERO_API_KEY=${SMSAERO_API_KEY:-}
+      - SMSAERO_SIGN=${SMSAERO_SIGN:-SMS Aero}
+      - SMS_ENABLED=${SMS_ENABLED:-false}
 
   frontend:
     build:
