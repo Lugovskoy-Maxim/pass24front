@@ -90,13 +90,31 @@ export default function LoginPage() {
     }
   };
 
+  const resolveEffectiveChannel = (): 'email' | 'phone' => {
+    const normalizedPhone = normalizeRuMobilePhone(phone);
+    const trimmedEmail = email.trim().toLowerCase();
+    if (verificationChannel === 'phone') return 'phone';
+    if (normalizedPhone && !trimmedEmail) return 'phone';
+    return 'email';
+  };
+
   const buildRegisterPayload = () => {
     const normalizedPhone = normalizeRuMobilePhone(phone) || undefined;
     const trimmedEmail = email.trim().toLowerCase() || undefined;
-    return {
-      email: verificationChannel === 'email' ? trimmedEmail : trimmedEmail,
-      phone: verificationChannel === 'phone' ? normalizedPhone : normalizedPhone,
-      verificationChannel,
+    const channel = resolveEffectiveChannel();
+
+    const payload: {
+      email?: string;
+      phone?: string;
+      verificationChannel: 'email' | 'phone';
+      password: string;
+      lastName: string;
+      firstName: string;
+      middleName?: string;
+      fullName: string;
+      company: string;
+    } = {
+      verificationChannel: channel,
       password,
       lastName: nameParts.lastName.trim(),
       firstName: nameParts.firstName.trim(),
@@ -104,10 +122,21 @@ export default function LoginPage() {
       fullName: buildFullName(nameParts),
       company: company.trim(),
     };
+
+    if (channel === 'phone') {
+      payload.phone = normalizedPhone;
+      if (trimmedEmail) payload.email = trimmedEmail;
+    } else {
+      payload.email = trimmedEmail;
+      if (normalizedPhone) payload.phone = normalizedPhone;
+    }
+
+    return payload;
   };
 
   const handleSubmit = async (e: FormEvent) => {
     e.preventDefault();
+    const effectiveChannel = mode === 'register' ? resolveEffectiveChannel() : undefined;
     const errors = validateLoginRegister({
       mode,
       email: mode === 'login' ? login : email,
@@ -115,7 +144,7 @@ export default function LoginPage() {
       nameParts: mode === 'register' ? nameParts : undefined,
       company: mode === 'register' ? company : undefined,
       phone: mode === 'register' ? phone : undefined,
-      verificationChannel: mode === 'register' ? verificationChannel : undefined,
+      verificationChannel: effectiveChannel,
     });
     setFieldErrors(errors);
     if (hasFieldErrors(errors)) return;
@@ -165,7 +194,7 @@ export default function LoginPage() {
       const payload = buildRegisterPayload();
       const result = await requestRegistrationCode(payload);
       setInfoMessage(result.message);
-      setVerificationChannel(result.verificationChannel);
+      setVerificationChannel(result.verificationChannel || payload.verificationChannel);
       if (result.verificationChannel === 'phone') {
         setVerifiedPhone(payload.phone || '');
       }
@@ -325,7 +354,7 @@ export default function LoginPage() {
                         autoComplete="email"
                       />
                     </FormField>
-                    <FormField id="phone" label="Телефон" hint="Необязательно" error={fieldErrors.phone}>
+                    <FormField id="phone" label="Телефон" hint="Можно зарегистрироваться по SMS без email" error={fieldErrors.phone}>
                       <FormInput
                         id="phone"
                         type="tel"
@@ -356,7 +385,7 @@ export default function LoginPage() {
                     <FormField id="email" label="Email" hint="Необязательно" error={fieldErrors.email}>
                       <FormInput
                         id="email"
-                        type="email"
+                        type="text"
                         value={email}
                         onChange={(e) => { setEmail(e.target.value); clearFieldError('email'); }}
                         invalid={!!fieldErrors.email}

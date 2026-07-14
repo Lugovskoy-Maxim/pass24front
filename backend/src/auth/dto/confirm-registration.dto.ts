@@ -1,12 +1,16 @@
-import { IsEmail, IsNotEmpty, IsOptional, IsString, Length, Matches } from 'class-validator';
+import { IsEmail, IsNotEmpty, IsOptional, IsString, Length, Matches, ValidateIf } from 'class-validator';
+import { EmptyToUndefined } from '../../common/dto-transforms';
 
 export class ConfirmRegistrationDto {
-  @IsOptional()
-  @IsEmail()
+  @EmptyToUndefined()
+  @ValidateIf((o) => o.email !== undefined)
+  @IsEmail({}, { message: 'Некорректный email' })
   email?: string;
 
-  @IsOptional()
+  @EmptyToUndefined()
+  @ValidateIf((o) => o.phone !== undefined)
   @IsString()
+  @IsNotEmpty({ message: 'Укажите номер телефона' })
   phone?: string;
 
   @IsString()
