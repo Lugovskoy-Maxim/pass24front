@@ -109,6 +109,7 @@ export declare class AdminController {
         roleLabels: any;
         roles: string[];
         systemRoles: ("tenant" | "security" | "admin" | "bc_admin")[];
+        builtinEmployeeRoles: "tenant_employee"[];
     }>;
     updateAccessConfig(dto: UpdateAccessConfigDto, req: any): Promise<{
         config: {
@@ -167,6 +168,7 @@ export declare class AdminController {
             roleLabels: any;
             roles: string[];
             systemRoles: ("tenant" | "security" | "admin" | "bc_admin")[];
+            builtinEmployeeRoles: "tenant_employee"[];
         };
     }>;
     getUsers(q: Record<string, string>): Promise<{

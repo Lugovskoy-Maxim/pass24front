@@ -84,6 +84,9 @@ let AdminService = class AdminService {
             if (access_constants_1.SYSTEM_ROLES.includes(role)) {
                 throw new common_1.BadRequestException(`Нельзя удалить системную роль: ${role}`);
             }
+            if (access_constants_1.BUILTIN_EMPLOYEE_ROLES.includes(role)) {
+                throw new common_1.BadRequestException(`Нельзя удалить встроенную роль сотрудника: ${role}`);
+            }
             const count = await this.userModel.countDocuments({ role, isActive: { $ne: false } });
             if (count > 0) {
                 throw new common_1.BadRequestException(`Нельзя удалить роль «${role}»: к ней привязаны пользователи`);

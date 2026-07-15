@@ -14,6 +14,7 @@ export declare class JwtStrategy extends JwtStrategy_base {
         role: any;
         fullName: string | undefined;
         parentTenantId: string | undefined;
+        isActive: boolean;
         permissions: string[];
     }>;
 }

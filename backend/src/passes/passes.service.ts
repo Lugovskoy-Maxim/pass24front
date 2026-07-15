@@ -24,6 +24,7 @@ import { PassTemplatesService } from './pass-templates.service';
 
 const PASS_EXPORT_LIMIT = 10_000;
 const PASS_REPORT_PAGE_SIZE = 50;
+const PASS_LIST_PAGE_SIZE = 50;
 
 @Injectable()
 export class PassesService implements OnModuleInit {
@@ -175,19 +176,21 @@ export class PassesService implements OnModuleInit {
   }
 
   private appendSearchFilter(filter: any, search?: string) {
-    if (!search?.trim()) return;
+    const term = search?.trim();
+    if (!term) return;
+    const pattern = new RegExp(this.escapeRegex(term), 'i');
     filter.$and = filter.$and || [];
     filter.$and.push({
       $or: [
-        { visitorName: new RegExp(search, 'i') },
-        { visitorPhone: new RegExp(search, 'i') },
-        { visitorPassportSeries: new RegExp(search, 'i') },
-        { visitorPassportNumber: new RegExp(search, 'i') },
-        { vehiclePlate: new RegExp(search, 'i') },
-        { companyName: new RegExp(search, 'i') },
-        { businessCenterName: new RegExp(search, 'i') },
-        { office: new RegExp(search, 'i') },
-        { passNumber: new RegExp(search, 'i') },
+        { visitorName: pattern },
+        { visitorPhone: pattern },
+        { visitorPassportSeries: pattern },
+        { visitorPassportNumber: pattern },
+        { vehiclePlate: pattern },
+        { companyName: pattern },
+        { businessCenterName: pattern },
+        { office: pattern },
+        { passNumber: pattern },
       ],
     });
   }
@@ -276,14 +279,28 @@ export class PassesService implements OnModuleInit {
     return filter;
   }
 
-  async findAll(params: { status?: string; date?: string; search?: string }, user?: any) {
+  async findAll(
+    params: { status?: string; date?: string; search?: string; limit?: string; offset?: string },
+    user?: any,
+  ) {
     await this.expirePastPasses();
     const filter = await this.buildListFilter(params, user);
+    const limit = Math.min(Math.max(parseInt(params.limit || String(PASS_LIST_PAGE_SIZE), 10) || PASS_LIST_PAGE_SIZE, 1), 200);
+    const offset = Math.max(parseInt(params.offset || '0', 10) || 0, 0);
 
-    const passes = await this.passModel.find(filter).sort({ createdAt: -1 }).lean();
+    const [passes, total] = await Promise.all([
+      this.passModel.find(filter).sort({ createdAt: -1 }).skip(offset).limit(limit).lean(),
+      this.passModel.countDocuments(filter),
+    ]);
     const withCheckout = await this.enrichPassCheckoutSettings(passes);
     const enriched = await this.enrichCreatorFields(withCheckout, user);
-    return { passes: enriched.map((p) => this.mapToFrontend(p, user)) };
+    return {
+      passes: enriched.map((p) => this.mapToFrontend(p, user)),
+      total,
+      offset,
+      limit,
+      hasMore: offset + passes.length < total,
+    };
   }
 
   async getExportFilters(user?: any) {
@@ -660,13 +677,15 @@ export class PassesService implements OnModuleInit {
     return { pass: this.mapToFrontend(withCheckout) };
   }
 
-  async getJournal(date?: string, user?: any) {
+  async getJournal(date?: string, user?: any, search?: string) {
     await this.expirePastPasses();
     const targetDate = date || this.getTodayDate();
     const accessFilter = await this.buildAccessFilter(user);
+    const filter: any = { visitDate: targetDate, ...accessFilter };
+    this.appendSearchFilter(filter, search);
 
     const passes = await this.passModel
-      .find({ visitDate: targetDate, ...accessFilter })
+      .find(filter)
       .sort({ createdAt: -1 })
       .lean();
 

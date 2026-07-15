@@ -11,21 +11,38 @@ var __metadata = (this && this.__metadata) || function (k, v) {
 Object.defineProperty(exports, "__esModule", { value: true });
 exports.RegisterDto = void 0;
 const class_validator_1 = require("class-validator");
+const dto_transforms_1 = require("../../common/dto-transforms");
 class RegisterDto {
     email;
+    phone;
+    verificationChannel;
     password;
     fullName;
     lastName;
     firstName;
     middleName;
-    phone;
     company;
 }
 exports.RegisterDto = RegisterDto;
 __decorate([
-    (0, class_validator_1.IsEmail)(),
+    (0, dto_transforms_1.EmptyToUndefined)(),
+    (0, class_validator_1.ValidateIf)((o) => o.email !== undefined),
+    (0, class_validator_1.IsEmail)({}, { message: 'Некорректный email' }),
     __metadata("design:type", String)
 ], RegisterDto.prototype, "email", void 0);
+__decorate([
+    (0, dto_transforms_1.EmptyToUndefined)(),
+    (0, class_validator_1.ValidateIf)((o) => o.verificationChannel === 'phone'),
+    (0, class_validator_1.IsString)(),
+    (0, class_validator_1.IsNotEmpty)({ message: 'Укажите номер телефона' }),
+    __metadata("design:type", String)
+], RegisterDto.prototype, "phone", void 0);
+__decorate([
+    (0, dto_transforms_1.EmptyToUndefined)(),
+    (0, class_validator_1.IsOptional)(),
+    (0, class_validator_1.IsIn)(['email', 'phone']),
+    __metadata("design:type", String)
+], RegisterDto.prototype, "verificationChannel", void 0);
 __decorate([
     (0, class_validator_1.IsNotEmpty)(),
     (0, class_validator_1.MinLength)(6),
@@ -47,10 +64,6 @@ __decorate([
     (0, class_validator_1.IsOptional)(),
     __metadata("design:type", String)
 ], RegisterDto.prototype, "middleName", void 0);
-__decorate([
-    (0, class_validator_1.IsOptional)(),
-    __metadata("design:type", String)
-], RegisterDto.prototype, "phone", void 0);
 __decorate([
     (0, class_validator_1.IsNotEmpty)({ message: 'Укажите название компании' }),
     __metadata("design:type", String)

@@ -50,5 +50,9 @@ export declare const ALL_PERMISSIONS: readonly [{
 }];
 export declare const DEFAULT_ROLE_PERMISSIONS: Record<string, string[]>;
 export declare const SYSTEM_ROLES: readonly ["tenant", "security", "bc_admin", "admin"];
+export declare const BUILTIN_EMPLOYEE_ROLE = "tenant_employee";
+export declare const BUILTIN_EMPLOYEE_ROLES: readonly ["tenant_employee"];
+export declare const DEFAULT_EMPLOYEE_ROLE_PERMISSIONS: Record<string, string[]>;
+export declare const BUILTIN_EMPLOYEE_ROLE_LABELS: Record<string, string>;
 export declare const ROLE_LABELS: Record<string, string>;
 export declare const PASS_TYPE_LABELS: Record<string, string>;

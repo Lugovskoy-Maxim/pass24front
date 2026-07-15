@@ -1,7 +1,7 @@
 'use client';
 
-import { Suspense, useEffect, useState, useCallback, FormEvent } from 'react';
-import { useRouter, useSearchParams } from 'next/navigation';
+import { Suspense, useEffect, useState, useCallback, useRef, FormEvent } from 'react';
+import { useSearchParams } from 'next/navigation';
 import { BarChart3, LogIn, LogOut, Users, CheckCircle, Clock, AlertCircle, Search, X } from 'lucide-react';
 import { ProtectedLayout } from '@/components/ProtectedLayout';
 import { PassListCard } from '@/components/PassListCard';
@@ -16,7 +16,6 @@ import { useAutoRefresh } from '@/hooks/useAutoRefresh';
 import { useOverdueGuests } from '@/hooks/useOverdueGuests';
 import { OverdueGuestsAlert } from '@/components/OverdueGuestsAlert';
 import { canSeeOverdueAlerts } from '@/lib/permissions';
-import { buildHistoryHref } from '@/lib/visit-history';
 import { useAuth } from '@/lib/auth';
 import { getGuestOverdueKind, getUiLabels } from '@/lib/ui-labels';
 import { isAwaitingEntry } from '@/lib/pass-entry';
@@ -37,9 +36,10 @@ function ControlPageContent() {
   const { passes: overduePasses, refresh: refreshOverdue } = useOverdueGuests(showOverdueAlerts);
   const overdueIds = new Set(overduePasses.map((pass) => pass.id));
   const receptionSections = getReceptionSections(labels);
-  const router = useRouter();
   const searchParams = useSearchParams();
   const [date, setDate] = useState(new Date().toISOString().slice(0, 10));
+  const [journalSearch, setJournalSearch] = useState('');
+  const journalSearchRef = useRef('');
   const [passes, setPasses] = useState<Pass[]>([]);
   const [stats, setStats] = useState({ total: 0, pending: 0, active: 0, completed: 0, approved: 0 });
   const [loading, setLoading] = useState(true);
@@ -60,7 +60,7 @@ function ControlPageContent() {
       setLoading(true);
       setLoadError('');
     }
-    return api.getJournal(date)
+    return api.getJournal(date, journalSearchRef.current || undefined)
       .then((data) => {
         setPasses(data.passes);
         setStats(data.stats);
@@ -105,43 +105,57 @@ function ControlPageContent() {
 
   const runLookup = useCallback(async (q: string) => {
     const trimmed = q.trim();
-    if (!trimmed) return;
-
-    const isPassNumber = /^(Pass-|PS-)/i.test(trimmed);
-    if (!isPassNumber) {
-      const digits = trimmed.replace(/\D/g, '');
-      const isPhone = digits.length >= 7;
-      router.push(buildHistoryHref({
-        scope: 'visitor',
-        ...(isPhone ? { visitorPhone: trimmed } : { visitorName: trimmed }),
-      }));
+    setJournalSearch(trimmed);
+    journalSearchRef.current = trimmed;
+    if (!trimmed) {
+      setSelected(null);
+      await load();
       return;
     }
 
     setLookupLoading(true);
     try {
-      const { pass } = await api.lookupPass(trimmed);
-      setLookupQuery(trimmed);
-      setSelected(pass);
-      const overdueKind = getGuestOverdueKind(pass);
-      if (overdueKind === 'past_end_time') {
-        toast(labels.toasts.guestPastEndTime.replace('{time}', pass.visitTimeTo || ''), 'warning');
-      } else if (overdueKind === 'past_date') {
-        toast(labels.toasts.guestStillInside, 'warning');
-      } else {
-        toast(`${labels.toasts.passFound}: ${pass.passNumber}`, 'success');
+      const data = await api.getJournal(date, trimmed);
+      setPasses(data.passes);
+      setStats(data.stats);
+
+      if (data.passes.length > 0) {
+        setSelected(data.passes[0]);
+        toast(`Найдено: ${data.passes.length}`, 'success');
+        return;
       }
-      const inJournal = passes.some((p) => p.id === pass.id);
-      const isOverdueGuest = pass.status === 'active' && getGuestOverdueKind(pass) !== null;
-      if (!inJournal && !isOverdueGuest && pass.visitDate !== date) {
-        setDate(pass.visitDate);
+
+      const isPassNumber = /^(Pass-|PS-)/i.test(trimmed);
+      if (isPassNumber) {
+        try {
+          const { pass } = await api.lookupPass(trimmed);
+          setSelected(pass);
+          const overdueKind = getGuestOverdueKind(pass);
+          if (overdueKind === 'past_end_time') {
+            toast(labels.toasts.guestPastEndTime.replace('{time}', pass.visitTimeTo || ''), 'warning');
+          } else if (overdueKind === 'past_date') {
+            toast(labels.toasts.guestStillInside, 'warning');
+          } else {
+            toast(`${labels.toasts.passFound}: ${pass.passNumber}`, 'success');
+          }
+          const isOverdueGuest = pass.status === 'active' && getGuestOverdueKind(pass) !== null;
+          if (!isOverdueGuest && pass.visitDate !== date) {
+            setDate(pass.visitDate);
+          }
+          return;
+        } catch {
+          // fall through to not-found toast
+        }
       }
+
+      toast('По запросу ничего не найдено', 'warning');
+      setSelected(null);
     } catch (err) {
-      toast(getErrorMessage(err, 'Пропуск не найден'), 'error');
+      toast(getErrorMessage(err, 'Ошибка поиска'), 'error');
     } finally {
       setLookupLoading(false);
     }
-  }, [toast, labels, passes, date, router]);
+  }, [toast, labels, date, load]);
 
   useEffect(() => {
     const passFromUrl = searchParams.get('pass');

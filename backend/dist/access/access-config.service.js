@@ -33,8 +33,8 @@ let AccessConfigService = class AccessConfigService {
             await this.accessConfigModel.create({
                 key: 'default',
                 enabledPassTypes: [...access_constants_1.ALL_PASS_TYPES],
-                rolePermissions: { ...access_constants_1.DEFAULT_ROLE_PERMISSIONS },
-                roleLabels: {},
+                rolePermissions: { ...access_constants_1.DEFAULT_ROLE_PERMISSIONS, ...access_constants_1.DEFAULT_EMPLOYEE_ROLE_PERMISSIONS },
+                roleLabels: { ...access_constants_1.BUILTIN_EMPLOYEE_ROLE_LABELS },
             });
             return;
         }
@@ -44,15 +44,24 @@ let AccessConfigService = class AccessConfigService {
             existing.roleLabels = {};
             changed = true;
         }
-        for (const [role, defaults] of Object.entries(access_constants_1.DEFAULT_ROLE_PERMISSIONS)) {
+        for (const [role, defaults] of Object.entries({
+            ...access_constants_1.DEFAULT_ROLE_PERMISSIONS,
+            ...access_constants_1.DEFAULT_EMPLOYEE_ROLE_PERMISSIONS,
+        })) {
             if (!existing.rolePermissions[role]) {
                 existing.rolePermissions[role] = [...defaults];
                 changed = true;
             }
         }
+        for (const [role, label] of Object.entries(access_constants_1.BUILTIN_EMPLOYEE_ROLE_LABELS)) {
+            if (!existing.roleLabels[role]) {
+                existing.roleLabels[role] = label;
+                changed = true;
+            }
+        }
         for (const [role, perms] of Object.entries(existing.rolePermissions)) {
             const sanitized = [...new Set((perms || []).filter((p) => validKeys.has(p)))];
-            const defaults = access_constants_1.DEFAULT_ROLE_PERMISSIONS[role] || [];
+            const defaults = access_constants_1.DEFAULT_ROLE_PERMISSIONS[role] || access_constants_1.DEFAULT_EMPLOYEE_ROLE_PERMISSIONS[role] || [];
             for (const perm of defaults) {
                 if (!sanitized.includes(perm)) {
                     sanitized.push(perm);
@@ -101,6 +110,11 @@ let AccessConfigService = class AccessConfigService {
                     throw new common_1.BadRequestException(`Нельзя удалить системную роль: ${role}`);
                 }
             }
+            for (const role of access_constants_1.BUILTIN_EMPLOYEE_ROLES) {
+                if (!data.rolePermissions[role]) {
+                    throw new common_1.BadRequestException(`Нельзя удалить встроенную роль сотрудника: ${role}`);
+                }
+            }
             for (const role of Object.keys(data.rolePermissions)) {
                 if (!ROLE_KEY_PATTERN.test(role)) {
                     throw new common_1.BadRequestException(`Некорректный код роли: ${role}`);
@@ -138,6 +152,10 @@ let AccessConfigService = class AccessConfigService {
             for (const role of access_constants_1.SYSTEM_ROLES) {
                 labels[role] = access_constants_1.ROLE_LABELS[role];
             }
+            for (const role of access_constants_1.BUILTIN_EMPLOYEE_ROLES) {
+                if (!labels[role])
+                    labels[role] = access_constants_1.BUILTIN_EMPLOYEE_ROLE_LABELS[role];
+            }
             doc.roleLabels = labels;
             doc.markModified('roleLabels');
         }
@@ -150,12 +168,13 @@ let AccessConfigService = class AccessConfigService {
     }
     async getEmployeeAssignableRoles() {
         const config = await this.getConfig();
-        const roles = config.roles.filter((role) => !access_constants_1.SYSTEM_ROLES.includes(role));
+        const rolePermissions = config.rolePermissions || {};
+        const roles = Object.keys(rolePermissions).filter((role) => !access_constants_1.SYSTEM_ROLES.includes(role));
         return {
             roles: roles.map((role) => ({
                 key: role,
                 label: config.roleLabels?.[role] || role,
-                permissions: config.rolePermissions[role] || [],
+                permissions: rolePermissions[role] || [],
             })),
         };
     }
@@ -186,6 +205,7 @@ let AccessConfigService = class AccessConfigService {
     mapConfig(doc) {
         const mergedRoles = {
             ...access_constants_1.DEFAULT_ROLE_PERMISSIONS,
+            ...access_constants_1.DEFAULT_EMPLOYEE_ROLE_PERMISSIONS,
             ...doc.rolePermissions,
         };
         return {
@@ -195,10 +215,12 @@ let AccessConfigService = class AccessConfigService {
             passTypeLabels: access_constants_1.PASS_TYPE_LABELS,
             roleLabels: {
                 ...access_constants_1.ROLE_LABELS,
+                ...access_constants_1.BUILTIN_EMPLOYEE_ROLE_LABELS,
                 ...(doc.roleLabels || {}),
             },
             roles: Object.keys(mergedRoles),
             systemRoles: [...access_constants_1.SYSTEM_ROLES],
+            builtinEmployeeRoles: [...access_constants_1.BUILTIN_EMPLOYEE_ROLES],
         };
     }
 };

@@ -17,6 +17,9 @@ export declare class AppSettings {
     themePrimary: string;
     themePrimaryHover: string;
     uiLabels: Record<string, unknown>;
+    smsRegistrationEnabled: boolean;
+    smsRegistrationDisabledMessage: string;
+    smsRegistrationCodeText: string;
 }
 export declare const AppSettingsSchema: import("mongoose").Schema<AppSettings, import("mongoose").Model<AppSettings, any, any, any, any, any, AppSettings>, {}, {}, {}, {}, import("mongoose").DefaultSchemaOptions, AppSettings, import("mongoose").Document<unknown, {}, AppSettings, {
     id: string;
@@ -163,6 +166,33 @@ export declare const AppSettingsSchema: import("mongoose").Schema<AppSettings, i
         id: string;
     }> | undefined;
     uiLabels?: import("mongoose").SchemaDefinitionProperty<Record<string, unknown>, AppSettings, import("mongoose").Document<unknown, {}, AppSettings, {
+        id: string;
+    }, import("mongoose").DefaultSchemaOptions> & Omit<AppSettings & {
+        _id: import("mongoose").Types.ObjectId;
+    } & {
+        __v: number;
+    }, "id"> & {
+        id: string;
+    }> | undefined;
+    smsRegistrationEnabled?: import("mongoose").SchemaDefinitionProperty<boolean, AppSettings, import("mongoose").Document<unknown, {}, AppSettings, {
+        id: string;
+    }, import("mongoose").DefaultSchemaOptions> & Omit<AppSettings & {
+        _id: import("mongoose").Types.ObjectId;
+    } & {
+        __v: number;
+    }, "id"> & {
+        id: string;
+    }> | undefined;
+    smsRegistrationDisabledMessage?: import("mongoose").SchemaDefinitionProperty<string, AppSettings, import("mongoose").Document<unknown, {}, AppSettings, {
+        id: string;
+    }, import("mongoose").DefaultSchemaOptions> & Omit<AppSettings & {
+        _id: import("mongoose").Types.ObjectId;
+    } & {
+        __v: number;
+    }, "id"> & {
+        id: string;
+    }> | undefined;
+    smsRegistrationCodeText?: import("mongoose").SchemaDefinitionProperty<string, AppSettings, import("mongoose").Document<unknown, {}, AppSettings, {
         id: string;
     }, import("mongoose").DefaultSchemaOptions> & Omit<AppSettings & {
         _id: import("mongoose").Types.ObjectId;

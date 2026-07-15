@@ -27,6 +27,9 @@ class UpdateSiteSettingsDto {
     themePrimary;
     themePrimaryHover;
     uiLabels;
+    smsRegistrationEnabled;
+    smsRegistrationDisabledMessage;
+    smsRegistrationCodeText;
 }
 exports.UpdateSiteSettingsDto = UpdateSiteSettingsDto;
 __decorate([
@@ -115,4 +118,21 @@ __decorate([
     (0, class_validator_1.IsObject)(),
     __metadata("design:type", Object)
 ], UpdateSiteSettingsDto.prototype, "uiLabels", void 0);
+__decorate([
+    (0, class_validator_1.IsOptional)(),
+    (0, class_validator_1.IsBoolean)(),
+    __metadata("design:type", Boolean)
+], UpdateSiteSettingsDto.prototype, "smsRegistrationEnabled", void 0);
+__decorate([
+    (0, class_validator_1.IsOptional)(),
+    (0, class_validator_1.IsString)(),
+    (0, class_validator_1.MaxLength)(500),
+    __metadata("design:type", String)
+], UpdateSiteSettingsDto.prototype, "smsRegistrationDisabledMessage", void 0);
+__decorate([
+    (0, class_validator_1.IsOptional)(),
+    (0, class_validator_1.IsString)(),
+    (0, class_validator_1.MaxLength)(300),
+    __metadata("design:type", String)
+], UpdateSiteSettingsDto.prototype, "smsRegistrationCodeText", void 0);
 //# sourceMappingURL=update-site-settings.dto.js.map

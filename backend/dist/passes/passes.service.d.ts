@@ -6,6 +6,7 @@ import { MailService } from '../mail/mail.service';
 import { Model } from 'mongoose';
 import { OfficeDocument, PassDocument, PropertyDocument, UserDocument } from '../schemas';
 import { CreatePassDto } from './dto/create-pass.dto';
+import { PassExportQueryDto } from './dto/pass-export-query.dto';
 import { PassHistoryQueryDto } from './dto/pass-history-query.dto';
 import { UpdatePassVisitorDto } from './dto/update-pass-visitor.dto';
 import { UpdateStatusDto } from './dto/update-status.dto';
@@ -32,10 +33,15 @@ export declare class PassesService implements OnModuleInit {
     private createdByTeamFilter;
     private getTenantTeamIds;
     private buildAccessFilter;
+    private appendSearchFilter;
+    private assertTenantExportScope;
+    private buildListFilter;
     findAll(params: {
         status?: string;
         date?: string;
         search?: string;
+        limit?: string;
+        offset?: string;
     }, user?: any): Promise<{
         passes: {
             id: any;
@@ -79,7 +85,98 @@ export declare class PassesService implements OnModuleInit {
             createdAt: any;
             updatedAt: any;
         }[];
+        total: number;
+        offset: number;
+        limit: number;
+        hasMore: boolean;
     }>;
+    getExportFilters(user?: any): Promise<{
+        scope: "own";
+        businessCenters: {
+            id: string;
+            name: string;
+        }[];
+        offices: {
+            id: string;
+            propertyId: string;
+            number: string;
+            businessCenterName: string;
+            company: string | undefined;
+        }[];
+        tenants: Array<{
+            id: string;
+            company: string;
+            email?: string;
+        }>;
+    } | {
+        scope: "all";
+        businessCenters: {
+            id: string;
+            name: string;
+        }[];
+        offices: {
+            id: string;
+            propertyId: string;
+            number: string;
+            businessCenterName: string;
+            company: string | undefined;
+        }[];
+        tenants: {
+            id: any;
+            company: any;
+            email: any;
+        }[];
+    }>;
+    findReport(query: PassExportQueryDto, user?: any): Promise<{
+        passes: {
+            id: any;
+            passNumber: any;
+            isOwner: boolean;
+            createdBy: any;
+            creatorName: any;
+            creatorCompany: any;
+            creatorPhone: any;
+            visitorName: any;
+            visitorPhone: any;
+            visitorPassportSeries: any;
+            visitorPassportNumber: any;
+            visitorPassportIssuedBy: any;
+            companyName: any;
+            visitPurpose: any;
+            passType: any;
+            vehiclePlate: any;
+            vehicleModel: any;
+            visitDate: any;
+            visitTimeFrom: any;
+            visitTimeTo: any;
+            propertyId: any;
+            officeId: any;
+            businessCenterName: any;
+            office: any;
+            floor: any;
+            comment: any;
+            status: any;
+            approvedBy: any;
+            approverName: any;
+            approvedAt: any;
+            rejectionReason: any;
+            checkedInAt: any;
+            checkedInBy: any;
+            checkerInName: any;
+            checkedOutAt: any;
+            checkedOutBy: any;
+            checkerOutName: any;
+            requireCheckout: boolean;
+            createdAt: any;
+            updatedAt: any;
+        }[];
+        total: number;
+        offset: number;
+        limit: number;
+        dateFrom: string | undefined;
+        dateTo: string | undefined;
+    }>;
+    exportCsv(query: PassExportQueryDto, user?: any): Promise<string>;
     findOne(id: string, user?: any): Promise<{
         pass: {
             id: any;
@@ -306,7 +403,7 @@ export declare class PassesService implements OnModuleInit {
             updatedAt: any;
         };
     }>;
-    getJournal(date?: string, user?: any): Promise<{
+    getJournal(date?: string, user?: any, search?: string): Promise<{
         date: string;
         stats: {
             total: number;

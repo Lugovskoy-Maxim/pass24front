@@ -57,10 +57,13 @@ const access_config_service_1 = require("../access/access-config.service");
 const audit_service_1 = require("../audit/audit.service");
 const auth_database_constants_1 = require("../database/auth-database.constants");
 const mail_service_1 = require("../mail/mail.service");
+const sms_service_1 = require("../sms/sms.service");
+const phone_1 = require("../common/phone");
 const schemas_1 = require("../schemas");
 const bookable_visit_dates_1 = require("../common/bookable-visit-dates");
 const tenant_owner_1 = require("../common/tenant-owner");
 const dev_test_accounts_1 = require("../database/dev-test-accounts");
+const site_settings_service_1 = require("../site-settings/site-settings.service");
 let AuthService = class AuthService {
     userModel;
     pendingModel;
@@ -70,7 +73,9 @@ let AuthService = class AuthService {
     accessConfigService;
     auditService;
     mailService;
-    constructor(userModel, pendingModel, officeModel, propertyModel, jwtService, accessConfigService, auditService, mailService) {
+    smsService;
+    siteSettingsService;
+    constructor(userModel, pendingModel, officeModel, propertyModel, jwtService, accessConfigService, auditService, mailService, smsService, siteSettingsService) {
         this.userModel = userModel;
         this.pendingModel = pendingModel;
         this.officeModel = officeModel;
@@ -79,12 +84,37 @@ let AuthService = class AuthService {
         this.accessConfigService = accessConfigService;
         this.auditService = auditService;
         this.mailService = mailService;
+        this.smsService = smsService;
+        this.siteSettingsService = siteSettingsService;
     }
     async requestRegistrationCode(dto) {
-        const email = dto.email.toLowerCase().trim();
-        const existing = await this.userModel.findOne({ email });
-        if (existing) {
-            throw new common_1.ConflictException('Пользователь с таким email уже существует');
+        const email = dto.email?.toLowerCase().trim() || undefined;
+        const phone = (0, phone_1.normalizeRuMobilePhone)(dto.phone);
+        const channel = this.resolveVerificationChannel(dto, email, phone);
+        if (channel === 'email' && !email) {
+            throw new common_1.BadRequestException('Укажите email для подтверждения');
+        }
+        if (channel === 'phone' && !phone) {
+            throw new common_1.BadRequestException('Укажите номер телефона в формате +79XXXXXXXXX');
+        }
+        let siteSettings = null;
+        if (channel === 'phone') {
+            siteSettings = await this.siteSettingsService.get();
+            if (!siteSettings.smsRegistrationEnabled) {
+                throw new common_1.BadRequestException(siteSettings.smsRegistrationDisabledMessage);
+            }
+        }
+        if (email) {
+            const existingEmail = await this.userModel.findOne({ email });
+            if (existingEmail) {
+                throw new common_1.ConflictException('Пользователь с таким email уже существует');
+            }
+        }
+        if (phone) {
+            const existingPhone = await this.userModel.findOne({ phone });
+            if (existingPhone) {
+                throw new common_1.ConflictException('Пользователь с таким телефоном уже существует');
+            }
         }
         let personName;
         try {
@@ -97,8 +127,9 @@ let AuthService = class AuthService {
         const codeHash = await bcrypt.hash(code, 10);
         const passwordHash = await bcrypt.hash(dto.password, 10);
         const expiresAt = new Date(Date.now() + 15 * 60 * 1000);
-        await this.pendingModel.findOneAndUpdate({ email }, {
-            email,
+        const pendingKey = channel === 'phone' ? { phone } : { email };
+        const pendingData = {
+            verificationChannel: channel,
             codeHash,
             expiresAt,
             password: passwordHash,
@@ -106,51 +137,79 @@ let AuthService = class AuthService {
             lastName: personName.lastName,
             firstName: personName.firstName,
             middleName: personName.middleName,
-            phone: dto.phone?.trim() || undefined,
             company: dto.company.trim(),
-        }, { upsert: true, new: true, setDefaultsOnInsert: true });
-        await this.mailService.sendRegistrationCode(email, code);
+        };
+        if (email)
+            pendingData.email = email;
+        if (phone)
+            pendingData.phone = phone;
+        await this.pendingModel.findOneAndUpdate(pendingKey, pendingData, { upsert: true, new: true, setDefaultsOnInsert: true });
+        if (channel === 'phone') {
+            if (!siteSettings)
+                siteSettings = await this.siteSettingsService.get();
+            await this.smsService.sendRegistrationCode(phone, code, siteSettings.smsRegistrationCodeText);
+        }
+        else {
+            await this.mailService.sendRegistrationCode(email, code);
+        }
         return {
             verificationRequired: true,
-            message: `Код подтверждения отправлен на ${email}`,
+            verificationChannel: channel,
+            message: channel === 'phone'
+                ? `Код подтверждения отправлен на ${phone}`
+                : `Код подтверждения отправлен на ${email}`,
             expiresInMinutes: 15,
         };
     }
     async confirmRegistration(dto) {
-        const email = dto.email.toLowerCase().trim();
+        const email = dto.email?.toLowerCase().trim() || undefined;
+        const phone = (0, phone_1.normalizeRuMobilePhone)(dto.phone);
+        if (!email && !phone) {
+            throw new common_1.BadRequestException('Укажите email или телефон');
+        }
+        const pendingFilter = phone ? { phone } : { email };
         const pending = await this.pendingModel
-            .findOne({ email })
+            .findOne(pendingFilter)
             .select('+codeHash +password')
             .lean();
         if (!pending) {
             throw new common_1.BadRequestException('Код не найден. Запросите новый код регистрации.');
         }
         if (pending.expiresAt.getTime() < Date.now()) {
-            await this.pendingModel.deleteOne({ email });
+            await this.pendingModel.deleteOne(pendingFilter);
             throw new common_1.BadRequestException('Код истёк. Запросите новый код регистрации.');
         }
         const codeOk = await bcrypt.compare(dto.code, pending.codeHash);
         if (!codeOk) {
             throw new common_1.BadRequestException('Неверный код подтверждения');
         }
-        const existing = await this.userModel.findOne({ email });
-        if (existing) {
-            await this.pendingModel.deleteOne({ email });
-            throw new common_1.ConflictException('Пользователь с таким email уже существует');
+        if (pending.email) {
+            const existingEmail = await this.userModel.findOne({ email: pending.email });
+            if (existingEmail) {
+                await this.pendingModel.deleteOne(pendingFilter);
+                throw new common_1.ConflictException('Пользователь с таким email уже существует');
+            }
+        }
+        if (pending.phone) {
+            const existingPhone = await this.userModel.findOne({ phone: pending.phone });
+            if (existingPhone) {
+                await this.pendingModel.deleteOne(pendingFilter);
+                throw new common_1.ConflictException('Пользователь с таким телефоном уже существует');
+            }
         }
         const user = await this.userModel.create({
-            email,
+            email: pending.email,
+            phone: pending.phone,
             fullName: pending.fullName,
             lastName: pending.lastName,
             firstName: pending.firstName,
             middleName: pending.middleName,
-            phone: pending.phone,
             company: pending.company,
             role: 'tenant',
             password: pending.password,
             isActive: false,
         });
-        await this.pendingModel.deleteOne({ email });
+        await this.pendingModel.deleteOne(pendingFilter);
         await this.auditService.log({
             action: 'user.registration_request',
             entityType: 'user',
@@ -160,7 +219,7 @@ let AuthService = class AuthService {
                 fullName: user.fullName,
                 company: user.company,
                 phone: user.phone,
-                emailVerified: true,
+                verificationChannel: pending.verificationChannel,
             },
         });
         return {
@@ -172,12 +231,17 @@ let AuthService = class AuthService {
         return this.requestRegistrationCode(dto);
     }
     async login(dto) {
-        const login = (dto.login || dto.email || '').trim().toLowerCase();
-        if (!login) {
+        const loginRaw = (dto.login || dto.email || '').trim();
+        if (!loginRaw) {
             throw new common_1.UnauthorizedException('Неверные учетные данные');
         }
+        const login = loginRaw.toLowerCase();
+        const phone = (0, phone_1.normalizeRuMobilePhone)(loginRaw);
+        const orConditions = [{ username: login }, { email: login }];
+        if (phone)
+            orConditions.push({ phone });
         const user = await this.userModel.findOne({
-            $or: [{ username: login }, { email: login }],
+            $or: orConditions,
         }).select('+password');
         if (!user) {
             if (dev_test_accounts_1.DEV_TEST_ACCOUNT_EMAILS.has(login)) {
@@ -189,9 +253,6 @@ let AuthService = class AuthService {
         if (!isValid) {
             throw new common_1.UnauthorizedException('Неверные учетные данные');
         }
-        if (user.isActive === false) {
-            throw new common_1.ForbiddenException('Учётная запись ожидает подтверждения администратором. Вход будет доступен после одобрения заявки.');
-        }
         const offices = await this.getUserOffices(user._id.toString(), user.parentTenantId?.toString());
         const token = this.generateToken(user);
         return { user: await this.toUserDto(user, offices), token };
@@ -200,9 +261,6 @@ let AuthService = class AuthService {
         const user = await this.userModel.findById(userId);
         if (!user)
             throw new common_1.UnauthorizedException();
-        if (user.isActive === false) {
-            throw new common_1.ForbiddenException('Учётная запись не активирована');
-        }
         const offices = await this.getUserOffices(userId, user.parentTenantId?.toString());
         return { user: await this.toUserDto(user, offices) };
     }
@@ -430,6 +488,23 @@ let AuthService = class AuthService {
             };
         });
     }
+    resolveVerificationChannel(dto, email, phone) {
+        if (dto.verificationChannel === 'phone') {
+            if (!phone)
+                throw new common_1.BadRequestException('Укажите корректный номер телефона в формате +79XXXXXXXXX');
+            return 'phone';
+        }
+        if (dto.verificationChannel === 'email') {
+            if (!email)
+                throw new common_1.BadRequestException('Укажите email');
+            return 'email';
+        }
+        if (phone && !email)
+            return 'phone';
+        if (email)
+            return 'email';
+        throw new common_1.BadRequestException('Укажите email или телефон для подтверждения регистрации');
+    }
     generateToken(user) {
         return this.jwtService.sign({
             sub: user._id.toString(),
@@ -460,6 +535,7 @@ let AuthService = class AuthService {
             enabledPassTypes,
             parent_tenant_id: user.parentTenantId?.toString(),
             is_tenant_owner: user.role === 'tenant' && !user.parentTenantId,
+            is_active: user.isActive !== false,
             profile_change_request: (0, profile_change_1.mapProfileChangeRequest)(user.profileChangeRequest),
         };
     }
@@ -514,6 +590,8 @@ exports.AuthService = AuthService = __decorate([
         jwt_1.JwtService,
         access_config_service_1.AccessConfigService,
         audit_service_1.AuditService,
-        mail_service_1.MailService])
+        mail_service_1.MailService,
+        sms_service_1.SmsService,
+        site_settings_service_1.SiteSettingsService])
 ], AuthService);
 //# sourceMappingURL=auth.service.js.map

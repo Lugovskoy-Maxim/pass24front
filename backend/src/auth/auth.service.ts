@@ -36,6 +36,7 @@ import { LoginDto } from './dto/login.dto';
 import { RegisterDto } from './dto/register.dto';
 import { UpdateProfileDto } from './dto/update-profile.dto';
 import { DEV_TEST_ACCOUNTS, DEV_TEST_ACCOUNT_EMAILS } from '../database/dev-test-accounts';
+import { SiteSettingsService } from '../site-settings/site-settings.service';
 
 @Injectable()
 export class AuthService {
@@ -50,6 +51,7 @@ export class AuthService {
     private auditService: AuditService,
     private mailService: MailService,
     private smsService: SmsService,
+    private siteSettingsService: SiteSettingsService,
   ) {}
 
   async requestRegistrationCode(dto: RegisterDto) {
@@ -62,6 +64,13 @@ export class AuthService {
     }
     if (channel === 'phone' && !phone) {
       throw new BadRequestException('Укажите номер телефона в формате +79XXXXXXXXX');
+    }
+    let siteSettings: Awaited<ReturnType<SiteSettingsService['get']>> | null = null;
+    if (channel === 'phone') {
+      siteSettings = await this.siteSettingsService.get();
+      if (!siteSettings.smsRegistrationEnabled) {
+        throw new BadRequestException(siteSettings.smsRegistrationDisabledMessage);
+      }
     }
 
     if (email) {
@@ -111,7 +120,8 @@ export class AuthService {
     );
 
     if (channel === 'phone') {
-      await this.smsService.sendRegistrationCode(phone!, code);
+      if (!siteSettings) siteSettings = await this.siteSettingsService.get();
+      await this.smsService.sendRegistrationCode(phone!, code, siteSettings.smsRegistrationCodeText);
     } else {
       await this.mailService.sendRegistrationCode(email!, code);
     }

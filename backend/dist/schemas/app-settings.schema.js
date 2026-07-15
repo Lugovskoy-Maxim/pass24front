@@ -28,6 +28,9 @@ let AppSettings = class AppSettings {
     themePrimary;
     themePrimaryHover;
     uiLabels;
+    smsRegistrationEnabled;
+    smsRegistrationDisabledMessage;
+    smsRegistrationCodeText;
 };
 exports.AppSettings = AppSettings;
 __decorate([
@@ -94,6 +97,18 @@ __decorate([
     (0, mongoose_1.Prop)({ type: Object, default: {} }),
     __metadata("design:type", Object)
 ], AppSettings.prototype, "uiLabels", void 0);
+__decorate([
+    (0, mongoose_1.Prop)({ default: true }),
+    __metadata("design:type", Boolean)
+], AppSettings.prototype, "smsRegistrationEnabled", void 0);
+__decorate([
+    (0, mongoose_1.Prop)({ default: 'Скоро функция будет работать' }),
+    __metadata("design:type", String)
+], AppSettings.prototype, "smsRegistrationDisabledMessage", void 0);
+__decorate([
+    (0, mongoose_1.Prop)({ default: 'Код подтверждения регистрации: {code}. Действует 15 минут.' }),
+    __metadata("design:type", String)
+], AppSettings.prototype, "smsRegistrationCodeText", void 0);
 exports.AppSettings = AppSettings = __decorate([
     (0, mongoose_1.Schema)({ timestamps: true, collection: 'app_settings' })
 ], AppSettings);

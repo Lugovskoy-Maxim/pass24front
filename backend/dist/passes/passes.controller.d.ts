@@ -1,5 +1,7 @@
+import type { Response } from 'express';
 import { PassesService } from './passes.service';
 import { CreatePassDto } from './dto/create-pass.dto';
+import { PassExportQueryDto } from './dto/pass-export-query.dto';
 import { PassHistoryQueryDto } from './dto/pass-history-query.dto';
 import { SendPassEmailDto } from './dto/send-pass-email.dto';
 import { UpdatePassVisitorDto } from './dto/update-pass-visitor.dto';
@@ -11,6 +13,8 @@ export declare class PassesController {
         status?: string;
         date?: string;
         search?: string;
+        limit?: string;
+        offset?: string;
     }, req: any): Promise<{
         passes: {
             id: any;
@@ -54,8 +58,12 @@ export declare class PassesController {
             createdAt: any;
             updatedAt: any;
         }[];
+        total: number;
+        offset: number;
+        limit: number;
+        hasMore: boolean;
     }>;
-    getJournal(date?: string, req?: any): Promise<{
+    getJournal(date?: string, search?: string, req?: any): Promise<{
         date: string;
         stats: {
             total: number;
@@ -205,6 +213,93 @@ export declare class PassesController {
             updatedAt: any;
         }[];
     }>;
+    getExportFilters(req: any): Promise<{
+        scope: "own";
+        businessCenters: {
+            id: string;
+            name: string;
+        }[];
+        offices: {
+            id: string;
+            propertyId: string;
+            number: string;
+            businessCenterName: string;
+            company: string | undefined;
+        }[];
+        tenants: {
+            id: string;
+            company: string;
+            email?: string;
+        }[];
+    } | {
+        scope: "all";
+        businessCenters: {
+            id: string;
+            name: string;
+        }[];
+        offices: {
+            id: string;
+            propertyId: string;
+            number: string;
+            businessCenterName: string;
+            company: string | undefined;
+        }[];
+        tenants: {
+            id: any;
+            company: any;
+            email: any;
+        }[];
+    }>;
+    getReport(query: PassExportQueryDto, req: any): Promise<{
+        passes: {
+            id: any;
+            passNumber: any;
+            isOwner: boolean;
+            createdBy: any;
+            creatorName: any;
+            creatorCompany: any;
+            creatorPhone: any;
+            visitorName: any;
+            visitorPhone: any;
+            visitorPassportSeries: any;
+            visitorPassportNumber: any;
+            visitorPassportIssuedBy: any;
+            companyName: any;
+            visitPurpose: any;
+            passType: any;
+            vehiclePlate: any;
+            vehicleModel: any;
+            visitDate: any;
+            visitTimeFrom: any;
+            visitTimeTo: any;
+            propertyId: any;
+            officeId: any;
+            businessCenterName: any;
+            office: any;
+            floor: any;
+            comment: any;
+            status: any;
+            approvedBy: any;
+            approverName: any;
+            approvedAt: any;
+            rejectionReason: any;
+            checkedInAt: any;
+            checkedInBy: any;
+            checkerInName: any;
+            checkedOutAt: any;
+            checkedOutBy: any;
+            checkerOutName: any;
+            requireCheckout: boolean;
+            createdAt: any;
+            updatedAt: any;
+        }[];
+        total: number;
+        offset: number;
+        limit: number;
+        dateFrom: string | undefined;
+        dateTo: string | undefined;
+    }>;
+    exportPasses(query: PassExportQueryDto, req: any, res: Response): Promise<void>;
     lookup(passNumber: string, req: any): Promise<{
         pass: {
             id: any;

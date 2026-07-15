@@ -26,7 +26,7 @@ export class SmsService {
       && !!this.configService.get<string>('SMSAERO_API_KEY');
   }
 
-  async sendRegistrationCode(phone: string, code: string) {
+  async sendRegistrationCode(phone: string, code: string, template?: string) {
     if (!this.isConfigured()) {
       throw new BadRequestException(
         'SMS-сервис не настроен. Укажите SMSAERO_EMAIL, SMSAERO_API_KEY и SMS_ENABLED=true.',
@@ -34,7 +34,8 @@ export class SmsService {
     }
 
     const sign = this.configService.get<string>('SMSAERO_SIGN') || 'SMS Aero';
-    const text = `Код подтверждения регистрации: ${code}. Действует 15 минут.`;
+    const text = (template?.includes('{code}') ? template : 'Код подтверждения регистрации: {code}. Действует 15 минут.')
+      .replace(/\{code\}/g, code);
 
     const response = await this.request('POST', 'sms/send', {
       number: ruPhoneToSmsNumber(phone),

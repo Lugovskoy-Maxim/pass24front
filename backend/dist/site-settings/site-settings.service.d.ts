@@ -18,6 +18,9 @@ export interface SiteSettingsDto {
     themePrimary: string;
     themePrimaryHover: string;
     uiLabels: UiLabels;
+    smsRegistrationEnabled: boolean;
+    smsRegistrationDisabledMessage: string;
+    smsRegistrationCodeText: string;
 }
 export declare class SiteSettingsService implements OnModuleInit {
     private appSettingsModel;

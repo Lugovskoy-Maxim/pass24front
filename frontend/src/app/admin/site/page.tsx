@@ -1,7 +1,8 @@
 'use client';
 
 import { ChangeEvent, FormEvent, useEffect, useState } from 'react';
-import { Globe, ImageIcon, Mail, Palette, Phone, RotateCcw, Trash2, Type, Upload } from 'lucide-react';
+import { Globe, ImageIcon, Mail, MessageSquare, Palette, Phone, RotateCcw, Trash2, Type, Upload } from 'lucide-react';
+import { useAuth } from '@/lib/auth';
 import { AdminLayout } from '@/components/AdminLayout';
 import { IconPickerField } from '@/components/IconPickerField';
 import { SiteBrand } from '@/components/SiteBrand';
@@ -17,7 +18,7 @@ import { mergeUiLabels, UiLabels } from '@/lib/ui-labels';
 
 const MAX_ICON_BYTES = 80 * 1024;
 
-type Tab = 'brand' | 'colors' | 'labels';
+type Tab = 'brand' | 'colors' | 'labels' | 'registration';
 
 function iconInputValue(value: string): string {
   return value.startsWith('data:') ? '' : value;
@@ -36,11 +37,19 @@ function normalizeSettings(s: SiteSettings): SiteSettings {
     uiIconSelectChevron: s.uiIconSelectChevron?.trim() || MSTYLE_BRAND_DEFAULTS.uiIconSelectChevron,
     themePrimary: s.themePrimary?.trim() || MSTYLE_BRAND_DEFAULTS.themePrimary,
     themePrimaryHover: s.themePrimaryHover?.trim() || MSTYLE_BRAND_DEFAULTS.themePrimaryHover,
+    smsRegistrationEnabled: s.smsRegistrationEnabled !== false,
+    smsRegistrationDisabledMessage: s.smsRegistrationDisabledMessage?.trim()
+      || MSTYLE_BRAND_DEFAULTS.smsRegistrationDisabledMessage,
+    smsRegistrationCodeText: s.smsRegistrationCodeText?.includes('{code}')
+      ? s.smsRegistrationCodeText.trim()
+      : MSTYLE_BRAND_DEFAULTS.smsRegistrationCodeText,
   };
 }
 
 export default function AdminSiteSettingsPage() {
+  const { user } = useAuth();
   const { toast } = useToast();
+  const isSuperAdmin = user?.role === 'admin';
   const [settings, setSettings] = useState<SiteSettings | null>(null);
   const [loadError, setLoadError] = useState('');
   const [loadErrorCause, setLoadErrorCause] = useState<unknown>(null);
@@ -183,6 +192,16 @@ export default function AdminSiteSettingsPage() {
           <Type className="w-4 h-4" />
           Названия и кнопки
         </button>
+        {isSuperAdmin && (
+          <button
+            type="button"
+            className={`btn text-sm ${tab === 'registration' ? 'btn-primary' : 'btn-secondary'}`}
+            onClick={() => setTab('registration')}
+          >
+            <MessageSquare className="w-4 h-4" />
+            Регистрация
+          </button>
+        )}
       </div>
 
       <form onSubmit={handleSubmit}>
@@ -456,6 +475,73 @@ export default function AdminSiteSettingsPage() {
         {tab === 'labels' && (
           <div className="max-w-4xl">
             <UiLabelsEditor labels={labels} onChange={setLabels} />
+          </div>
+        )}
+
+        {tab === 'registration' && isSuperAdmin && (
+          <div className="card p-6 max-w-2xl space-y-5">
+            <div>
+              <h2 className="text-base font-semibold mb-1">Регистрация по SMS</h2>
+              <p className="text-sm text-[var(--muted)]">
+                Управляет вкладкой «По SMS» на странице регистрации. Изменения применяются сразу после сохранения.
+              </p>
+            </div>
+            <label className="flex items-start gap-3 cursor-pointer">
+              <input
+                type="checkbox"
+                className="checkbox mt-0.5"
+                checked={settings.smsRegistrationEnabled !== false}
+                onChange={(e) => setSettings({
+                  ...settings,
+                  smsRegistrationEnabled: e.target.checked,
+                })}
+              />
+              <span>
+                <span className="text-sm font-medium block">Разрешить регистрацию по SMS</span>
+                <span className="text-xs text-[var(--muted)]">
+                  Если выключено, пользователи смогут регистрироваться только по email.
+                </span>
+              </span>
+            </label>
+            <div>
+              <label className="label" htmlFor="smsDisabledMessage">
+                Сообщение при отключённой SMS-регистрации
+              </label>
+              <textarea
+                id="smsDisabledMessage"
+                className="input min-h-[96px] resize-y"
+                value={settings.smsRegistrationDisabledMessage || ''}
+                onChange={(e) => setSettings({
+                  ...settings,
+                  smsRegistrationDisabledMessage: e.target.value,
+                })}
+                placeholder={MSTYLE_BRAND_DEFAULTS.smsRegistrationDisabledMessage}
+                maxLength={500}
+              />
+              <p className="text-xs text-[var(--muted)] mt-1">
+                Показывается во всплывающем уведомлении, когда пользователь нажимает «По SMS» или пытается зарегистрироваться по телефону.
+              </p>
+            </div>
+            <div>
+              <label className="label" htmlFor="smsCodeText">
+                Текст SMS с кодом подтверждения
+              </label>
+              <textarea
+                id="smsCodeText"
+                className="input min-h-[96px] resize-y font-mono text-sm"
+                value={settings.smsRegistrationCodeText || ''}
+                onChange={(e) => setSettings({
+                  ...settings,
+                  smsRegistrationCodeText: e.target.value,
+                })}
+                placeholder={MSTYLE_BRAND_DEFAULTS.smsRegistrationCodeText}
+                maxLength={300}
+              />
+              <p className="text-xs text-[var(--muted)] mt-1">
+                Используйте <code className="text-[var(--text)]">{'{code}'}</code> для подстановки 6-значного кода.
+                Текст должен содержать этот шаблон. Рекомендуемая длина — до 70 символов (одно SMS).
+              </p>
+            </div>
           </div>
         )}
 

@@ -15,6 +15,7 @@ import { FieldErrors, hasFieldErrors, normalizeRuMobilePhone, validateLoginRegis
 import { formatRuMobilePhone } from '@/lib/phone';
 import { ThemeToggle } from '@/components/ThemeToggle';
 import { useTheme } from '@/components/ThemeProvider';
+import { useToast } from '@/components/Toast';
 
 interface DevQuickLoginAccount {
   label: string;
@@ -51,12 +52,22 @@ export default function LoginPage() {
   const { login: authLogin, requestRegistrationCode, confirmRegistration } = useAuth();
   const config = useConfig();
   const { theme } = useTheme();
+  const { toast } = useToast();
+  const smsRegistrationEnabled = config?.smsRegistrationEnabled !== false;
+  const smsDisabledMessage = config?.smsRegistrationDisabledMessage?.trim()
+    || 'Скоро функция будет работать';
 
   useEffect(() => {
     api.getDevAccounts()
       .then((result) => setDevAccounts(result.accounts))
       .catch(() => setDevAccounts([]));
   }, []);
+
+  useEffect(() => {
+    if (!smsRegistrationEnabled && verificationChannel === 'phone') {
+      setVerificationChannel('email');
+    }
+  }, [smsRegistrationEnabled, verificationChannel]);
 
   const clearFieldError = (field: string) => {
     setFieldErrors((prev) => {
@@ -93,9 +104,20 @@ export default function LoginPage() {
   const resolveEffectiveChannel = (): 'email' | 'phone' => {
     const normalizedPhone = normalizeRuMobilePhone(phone);
     const trimmedEmail = email.trim().toLowerCase();
-    if (verificationChannel === 'phone') return 'phone';
-    if (normalizedPhone && !trimmedEmail) return 'phone';
+    if (verificationChannel === 'phone') {
+      return smsRegistrationEnabled ? 'phone' : 'email';
+    }
+    if (normalizedPhone && !trimmedEmail && smsRegistrationEnabled) return 'phone';
     return 'email';
+  };
+
+  const handleSmsChannelClick = () => {
+    if (!smsRegistrationEnabled) {
+      toast(smsDisabledMessage, 'info');
+      return;
+    }
+    setVerificationChannel('phone');
+    clearFieldError('email');
   };
 
   const buildRegisterPayload = () => {
@@ -148,6 +170,11 @@ export default function LoginPage() {
     });
     setFieldErrors(errors);
     if (hasFieldErrors(errors)) return;
+
+    if (mode === 'register' && effectiveChannel === 'phone' && !smsRegistrationEnabled) {
+      toast(smsDisabledMessage, 'info');
+      return;
+    }
 
     if (mode === 'login') {
       await performLogin(login, password);
@@ -334,8 +361,13 @@ export default function LoginPage() {
                     </button>
                     <button
                       type="button"
-                      className={`channel-tabs__btn ${verificationChannel === 'phone' ? 'channel-tabs__btn--active' : ''}`}
-                      onClick={() => { setVerificationChannel('phone'); clearFieldError('email'); }}
+                      className={[
+                        'channel-tabs__btn',
+                        verificationChannel === 'phone' ? 'channel-tabs__btn--active' : '',
+                        !smsRegistrationEnabled ? 'channel-tabs__btn--disabled' : '',
+                      ].filter(Boolean).join(' ')}
+                      onClick={handleSmsChannelClick}
+                      aria-disabled={!smsRegistrationEnabled}
                     >
                       По SMS
                     </button>

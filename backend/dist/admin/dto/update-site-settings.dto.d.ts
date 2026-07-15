@@ -14,4 +14,7 @@ export declare class UpdateSiteSettingsDto {
     themePrimary?: string;
     themePrimaryHover?: string;
     uiLabels?: Record<string, unknown>;
+    smsRegistrationEnabled?: boolean;
+    smsRegistrationDisabledMessage?: string;
+    smsRegistrationCodeText?: string;
 }

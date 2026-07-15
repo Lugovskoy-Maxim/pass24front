@@ -162,7 +162,13 @@ let AdminController = class AdminController {
         return { settings };
     }
     async updateSiteSettings(dto, req) {
-        const settings = await this.siteSettingsService.update(dto);
+        const payload = { ...dto };
+        if (req.user?.role !== 'admin') {
+            delete payload.smsRegistrationEnabled;
+            delete payload.smsRegistrationDisabledMessage;
+            delete payload.smsRegistrationCodeText;
+        }
+        const settings = await this.siteSettingsService.update(payload);
         await this.auditService.log({
             action: 'site_settings.update',
             entityType: 'app_settings',

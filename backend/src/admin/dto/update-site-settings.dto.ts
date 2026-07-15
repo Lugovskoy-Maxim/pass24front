@@ -71,4 +71,18 @@ export class UpdateSiteSettingsDto {
   @IsOptional()
   @IsObject()
   uiLabels?: Record<string, unknown>;
+
+  @IsOptional()
+  @IsBoolean()
+  smsRegistrationEnabled?: boolean;
+
+  @IsOptional()
+  @IsString()
+  @MaxLength(500)
+  smsRegistrationDisabledMessage?: string;
+
+  @IsOptional()
+  @IsString()
+  @MaxLength(300)
+  smsRegistrationCodeText?: string;
 }

@@ -13,6 +13,9 @@ export const MSTYLE_BRAND_DEFAULTS = {
   uiIconSelectChevron: 'chevron-down',
   themePrimary: '#eb711c',
   themePrimaryHover: '#d55700',
+  smsRegistrationEnabled: true,
+  smsRegistrationDisabledMessage: 'Скоро функция будет работать',
+  smsRegistrationCodeText: 'Код подтверждения регистрации: {code}. Действует 15 минут.',
 } as const;
 
 export const LEGACY_BRAND_DEFAULTS = {

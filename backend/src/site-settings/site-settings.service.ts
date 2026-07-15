@@ -24,6 +24,9 @@ export interface SiteSettingsDto {
   themePrimary: string;
   themePrimaryHover: string;
   uiLabels: UiLabels;
+  smsRegistrationEnabled: boolean;
+  smsRegistrationDisabledMessage: string;
+  smsRegistrationCodeText: string;
 }
 
 @Injectable()
@@ -98,6 +101,20 @@ export class SiteSettingsService implements OnModuleInit {
     if (data.uiLabels !== undefined) {
       update.uiLabels = deepMergeUiLabels(data.uiLabels as Record<string, unknown>);
     }
+    if (data.smsRegistrationEnabled !== undefined) {
+      update.smsRegistrationEnabled = !!data.smsRegistrationEnabled;
+    }
+    if (data.smsRegistrationDisabledMessage !== undefined) {
+      const message = data.smsRegistrationDisabledMessage.trim();
+      update.smsRegistrationDisabledMessage = message
+        || MSTYLE_BRAND_DEFAULTS.smsRegistrationDisabledMessage;
+    }
+    if (data.smsRegistrationCodeText !== undefined) {
+      const text = data.smsRegistrationCodeText.trim();
+      update.smsRegistrationCodeText = text.includes('{code}')
+        ? text
+        : MSTYLE_BRAND_DEFAULTS.smsRegistrationCodeText;
+    }
 
     const doc = await this.appSettingsModel
       .findOneAndUpdate({ key: SETTINGS_KEY }, { $set: update }, { new: true, upsert: true })
@@ -127,6 +144,12 @@ export class SiteSettingsService implements OnModuleInit {
       themePrimary: this.normalizeHexColor(doc?.themePrimary, MSTYLE_BRAND_DEFAULTS.themePrimary),
       themePrimaryHover: this.normalizeHexColor(doc?.themePrimaryHover, MSTYLE_BRAND_DEFAULTS.themePrimaryHover),
       uiLabels: deepMergeUiLabels(doc?.uiLabels),
+      smsRegistrationEnabled: doc?.smsRegistrationEnabled !== false,
+      smsRegistrationDisabledMessage: doc?.smsRegistrationDisabledMessage?.trim()
+        || MSTYLE_BRAND_DEFAULTS.smsRegistrationDisabledMessage,
+      smsRegistrationCodeText: doc?.smsRegistrationCodeText?.trim()?.includes('{code}')
+        ? doc.smsRegistrationCodeText.trim()
+        : MSTYLE_BRAND_DEFAULTS.smsRegistrationCodeText,
     };
   }
 

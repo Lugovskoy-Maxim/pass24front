@@ -3,12 +3,14 @@ import { JwtService } from '@nestjs/jwt';
 import { AccessConfigService } from '../access/access-config.service';
 import { AuditService } from '../audit/audit.service';
 import { MailService } from '../mail/mail.service';
+import { SmsService } from '../sms/sms.service';
 import { OfficeDocument, PropertyDocument, RegistrationPendingDocument, UserDocument } from '../schemas';
 import { ConfirmRegistrationDto } from './dto/confirm-registration.dto';
 import { CreateTenantEmployeeDto } from './dto/create-tenant-employee.dto';
 import { LoginDto } from './dto/login.dto';
 import { RegisterDto } from './dto/register.dto';
 import { UpdateProfileDto } from './dto/update-profile.dto';
+import { SiteSettingsService } from '../site-settings/site-settings.service';
 export declare class AuthService {
     private userModel;
     private pendingModel;
@@ -18,9 +20,12 @@ export declare class AuthService {
     private accessConfigService;
     private auditService;
     private mailService;
-    constructor(userModel: Model<UserDocument>, pendingModel: Model<RegistrationPendingDocument>, officeModel: Model<OfficeDocument>, propertyModel: Model<PropertyDocument>, jwtService: JwtService, accessConfigService: AccessConfigService, auditService: AuditService, mailService: MailService);
+    private smsService;
+    private siteSettingsService;
+    constructor(userModel: Model<UserDocument>, pendingModel: Model<RegistrationPendingDocument>, officeModel: Model<OfficeDocument>, propertyModel: Model<PropertyDocument>, jwtService: JwtService, accessConfigService: AccessConfigService, auditService: AuditService, mailService: MailService, smsService: SmsService, siteSettingsService: SiteSettingsService);
     requestRegistrationCode(dto: RegisterDto): Promise<{
         verificationRequired: boolean;
+        verificationChannel: "phone" | "email";
         message: string;
         expiresInMinutes: number;
     }>;
@@ -30,6 +35,7 @@ export declare class AuthService {
     }>;
     register(dto: RegisterDto): Promise<{
         verificationRequired: boolean;
+        verificationChannel: "phone" | "email";
         message: string;
         expiresInMinutes: number;
     }>;
@@ -53,6 +59,7 @@ export declare class AuthService {
             enabledPassTypes: any;
             parent_tenant_id: any;
             is_tenant_owner: boolean;
+            is_active: boolean;
             profile_change_request: {
                 last_name: string;
                 first_name: string;
@@ -85,6 +92,7 @@ export declare class AuthService {
             enabledPassTypes: any;
             parent_tenant_id: any;
             is_tenant_owner: boolean;
+            is_active: boolean;
             profile_change_request: {
                 last_name: string;
                 first_name: string;
@@ -116,6 +124,7 @@ export declare class AuthService {
             enabledPassTypes: any;
             parent_tenant_id: any;
             is_tenant_owner: boolean;
+            is_active: boolean;
             profile_change_request: {
                 last_name: string;
                 first_name: string;
@@ -147,6 +156,7 @@ export declare class AuthService {
             enabledPassTypes: any;
             parent_tenant_id: any;
             is_tenant_owner: boolean;
+            is_active: boolean;
             profile_change_request: {
                 last_name: string;
                 first_name: string;
@@ -202,6 +212,7 @@ export declare class AuthService {
         workingHoursTo: any;
         closedWeekdays: number[];
     }[]>;
+    private resolveVerificationChannel;
     private generateToken;
     private toUserDto;
     getDevAccounts(): {

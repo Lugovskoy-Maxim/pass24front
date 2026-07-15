@@ -66,6 +66,8 @@ let AppConfigService = class AppConfigService {
             contactEmail: s.contact_email || site.siteEmail,
             receptionFloor: s.reception_floor || '1',
             uiLabels: site.uiLabels,
+            smsRegistrationEnabled: site.smsRegistrationEnabled,
+            smsRegistrationDisabledMessage: site.smsRegistrationDisabledMessage,
         };
     }
 };

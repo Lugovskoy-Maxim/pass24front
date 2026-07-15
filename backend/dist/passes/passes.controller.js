@@ -19,6 +19,7 @@ const permissions_decorator_1 = require("../auth/permissions.decorator");
 const permissions_guard_1 = require("../auth/permissions.guard");
 const passes_service_1 = require("./passes.service");
 const create_pass_dto_1 = require("./dto/create-pass.dto");
+const pass_export_query_dto_1 = require("./dto/pass-export-query.dto");
 const pass_history_query_dto_1 = require("./dto/pass-history-query.dto");
 const send_pass_email_dto_1 = require("./dto/send-pass-email.dto");
 const update_pass_visitor_dto_1 = require("./dto/update-pass-visitor.dto");
@@ -31,8 +32,8 @@ let PassesController = class PassesController {
     findAll(query, req) {
         return this.passesService.findAll(query, req.user);
     }
-    getJournal(date, req) {
-        return this.passesService.getJournal(date, req?.user);
+    getJournal(date, search, req) {
+        return this.passesService.getJournal(date, req?.user, search);
     }
     getStats(req) {
         return this.passesService.getStats(req.user);
@@ -42,6 +43,22 @@ let PassesController = class PassesController {
     }
     getHistory(query, req) {
         return this.passesService.getHistory(query, req.user);
+    }
+    getExportFilters(req) {
+        return this.passesService.getExportFilters(req.user);
+    }
+    getReport(query, req) {
+        return this.passesService.findReport(query, req.user);
+    }
+    async exportPasses(query, req, res) {
+        const csv = await this.passesService.exportCsv(query, req.user);
+        const datePart = query.dateFrom && query.dateTo
+            ? `${query.dateFrom}_${query.dateTo}`
+            : query.date || new Date().toISOString().slice(0, 10);
+        const filename = `passes-${datePart}.csv`;
+        res.setHeader('Content-Type', 'text/csv; charset=utf-8');
+        res.setHeader('Content-Disposition', `attachment; filename="${filename}"`);
+        res.send(Buffer.from(`\uFEFF${csv}`, 'utf-8'));
     }
     lookup(passNumber, req) {
         return this.passesService.lookup(passNumber, req.user);
@@ -82,9 +99,10 @@ __decorate([
     (0, common_1.Get)('journal'),
     (0, permissions_decorator_1.RequirePermissions)('passes.reception', 'passes.view_all', 'admin.panel'),
     __param(0, (0, common_1.Query)('date')),
-    __param(1, (0, common_1.Req)()),
+    __param(1, (0, common_1.Query)('search')),
+    __param(2, (0, common_1.Req)()),
     __metadata("design:type", Function),
-    __metadata("design:paramtypes", [String, Object]),
+    __metadata("design:paramtypes", [String, String, Object]),
     __metadata("design:returntype", void 0)
 ], PassesController.prototype, "getJournal", null);
 __decorate([
@@ -112,6 +130,33 @@ __decorate([
     __metadata("design:paramtypes", [pass_history_query_dto_1.PassHistoryQueryDto, Object]),
     __metadata("design:returntype", void 0)
 ], PassesController.prototype, "getHistory", null);
+__decorate([
+    (0, common_1.Get)('export-filters'),
+    (0, permissions_decorator_1.RequirePermissions)('passes.view_own', 'passes.view_all', 'admin.panel'),
+    __param(0, (0, common_1.Req)()),
+    __metadata("design:type", Function),
+    __metadata("design:paramtypes", [Object]),
+    __metadata("design:returntype", void 0)
+], PassesController.prototype, "getExportFilters", null);
+__decorate([
+    (0, common_1.Get)('report'),
+    (0, permissions_decorator_1.RequirePermissions)('passes.view_own', 'passes.view_all', 'admin.panel'),
+    __param(0, (0, common_1.Query)()),
+    __param(1, (0, common_1.Req)()),
+    __metadata("design:type", Function),
+    __metadata("design:paramtypes", [pass_export_query_dto_1.PassExportQueryDto, Object]),
+    __metadata("design:returntype", void 0)
+], PassesController.prototype, "getReport", null);
+__decorate([
+    (0, common_1.Get)('export'),
+    (0, permissions_decorator_1.RequirePermissions)('passes.view_own', 'passes.view_all', 'admin.panel'),
+    __param(0, (0, common_1.Query)()),
+    __param(1, (0, common_1.Req)()),
+    __param(2, (0, common_1.Res)()),
+    __metadata("design:type", Function),
+    __metadata("design:paramtypes", [pass_export_query_dto_1.PassExportQueryDto, Object, Object]),
+    __metadata("design:returntype", Promise)
+], PassesController.prototype, "exportPasses", null);
 __decorate([
     (0, common_1.Get)('lookup/:passNumber'),
     (0, permissions_decorator_1.RequirePermissions)('passes.lookup', 'passes.reception', 'admin.panel'),

@@ -85,6 +85,7 @@ export const DEFAULT_UI_LABELS = {
     auditLog: 'Журнал действий',
     fullAudit: 'Весь журнал',
     retry: 'Повторить',
+    loadMore: 'Ещё',
     apply: 'Применить',
     reset: 'Сбросить',
     export: 'Скачать CSV',

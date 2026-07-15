@@ -212,5 +212,7 @@ export declare class AppConfigService {
                 readonly guestPastEndTime: "Посетитель не вышел до {time}. Оформите выход вручную.";
             };
         };
+        smsRegistrationEnabled: boolean;
+        smsRegistrationDisabledMessage: string;
     }>;
 }

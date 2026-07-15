@@ -549,6 +549,15 @@ input[type="checkbox"]:not(.checkbox) {
   box-shadow: 0 1px 3px rgba(0, 0, 0, 0.12);
 }
 
+.channel-tabs__btn--disabled {
+  opacity: 0.55;
+  cursor: not-allowed;
+}
+
+.channel-tabs__btn--disabled:hover {
+  color: var(--muted);
+}
+
 .card {
   background: var(--surface);
   color: var(--text);

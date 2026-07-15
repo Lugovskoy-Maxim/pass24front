@@ -56,6 +56,16 @@ export class AppSettings {
 
   @Prop({ type: Object, default: {} })
   uiLabels: Record<string, unknown>;
+
+  /** Регистрация арендаторов по SMS (код на телефон) */
+  @Prop({ default: true })
+  smsRegistrationEnabled: boolean;
+
+  @Prop({ default: 'Скоро функция будет работать' })
+  smsRegistrationDisabledMessage: string;
+
+  @Prop({ default: 'Код подтверждения регистрации: {code}. Действует 15 минут.' })
+  smsRegistrationCodeText: string;
 }
 
 export const AppSettingsSchema = SchemaFactory.createForClass(AppSettings);

@@ -18,14 +18,17 @@ export class PassesController {
 
   @Get()
   @RequirePermissions('passes.view_own', 'passes.view_all', 'admin.panel')
-  findAll(@Query() query: { status?: string; date?: string; search?: string }, @Req() req: any) {
+  findAll(
+    @Query() query: { status?: string; date?: string; search?: string; limit?: string; offset?: string },
+    @Req() req: any,
+  ) {
     return this.passesService.findAll(query, req.user);
   }
 
   @Get('journal')
   @RequirePermissions('passes.reception', 'passes.view_all', 'admin.panel')
-  getJournal(@Query('date') date?: string, @Req() req?: any) {
-    return this.passesService.getJournal(date, req?.user);
+  getJournal(@Query('date') date?: string, @Query('search') search?: string, @Req() req?: any) {
+    return this.passesService.getJournal(date, req?.user, search);
   }
 
   @Get('stats')

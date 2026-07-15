@@ -1,10 +1,11 @@
 export declare class RegisterDto {
-    email: string;
+    email?: string;
+    phone?: string;
+    verificationChannel?: 'email' | 'phone';
     password: string;
     fullName?: string;
     lastName?: string;
     firstName?: string;
     middleName?: string;
-    phone?: string;
     company: string;
 }

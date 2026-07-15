@@ -211,6 +211,8 @@ export declare class ConfigController {
                 readonly guestPastEndTime: "Посетитель не вышел до {time}. Оформите выход вручную.";
             };
         };
+        smsRegistrationEnabled: boolean;
+        smsRegistrationDisabledMessage: string;
     }>;
     getAccessConfig(req: any): Promise<{
         enabledPassTypes: any;

@@ -29,7 +29,11 @@ const tenant_account_1 = require("../common/tenant-account");
 const user_permissions_1 = require("../common/user-permissions");
 const bookable_visit_dates_1 = require("../common/bookable-visit-dates");
 const visit_date_1 = require("../common/visit-date");
+const pass_csv_1 = require("../common/pass-csv");
 const pass_templates_service_1 = require("./pass-templates.service");
+const PASS_EXPORT_LIMIT = 10_000;
+const PASS_REPORT_PAGE_SIZE = 50;
+const PASS_LIST_PAGE_SIZE = 50;
 let PassesService = class PassesService {
     passModel;
     officeModel;
@@ -158,31 +162,235 @@ let PassesService = class PassesService {
         }
         return { _id: null };
     }
-    async findAll(params, user) {
-        await this.expirePastPasses();
+    appendSearchFilter(filter, search) {
+        const term = search?.trim();
+        if (!term)
+            return;
+        const pattern = new RegExp(this.escapeRegex(term), 'i');
+        filter.$and = filter.$and || [];
+        filter.$and.push({
+            $or: [
+                { visitorName: pattern },
+                { visitorPhone: pattern },
+                { visitorPassportSeries: pattern },
+                { visitorPassportNumber: pattern },
+                { vehiclePlate: pattern },
+                { companyName: pattern },
+                { businessCenterName: pattern },
+                { office: pattern },
+                { passNumber: pattern },
+            ],
+        });
+    }
+    async assertTenantExportScope(user, params) {
+        const ownerId = (0, tenant_owner_1.resolveTenantOwnerId)(user);
+        if (!ownerId)
+            throw new common_1.ForbiddenException('Нет доступа');
+        const offices = await this.officeModel
+            .find({ tenantId: new mongoose_2.Types.ObjectId(ownerId), isActive: true })
+            .select('_id property')
+            .lean();
+        const officeIds = new Set(offices.map((o) => o._id.toString()));
+        const propertyIds = new Set(offices.map((o) => o.property?.toString()).filter((id) => !!id));
+        if (params.officeId && !officeIds.has(params.officeId)) {
+            throw new common_1.ForbiddenException('Нет доступа к выбранному офису');
+        }
+        if (params.propertyId && !propertyIds.has(params.propertyId)) {
+            throw new common_1.ForbiddenException('Нет доступа к выбранному БЦ');
+        }
+    }
+    async buildListFilter(params, user) {
         const filter = { ...(await this.buildAccessFilter(user)) };
         if (params.status)
             filter.status = params.status;
-        if (params.date)
-            filter.visitDate = params.date;
-        if (params.search) {
-            filter.$and = filter.$and || [];
-            filter.$and.push({
-                $or: [
-                    { visitorName: new RegExp(params.search, 'i') },
-                    { visitorPhone: new RegExp(params.search, 'i') },
-                    { visitorPassportSeries: new RegExp(params.search, 'i') },
-                    { visitorPassportNumber: new RegExp(params.search, 'i') },
-                    { vehiclePlate: new RegExp(params.search, 'i') },
-                    { companyName: new RegExp(params.search, 'i') },
-                    { businessCenterName: new RegExp(params.search, 'i') },
-                ],
-            });
+        if (params.passType)
+            filter.passType = params.passType;
+        if (params.dateFrom || params.dateTo) {
+            if (params.dateFrom && !(0, visit_date_1.isValidVisitDateString)(params.dateFrom)) {
+                throw new common_1.BadRequestException('Некорректная дата «с»');
+            }
+            if (params.dateTo && !(0, visit_date_1.isValidVisitDateString)(params.dateTo)) {
+                throw new common_1.BadRequestException('Некорректная дата «по»');
+            }
+            if (params.dateFrom && params.dateTo && params.dateFrom > params.dateTo) {
+                throw new common_1.BadRequestException('Дата «с» не может быть позже даты «по»');
+            }
+            filter.visitDate = {};
+            if (params.dateFrom)
+                filter.visitDate.$gte = params.dateFrom;
+            if (params.dateTo)
+                filter.visitDate.$lte = params.dateTo;
         }
-        const passes = await this.passModel.find(filter).sort({ createdAt: -1 }).lean();
+        else if (params.date) {
+            if (!(0, visit_date_1.isValidVisitDateString)(params.date)) {
+                throw new common_1.BadRequestException('Некорректная дата визита');
+            }
+            filter.visitDate = params.date;
+        }
+        this.appendSearchFilter(filter, params.search);
+        if (params.propertyId || params.officeId) {
+            if ((0, tenant_account_1.isTenantCompanyUser)(user)) {
+                await this.assertTenantExportScope(user, params);
+            }
+            if (params.propertyId)
+                filter.property = new mongoose_2.Types.ObjectId(params.propertyId);
+            if (params.officeId)
+                filter.officeId = new mongoose_2.Types.ObjectId(params.officeId);
+        }
+        if (params.tenantId) {
+            if ((0, tenant_account_1.isTenantCompanyUser)(user)) {
+                throw new common_1.ForbiddenException('Фильтр по арендатору недоступен');
+            }
+            if (!(await this.accessConfigService.canViewAllPasses(user.role, user.parentTenantId))) {
+                throw new common_1.ForbiddenException('Нет доступа к фильтру по арендатору');
+            }
+            filter.createdBy = new mongoose_2.Types.ObjectId(params.tenantId);
+        }
+        return filter;
+    }
+    async findAll(params, user) {
+        await this.expirePastPasses();
+        const filter = await this.buildListFilter(params, user);
+        const limit = Math.min(Math.max(parseInt(params.limit || String(PASS_LIST_PAGE_SIZE), 10) || PASS_LIST_PAGE_SIZE, 1), 200);
+        const offset = Math.max(parseInt(params.offset || '0', 10) || 0, 0);
+        const [passes, total] = await Promise.all([
+            this.passModel.find(filter).sort({ createdAt: -1 }).skip(offset).limit(limit).lean(),
+            this.passModel.countDocuments(filter),
+        ]);
         const withCheckout = await this.enrichPassCheckoutSettings(passes);
         const enriched = await this.enrichCreatorFields(withCheckout, user);
-        return { passes: enriched.map((p) => this.mapToFrontend(p, user)) };
+        return {
+            passes: enriched.map((p) => this.mapToFrontend(p, user)),
+            total,
+            offset,
+            limit,
+            hasMore: offset + passes.length < total,
+        };
+    }
+    async getExportFilters(user) {
+        const canFilterTenants = !(0, tenant_account_1.isTenantCompanyUser)(user)
+            && !!(await this.accessConfigService.canViewAllPasses(user?.role, user?.parentTenantId));
+        if ((0, tenant_account_1.isTenantCompanyUser)(user)) {
+            const ownerId = (0, tenant_owner_1.resolveTenantOwnerId)(user);
+            const offices = ownerId
+                ? await this.officeModel.find({ tenantId: new mongoose_2.Types.ObjectId(ownerId), isActive: true }).lean()
+                : [];
+            const propertyIds = [...new Set(offices.map((o) => o.property?.toString()).filter((id) => !!id))];
+            const properties = propertyIds.length
+                ? await this.propertyModel.find({ _id: { $in: propertyIds.map((id) => new mongoose_2.Types.ObjectId(id)) } }).select('name').lean()
+                : [];
+            const propertyMap = new Map(properties.map((p) => [p._id.toString(), p.name]));
+            return {
+                scope: 'own',
+                businessCenters: propertyIds.map((id) => ({ id, name: propertyMap.get(id) || 'БЦ' })),
+                offices: offices.map((o) => ({
+                    id: o._id.toString(),
+                    propertyId: o.property?.toString(),
+                    number: o.number,
+                    businessCenterName: propertyMap.get(o.property?.toString() || '') || '',
+                    company: o.company,
+                })),
+                tenants: [],
+            };
+        }
+        const [properties, offices, tenants] = await Promise.all([
+            this.propertyModel.find({ type: enums_1.PropertyType.BUSINESS_CENTER, isActive: true }).sort({ name: 1 }).lean(),
+            this.officeModel.find({ isActive: true }).sort({ number: 1 }).lean(),
+            canFilterTenants
+                ? this.userModel
+                    .find({ role: 'tenant', parentTenantId: null, isActive: { $ne: false } })
+                    .select('fullName company email')
+                    .sort({ company: 1, fullName: 1 })
+                    .lean()
+                : Promise.resolve([]),
+        ]);
+        const propertyMap = new Map(properties.map((p) => [p._id.toString(), p.name]));
+        return {
+            scope: 'all',
+            businessCenters: properties.map((p) => ({ id: p._id.toString(), name: p.name })),
+            offices: offices.map((o) => ({
+                id: o._id.toString(),
+                propertyId: o.property?.toString(),
+                number: o.number,
+                businessCenterName: propertyMap.get(o.property?.toString() || '') || '',
+                company: o.company,
+            })),
+            tenants: tenants.map((t) => ({
+                id: t._id.toString(),
+                company: t.company || t.fullName,
+                email: t.email,
+            })),
+        };
+    }
+    async findReport(query, user) {
+        await this.expirePastPasses();
+        const reportQuery = { ...query };
+        if (!reportQuery.dateFrom && !reportQuery.dateTo && !reportQuery.date) {
+            const today = this.getLocalDateString();
+            reportQuery.dateTo = today;
+            const monthStart = `${today.slice(0, 8)}01`;
+            reportQuery.dateFrom = monthStart;
+        }
+        const filter = await this.buildListFilter(reportQuery, user);
+        const limit = Math.min(reportQuery.limit || PASS_REPORT_PAGE_SIZE, PASS_REPORT_PAGE_SIZE);
+        const offset = Math.max(reportQuery.offset || 0, 0);
+        const [passes, total] = await Promise.all([
+            this.passModel
+                .find(filter)
+                .sort({ visitDate: -1, createdAt: -1 })
+                .skip(offset)
+                .limit(limit)
+                .lean(),
+            this.passModel.countDocuments(filter),
+        ]);
+        const withCheckout = await this.enrichPassCheckoutSettings(passes);
+        const enriched = await this.enrichCreatorFields(withCheckout, user);
+        return {
+            passes: enriched.map((p) => this.mapToFrontend(p, user)),
+            total,
+            offset,
+            limit,
+            dateFrom: reportQuery.dateFrom,
+            dateTo: reportQuery.dateTo,
+        };
+    }
+    async exportCsv(query, user) {
+        await this.expirePastPasses();
+        const filter = await this.buildListFilter(query, user);
+        const limit = Math.min(query.limit || PASS_EXPORT_LIMIT, PASS_EXPORT_LIMIT);
+        const passes = await this.passModel
+            .find(filter)
+            .sort({ visitDate: -1, createdAt: -1 })
+            .limit(limit)
+            .lean();
+        const withCheckout = await this.enrichPassCheckoutSettings(passes);
+        const enriched = await this.enrichCreatorFields(withCheckout, user);
+        const includeCreator = !(0, tenant_account_1.isTenantCompanyUser)(user);
+        return (0, pass_csv_1.buildPassCsv)(enriched.map((doc) => ({
+            passNumber: doc.passNumber,
+            status: doc.status,
+            passType: doc.passType,
+            visitDate: doc.visitDate,
+            visitTimeFrom: doc.visitTimeFrom,
+            visitTimeTo: doc.visitTimeTo,
+            visitorName: doc.visitorName,
+            visitorPhone: doc.visitorPhone,
+            companyName: doc.companyName,
+            visitPurpose: doc.visitPurpose,
+            businessCenterName: doc.businessCenterName,
+            office: doc.office,
+            floor: doc.floor,
+            vehiclePlate: doc.vehiclePlate,
+            vehicleModel: doc.vehicleModel,
+            creatorName: doc.creatorName,
+            creatorCompany: doc.creatorCompany,
+            creatorPhone: doc.creatorPhone,
+            approverName: doc.approverName,
+            checkedInAt: doc.checkedInAt,
+            checkedOutAt: doc.checkedOutAt,
+            comment: doc.comment,
+            createdAt: doc.createdAt,
+        })), { includeCreator });
     }
     async findOne(id, user) {
         await this.expirePastPasses();
@@ -394,12 +602,14 @@ let PassesService = class PassesService {
         const [withCheckout] = await this.enrichPassCheckoutSettings([pass.toObject()]);
         return { pass: this.mapToFrontend(withCheckout) };
     }
-    async getJournal(date, user) {
+    async getJournal(date, user, search) {
         await this.expirePastPasses();
         const targetDate = date || this.getTodayDate();
         const accessFilter = await this.buildAccessFilter(user);
+        const filter = { visitDate: targetDate, ...accessFilter };
+        this.appendSearchFilter(filter, search);
         const passes = await this.passModel
-            .find({ visitDate: targetDate, ...accessFilter })
+            .find(filter)
             .sort({ createdAt: -1 })
             .lean();
         const withCheckout = await this.enrichPassCheckoutSettings(passes);

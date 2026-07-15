@@ -19,6 +19,7 @@ const admin_module_1 = require("./admin/admin.module");
 const access_config_module_1 = require("./access/access-config.module");
 const audit_module_1 = require("./audit/audit.module");
 const mail_module_1 = require("./mail/mail.module");
+const sms_module_1 = require("./sms/sms.module");
 const site_settings_module_1 = require("./site-settings/site-settings.module");
 let AppModule = class AppModule {
 };
@@ -43,6 +44,7 @@ exports.AppModule = AppModule = __decorate([
             access_config_module_1.AccessConfigModule,
             audit_module_1.AuditModule,
             mail_module_1.MailModule,
+            sms_module_1.SmsModule,
             site_settings_module_1.SiteSettingsModule,
             auth_module_1.AuthModule,
             passes_module_1.PassesModule,

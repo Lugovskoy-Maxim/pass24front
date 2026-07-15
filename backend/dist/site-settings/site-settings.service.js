@@ -92,6 +92,20 @@ let SiteSettingsService = class SiteSettingsService {
         if (data.uiLabels !== undefined) {
             update.uiLabels = (0, ui_labels_defaults_1.deepMergeUiLabels)(data.uiLabels);
         }
+        if (data.smsRegistrationEnabled !== undefined) {
+            update.smsRegistrationEnabled = !!data.smsRegistrationEnabled;
+        }
+        if (data.smsRegistrationDisabledMessage !== undefined) {
+            const message = data.smsRegistrationDisabledMessage.trim();
+            update.smsRegistrationDisabledMessage = message
+                || brand_defaults_1.MSTYLE_BRAND_DEFAULTS.smsRegistrationDisabledMessage;
+        }
+        if (data.smsRegistrationCodeText !== undefined) {
+            const text = data.smsRegistrationCodeText.trim();
+            update.smsRegistrationCodeText = text.includes('{code}')
+                ? text
+                : brand_defaults_1.MSTYLE_BRAND_DEFAULTS.smsRegistrationCodeText;
+        }
         const doc = await this.appSettingsModel
             .findOneAndUpdate({ key: SETTINGS_KEY }, { $set: update }, { new: true, upsert: true })
             .lean();
@@ -117,6 +131,12 @@ let SiteSettingsService = class SiteSettingsService {
             themePrimary: this.normalizeHexColor(doc?.themePrimary, brand_defaults_1.MSTYLE_BRAND_DEFAULTS.themePrimary),
             themePrimaryHover: this.normalizeHexColor(doc?.themePrimaryHover, brand_defaults_1.MSTYLE_BRAND_DEFAULTS.themePrimaryHover),
             uiLabels: (0, ui_labels_defaults_1.deepMergeUiLabels)(doc?.uiLabels),
+            smsRegistrationEnabled: doc?.smsRegistrationEnabled !== false,
+            smsRegistrationDisabledMessage: doc?.smsRegistrationDisabledMessage?.trim()
+                || brand_defaults_1.MSTYLE_BRAND_DEFAULTS.smsRegistrationDisabledMessage,
+            smsRegistrationCodeText: doc?.smsRegistrationCodeText?.trim()?.includes('{code}')
+                ? doc.smsRegistrationCodeText.trim()
+                : brand_defaults_1.MSTYLE_BRAND_DEFAULTS.smsRegistrationCodeText,
         };
     }
     normalizeHexColor(value, fallback) {

@@ -342,13 +342,17 @@ export const api = {
   getTenantEmployeeRoles: () =>
     request<{ roles: EmployeeRole[] }>('/auth/tenant/employee-roles'),
 
-  getPasses: (params?: { status?: string; date?: string; search?: string }) => {
+  getPasses: (params?: { status?: string; date?: string; search?: string; limit?: number; offset?: number }) => {
     const q = new URLSearchParams();
     if (params?.status) q.set('status', params.status);
     if (params?.date) q.set('date', params.date);
     if (params?.search) q.set('search', params.search);
+    if (params?.limit !== undefined) q.set('limit', String(params.limit));
+    if (params?.offset !== undefined) q.set('offset', String(params.offset));
     const qs = q.toString();
-    return request<{ passes: Pass[] }>(`/passes${qs ? `?${qs}` : ''}`);
+    return request<{ passes: Pass[]; total: number; offset: number; limit: number; hasMore: boolean }>(
+      `/passes${qs ? `?${qs}` : ''}`,
+    );
   },
 
   getPassExportFilters: () =>
@@ -382,10 +386,15 @@ export const api = {
     await downloadFileResponse(res, `passes-${datePart}.csv`);
   },
 
-  getJournal: (date?: string) =>
-    request<{ date: string; stats: { total: number; pending: number; active: number; completed: number; approved: number }; passes: Pass[] }>(
-      `/passes/journal${date ? `?date=${date}` : ''}`,
-    ),
+  getJournal: (date?: string, search?: string) => {
+    const q = new URLSearchParams();
+    if (date) q.set('date', date);
+    if (search?.trim()) q.set('search', search.trim());
+    const qs = q.toString();
+    return request<{ date: string; stats: { total: number; pending: number; active: number; completed: number; approved: number }; passes: Pass[] }>(
+      `/passes/journal${qs ? `?${qs}` : ''}`,
+    );
+  },
 
   getPass: (id: string) => request<{ pass: Pass }>(`/passes/${id}`),
 
@@ -709,6 +718,9 @@ export interface SiteSettings {
   themePrimary: string;
   themePrimaryHover: string;
   uiLabels?: Record<string, unknown>;
+  smsRegistrationEnabled?: boolean;
+  smsRegistrationDisabledMessage?: string;
+  smsRegistrationCodeText?: string;
 }
 
 export interface BcConfig extends SiteSettings {

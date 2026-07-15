@@ -29,6 +29,7 @@ export declare class AuthController {
             enabledPassTypes: any;
             parent_tenant_id: any;
             is_tenant_owner: boolean;
+            is_active: boolean;
             profile_change_request: {
                 last_name: string;
                 first_name: string;
@@ -51,6 +52,7 @@ export declare class AuthController {
     };
     requestRegistrationCode(dto: RegisterDto): Promise<{
         verificationRequired: boolean;
+        verificationChannel: "phone" | "email";
         message: string;
         expiresInMinutes: number;
     }>;
@@ -60,6 +62,7 @@ export declare class AuthController {
     }>;
     register(dto: RegisterDto): Promise<{
         verificationRequired: boolean;
+        verificationChannel: "phone" | "email";
         message: string;
         expiresInMinutes: number;
     }>;
@@ -83,6 +86,7 @@ export declare class AuthController {
             enabledPassTypes: any;
             parent_tenant_id: any;
             is_tenant_owner: boolean;
+            is_active: boolean;
             profile_change_request: {
                 last_name: string;
                 first_name: string;
@@ -114,6 +118,7 @@ export declare class AuthController {
             enabledPassTypes: any;
             parent_tenant_id: any;
             is_tenant_owner: boolean;
+            is_active: boolean;
             profile_change_request: {
                 last_name: string;
                 first_name: string;
@@ -145,6 +150,7 @@ export declare class AuthController {
             enabledPassTypes: any;
             parent_tenant_id: any;
             is_tenant_owner: boolean;
+            is_active: boolean;
             profile_change_request: {
                 last_name: string;
                 first_name: string;

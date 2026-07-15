@@ -1,6 +1,6 @@
 'use client';
 
-import { Suspense, useEffect, useState, useCallback } from 'react';
+import { Suspense, useEffect, useState, useCallback, useRef } from 'react';
 import { useRouter, useSearchParams } from 'next/navigation';
 import Link from 'next/link';
 import { Download, Inbox, Plus, Printer, Search, Table2 } from 'lucide-react';
@@ -31,6 +31,7 @@ import { ListSkeleton } from '@/components/ui/Skeleton';
 import { EmptyState } from '@/components/ui/EmptyState';
 
 const ALL_STATUSES: PassStatus[] = ['pending', 'approved', 'active', 'completed', 'rejected', 'expired', 'cancelled'];
+const PAGE_SIZE = 50;
 
 function formatPassCount(count: number, labels: UiLabels): string {
   const mod10 = count % 10;
@@ -47,6 +48,10 @@ function PassesPageContent() {
   const config = useConfig();
   const { toast } = useToast();
   const [passes, setPasses] = useState<Pass[]>([]);
+  const [total, setTotal] = useState(0);
+  const [hasMore, setHasMore] = useState(false);
+  const [loadingMore, setLoadingMore] = useState(false);
+  const visibleCountRef = useRef(0);
   const [search, setSearch] = useState('');
   const debouncedSearch = useDebounce(search);
   const [statusFilter, setStatusFilter] = useState('');
@@ -79,32 +84,54 @@ function PassesPageContent() {
 
   const canPrintPass = (pass: Pass) => isAwaitingEntry(pass.status) || pass.status === 'active';
 
-  const load = useCallback((options?: { silent?: boolean }) => {
+  const load = useCallback((options?: { silent?: boolean; append?: boolean }) => {
     const silent = options?.silent;
-    if (!silent) {
+    const append = options?.append;
+    if (!silent && !append) {
       setLoading(true);
       setLoadError('');
     }
+    const visibleCount = visibleCountRef.current;
+    const offset = append ? visibleCount : 0;
+    const limit = append ? PAGE_SIZE : (silent && visibleCount > PAGE_SIZE ? visibleCount : PAGE_SIZE);
     return api.getPasses({
       status: statusFilter || undefined,
       search: debouncedSearch || undefined,
       date: dateFilter || undefined,
+      limit,
+      offset,
     })
-      .then(({ passes: data }) => {
-        setPasses(data);
-        return data;
+      .then((data) => {
+        setPasses((prev) => (append ? [...prev, ...data.passes] : data.passes));
+        setTotal(data.total);
+        setHasMore(data.hasMore);
+        return data.passes;
       })
       .catch((err) => {
-        if (!silent) {
+        if (!silent && !append) {
           setLoadErrorCause(err);
           setLoadError(getErrorMessage(err, 'Ошибка загрузки'));
         }
         return [] as Pass[];
       })
       .finally(() => {
-        if (!silent) setLoading(false);
+        if (!silent && !append) setLoading(false);
       });
   }, [statusFilter, debouncedSearch, dateFilter]);
+
+  useEffect(() => {
+    visibleCountRef.current = passes.length;
+  }, [passes.length]);
+
+  const loadMore = useCallback(async () => {
+    if (loadingMore || !hasMore) return;
+    setLoadingMore(true);
+    try {
+      await load({ append: true });
+    } finally {
+      setLoadingMore(false);
+    }
+  }, [load, loadingMore, hasMore]);
 
   useEffect(() => { load(); }, [load]);
 
@@ -290,7 +317,11 @@ function PassesPageContent() {
           </div>
         ) : (
           <div className="flex flex-col gap-1.5">
-            <p className="text-xs text-[var(--muted)] mb-1 px-1">{formatPassCount(passes.length, labels)}</p>
+            <p className="text-xs text-[var(--muted)] mb-1 px-1">
+              {passes.length < total
+                ? `Показано ${passes.length} из ${total}`
+                : formatPassCount(passes.length, labels)}
+            </p>
             {passes.map((pass) => (
               <PassListCard
                 key={pass.id}
@@ -301,6 +332,16 @@ function PassesPageContent() {
                 onClick={() => setSelected(pass)}
               />
             ))}
+            {hasMore && (
+              <button
+                type="button"
+                className="btn btn-secondary w-full sm:w-auto self-center mt-2"
+                disabled={loadingMore}
+                onClick={loadMore}
+              >
+                {loadingMore ? '...' : labels.buttons.loadMore}
+              </button>
+            )}
           </div>
         )}
       </div>

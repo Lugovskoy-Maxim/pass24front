@@ -62,6 +62,7 @@ export declare class AccessConfigService implements OnModuleInit {
         roleLabels: any;
         roles: string[];
         systemRoles: ("tenant" | "security" | "admin" | "bc_admin")[];
+        builtinEmployeeRoles: "tenant_employee"[];
     }>;
     updateConfig(data: {
         enabledPassTypes?: string[];
@@ -124,6 +125,7 @@ export declare class AccessConfigService implements OnModuleInit {
             roleLabels: any;
             roles: string[];
             systemRoles: ("tenant" | "security" | "admin" | "bc_admin")[];
+            builtinEmployeeRoles: "tenant_employee"[];
         };
     }>;
     getPermissionsForRole(role: string): Promise<string[]>;
