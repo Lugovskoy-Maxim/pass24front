@@ -517,16 +517,36 @@ input[type="checkbox"]:not(.checkbox) {
   }
 }
 
-/* ФИО: одинаковая высота подписей — инпуты в одну линию */
 .person-name-fields__grid .form-field .label {
-  min-height: 2.75rem;
-  line-height: 1.35;
+  margin-bottom: 0.25rem;
 }
 
-@media (min-width: 640px) {
-  .person-name-fields__grid {
-    align-items: end;
-  }
+.channel-tabs {
+  display: flex;
+  gap: 0.25rem;
+  padding: 0.25rem;
+  border-radius: var(--radius-sm);
+  background: var(--surface-muted);
+}
+
+.channel-tabs__btn {
+  flex: 1;
+  padding: 0.5rem 0.75rem;
+  font-size: 0.875rem;
+  font-weight: 500;
+  border-radius: calc(var(--radius-sm) - 2px);
+  color: var(--muted);
+  transition: background-color 0.15s, color 0.15s, box-shadow 0.15s;
+}
+
+.channel-tabs__btn:hover:not(.channel-tabs__btn--active) {
+  color: var(--text);
+}
+
+.channel-tabs__btn--active {
+  background: var(--accent);
+  color: #fff;
+  box-shadow: 0 1px 3px rgba(0, 0, 0, 0.12);
 }
 
 .card {

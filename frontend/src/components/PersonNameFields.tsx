@@ -29,7 +29,7 @@ export function PersonNameFields({
   };
 
   return (
-    <div className={`space-y-3 ${className}`}>
+    <div className={`space-y-2 ${className}`}>
       {labels.sectionTitle && (
         <p className="text-sm font-medium text-[var(--text)]">{labels.sectionTitle}</p>
       )}

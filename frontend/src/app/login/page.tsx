@@ -324,17 +324,17 @@ export default function LoginPage() {
 
                 <div className="space-y-2">
                   <p className="text-sm font-medium text-[var(--text)]">Подтверждение регистрации</p>
-                  <div className="flex gap-1 p-1 surface-muted rounded">
+                  <div className="channel-tabs">
                     <button
                       type="button"
-                      className={`flex-1 py-2 text-sm rounded transition-colors ${verificationChannel === 'email' ? 'bg-[var(--surface-elevated)] shadow-sm font-medium text-[var(--text)]' : 'text-[var(--muted)]'}`}
+                      className={`channel-tabs__btn ${verificationChannel === 'email' ? 'channel-tabs__btn--active' : ''}`}
                       onClick={() => { setVerificationChannel('email'); clearFieldError('phone'); }}
                     >
                       По email
                     </button>
                     <button
                       type="button"
-                      className={`flex-1 py-2 text-sm rounded transition-colors ${verificationChannel === 'phone' ? 'bg-[var(--surface-elevated)] shadow-sm font-medium text-[var(--text)]' : 'text-[var(--muted)]'}`}
+                      className={`channel-tabs__btn ${verificationChannel === 'phone' ? 'channel-tabs__btn--active' : ''}`}
                       onClick={() => { setVerificationChannel('phone'); clearFieldError('email'); }}
                     >
                       По SMS
@@ -354,7 +354,7 @@ export default function LoginPage() {
                         autoComplete="email"
                       />
                     </FormField>
-                    <FormField id="phone" label="Телефон" hint="Можно зарегистрироваться по SMS без email" error={fieldErrors.phone}>
+                    <FormField id="phone" label="Телефон" error={fieldErrors.phone}>
                       <FormInput
                         id="phone"
                         type="tel"
@@ -365,9 +365,6 @@ export default function LoginPage() {
                         placeholder="+7 (999) 000-00-00"
                       />
                     </FormField>
-                    <p className="text-xs text-[var(--muted)]">
-                      На email придёт код подтверждения. После регистрации заявка отправится администратору.
-                    </p>
                   </>
                 ) : (
                   <>
@@ -392,9 +389,6 @@ export default function LoginPage() {
                         autoComplete="email"
                       />
                     </FormField>
-                    <p className="text-xs text-[var(--muted)]">
-                      На номер +79… придёт SMS с кодом. Начните ввод с 8 или +7 — мы приведём номер к формату +7.
-                    </p>
                   </>
                 )}
               </>
