@@ -1,6 +1,6 @@
 'use client';
 
-import { FormEvent, useEffect, useState } from 'react';
+import { FormEvent, useCallback, useEffect, useState } from 'react';
 import { Building2, Clock, Mail, Phone, Shield, User as UserIcon, UserPlus, Users } from 'lucide-react';
 import { ProtectedLayout } from '@/components/ProtectedLayout';
 import { PersonNameFields } from '@/components/PersonNameFields';
@@ -27,6 +27,7 @@ import {
   PersonNameParts,
   splitFullName,
 } from '@/lib/person-name';
+import { useAutoRefresh } from '@/hooks/useAutoRefresh';
 
 function ProfileInfoRow({
   icon: Icon,
@@ -95,10 +96,11 @@ export default function ProfilePage() {
     setCompany((pending?.company ?? user.company) || '');
   }, [user, pending]);
 
-  useEffect(() => {
-    if (!tenantOwner) return;
-    setEmployeesLoading(true);
-    Promise.all([
+  const loadEmployees = useCallback((options?: { silent?: boolean }) => {
+    if (!tenantOwner) return Promise.resolve();
+    const silent = options?.silent;
+    if (!silent) setEmployeesLoading(true);
+    return Promise.all([
       api.getTenantEmployees(),
       api.getTenantEmployeeRoles(),
     ])
@@ -108,8 +110,16 @@ export default function ProfilePage() {
         setEmployeeRole((prev) => prev || roles[0]?.key || '');
       })
       .catch(() => setEmployees([]))
-      .finally(() => setEmployeesLoading(false));
+      .finally(() => {
+        if (!silent) setEmployeesLoading(false);
+      });
   }, [tenantOwner]);
+
+  useEffect(() => {
+    void loadEmployees();
+  }, [loadEmployees]);
+
+  useAutoRefresh(() => loadEmployees({ silent: true }), { enabled: tenantOwner && !employeeSaving });
 
   if (!user) return null;
 

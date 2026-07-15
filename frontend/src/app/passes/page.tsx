@@ -12,6 +12,7 @@ import { PassPrintCard } from '@/components/PassPrintCard';
 import { SharePassActions } from '@/components/SharePassActions';
 import { useAuth } from '@/lib/auth';
 import { useDebounce } from '@/hooks/useDebounce';
+import { useAutoRefresh } from '@/hooks/useAutoRefresh';
 import { useConfig } from '@/hooks/useConfig';
 import { useToast } from '@/components/Toast';
 import { api, Pass, PassStatus, getErrorMessage } from '@/lib/api';
@@ -78,9 +79,12 @@ function PassesPageContent() {
 
   const canPrintPass = (pass: Pass) => isAwaitingEntry(pass.status) || pass.status === 'active';
 
-  const load = useCallback(() => {
-    setLoading(true);
-    setLoadError('');
+  const load = useCallback((options?: { silent?: boolean }) => {
+    const silent = options?.silent;
+    if (!silent) {
+      setLoading(true);
+      setLoadError('');
+    }
     return api.getPasses({
       status: statusFilter || undefined,
       search: debouncedSearch || undefined,
@@ -91,14 +95,20 @@ function PassesPageContent() {
         return data;
       })
       .catch((err) => {
-        setLoadErrorCause(err);
-        setLoadError(getErrorMessage(err, 'Ошибка загрузки'));
+        if (!silent) {
+          setLoadErrorCause(err);
+          setLoadError(getErrorMessage(err, 'Ошибка загрузки'));
+        }
         return [] as Pass[];
       })
-      .finally(() => setLoading(false));
+      .finally(() => {
+        if (!silent) setLoading(false);
+      });
   }, [statusFilter, debouncedSearch, dateFilter]);
 
   useEffect(() => { load(); }, [load]);
+
+  useAutoRefresh(() => load({ silent: true }), { enabled: !actionLoading });
 
   const closeDetail = useCallback(() => {
     setSelected(null);

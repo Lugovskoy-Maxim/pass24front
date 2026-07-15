@@ -7,6 +7,7 @@ import { api, AdminUser, BusinessCenter, CreateUserData, Office, ProfileChangeRe
 import { PageError } from '@/components/PageError';
 import { useToast } from '@/components/Toast';
 import { useDebounce } from '@/hooks/useDebounce';
+import { useAutoRefresh } from '@/hooks/useAutoRefresh';
 import { PersonNameFields } from '@/components/PersonNameFields';
 import { buildFullName, getUserNameLabels, isPersonNameValid, PersonNameParts, splitFullName } from '@/lib/person-name';
 
@@ -62,11 +63,26 @@ export default function AdminUsersPage() {
     role: cat === 'staff' ? applied.role || undefined : undefined,
   }), []);
 
-  const load = useCallback(() => {
-    setLoading(true);
-    setLoadError('');
-    setLoadErrorCause(null);
-    Promise.all([
+  const loadProfileRequests = useCallback(() => {
+    return api.admin.getProfileChangeRequests()
+      .then(({ requests }) => setProfileRequests(requests))
+      .catch(() => setProfileRequests([]));
+  }, []);
+
+  const loadRegistrationRequests = useCallback(() => {
+    return api.admin.getRegistrationRequests()
+      .then(({ requests }) => setRegistrationRequests(requests))
+      .catch(() => setRegistrationRequests([]));
+  }, []);
+
+  const load = useCallback((options?: { silent?: boolean }) => {
+    const silent = options?.silent;
+    if (!silent) {
+      setLoading(true);
+      setLoadError('');
+      setLoadErrorCause(null);
+    }
+    return Promise.all([
       api.admin.getUsers(buildQuery(category, appliedFilters, debouncedSearch)),
       api.admin.getOffices(),
       api.admin.getBusinessCenters(),
@@ -79,25 +95,27 @@ export default function AdminUsersPage() {
         setBusinessCenters(bc.filter((b) => b.isActive));
       })
       .catch((err) => {
-        setLoadErrorCause(err);
-        setLoadError(getErrorMessage(err, 'Ошибка загрузки'));
+        if (!silent) {
+          setLoadErrorCause(err);
+          setLoadError(getErrorMessage(err, 'Ошибка загрузки'));
+        }
       })
-      .finally(() => setLoading(false));
+      .finally(() => {
+        if (!silent) setLoading(false);
+      });
   }, [category, appliedFilters, debouncedSearch, buildQuery]);
 
   useEffect(() => { load(); }, [load]);
 
-  const loadProfileRequests = () => {
-    api.admin.getProfileChangeRequests()
-      .then(({ requests }) => setProfileRequests(requests))
-      .catch(() => setProfileRequests([]));
-  };
+  const refreshModeration = useCallback(() => {
+    if (category !== 'tenants') return Promise.resolve();
+    return Promise.all([loadProfileRequests(), loadRegistrationRequests()]);
+  }, [category, loadProfileRequests, loadRegistrationRequests]);
 
-  const loadRegistrationRequests = () => {
-    api.admin.getRegistrationRequests()
-      .then(({ requests }) => setRegistrationRequests(requests))
-      .catch(() => setRegistrationRequests([]));
-  };
+  useAutoRefresh(() => {
+    void load({ silent: true });
+    void refreshModeration();
+  }, { enabled: !saving && !showForm });
 
   useEffect(() => {
     if (category === 'tenants') {

@@ -6,6 +6,7 @@ import { AdminLayout } from '@/components/AdminLayout';
 import { useToast } from '@/components/Toast';
 import { api, AuditEntry, AuditFilters, AUDIT_ENTITY_LABELS, AUDIT_LABELS, formatAuditEntity, getErrorMessage } from '@/lib/api';
 import { PageError } from '@/components/PageError';
+import { useAutoRefresh } from '@/hooks/useAutoRefresh';
 
 const PAGE_SIZE = 50;
 
@@ -29,26 +30,42 @@ export default function AdminAuditPage() {
   const [filters, setFilters] = useState<AuditFilters>(EMPTY_FILTERS);
   const [appliedFilters, setAppliedFilters] = useState<AuditFilters>(EMPTY_FILTERS);
 
-  const fetchAudit = useCallback((off: number, nextFilters: AuditFilters) => {
-    setLoading(true);
-    setLoadError('');
-    setLoadErrorCause(null);
-    api.admin.getAudit({ ...nextFilters, offset: off })
+  const fetchAudit = useCallback((
+    off: number,
+    nextFilters: AuditFilters,
+    options?: { silent?: boolean },
+  ) => {
+    const silent = options?.silent;
+    if (!silent) {
+      setLoading(true);
+      setLoadError('');
+      setLoadErrorCause(null);
+    }
+    return api.admin.getAudit({ ...nextFilters, offset: off })
       .then((data) => {
         setEntries(data.entries);
         setTotal(data.total);
         setOffset(off);
       })
       .catch((err) => {
-        setLoadErrorCause(err);
-        setLoadError(getErrorMessage(err, 'Ошибка загрузки'));
+        if (!silent) {
+          setLoadErrorCause(err);
+          setLoadError(getErrorMessage(err, 'Ошибка загрузки'));
+        }
       })
-      .finally(() => setLoading(false));
+      .finally(() => {
+        if (!silent) setLoading(false);
+      });
   }, []);
 
   useEffect(() => {
     fetchAudit(0, appliedFilters);
   }, [appliedFilters, fetchAudit]);
+
+  useAutoRefresh(
+    () => fetchAudit(offset, appliedFilters, { silent: true }),
+    { enabled: !exporting },
+  );
 
   const applyFilters = () => {
     setAppliedFilters({ ...filters });

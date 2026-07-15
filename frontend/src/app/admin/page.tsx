@@ -1,6 +1,7 @@
 'use client';
 
-import { useEffect, useState } from 'react';
+import { useCallback, useEffect, useState } from 'react';
+import { useAutoRefresh } from '@/hooks/useAutoRefresh';
 import Link from 'next/link';
 import { Users, FileText, Building2, Sparkles, List, ScrollText } from 'lucide-react';
 import { AdminLayout } from '@/components/AdminLayout';
@@ -33,18 +34,24 @@ export default function AdminDashboardPage() {
   const [errorCause, setErrorCause] = useState<unknown>(null);
   const [seeding, setSeeding] = useState(false);
 
-  const load = () => {
-    setError('');
-    setErrorCause(null);
-    api.admin.dashboard()
+  const load = useCallback((options?: { silent?: boolean }) => {
+    if (!options?.silent) {
+      setError('');
+      setErrorCause(null);
+    }
+    return api.admin.dashboard()
       .then(setData)
       .catch((e) => {
-        setErrorCause(e);
-        setError(getErrorMessage(e, 'Ошибка загрузки'));
+        if (!options?.silent) {
+          setErrorCause(e);
+          setError(getErrorMessage(e, 'Ошибка загрузки'));
+        }
       });
-  };
+  }, []);
 
-  useEffect(() => { load(); }, []);
+  useEffect(() => { load(); }, [load]);
+
+  useAutoRefresh(() => load({ silent: true }));
 
   const handleSeed = async () => {
     setSeeding(true);

@@ -21,6 +21,7 @@ import {
 import { getLocalDateString } from '@/lib/local-date';
 import { canViewAllPasses, canViewPasses } from '@/lib/permissions';
 import { getStatusLabel, getUiLabels } from '@/lib/ui-labels';
+import { useAutoRefresh } from '@/hooks/useAutoRefresh';
 
 const PAGE_SIZE = 50;
 const ALL_STATUSES: PassStatus[] = ['pending', 'approved', 'active', 'completed', 'rejected', 'expired', 'cancelled'];
@@ -70,10 +71,17 @@ export default function PassesReportPage() {
     return options.offices.filter((o) => o.propertyId === filters.propertyId);
   }, [options, filters.propertyId]);
 
-  const fetchReport = useCallback((nextApplied: PassExportFiltersInput, nextOffset: number) => {
-    setLoading(true);
-    setLoadError('');
-    setLoadErrorCause(null);
+  const fetchReport = useCallback((
+    nextApplied: PassExportFiltersInput,
+    nextOffset: number,
+    options?: { silent?: boolean },
+  ) => {
+    const silent = options?.silent;
+    if (!silent) {
+      setLoading(true);
+      setLoadError('');
+      setLoadErrorCause(null);
+    }
     return api.getPassReport({ ...nextApplied, offset: nextOffset, limit: PAGE_SIZE })
       .then((data) => {
         setPasses(data.passes);
@@ -82,18 +90,27 @@ export default function PassesReportPage() {
         setApplied(nextApplied);
       })
       .catch((err) => {
-        setLoadErrorCause(err);
-        setLoadError(getErrorMessage(err, 'Ошибка загрузки'));
-        setPasses([]);
-        setTotal(0);
+        if (!silent) {
+          setLoadErrorCause(err);
+          setLoadError(getErrorMessage(err, 'Ошибка загрузки'));
+          setPasses([]);
+          setTotal(0);
+        }
       })
-      .finally(() => setLoading(false));
+      .finally(() => {
+        if (!silent) setLoading(false);
+      });
   }, []);
 
   useEffect(() => {
     if (!user || !canViewPasses(user)) return;
     fetchReport({ ...defaultPeriod() }, 0);
   }, [user, fetchReport]);
+
+  useAutoRefresh(
+    () => fetchReport(applied, offset, { silent: true }),
+    { enabled: !!user && canViewPasses(user) && !exporting },
+  );
 
   const applyFilters = () => {
     if (!filters.dateFrom || !filters.dateTo) {

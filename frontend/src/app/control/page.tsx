@@ -12,6 +12,7 @@ import { useConfig } from '@/hooks/useConfig';
 import { api, Pass, getErrorMessage } from '@/lib/api';
 import { PageError } from '@/components/PageError';
 import { useElementInView } from '@/hooks/useElementInView';
+import { useAutoRefresh } from '@/hooks/useAutoRefresh';
 import { useOverdueGuests } from '@/hooks/useOverdueGuests';
 import { OverdueGuestsAlert } from '@/components/OverdueGuestsAlert';
 import { canSeeOverdueAlerts } from '@/lib/permissions';
@@ -53,9 +54,12 @@ function ControlPageContent() {
   const [statsOpen, setStatsOpen] = useState(false);
   const overdueSectionInView = useElementInView(overdueSectionEl);
 
-  const load = useCallback(() => {
-    setLoading(true);
-    setLoadError('');
+  const load = useCallback((options?: { silent?: boolean }) => {
+    const silent = options?.silent;
+    if (!silent) {
+      setLoading(true);
+      setLoadError('');
+    }
     return api.getJournal(date)
       .then((data) => {
         setPasses(data.passes);
@@ -63,14 +67,20 @@ function ControlPageContent() {
         return data.passes;
       })
       .catch((err) => {
-        setLoadErrorCause(err);
-        setLoadError(getErrorMessage(err, 'Ошибка загрузки'));
+        if (!silent) {
+          setLoadErrorCause(err);
+          setLoadError(getErrorMessage(err, 'Ошибка загрузки'));
+        }
         return [] as Pass[];
       })
-      .finally(() => setLoading(false));
+      .finally(() => {
+        if (!silent) setLoading(false);
+      });
   }, [date]);
 
   useEffect(() => { load(); }, [load]);
+
+  useAutoRefresh(() => load({ silent: true }), { enabled: !actionId && !lookupLoading });
 
   useEffect(() => {
     if (typeof window === 'undefined') return;

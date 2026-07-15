@@ -13,6 +13,7 @@ import { getUiLabels } from '@/lib/ui-labels';
 import { HistoryQuery, historyTitle } from '@/lib/visit-history';
 import { getHomePath } from '@/lib/permissions';
 import { useAuth } from '@/lib/auth';
+import { useAutoRefresh } from '@/hooks/useAutoRefresh';
 
 function parseHistoryQuery(params: URLSearchParams): HistoryQuery | null {
   const scope = params.get('scope') as HistoryQuery['scope'] | null;
@@ -43,20 +44,29 @@ function HistoryPageContent() {
   const [loadError, setLoadError] = useState('');
   const [loadErrorCause, setLoadErrorCause] = useState<unknown>(null);
 
-  const load = useCallback(() => {
+  const load = useCallback((options?: { silent?: boolean }) => {
     if (!query) return Promise.resolve();
-    setLoading(true);
-    setLoadError('');
+    const silent = options?.silent;
+    if (!silent) {
+      setLoading(true);
+      setLoadError('');
+    }
     return api.getPassHistory(query)
       .then(({ passes: data }) => setPasses(data))
       .catch((err) => {
-        setLoadErrorCause(err);
-        setLoadError(getErrorMessage(err, 'Ошибка загрузки'));
+        if (!silent) {
+          setLoadErrorCause(err);
+          setLoadError(getErrorMessage(err, 'Ошибка загрузки'));
+        }
       })
-      .finally(() => setLoading(false));
+      .finally(() => {
+        if (!silent) setLoading(false);
+      });
   }, [query]);
 
   useEffect(() => { load(); }, [load]);
+
+  useAutoRefresh(() => load({ silent: true }), { enabled: !!query });
 
   if (!query) {
     return (
