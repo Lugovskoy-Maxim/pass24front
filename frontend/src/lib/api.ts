@@ -70,6 +70,7 @@ export interface User {
   enabledPassTypes?: PassType[];
   parent_tenant_id?: string;
   is_tenant_owner?: boolean;
+  is_active?: boolean;
   role_label?: string;
 }
 

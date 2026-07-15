@@ -119,6 +119,13 @@ export default function ProfilePage() {
     void loadEmployees();
   }, [loadEmployees]);
 
+  useEffect(() => {
+    if (!employeeRoles.length) return;
+    setEmployeeRole((prev) => (
+      prev && employeeRoles.some((role) => role.key === prev) ? prev : employeeRoles[0].key
+    ));
+  }, [employeeRoles]);
+
   useAutoRefresh(() => loadEmployees({ silent: true }), { enabled: tenantOwner && !employeeSaving });
 
   if (!user) return null;
@@ -394,12 +401,12 @@ export default function ProfilePage() {
                   invalid={!!fieldErrors.password}
                 />
               </FormField>
-              {employeeRoles.length > 1 ? (
+              {employeeRoles.length > 0 ? (
                 <FormField id="employeeRole" label="Тип пользователя">
                   <select
                     id="employeeRole"
                     className="form-input w-full"
-                    value={employeeRole}
+                    value={employeeRole || employeeRoles[0]?.key || ''}
                     onChange={(e) => setEmployeeRole(e.target.value)}
                   >
                     {employeeRoles.map((role) => (
@@ -409,11 +416,11 @@ export default function ProfilePage() {
                     ))}
                   </select>
                 </FormField>
-              ) : employeeRoles.length === 0 ? (
+              ) : (
                 <p className="text-sm text-amber-700 bg-amber-50 border border-amber-200 rounded-lg px-3 py-2">
                   Нет доступных типов сотрудников. Обратитесь к администратору системы.
                 </p>
-              ) : null}
+              )}
               <button type="submit" className="btn btn-primary" disabled={employeeSaving || employeeRoles.length === 0}>
                 {employeeSaving ? 'Добавление...' : 'Добавить сотрудника'}
               </button>

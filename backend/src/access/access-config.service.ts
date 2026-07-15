@@ -190,12 +190,15 @@ export class AccessConfigService implements OnModuleInit {
 
   async getEmployeeAssignableRoles() {
     const config = await this.getConfig();
-    const roles = config.roles.filter((role) => !SYSTEM_ROLES.includes(role as any));
+    const rolePermissions = config.rolePermissions || {};
+    const roles = Object.keys(rolePermissions).filter(
+      (role) => !SYSTEM_ROLES.includes(role as any),
+    );
     return {
       roles: roles.map((role) => ({
         key: role,
         label: config.roleLabels?.[role] || role,
-        permissions: config.rolePermissions[role] || [],
+        permissions: rolePermissions[role] || [],
       })),
     };
   }

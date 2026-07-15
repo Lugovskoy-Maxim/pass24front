@@ -12,6 +12,11 @@ export function isTenantCompanyUser(user: User | null | undefined): boolean {
   return isTenantOwner(user) || isTenantEmployee(user);
 }
 
+/** Арендатор зарегистрировался, но админ ещё не активировал аккаунт. */
+export function isAwaitingAdminApproval(user: User | null | undefined): boolean {
+  return !!user && user.is_active === false && isTenantOwner(user);
+}
+
 export function getUserRoleLabel(user: User | null | undefined): string {
   if (!user) return '';
   return user.role_label || ROLE_LABELS[user.role as keyof typeof ROLE_LABELS] || user.role;
@@ -71,6 +76,8 @@ export function canSeeOverdueAlerts(user: User | null | undefined): boolean {
 /** Стартовая страница после входа — без дублирующей «Главной». */
 export function getHomePath(user: User | null | undefined): string {
   if (!user) return '/login';
+  if (isAwaitingAdminApproval(user)) return '/profile';
+  if (user.role === 'security' && canUseReception(user)) return '/control';
   if (canViewPasses(user)) return '/passes';
   if (canOrderPasses(user)) return '/passes/new';
   if (canUseReception(user)) return '/control';

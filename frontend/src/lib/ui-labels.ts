@@ -29,7 +29,7 @@ export const DEFAULT_UI_LABELS = {
   passes: {
     detailTitle: 'Детали пропуска',
     detailTimeline: 'Ход визита',
-    searchPlaceholder: 'Поиск...',
+    searchPlaceholder: 'Поиск: ФИО, телефон, офис, номер пропуска...',
     allStatuses: 'Все статусы',
     notFound: 'Пропуска не найдены',
     loading: 'Загрузка...',

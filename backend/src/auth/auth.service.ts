@@ -234,12 +234,6 @@ export class AuthService {
       throw new UnauthorizedException('Неверные учетные данные');
     }
 
-    if (user.isActive === false) {
-      throw new ForbiddenException(
-        'Учётная запись ожидает подтверждения администратором. Вход будет доступен после одобрения заявки.',
-      );
-    }
-
     const offices = await this.getUserOffices(user._id.toString(), user.parentTenantId?.toString());
     const token = this.generateToken(user);
     return { user: await this.toUserDto(user, offices), token };
@@ -248,9 +242,6 @@ export class AuthService {
   async me(userId: string) {
     const user = await this.userModel.findById(userId);
     if (!user) throw new UnauthorizedException();
-    if (user.isActive === false) {
-      throw new ForbiddenException('Учётная запись не активирована');
-    }
     const offices = await this.getUserOffices(userId, user.parentTenantId?.toString());
     return { user: await this.toUserDto(user, offices) };
   }
@@ -551,6 +542,7 @@ export class AuthService {
       enabledPassTypes,
       parent_tenant_id: user.parentTenantId?.toString(),
       is_tenant_owner: user.role === 'tenant' && !user.parentTenantId,
+      is_active: user.isActive !== false,
       profile_change_request: mapProfileChangeRequest(user.profileChangeRequest),
     };
   }

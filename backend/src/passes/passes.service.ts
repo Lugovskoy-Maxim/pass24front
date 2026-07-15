@@ -186,6 +186,8 @@ export class PassesService implements OnModuleInit {
         { vehiclePlate: new RegExp(search, 'i') },
         { companyName: new RegExp(search, 'i') },
         { businessCenterName: new RegExp(search, 'i') },
+        { office: new RegExp(search, 'i') },
+        { passNumber: new RegExp(search, 'i') },
       ],
     });
   }

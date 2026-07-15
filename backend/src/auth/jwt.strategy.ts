@@ -24,7 +24,7 @@ export class JwtStrategy extends PassportStrategy(Strategy) {
 
   async validate(payload: any) {
     const user = await this.userModel.findById(payload.sub);
-    if (!user || user.isActive === false) {
+    if (!user) {
       throw new UnauthorizedException();
     }
     const permissions = await this.accessConfigService.getPermissionsForRole(user.role || 'tenant');
@@ -34,6 +34,7 @@ export class JwtStrategy extends PassportStrategy(Strategy) {
       role: user.role || payload.role,
       fullName: user.fullName,
       parentTenantId: user.parentTenantId?.toString(),
+      isActive: user.isActive !== false,
       permissions,
     };
   }
