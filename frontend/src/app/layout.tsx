@@ -17,17 +17,22 @@ const manrope = Manrope({
 export const metadata: Metadata = {
   title: 'M-STYLE — Пропуска для бизнес-центра',
   description: 'Система заказа пропусков для арендаторов офисов M-STYLE',
-  applicationName: 'M-STYLE Пропуска',
+  applicationName: 'Пропуска.МСтиль',
   icons: {
     icon: [
+      { url: '/favicon.ico', sizes: 'any' },
       { url: '/icons/favicon-32.png', sizes: '32x32', type: 'image/png' },
       { url: '/icons/icon-192.png', sizes: '192x192', type: 'image/png' },
+      { url: '/icons/icon-512.png', sizes: '512x512', type: 'image/png' },
     ],
-    apple: [{ url: '/icons/icon-192.png', sizes: '192x192', type: 'image/png' }],
+    apple: [
+      { url: '/icons/apple-touch-icon.png', sizes: '180x180', type: 'image/png' },
+      { url: '/icons/icon-192.png', sizes: '192x192', type: 'image/png' },
+    ],
   },
   appleWebApp: {
     capable: true,
-    title: 'Пропуска',
+    title: 'Пропуска.МСтиль',
     statusBarStyle: 'black-translucent',
   },
   formatDetection: {
