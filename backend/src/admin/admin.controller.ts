@@ -228,7 +228,14 @@ export class AdminController {
   @Patch('site-settings')
   @RequireAllPermissions('admin.settings')
   async updateSiteSettings(@Body() dto: UpdateSiteSettingsDto, @Req() req: any) {
-    const payload = { ...dto };
+    const payload: Parameters<SiteSettingsService['update']>[0] = {
+      ...dto,
+      faqItems: dto.faqItems?.map((item) => ({
+        id: item.id,
+        question: item.question,
+        answer: item.answer,
+      })),
+    };
     if (req.user?.role !== 'admin') {
       delete payload.smsRegistrationEnabled;
       delete payload.smsRegistrationDisabledMessage;

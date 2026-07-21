@@ -3,7 +3,7 @@ import { InjectModel } from '@nestjs/mongoose';
 import { Model } from 'mongoose';
 import { AppSettings, AppSettingsDocument } from '../schemas/app-settings.schema';
 import { MSTYLE_BRAND_DEFAULTS, isLegacyBrandSettings } from '../brand/brand-defaults';
-import { DEFAULT_FAQ_ITEMS, FaqItem, normalizeFaqItems } from './faq-defaults';
+import { DEFAULT_FAQ_ITEMS, NormalizedFaqItem, normalizeFaqItems } from './faq-defaults';
 import { deepMergeUiLabels, UiLabels } from './ui-labels.defaults';
 
 const SETTINGS_KEY = 'global';
@@ -28,7 +28,7 @@ export interface SiteSettingsDto {
   smsRegistrationEnabled: boolean;
   smsRegistrationDisabledMessage: string;
   smsRegistrationCodeText: string;
-  faqItems: FaqItem[];
+  faqItems: NormalizedFaqItem[];
 }
 
 @Injectable()
@@ -64,14 +64,28 @@ export class SiteSettingsService implements OnModuleInit {
     return this.map(doc);
   }
 
-  async update(
-    data: Partial<Omit<SiteSettingsDto, 'uiLabels' | 'faqItems'>>
-      & {
-        uiLabels?: Record<string, unknown>;
-        /** id может отсутствовать — подставится при нормализации */
-        faqItems?: Array<{ id?: string; question: string; answer: string }>;
-      },
-  ): Promise<SiteSettingsDto> {
+  async update(data: {
+    siteName?: string;
+    siteIcon?: string;
+    siteIconLight?: string;
+    siteIconDark?: string;
+    siteTagline?: string;
+    sitePhone?: string;
+    siteEmail?: string;
+    brandMarkType?: string;
+    brandMarkText?: string;
+    brandShowName?: boolean;
+    brandNameBeforeMark?: boolean;
+    uiIconSelectChevron?: string;
+    themePrimary?: string;
+    themePrimaryHover?: string;
+    uiLabels?: Record<string, unknown>;
+    smsRegistrationEnabled?: boolean;
+    smsRegistrationDisabledMessage?: string;
+    smsRegistrationCodeText?: string;
+    /** Сырой список из DTO — id опционален, нормализуется внутри */
+    faqItems?: Array<{ id?: string; question?: string; answer?: string }>;
+  }): Promise<SiteSettingsDto> {
     for (const field of ['siteIcon', 'siteIconLight', 'siteIconDark'] as const) {
       const value = data[field];
       if (value !== undefined && value.length > MAX_ICON_LENGTH) {

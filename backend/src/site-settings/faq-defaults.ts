@@ -1,8 +1,12 @@
 export interface FaqItem {
-  id: string;
+  /** Может отсутствовать во входных DTO — normalizeFaqItems всегда проставляет id */
+  id?: string;
   question: string;
   answer: string;
 }
+
+/** Нормализованный элемент с гарантированным id */
+export type NormalizedFaqItem = Required<Pick<FaqItem, 'id' | 'question' | 'answer'>>;
 
 /** Дефолтные вопросы/ответы для панели помощи */
 export const DEFAULT_FAQ_ITEMS: FaqItem[] = [
@@ -60,12 +64,16 @@ const MAX_FAQ_ITEMS = 50;
 const MAX_QUESTION = 300;
 const MAX_ANSWER = 2000;
 
-export function normalizeFaqItems(raw: unknown): FaqItem[] {
+export function normalizeFaqItems(raw: unknown): NormalizedFaqItem[] {
   if (!Array.isArray(raw) || raw.length === 0) {
-    return DEFAULT_FAQ_ITEMS.map((item) => ({ ...item }));
+    return DEFAULT_FAQ_ITEMS.map((item) => ({
+      id: item.id || 'faq',
+      question: item.question,
+      answer: item.answer,
+    }));
   }
 
-  const result: FaqItem[] = [];
+  const result: NormalizedFaqItem[] = [];
   for (let i = 0; i < Math.min(raw.length, MAX_FAQ_ITEMS); i += 1) {
     const row = raw[i];
     if (!row || typeof row !== 'object') continue;
@@ -77,5 +85,11 @@ export function normalizeFaqItems(raw: unknown): FaqItem[] {
     result.push({ id, question, answer });
   }
 
-  return result.length ? result : DEFAULT_FAQ_ITEMS.map((item) => ({ ...item }));
+  return result.length
+    ? result
+    : DEFAULT_FAQ_ITEMS.map((item) => ({
+        id: item.id || 'faq',
+        question: item.question,
+        answer: item.answer,
+      }));
 }
