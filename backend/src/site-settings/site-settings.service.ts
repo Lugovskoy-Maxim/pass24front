@@ -66,7 +66,11 @@ export class SiteSettingsService implements OnModuleInit {
 
   async update(
     data: Partial<Omit<SiteSettingsDto, 'uiLabels' | 'faqItems'>>
-      & { uiLabels?: Record<string, unknown>; faqItems?: FaqItem[] },
+      & {
+        uiLabels?: Record<string, unknown>;
+        /** id может отсутствовать — подставится при нормализации */
+        faqItems?: Array<{ id?: string; question: string; answer: string }>;
+      },
   ): Promise<SiteSettingsDto> {
     for (const field of ['siteIcon', 'siteIconLight', 'siteIconDark'] as const) {
       const value = data[field];
