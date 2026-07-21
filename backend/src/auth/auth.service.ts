@@ -30,13 +30,21 @@ import {
 } from '../schemas';
 import { parseClosedWeekdays } from '../common/bookable-visit-dates';
 import { resolveTenantOwnerId } from '../common/tenant-owner';
+import { ConfirmPasswordResetDto } from './dto/confirm-password-reset.dto';
 import { ConfirmRegistrationDto } from './dto/confirm-registration.dto';
 import { CreateTenantEmployeeDto } from './dto/create-tenant-employee.dto';
 import { LoginDto } from './dto/login.dto';
 import { RegisterDto } from './dto/register.dto';
+import { RequestPasswordResetDto } from './dto/request-password-reset.dto';
 import { UpdateProfileDto } from './dto/update-profile.dto';
 import { DEV_TEST_ACCOUNTS, DEV_TEST_ACCOUNT_EMAILS } from '../database/dev-test-accounts';
 import { SiteSettingsService } from '../site-settings/site-settings.service';
+
+/** Интервал между отправками SMS-кодов (регистрация) */
+const SMS_RESEND_INTERVAL_MS = 5 * 60 * 1000;
+/** Интервал между письмами восстановления пароля */
+const PASSWORD_RESET_RESEND_INTERVAL_MS = 5 * 60 * 1000;
+const CODE_TTL_MS = 15 * 60 * 1000;
 
 @Injectable()
 export class AuthService {
@@ -55,6 +63,10 @@ export class AuthService {
   ) {}
 
   async requestRegistrationCode(dto: RegisterDto) {
+    if (dto.password !== dto.passwordConfirm) {
+      throw new BadRequestException('Пароли не совпадают');
+    }
+
     const email = dto.email?.toLowerCase().trim() || undefined;
     const phone = normalizeRuMobilePhone(dto.phone);
     const channel = this.resolveVerificationChannel(dto, email, phone);
@@ -93,16 +105,32 @@ export class AuthService {
       throw new BadRequestException('Укажите фамилию и имя');
     }
 
+    const pendingKey = channel === 'phone' ? { phone } : { email };
+    const existingPending = await this.pendingModel.findOne(pendingKey).lean();
+
+    if (channel === 'phone' && existingPending?.lastCodeSentAt) {
+      const retryAfterSeconds = this.getRetryAfterSeconds(
+        existingPending.lastCodeSentAt,
+        SMS_RESEND_INTERVAL_MS,
+      );
+      if (retryAfterSeconds > 0) {
+        throw new BadRequestException(
+          `Повторная отправка SMS возможна через ${this.formatRetryWait(retryAfterSeconds)}. Не чаще 1 раза в 5 минут.`,
+        );
+      }
+    }
+
     const code = String(Math.floor(100000 + Math.random() * 900000));
     const codeHash = await bcrypt.hash(code, 10);
     const passwordHash = await bcrypt.hash(dto.password, 10);
-    const expiresAt = new Date(Date.now() + 15 * 60 * 1000);
-    const pendingKey = channel === 'phone' ? { phone } : { email };
+    const now = new Date();
+    const expiresAt = new Date(now.getTime() + CODE_TTL_MS);
 
     const pendingData: Record<string, unknown> = {
       verificationChannel: channel,
       codeHash,
       expiresAt,
+      lastCodeSentAt: now,
       password: passwordHash,
       fullName: personName.fullName,
       lastName: personName.lastName,
@@ -133,6 +161,7 @@ export class AuthService {
         ? `Код подтверждения отправлен на ${phone}`
         : `Код подтверждения отправлен на ${email}`,
       expiresInMinutes: 15,
+      retryAfterSeconds: channel === 'phone' ? Math.floor(SMS_RESEND_INTERVAL_MS / 1000) : 0,
     };
   }
 
@@ -178,6 +207,8 @@ export class AuthService {
       }
     }
 
+    const emailVerified = pending.verificationChannel === 'email' && !!pending.email;
+
     const user = await this.userModel.create({
       email: pending.email,
       phone: pending.phone,
@@ -189,6 +220,7 @@ export class AuthService {
       role: 'tenant',
       password: pending.password,
       isActive: false,
+      emailVerified,
     } as any);
 
     await this.pendingModel.deleteOne(pendingFilter);
@@ -215,6 +247,124 @@ export class AuthService {
   /** @deprecated Используйте requestRegistrationCode + confirmRegistration */
   async register(dto: RegisterDto) {
     return this.requestRegistrationCode(dto);
+  }
+
+  async requestPasswordReset(dto: RequestPasswordResetDto) {
+    const email = dto.email.toLowerCase().trim();
+    const siteSettings = await this.siteSettingsService.get();
+    const adminContact = {
+      phone: siteSettings.sitePhone || undefined,
+      email: siteSettings.siteEmail || undefined,
+    };
+
+    const user = await this.userModel
+      .findOne({ email })
+      .select('+passwordResetCodeHash')
+      .exec();
+
+    if (!user) {
+      return {
+        recoveryChannel: 'admin' as const,
+        message:
+          'Аккаунт с таким email не найден. Восстановление по почте недоступно — свяжитесь с администратором.',
+        contact: adminContact,
+      };
+    }
+
+    if (!user.email) {
+      return {
+        recoveryChannel: 'admin' as const,
+        message:
+          'У этой учётной записи нет email. Восстановление пароля — через администратора.',
+        contact: adminContact,
+      };
+    }
+
+    if (user.passwordResetLastSentAt) {
+      const retryAfterSeconds = this.getRetryAfterSeconds(
+        user.passwordResetLastSentAt,
+        PASSWORD_RESET_RESEND_INTERVAL_MS,
+      );
+      if (retryAfterSeconds > 0) {
+        throw new BadRequestException(
+          `Повторная отправка кода возможна через ${this.formatRetryWait(retryAfterSeconds)}. Не чаще 1 раза в 5 минут.`,
+        );
+      }
+    }
+
+    const code = String(Math.floor(100000 + Math.random() * 900000));
+    const codeHash = await bcrypt.hash(code, 10);
+    const now = new Date();
+    user.passwordResetCodeHash = codeHash;
+    user.passwordResetExpiresAt = new Date(now.getTime() + CODE_TTL_MS);
+    user.passwordResetLastSentAt = now;
+    await user.save();
+
+    await this.mailService.sendPasswordResetCode(email, code);
+
+    return {
+      recoveryChannel: 'email' as const,
+      message: `Код восстановления отправлен на ${email}`,
+      expiresInMinutes: 15,
+      retryAfterSeconds: Math.floor(PASSWORD_RESET_RESEND_INTERVAL_MS / 1000),
+      contact: adminContact,
+    };
+  }
+
+  async confirmPasswordReset(dto: ConfirmPasswordResetDto) {
+    if (dto.password !== dto.passwordConfirm) {
+      throw new BadRequestException('Пароли не совпадают');
+    }
+
+    const email = dto.email.toLowerCase().trim();
+    const user = await this.userModel
+      .findOne({ email })
+      .select('+password +passwordResetCodeHash')
+      .exec();
+
+    if (!user?.passwordResetCodeHash || !user.passwordResetExpiresAt) {
+      throw new BadRequestException('Код не найден. Запросите восстановление пароля заново.');
+    }
+
+    if (user.passwordResetExpiresAt.getTime() < Date.now()) {
+      await this.userModel.updateOne(
+        { _id: user._id },
+        { $unset: { passwordResetCodeHash: 1, passwordResetExpiresAt: 1 } },
+      );
+      throw new BadRequestException('Код истёк. Запросите восстановление пароля заново.');
+    }
+
+    const codeOk = await bcrypt.compare(dto.code, user.passwordResetCodeHash);
+    if (!codeOk) {
+      throw new BadRequestException('Неверный код подтверждения');
+    }
+
+    const passwordHash = await bcrypt.hash(dto.password, 10);
+    await this.userModel.updateOne(
+      { _id: user._id },
+      {
+        $set: {
+          password: passwordHash,
+          ...(user.email ? { emailVerified: true } : {}),
+        },
+        $unset: {
+          passwordResetCodeHash: 1,
+          passwordResetExpiresAt: 1,
+          passwordResetLastSentAt: 1,
+        },
+      },
+    );
+
+    await this.auditService.log({
+      action: 'user.password_reset',
+      entityType: 'user',
+      entityId: user._id,
+      details: { email: user.email },
+    });
+
+    return {
+      message: 'Пароль успешно изменён. Войдите с новым паролем.',
+    };
   }
 
   async login(dto: LoginDto) {
@@ -418,6 +568,7 @@ export class AuthService {
       parentTenantId: owner._id,
       password: passwordHash,
       isActive: true,
+      emailVerified: true,
     } as any);
 
     await this.auditService.log({
@@ -521,6 +672,20 @@ export class AuthService {
     throw new BadRequestException('Укажите email или телефон для подтверждения регистрации');
   }
 
+  private getRetryAfterSeconds(lastSentAt: Date, intervalMs: number): number {
+    const elapsed = Date.now() - new Date(lastSentAt).getTime();
+    if (elapsed >= intervalMs) return 0;
+    return Math.ceil((intervalMs - elapsed) / 1000);
+  }
+
+  private formatRetryWait(totalSeconds: number): string {
+    const mins = Math.floor(totalSeconds / 60);
+    const secs = totalSeconds % 60;
+    if (mins <= 0) return `${secs} сек.`;
+    if (secs === 0) return `${mins} мин.`;
+    return `${mins} мин. ${secs} сек.`;
+  }
+
   private generateToken(user: any) {
     return this.jwtService.sign({
       sub: user._id.toString(),
@@ -537,6 +702,7 @@ export class AuthService {
       id: user._id.toString(),
       username: user.username,
       email: user.email,
+      email_verified: !!user.emailVerified,
       full_name: user.fullName,
       last_name: user.lastName,
       first_name: user.firstName,
@@ -591,6 +757,7 @@ export class AuthService {
         role: account.role,
         password: hashed,
         isActive: true,
+        emailVerified: true,
       } as any);
     }
 

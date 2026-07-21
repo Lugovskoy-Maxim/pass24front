@@ -68,6 +68,7 @@ export class TestDataSeedService {
         role: tenantAccount.role,
         password: await bcrypt.hash(tenantAccount.password, 10),
         isActive: true,
+        emailVerified: true,
         office: tenantAccount.office,
         floor: tenantAccount.floor,
       } as any);
@@ -119,6 +120,7 @@ export class TestDataSeedService {
         role: account.role,
         password: await bcrypt.hash(account.password, 10),
         isActive: true,
+        emailVerified: true,
         ...(account.role === 'security' || account.role === 'bc_admin'
           ? { properties: propertyIds }
           : {}),

@@ -27,8 +27,21 @@ export class User {
   @Prop({ trim: true, lowercase: true, unique: true, sparse: true })
   email?: string;
 
+  /** Email подтверждён кодом при регистрации (или задан админом) */
+  @Prop({ default: false })
+  emailVerified: boolean;
+
   @Prop({ select: false })
   password?: string;
+
+  @Prop({ select: false })
+  passwordResetCodeHash?: string;
+
+  @Prop()
+  passwordResetExpiresAt?: Date;
+
+  @Prop()
+  passwordResetLastSentAt?: Date;
 
   @Prop({ type: String, default: 'tenant' })
   role: string;

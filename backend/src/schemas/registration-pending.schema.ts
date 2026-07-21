@@ -20,6 +20,10 @@ export class RegistrationPending {
   @Prop({ required: true })
   expiresAt: Date;
 
+  /** Когда последний раз отправляли код (для rate limit SMS) */
+  @Prop()
+  lastCodeSentAt?: Date;
+
   @Prop({ required: true, select: false })
   password: string;
 

@@ -22,6 +22,10 @@ export class RegisterDto {
   @MinLength(6)
   password: string;
 
+  @IsNotEmpty({ message: 'Повторите пароль' })
+  @MinLength(6)
+  passwordConfirm: string;
+
   @IsOptional()
   fullName?: string;
 

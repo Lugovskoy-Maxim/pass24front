@@ -11,7 +11,15 @@ import { SiteBrand } from '@/components/SiteBrand';
 import { PersonNameFields } from '@/components/PersonNameFields';
 import { FormErrorBanner, FormField, FormInput, PasswordInput } from '@/components/FormField';
 import { buildFullName, getUserNameLabels, PersonNameParts } from '@/lib/person-name';
-import { FieldErrors, hasFieldErrors, normalizeRuMobilePhone, validateLoginRegister, validateRegistrationCode } from '@/lib/form-validation';
+import {
+  FieldErrors,
+  hasFieldErrors,
+  normalizeRuMobilePhone,
+  validateLoginRegister,
+  validatePasswordResetConfirm,
+  validatePasswordResetRequest,
+  validateRegistrationCode,
+} from '@/lib/form-validation';
 import { formatRuMobilePhone } from '@/lib/phone';
 import { ThemeToggle } from '@/components/ThemeToggle';
 import { useTheme } from '@/components/ThemeProvider';
@@ -24,6 +32,15 @@ interface DevQuickLoginAccount {
   role: UserRole;
 }
 
+type PageMode = 'login' | 'register' | 'forgot';
+type ForgotStep = 'request' | 'confirm';
+
+function formatCountdown(seconds: number): string {
+  const m = Math.floor(seconds / 60);
+  const s = seconds % 60;
+  return `${m}:${String(s).padStart(2, '0')}`;
+}
+
 export default function LoginPage() {
   const { user, loading: authLoading } = useAuth();
   const router = useRouter();
@@ -32,23 +49,29 @@ export default function LoginPage() {
     if (!authLoading && user) router.replace(getHomePath(user));
   }, [user, authLoading, router]);
 
-  const [mode, setMode] = useState<'login' | 'register'>('login');
+  const [mode, setMode] = useState<PageMode>('login');
   const [registerStep, setRegisterStep] = useState<'form' | 'verify'>('form');
+  const [forgotStep, setForgotStep] = useState<ForgotStep>('request');
   const [verificationChannel, setVerificationChannel] = useState<'email' | 'phone'>('email');
   const [login, setLogin] = useState('');
   const [email, setEmail] = useState('');
   const [password, setPassword] = useState('');
+  const [passwordConfirm, setPasswordConfirm] = useState('');
   const [verificationCode, setVerificationCode] = useState('');
   const [nameParts, setNameParts] = useState<PersonNameParts>({ lastName: '', firstName: '', middleName: '' });
   const [company, setCompany] = useState('');
   const [phone, setPhone] = useState('');
   const [verifiedPhone, setVerifiedPhone] = useState('');
+  const [resetEmail, setResetEmail] = useState('');
   const [formError, setFormError] = useState('');
   const [fieldErrors, setFieldErrors] = useState<FieldErrors>({});
   const [success, setSuccess] = useState('');
   const [infoMessage, setInfoMessage] = useState('');
   const [loading, setLoading] = useState(false);
   const [devAccounts, setDevAccounts] = useState<DevQuickLoginAccount[]>([]);
+  const [smsResendIn, setSmsResendIn] = useState(0);
+  const [resetResendIn, setResetResendIn] = useState(0);
+  const [adminContact, setAdminContact] = useState<{ phone?: string; email?: string } | null>(null);
   const { login: authLogin, requestRegistrationCode, confirmRegistration } = useAuth();
   const config = useConfig();
   const { theme } = useTheme();
@@ -68,6 +91,18 @@ export default function LoginPage() {
       setVerificationChannel('email');
     }
   }, [smsRegistrationEnabled, verificationChannel]);
+
+  useEffect(() => {
+    if (smsResendIn <= 0) return;
+    const timer = window.setTimeout(() => setSmsResendIn((prev) => prev - 1), 1000);
+    return () => window.clearTimeout(timer);
+  }, [smsResendIn]);
+
+  useEffect(() => {
+    if (resetResendIn <= 0) return;
+    const timer = window.setTimeout(() => setResetResendIn((prev) => prev - 1), 1000);
+    return () => window.clearTimeout(timer);
+  }, [resetResendIn]);
 
   const clearFieldError = (field: string) => {
     setFieldErrors((prev) => {
@@ -130,6 +165,7 @@ export default function LoginPage() {
       phone?: string;
       verificationChannel: 'email' | 'phone';
       password: string;
+      passwordConfirm: string;
       lastName: string;
       firstName: string;
       middleName?: string;
@@ -138,6 +174,7 @@ export default function LoginPage() {
     } = {
       verificationChannel: channel,
       password,
+      passwordConfirm,
       lastName: nameParts.lastName.trim(),
       firstName: nameParts.firstName.trim(),
       middleName: nameParts.middleName.trim() || undefined,
@@ -158,11 +195,18 @@ export default function LoginPage() {
 
   const handleSubmit = async (e: FormEvent) => {
     e.preventDefault();
+
+    if (mode === 'forgot') {
+      await handleForgotSubmit();
+      return;
+    }
+
     const effectiveChannel = mode === 'register' ? resolveEffectiveChannel() : undefined;
     const errors = validateLoginRegister({
-      mode,
+      mode: mode === 'register' ? 'register' : 'login',
       email: mode === 'login' ? login : email,
       password,
+      passwordConfirm: mode === 'register' ? passwordConfirm : undefined,
       nameParts: mode === 'register' ? nameParts : undefined,
       company: mode === 'register' ? company : undefined,
       phone: mode === 'register' ? phone : undefined,
@@ -198,12 +242,14 @@ export default function LoginPage() {
         setRegisterStep('form');
         setMode('login');
         setPassword('');
+        setPasswordConfirm('');
         setVerificationCode('');
         setNameParts({ lastName: '', firstName: '', middleName: '' });
         setCompany('');
         setPhone('');
         setVerifiedPhone('');
         setEmail('');
+        setSmsResendIn(0);
         setFieldErrors({});
       } catch (err) {
         setFormError(getErrorMessage(err, 'Неверный код подтверждения'));
@@ -224,6 +270,9 @@ export default function LoginPage() {
       setVerificationChannel(result.verificationChannel || payload.verificationChannel);
       if (result.verificationChannel === 'phone') {
         setVerifiedPhone(payload.phone || '');
+        setSmsResendIn(result.retryAfterSeconds || 300);
+      } else {
+        setSmsResendIn(0);
       }
       setRegisterStep('verify');
       setVerificationCode('');
@@ -235,13 +284,103 @@ export default function LoginPage() {
     }
   };
 
+  const handleForgotSubmit = async () => {
+    if (forgotStep === 'request') {
+      const errors = validatePasswordResetRequest(resetEmail);
+      setFieldErrors(errors);
+      if (hasFieldErrors(errors)) return;
+
+      setFormError('');
+      setInfoMessage('');
+      setLoading(true);
+      try {
+        const result = await api.requestPasswordReset({ email: resetEmail.trim().toLowerCase() });
+        setAdminContact(result.contact || {
+          phone: config?.sitePhone,
+          email: config?.siteEmail,
+        });
+        setInfoMessage(result.message);
+        if (result.recoveryChannel === 'email') {
+          setForgotStep('confirm');
+          setResetResendIn(result.retryAfterSeconds || 300);
+          setVerificationCode('');
+          setPassword('');
+          setPasswordConfirm('');
+        }
+        setFieldErrors({});
+      } catch (err) {
+        setFormError(getErrorMessage(err, 'Не удалось запросить восстановление'));
+      } finally {
+        setLoading(false);
+      }
+      return;
+    }
+
+    const errors = validatePasswordResetConfirm({
+      code: verificationCode,
+      password,
+      passwordConfirm,
+    });
+    setFieldErrors(errors);
+    if (hasFieldErrors(errors)) return;
+
+    setFormError('');
+    setLoading(true);
+    try {
+      const result = await api.confirmPasswordReset({
+        email: resetEmail.trim().toLowerCase(),
+        code: verificationCode.trim(),
+        password,
+        passwordConfirm,
+      });
+      setSuccess(result.message);
+      setInfoMessage('');
+      setMode('login');
+      setForgotStep('request');
+      setPassword('');
+      setPasswordConfirm('');
+      setVerificationCode('');
+      setResetEmail('');
+      setResetResendIn(0);
+      setFieldErrors({});
+    } catch (err) {
+      setFormError(getErrorMessage(err, 'Не удалось сменить пароль'));
+    } finally {
+      setLoading(false);
+    }
+  };
+
   const handleResendCode = async () => {
+    if (smsResendIn > 0) return;
     setFormError('');
     setFieldErrors({});
     setLoading(true);
     try {
       const result = await requestRegistrationCode(buildRegisterPayload());
       setInfoMessage(result.message);
+      setVerificationCode('');
+      if (result.verificationChannel === 'phone') {
+        setSmsResendIn(result.retryAfterSeconds || 300);
+      }
+    } catch (err) {
+      setFormError(getErrorMessage(err, 'Не удалось отправить код'));
+    } finally {
+      setLoading(false);
+    }
+  };
+
+  const handleResendResetCode = async () => {
+    if (resetResendIn > 0) return;
+    setFormError('');
+    setFieldErrors({});
+    setLoading(true);
+    try {
+      const result = await api.requestPasswordReset({ email: resetEmail.trim().toLowerCase() });
+      setInfoMessage(result.message);
+      setAdminContact(result.contact || adminContact);
+      if (result.recoveryChannel === 'email') {
+        setResetResendIn(result.retryAfterSeconds || 300);
+      }
       setVerificationCode('');
     } catch (err) {
       setFormError(getErrorMessage(err, 'Не удалось отправить код'));
@@ -261,14 +400,25 @@ export default function LoginPage() {
     void performLogin(loginEmail, loginPassword);
   };
 
-  const switchMode = (next: 'login' | 'register') => {
+  const switchMode = (next: PageMode) => {
     setMode(next);
     setRegisterStep('form');
+    setForgotStep('request');
     setVerificationCode('');
     setFormError('');
     setFieldErrors({});
     setSuccess('');
     setInfoMessage('');
+    setPasswordConfirm('');
+    setSmsResendIn(0);
+    setResetResendIn(0);
+    if (next === 'forgot') {
+      setResetEmail(login.includes('@') ? login : email);
+      setAdminContact({
+        phone: config?.sitePhone,
+        email: config?.siteEmail,
+      });
+    }
   };
 
   const backToRegisterForm = () => {
@@ -282,6 +432,19 @@ export default function LoginPage() {
   const verificationTarget = verificationChannel === 'phone'
     ? formatRuMobilePhone(verifiedPhone || phone)
     : email;
+
+  const contactPhone = adminContact?.phone || config?.sitePhone;
+  const contactEmail = adminContact?.email || config?.siteEmail;
+
+  const submitLabel = (() => {
+    if (loading) return 'Загрузка...';
+    if (mode === 'login') return 'Войти';
+    if (mode === 'forgot') {
+      return forgotStep === 'confirm' ? 'Сохранить новый пароль' : 'Отправить код';
+    }
+    if (registerStep === 'verify') return 'Подтвердить регистрацию';
+    return 'Получить код';
+  })();
 
   return (
     <div className="min-h-screen flex items-center justify-center p-4 bg-[var(--bg)] relative">
@@ -312,22 +475,33 @@ export default function LoginPage() {
         </div>
 
         <div className="card p-6">
-          <div className="flex gap-1 mb-6 p-1 surface-muted rounded">
-            <button
-              type="button"
-              className={`flex-1 py-2 text-sm rounded transition-colors ${mode === 'login' ? 'bg-[var(--surface-elevated)] shadow-sm font-medium text-[var(--text)]' : 'text-[var(--muted)]'}`}
-              onClick={() => switchMode('login')}
-            >
-              Вход
-            </button>
-            <button
-              type="button"
-              className={`flex-1 py-2 text-sm rounded transition-colors ${mode === 'register' ? 'bg-[var(--surface-elevated)] shadow-sm font-medium text-[var(--text)]' : 'text-[var(--muted)]'}`}
-              onClick={() => switchMode('register')}
-            >
-              Регистрация
-            </button>
-          </div>
+          {mode !== 'forgot' && (
+            <div className="flex gap-1 mb-6 p-1 surface-muted rounded">
+              <button
+                type="button"
+                className={`flex-1 py-2 text-sm rounded transition-colors ${mode === 'login' ? 'bg-[var(--surface-elevated)] shadow-sm font-medium text-[var(--text)]' : 'text-[var(--muted)]'}`}
+                onClick={() => switchMode('login')}
+              >
+                Вход
+              </button>
+              <button
+                type="button"
+                className={`flex-1 py-2 text-sm rounded transition-colors ${mode === 'register' ? 'bg-[var(--surface-elevated)] shadow-sm font-medium text-[var(--text)]' : 'text-[var(--muted)]'}`}
+                onClick={() => switchMode('register')}
+              >
+                Регистрация
+              </button>
+            </div>
+          )}
+
+          {mode === 'forgot' && (
+            <div className="mb-6">
+              <h2 className="text-lg font-semibold text-[var(--text)]">Восстановление пароля</h2>
+              <p className="text-sm text-[var(--muted)] mt-1">
+                Код придёт на email, привязанный к аккаунту. Если почты нет — обратитесь к администратору.
+              </p>
+            </div>
+          )}
 
           <form onSubmit={handleSubmit} className="space-y-4" noValidate>
             {mode === 'register' && registerStep === 'form' && (
@@ -449,7 +623,9 @@ export default function LoginPage() {
                 </FormField>
                 <p className="text-xs text-[var(--muted)]">
                   Код действует 15 минут.
-                  {verificationChannel === 'email' ? ' Проверьте папку «Спам», если письма нет.' : ' Если SMS не пришло, запросите код повторно.'}
+                  {verificationChannel === 'email'
+                    ? ' Проверьте папку «Спам», если письма нет.'
+                    : ' Повторная отправка SMS — не чаще 1 раза в 5 минут.'}
                 </p>
               </div>
             )}
@@ -480,19 +656,94 @@ export default function LoginPage() {
                     autoComplete="current-password"
                   />
                 </FormField>
+                <div className="flex justify-end -mt-1">
+                  <button
+                    type="button"
+                    className="text-sm text-[var(--primary)] hover:underline"
+                    onClick={() => switchMode('forgot')}
+                  >
+                    Забыли пароль?
+                  </button>
+                </div>
               </>
             )}
 
             {mode === 'register' && registerStep === 'form' && (
-              <FormField id="password" label="Пароль" required error={fieldErrors.password} hint="Минимум 6 символов">
-                <PasswordInput
-                  id="password"
-                  value={password}
-                  onChange={(e) => { setPassword(e.target.value); clearFieldError('password'); }}
-                  invalid={!!fieldErrors.password}
-                  autoComplete="new-password"
+              <>
+                <FormField id="password" label="Пароль" required error={fieldErrors.password} hint="Минимум 6 символов">
+                  <PasswordInput
+                    id="password"
+                    value={password}
+                    onChange={(e) => { setPassword(e.target.value); clearFieldError('password'); }}
+                    invalid={!!fieldErrors.password}
+                    autoComplete="new-password"
+                  />
+                </FormField>
+                <FormField id="passwordConfirm" label="Повторите пароль" required error={fieldErrors.passwordConfirm}>
+                  <PasswordInput
+                    id="passwordConfirm"
+                    value={passwordConfirm}
+                    onChange={(e) => { setPasswordConfirm(e.target.value); clearFieldError('passwordConfirm'); }}
+                    invalid={!!fieldErrors.passwordConfirm}
+                    autoComplete="new-password"
+                  />
+                </FormField>
+              </>
+            )}
+
+            {mode === 'forgot' && forgotStep === 'request' && (
+              <FormField id="resetEmail" label="Email аккаунта" required error={fieldErrors.email}>
+                <FormInput
+                  id="resetEmail"
+                  type="email"
+                  value={resetEmail}
+                  onChange={(e) => { setResetEmail(e.target.value); clearFieldError('email'); }}
+                  invalid={!!fieldErrors.email}
+                  autoComplete="email"
+                  placeholder="email@example.com"
                 />
               </FormField>
+            )}
+
+            {mode === 'forgot' && forgotStep === 'confirm' && (
+              <>
+                <p className="text-sm text-[var(--text)]">
+                  Введите код из письма на <span className="font-medium">{resetEmail}</span> и новый пароль.
+                </p>
+                <FormField id="resetCode" label="Код из письма" required error={fieldErrors.code}>
+                  <FormInput
+                    id="resetCode"
+                    inputMode="numeric"
+                    autoComplete="one-time-code"
+                    value={verificationCode}
+                    onChange={(e) => {
+                      setVerificationCode(e.target.value.replace(/\D/g, '').slice(0, 6));
+                      clearFieldError('code');
+                    }}
+                    invalid={!!fieldErrors.code}
+                    placeholder="000000"
+                    className="tracking-[0.3em] text-center text-lg font-mono"
+                  />
+                </FormField>
+                <FormField id="newPassword" label="Новый пароль" required error={fieldErrors.password} hint="Минимум 6 символов">
+                  <PasswordInput
+                    id="newPassword"
+                    value={password}
+                    onChange={(e) => { setPassword(e.target.value); clearFieldError('password'); }}
+                    invalid={!!fieldErrors.password}
+                    autoComplete="new-password"
+                  />
+                </FormField>
+                <FormField id="newPasswordConfirm" label="Повторите пароль" required error={fieldErrors.passwordConfirm}>
+                  <PasswordInput
+                    id="newPasswordConfirm"
+                    value={passwordConfirm}
+                    onChange={(e) => { setPasswordConfirm(e.target.value); clearFieldError('passwordConfirm'); }}
+                    invalid={!!fieldErrors.passwordConfirm}
+                    autoComplete="new-password"
+                  />
+                </FormField>
+              </>
             )}
 
             {success && mode === 'login' && (
@@ -501,22 +752,36 @@ export default function LoginPage() {
               </div>
             )}
 
-            {infoMessage && mode === 'register' && registerStep === 'verify' && (
+            {infoMessage && (mode === 'register' || mode === 'forgot') && (
               <div className="text-sm text-[var(--status-active)] bg-[var(--status-active-soft)] px-3 py-2 rounded-md border border-[var(--status-active-border)]">
                 {infoMessage}
+              </div>
+            )}
+
+            {mode === 'forgot' && (contactPhone || contactEmail) && (
+              <div className="text-sm text-[var(--muted)] bg-[var(--surface-muted)] px-3 py-2 rounded-md border border-[var(--border)] space-y-1">
+                <p className="font-medium text-[var(--text)]">Связаться с администратором</p>
+                {contactPhone && (
+                  <a href={`tel:${contactPhone}`} className="inline-flex items-center gap-1.5 text-[var(--primary)] hover:underline">
+                    <Phone className="w-3.5 h-3.5" />
+                    {contactPhone}
+                  </a>
+                )}
+                {contactEmail && (
+                  <div>
+                    <a href={`mailto:${contactEmail}`} className="inline-flex items-center gap-1.5 text-[var(--primary)] hover:underline">
+                      <Mail className="w-3.5 h-3.5" />
+                      {contactEmail}
+                    </a>
+                  </div>
+                )}
               </div>
             )}
 
             <FormErrorBanner message={formError} />
 
             <button type="submit" className="btn btn-primary w-full" disabled={loading}>
-              {loading
-                ? 'Загрузка...'
-                : mode === 'login'
-                  ? 'Войти'
-                  : registerStep === 'verify'
-                    ? 'Подтвердить регистрацию'
-                    : 'Получить код'}
+              {submitLabel}
             </button>
 
             {mode === 'register' && registerStep === 'verify' && (
@@ -524,10 +789,41 @@ export default function LoginPage() {
                 <button type="button" className="btn btn-secondary flex-1" disabled={loading} onClick={backToRegisterForm}>
                   Изменить данные
                 </button>
-                <button type="button" className="btn btn-secondary flex-1" disabled={loading} onClick={() => void handleResendCode()}>
-                  Отправить код снова
+                <button
+                  type="button"
+                  className="btn btn-secondary flex-1"
+                  disabled={loading || (verificationChannel === 'phone' && smsResendIn > 0)}
+                  onClick={() => void handleResendCode()}
+                >
+                  {verificationChannel === 'phone' && smsResendIn > 0
+                    ? `Повтор через ${formatCountdown(smsResendIn)}`
+                    : 'Отправить код снова'}
                 </button>
               </div>
+            )}
+
+            {mode === 'forgot' && forgotStep === 'confirm' && (
+              <button
+                type="button"
+                className="btn btn-secondary w-full"
+                disabled={loading || resetResendIn > 0}
+                onClick={() => void handleResendResetCode()}
+              >
+                {resetResendIn > 0
+                  ? `Повторная отправка через ${formatCountdown(resetResendIn)}`
+                  : 'Отправить код снова'}
+              </button>
+            )}
+
+            {mode === 'forgot' && (
+              <button
+                type="button"
+                className="btn btn-secondary w-full"
+                disabled={loading}
+                onClick={() => switchMode('login')}
+              >
+                Вернуться ко входу
+              </button>
             )}
           </form>
 

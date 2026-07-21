@@ -126,25 +126,13 @@ export class MailService {
     }
 
     const from = this.getPassFromAddress();
-    const appHost = (this.configService.get<string>('PUBLIC_APP_URL') || 'https://pass.mstyle.ru')
-      .replace(/^https?:\/\//, '')
-      .replace(/\/$/, '');
-    const html = `
-      <div style="font-family:Inter,Arial,sans-serif;max-width:480px;margin:0 auto;color:#0f172a">
-        <div style="padding:24px;border:1px solid #e2e8f0;border-radius:12px;background:#fff">
-          <h2 style="margin:0 0 12px;font-size:20px">Подтверждение регистрации</h2>
-          <p style="margin:0 0 16px;line-height:1.5;color:#475569">
-            Введите этот код на странице регистрации ${appHost}:
-          </p>
-          <div style="font-size:32px;font-weight:700;letter-spacing:0.35em;text-align:center;padding:16px;background:#f8fafc;border-radius:8px">
-            ${code}
-          </div>
-          <p style="margin:16px 0 0;font-size:13px;color:#64748b">
-            Код действует 15 минут. Если вы не запрашивали регистрацию, просто проигнорируйте письмо.
-          </p>
-        </div>
-      </div>
-    `;
+    const appHost = this.getAppHost();
+    const html = this.buildCodeEmailHtml({
+      title: 'Подтверждение регистрации',
+      intro: `Введите этот код на странице регистрации ${appHost}:`,
+      code,
+      footer: 'Код действует 15 минут. Если вы не запрашивали регистрацию, просто проигнорируйте письмо.',
+    });
 
     try {
       await this.transporter.sendMail({
@@ -161,6 +149,69 @@ export class MailService {
       this.logger.error(`Registration code email failed to ${to}: ${message}`);
       throw new InternalServerErrorException('Не удалось отправить код подтверждения на почту');
     }
+  }
+
+  async sendPasswordResetCode(to: string, code: string) {
+    if (!this.transporter) {
+      throw new BadRequestException(
+        'Почтовый сервер не настроен. Восстановление пароля временно недоступно — обратитесь к администратору.',
+      );
+    }
+
+    const from = this.getPassFromAddress();
+    const appHost = this.getAppHost();
+    const html = this.buildCodeEmailHtml({
+      title: 'Восстановление пароля',
+      intro: `Введите этот код на странице входа ${appHost}, чтобы задать новый пароль:`,
+      code,
+      footer: 'Код действует 15 минут. Если вы не запрашивали сброс пароля, просто проигнорируйте письмо.',
+    });
+
+    try {
+      await this.transporter.sendMail({
+        from,
+        to,
+        subject: `Восстановление пароля: ${code}`,
+        text: `Код восстановления пароля на ${appHost}: ${code}\nКод действует 15 минут.`,
+        html,
+      });
+      this.logger.log(`Password reset code emailed to ${to}`);
+      return { sent: true };
+    } catch (err) {
+      const message = err instanceof Error ? err.message : 'Неизвестная ошибка SMTP';
+      this.logger.error(`Password reset email failed to ${to}: ${message}`);
+      throw new InternalServerErrorException('Не удалось отправить код восстановления на почту');
+    }
+  }
+
+  private getAppHost(): string {
+    return (this.configService.get<string>('PUBLIC_APP_URL') || 'https://pass.mstyle.ru')
+      .replace(/^https?:\/\//, '')
+      .replace(/\/$/, '');
+  }
+
+  private buildCodeEmailHtml(params: {
+    title: string;
+    intro: string;
+    code: string;
+    footer: string;
+  }): string {
+    return `
+      <div style="font-family:Inter,Arial,sans-serif;max-width:480px;margin:0 auto;color:#0f172a">
+        <div style="padding:24px;border:1px solid #e2e8f0;border-radius:12px;background:#fff">
+          <h2 style="margin:0 0 12px;font-size:20px">${params.title}</h2>
+          <p style="margin:0 0 16px;line-height:1.5;color:#475569">
+            ${params.intro}
+          </p>
+          <div style="font-size:32px;font-weight:700;letter-spacing:0.35em;text-align:center;padding:16px;background:#f8fafc;border-radius:8px">
+            ${params.code}
+          </div>
+          <p style="margin:16px 0 0;font-size:13px;color:#64748b">
+            ${params.footer}
+          </p>
+        </div>
+      </div>
+    `;
   }
 
   private getPassFromAddress(): string {

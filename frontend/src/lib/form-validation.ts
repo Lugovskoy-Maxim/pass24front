@@ -31,6 +31,7 @@ export function validateLoginRegister(data: {
   mode: 'login' | 'register';
   email: string;
   password: string;
+  passwordConfirm?: string;
   nameParts?: PersonNameParts;
   company?: string;
   phone?: string;
@@ -63,11 +64,36 @@ export function validateLoginRegister(data: {
   else if (data.password.length < 6) errors.password = 'Минимум 6 символов';
 
   if (data.mode === 'register') {
+    if (isBlank(data.passwordConfirm)) errors.passwordConfirm = 'Повторите пароль';
+    else if (data.passwordConfirm !== data.password) errors.passwordConfirm = 'Пароли не совпадают';
     if (!data.nameParts?.lastName?.trim()) errors.lastName = 'Укажите фамилию';
     if (!data.nameParts?.firstName?.trim()) errors.firstName = 'Укажите имя';
     if (isBlank(data.company)) errors.company = 'Укажите название компании';
   }
 
+  return errors;
+}
+
+export function validatePasswordResetRequest(email: string): FieldErrors {
+  const errors: FieldErrors = {};
+  if (isBlank(email)) errors.email = 'Укажите email';
+  else if (!isValidEmail(email)) errors.email = 'Некорректный email';
+  return errors;
+}
+
+export function validatePasswordResetConfirm(data: {
+  code: string;
+  password: string;
+  passwordConfirm: string;
+}): FieldErrors {
+  const errors: FieldErrors = {};
+  const trimmed = data.code.trim();
+  if (!trimmed) errors.code = 'Введите код из письма';
+  else if (!/^\d{6}$/.test(trimmed)) errors.code = 'Код состоит из 6 цифр';
+  if (isBlank(data.password)) errors.password = 'Укажите новый пароль';
+  else if (data.password.length < 6) errors.password = 'Минимум 6 символов';
+  if (isBlank(data.passwordConfirm)) errors.passwordConfirm = 'Повторите пароль';
+  else if (data.passwordConfirm !== data.password) errors.passwordConfirm = 'Пароли не совпадают';
   return errors;
 }
 

@@ -69,6 +69,7 @@ export class SeedService implements OnModuleInit {
       role,
       password: hashed,
       isActive: true,
+      emailVerified: !!legacyEmail,
       ...(legacyEmail ? { email: legacyEmail } : {}),
     } as any);
 

@@ -55,6 +55,7 @@ export interface User {
   id: string;
   username?: string;
   email?: string;
+  email_verified?: boolean;
   full_name: string;
   last_name?: string;
   first_name?: string;
@@ -278,6 +279,7 @@ export const api = {
     phone?: string;
     verificationChannel?: 'email' | 'phone';
     password: string;
+    passwordConfirm: string;
     fullName?: string;
     lastName?: string;
     firstName?: string;
@@ -289,6 +291,7 @@ export const api = {
       verificationChannel: 'email' | 'phone';
       message: string;
       expiresInMinutes: number;
+      retryAfterSeconds?: number;
     }>(
       '/auth/register/request-code',
       { method: 'POST', body: JSON.stringify(data) },
@@ -296,6 +299,29 @@ export const api = {
 
   registerConfirm: (data: { email?: string; phone?: string; code: string }) =>
     request<{ pendingApproval: true; message: string }>('/auth/register/confirm', {
+      method: 'POST',
+      body: JSON.stringify(data),
+    }),
+
+  requestPasswordReset: (data: { email: string }) =>
+    request<{
+      recoveryChannel: 'email' | 'admin';
+      message: string;
+      expiresInMinutes?: number;
+      retryAfterSeconds?: number;
+      contact?: { phone?: string; email?: string };
+    }>('/auth/password-reset/request', {
+      method: 'POST',
+      body: JSON.stringify(data),
+    }),
+
+  confirmPasswordReset: (data: {
+    email: string;
+    code: string;
+    password: string;
+    passwordConfirm: string;
+  }) =>
+    request<{ message: string }>('/auth/password-reset/confirm', {
       method: 'POST',
       body: JSON.stringify(data),
     }),
@@ -860,6 +886,7 @@ export interface UserFilters {
 export interface AdminUser {
   id: string;
   email: string;
+  emailVerified?: boolean;
   fullName: string;
   lastName?: string;
   firstName?: string;

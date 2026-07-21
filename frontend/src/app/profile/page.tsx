@@ -270,6 +270,13 @@ export default function ProfilePage() {
           {(user.email || user.username) && (
             <ProfileInfoRow icon={Mail} label={user.email ? 'Email' : 'Логин'} value={user.email || user.username || ''} />
           )}
+          {user.email && (
+            <ProfileInfoRow
+              icon={Mail}
+              label="Почта подтверждена"
+              value={user.email_verified ? 'Да' : 'Нет'}
+            />
+          )}
           <ProfileInfoRow icon={Shield} label="Роль" value={getUserRoleLabel(user)} />
           {user.company && <ProfileInfoRow icon={Building2} label="Компания" value={user.company} />}
           {user.phone && <ProfileInfoRow icon={Phone} label="Телефон" value={user.phone} />}

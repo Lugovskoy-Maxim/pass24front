@@ -12,12 +12,13 @@ interface AuthContextType {
     phone?: string;
     verificationChannel?: 'email' | 'phone';
     password: string;
+    passwordConfirm: string;
     fullName?: string;
     lastName?: string;
     firstName?: string;
     middleName?: string;
     company: string;
-  }) => Promise<{ message: string; verificationChannel: 'email' | 'phone' }>;
+  }) => Promise<{ message: string; verificationChannel: 'email' | 'phone'; retryAfterSeconds?: number }>;
   confirmRegistration: (data: {
     email?: string;
     phone?: string;
@@ -54,6 +55,7 @@ export function AuthProvider({ children }: { children: ReactNode }) {
     phone?: string;
     verificationChannel?: 'email' | 'phone';
     password: string;
+    passwordConfirm: string;
     fullName?: string;
     lastName?: string;
     firstName?: string;
@@ -64,6 +66,7 @@ export function AuthProvider({ children }: { children: ReactNode }) {
     return {
       message: result.message,
       verificationChannel: result.verificationChannel,
+      retryAfterSeconds: result.retryAfterSeconds,
     };
   };
 

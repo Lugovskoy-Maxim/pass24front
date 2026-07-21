@@ -244,6 +244,7 @@ export class AdminService {
       floor: dto.floor,
       password: hashed,
       isActive: true,
+      emailVerified: true,
     } as any);
 
     if (dto.role === 'tenant' && dto.officeIds !== undefined) {
@@ -934,6 +935,7 @@ export class AdminService {
     return {
       id: user._id.toString(),
       email: user.email,
+      emailVerified: !!user.emailVerified,
       fullName: user.fullName,
       lastName: nameParts.lastName,
       firstName: nameParts.firstName,

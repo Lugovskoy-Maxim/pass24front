@@ -454,7 +454,14 @@ export default function AdminUsersPage() {
             <div key={u.id} className="rounded-lg border border-[var(--alert-border)] bg-[var(--surface)] p-4 flex flex-col lg:flex-row lg:items-center justify-between gap-4">
               <div className="text-sm">
                 <div className="font-medium">{u.fullName}</div>
-                <div className="text-[var(--muted)] mt-1">{u.email}</div>
+                <div className="text-[var(--muted)] mt-1">
+                  {u.email || '—'}
+                  {u.email && (
+                    <span className={`ml-2 text-[10px] px-1.5 py-0.5 rounded-full ${u.emailVerified ? 'bg-emerald-50 text-emerald-700' : 'bg-slate-100 text-slate-600'}`}>
+                      {u.emailVerified ? 'email подтверждён' : 'email не подтверждён'}
+                    </span>
+                  )}
+                </div>
                 <div className="text-[var(--muted)] mt-1">
                   {u.company && `Компания: ${u.company}`}
                   {u.phone ? ` · Тел.: ${u.phone}` : ''}
@@ -690,9 +697,23 @@ export default function AdminUsersPage() {
                       </span>
                     )}
                   </div>
-                  <div className="text-xs text-[var(--muted)] lg:hidden">{u.email}</div>
+                  <div className="text-xs text-[var(--muted)] lg:hidden">
+                    {u.email || '—'}
+                    {u.email && (
+                      <span className={`ml-1.5 text-[10px] ${u.emailVerified ? 'text-emerald-700' : 'text-slate-500'}`}>
+                        ({u.emailVerified ? 'подтверждён' : 'не подтверждён'})
+                      </span>
+                    )}
+                  </div>
                 </td>
-                <td className="p-3 hidden lg:table-cell text-[var(--muted)]">{u.email}</td>
+                <td className="p-3 hidden lg:table-cell text-[var(--muted)]">
+                  <div>{u.email || '—'}</div>
+                  {u.email && (
+                    <div className={`text-[10px] mt-0.5 ${u.emailVerified ? 'text-emerald-700' : 'text-slate-500'}`}>
+                      {u.emailVerified ? 'подтверждён' : 'не подтверждён'}
+                    </div>
+                  )}
+                </td>
                 {category === 'tenants' && (
                   <td className="p-3 hidden md:table-cell text-[var(--muted)]">{u.company || '—'}</td>
                 )}
