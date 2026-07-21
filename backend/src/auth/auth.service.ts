@@ -30,6 +30,7 @@ import {
 } from '../schemas';
 import { parseClosedWeekdays } from '../common/bookable-visit-dates';
 import { resolveTenantOwnerId } from '../common/tenant-owner';
+import { ConfirmEmailVerifyDto } from './dto/confirm-email-verify.dto';
 import { ConfirmPasswordResetDto } from './dto/confirm-password-reset.dto';
 import { ConfirmRegistrationDto } from './dto/confirm-registration.dto';
 import { CreateTenantEmployeeDto } from './dto/create-tenant-employee.dto';
@@ -42,8 +43,8 @@ import { SiteSettingsService } from '../site-settings/site-settings.service';
 
 /** Интервал между отправками SMS-кодов (регистрация) */
 const SMS_RESEND_INTERVAL_MS = 5 * 60 * 1000;
-/** Интервал между письмами восстановления пароля */
-const PASSWORD_RESET_RESEND_INTERVAL_MS = 5 * 60 * 1000;
+/** Интервал между письмами восстановления пароля / подтверждения email */
+const EMAIL_CODE_RESEND_INTERVAL_MS = 5 * 60 * 1000;
 const CODE_TTL_MS = 15 * 60 * 1000;
 
 @Injectable()
@@ -283,7 +284,7 @@ export class AuthService {
     if (user.passwordResetLastSentAt) {
       const retryAfterSeconds = this.getRetryAfterSeconds(
         user.passwordResetLastSentAt,
-        PASSWORD_RESET_RESEND_INTERVAL_MS,
+        EMAIL_CODE_RESEND_INTERVAL_MS,
       );
       if (retryAfterSeconds > 0) {
         throw new BadRequestException(
@@ -306,7 +307,7 @@ export class AuthService {
       recoveryChannel: 'email' as const,
       message: `Код восстановления отправлен на ${email}`,
       expiresInMinutes: 15,
-      retryAfterSeconds: Math.floor(PASSWORD_RESET_RESEND_INTERVAL_MS / 1000),
+      retryAfterSeconds: Math.floor(EMAIL_CODE_RESEND_INTERVAL_MS / 1000),
       contact: adminContact,
     };
   }
@@ -364,6 +365,118 @@ export class AuthService {
 
     return {
       message: 'Пароль успешно изменён. Войдите с новым паролем.',
+    };
+  }
+
+  async requestEmailVerification(userId: string) {
+    const user = await this.userModel
+      .findById(userId)
+      .select('+emailVerifyCodeHash')
+      .exec();
+    if (!user) throw new UnauthorizedException();
+
+    const email = user.email?.trim().toLowerCase();
+    if (!email) {
+      throw new BadRequestException(
+        'У аккаунта нет email. Обратитесь к администратору, чтобы указать почту.',
+      );
+    }
+
+    if (user.emailVerified) {
+      throw new BadRequestException('Email уже подтверждён');
+    }
+
+    if (user.emailVerifyLastSentAt) {
+      const retryAfterSeconds = this.getRetryAfterSeconds(
+        user.emailVerifyLastSentAt,
+        EMAIL_CODE_RESEND_INTERVAL_MS,
+      );
+      if (retryAfterSeconds > 0) {
+        throw new BadRequestException(
+          `Повторная отправка кода возможна через ${this.formatRetryWait(retryAfterSeconds)}. Не чаще 1 раза в 5 минут.`,
+        );
+      }
+    }
+
+    const code = String(Math.floor(100000 + Math.random() * 900000));
+    const codeHash = await bcrypt.hash(code, 10);
+    const now = new Date();
+    user.emailVerifyCodeHash = codeHash;
+    user.emailVerifyExpiresAt = new Date(now.getTime() + CODE_TTL_MS);
+    user.emailVerifyLastSentAt = now;
+    await user.save();
+
+    await this.mailService.sendEmailVerificationCode(email, code);
+
+    return {
+      message: `Код подтверждения отправлен на ${email}`,
+      expiresInMinutes: 15,
+      retryAfterSeconds: Math.floor(EMAIL_CODE_RESEND_INTERVAL_MS / 1000),
+    };
+  }
+
+  async confirmEmailVerification(userId: string, dto: ConfirmEmailVerifyDto) {
+    const user = await this.userModel
+      .findById(userId)
+      .select('+emailVerifyCodeHash')
+      .exec();
+    if (!user) throw new UnauthorizedException();
+
+    if (!user.email) {
+      throw new BadRequestException('У аккаунта нет email');
+    }
+
+    if (user.emailVerified) {
+      const offices = await this.getUserOffices(userId, user.parentTenantId?.toString());
+      return {
+        message: 'Email уже подтверждён',
+        user: await this.toUserDto(user, offices),
+      };
+    }
+
+    if (!user.emailVerifyCodeHash || !user.emailVerifyExpiresAt) {
+      throw new BadRequestException('Сначала запросите код подтверждения');
+    }
+
+    if (user.emailVerifyExpiresAt.getTime() < Date.now()) {
+      await this.userModel.updateOne(
+        { _id: user._id },
+        { $unset: { emailVerifyCodeHash: 1, emailVerifyExpiresAt: 1 } },
+      );
+      throw new BadRequestException('Код истёк. Запросите новый код.');
+    }
+
+    const codeOk = await bcrypt.compare(dto.code, user.emailVerifyCodeHash);
+    if (!codeOk) {
+      throw new BadRequestException('Неверный код подтверждения');
+    }
+
+    await this.userModel.updateOne(
+      { _id: user._id },
+      {
+        $set: { emailVerified: true },
+        $unset: {
+          emailVerifyCodeHash: 1,
+          emailVerifyExpiresAt: 1,
+          emailVerifyLastSentAt: 1,
+        },
+      },
+    );
+
+    user.emailVerified = true;
+
+    await this.auditService.log({
+      action: 'user.email_verified',
+      entityType: 'user',
+      entityId: user._id,
+      actor: { userId, email: user.email, role: user.role },
+      details: { email: user.email },
+    });
+
+    const offices = await this.getUserOffices(userId, user.parentTenantId?.toString());
+    return {
+      message: 'Email успешно подтверждён',
+      user: await this.toUserDto(user, offices),
     };
   }
 

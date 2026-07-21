@@ -333,6 +333,18 @@ export const api = {
       '/auth/dev-accounts',
     ),
 
+  requestEmailVerification: () =>
+    request<{ message: string; expiresInMinutes: number; retryAfterSeconds?: number }>(
+      '/auth/email/verify/request',
+      { method: 'POST', body: JSON.stringify({}) },
+    ),
+
+  confirmEmailVerification: (data: { code: string }) =>
+    request<{ message: string; user: User }>('/auth/email/verify/confirm', {
+      method: 'POST',
+      body: JSON.stringify(data),
+    }),
+
   updateProfile: (data: {
     lastName: string;
     firstName: string;

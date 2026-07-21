@@ -3,6 +3,7 @@ import { AuthGuard } from '@nestjs/passport';
 import { AccessConfigService } from '../access/access-config.service';
 import { AuthService } from './auth.service';
 import { LoginDto } from './dto/login.dto';
+import { ConfirmEmailVerifyDto } from './dto/confirm-email-verify.dto';
 import { ConfirmPasswordResetDto } from './dto/confirm-password-reset.dto';
 import { ConfirmRegistrationDto } from './dto/confirm-registration.dto';
 import { CreateTenantEmployeeDto } from './dto/create-tenant-employee.dto';
@@ -56,6 +57,18 @@ export class AuthController {
   @Get('me')
   async me(@Req() req: any) {
     return this.authService.me(req.user.userId);
+  }
+
+  @UseGuards(AuthGuard('jwt'))
+  @Post('email/verify/request')
+  async requestEmailVerification(@Req() req: any) {
+    return this.authService.requestEmailVerification(req.user.userId);
+  }
+
+  @UseGuards(AuthGuard('jwt'))
+  @Post('email/verify/confirm')
+  async confirmEmailVerification(@Req() req: any, @Body() dto: ConfirmEmailVerifyDto) {
+    return this.authService.confirmEmailVerification(req.user.userId, dto);
   }
 
   @UseGuards(AuthGuard('jwt'))

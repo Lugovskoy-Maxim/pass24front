@@ -43,6 +43,15 @@ export class User {
   @Prop()
   passwordResetLastSentAt?: Date;
 
+  @Prop({ select: false })
+  emailVerifyCodeHash?: string;
+
+  @Prop()
+  emailVerifyExpiresAt?: Date;
+
+  @Prop()
+  emailVerifyLastSentAt?: Date;
+
   @Prop({ type: String, default: 'tenant' })
   role: string;
 

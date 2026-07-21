@@ -184,6 +184,39 @@ export class MailService {
     }
   }
 
+  async sendEmailVerificationCode(to: string, code: string) {
+    if (!this.transporter) {
+      throw new BadRequestException(
+        'Почтовый сервер не настроен. Подтверждение email временно недоступно.',
+      );
+    }
+
+    const from = this.getPassFromAddress();
+    const appHost = this.getAppHost();
+    const html = this.buildCodeEmailHtml({
+      title: 'Подтверждение email',
+      intro: `Введите этот код в профиле на ${appHost}, чтобы подтвердить адрес почты:`,
+      code,
+      footer: 'Код действует 15 минут. Если вы не запрашивали подтверждение, просто проигнорируйте письмо.',
+    });
+
+    try {
+      await this.transporter.sendMail({
+        from,
+        to,
+        subject: `Подтверждение email: ${code}`,
+        text: `Код подтверждения email на ${appHost}: ${code}\nКод действует 15 минут.`,
+        html,
+      });
+      this.logger.log(`Email verification code emailed to ${to}`);
+      return { sent: true };
+    } catch (err) {
+      const message = err instanceof Error ? err.message : 'Неизвестная ошибка SMTP';
+      this.logger.error(`Email verification email failed to ${to}: ${message}`);
+      throw new InternalServerErrorException('Не удалось отправить код подтверждения на почту');
+    }
+  }
+
   private getAppHost(): string {
     return (this.configService.get<string>('PUBLIC_APP_URL') || 'https://pass.mstyle.ru')
       .replace(/^https?:\/\//, '')

@@ -1,7 +1,7 @@
 'use client';
 
 import { FormEvent, useCallback, useEffect, useState } from 'react';
-import { Building2, Clock, Mail, Phone, Shield, User as UserIcon, UserPlus, Users } from 'lucide-react';
+import { Building2, CheckCircle2, Clock, Mail, Phone, Shield, User as UserIcon, UserPlus, Users } from 'lucide-react';
 import { ProtectedLayout } from '@/components/ProtectedLayout';
 import { PersonNameFields } from '@/components/PersonNameFields';
 import { FormField, FormInput } from '@/components/FormField';
@@ -49,6 +49,12 @@ function ProfileInfoRow({
   );
 }
 
+function formatCountdown(seconds: number): string {
+  const m = Math.floor(seconds / 60);
+  const s = seconds % 60;
+  return `${m}:${String(s).padStart(2, '0')}`;
+}
+
 export default function ProfilePage() {
   const { user, refreshUser } = useAuth();
   const { toast } = useToast();
@@ -68,6 +74,10 @@ export default function ProfilePage() {
   const [employeePassword, setEmployeePassword] = useState('');
   const [employeeRole, setEmployeeRole] = useState('');
   const [employeeRoles, setEmployeeRoles] = useState<EmployeeRole[]>([]);
+  const [emailVerifyStep, setEmailVerifyStep] = useState<'idle' | 'code'>('idle');
+  const [emailVerifyCode, setEmailVerifyCode] = useState('');
+  const [emailVerifyLoading, setEmailVerifyLoading] = useState(false);
+  const [emailVerifyResendIn, setEmailVerifyResendIn] = useState(0);
 
   const tenantOwner = isTenantOwner(user);
   const tenantEmployee = isTenantEmployee(user);
@@ -128,7 +138,15 @@ export default function ProfilePage() {
 
   useAutoRefresh(() => loadEmployees({ silent: true }), { enabled: tenantOwner && !employeeSaving });
 
+  useEffect(() => {
+    if (emailVerifyResendIn <= 0) return;
+    const timer = window.setTimeout(() => setEmailVerifyResendIn((prev) => prev - 1), 1000);
+    return () => window.clearTimeout(timer);
+  }, [emailVerifyResendIn]);
+
   if (!user) return null;
+
+  const needsEmailVerification = !!user.email && !user.email_verified;
 
   const currentName = user.last_name || user.first_name
     ? { lastName: user.last_name || '', firstName: user.first_name || '', middleName: user.middle_name || '' }
@@ -211,6 +229,43 @@ export default function ProfilePage() {
     }
   };
 
+  const handleRequestEmailCode = async () => {
+    setEmailVerifyLoading(true);
+    try {
+      const result = await api.requestEmailVerification();
+      setEmailVerifyStep('code');
+      setEmailVerifyCode('');
+      setEmailVerifyResendIn(result.retryAfterSeconds || 300);
+      toast(result.message, 'success');
+    } catch (err) {
+      toast(getErrorMessage(err, 'Не удалось отправить код'), 'error');
+    } finally {
+      setEmailVerifyLoading(false);
+    }
+  };
+
+  const handleConfirmEmailCode = async (e: FormEvent) => {
+    e.preventDefault();
+    const code = emailVerifyCode.trim();
+    if (!/^\d{6}$/.test(code)) {
+      toast('Введите 6-значный код из письма', 'error');
+      return;
+    }
+    setEmailVerifyLoading(true);
+    try {
+      const result = await api.confirmEmailVerification({ code });
+      await refreshUser();
+      setEmailVerifyStep('idle');
+      setEmailVerifyCode('');
+      setEmailVerifyResendIn(0);
+      toast(result.message, 'success');
+    } catch (err) {
+      toast(getErrorMessage(err, 'Неверный код'), 'error');
+    } finally {
+      setEmailVerifyLoading(false);
+    }
+  };
+
   const handleCancel = async () => {
     setCancelling(true);
     try {
@@ -271,11 +326,17 @@ export default function ProfilePage() {
             <ProfileInfoRow icon={Mail} label={user.email ? 'Email' : 'Логин'} value={user.email || user.username || ''} />
           )}
           {user.email && (
-            <ProfileInfoRow
-              icon={Mail}
-              label="Почта подтверждена"
-              value={user.email_verified ? 'Да' : 'Нет'}
-            />
+            <div className="flex items-start gap-3 text-sm">
+              <CheckCircle2
+                className={`w-4 h-4 shrink-0 mt-0.5 ${user.email_verified ? 'text-[var(--status-active)]' : 'text-[var(--muted)]'}`}
+              />
+              <div className="min-w-0">
+                <div className="text-xs text-[var(--muted)]">Почта подтверждена</div>
+                <div className={`font-medium ${user.email_verified ? 'text-[var(--status-active)]' : ''}`}>
+                  {user.email_verified ? 'Да' : 'Нет'}
+                </div>
+              </div>
+            </div>
           )}
           <ProfileInfoRow icon={Shield} label="Роль" value={getUserRoleLabel(user)} />
           {user.company && <ProfileInfoRow icon={Building2} label="Компания" value={user.company} />}
@@ -286,6 +347,79 @@ export default function ProfilePage() {
             <ProfileInfoRow icon={Building2} label="Офис" value={`оф. ${user.office}${user.floor ? `, ${user.floor} эт.` : ''}`} />
           ) : null}
         </div>
+
+        {needsEmailVerification && (
+          <div className="card p-5 mb-6 border theme-alert-subtle space-y-4">
+            <div className="flex items-start gap-3">
+              <Mail className="w-5 h-5 text-amber-800 shrink-0 mt-0.5" />
+              <div className="min-w-0">
+                <p className="font-medium text-amber-950">Подтвердите email</p>
+                <p className="text-sm text-amber-900/85 mt-1">
+                  Адрес <strong className="break-all">{user.email}</strong> ещё не подтверждён.
+                  Мы отправим 6-значный код на эту почту.
+                </p>
+              </div>
+            </div>
+
+            {emailVerifyStep === 'idle' ? (
+              <button
+                type="button"
+                className="btn btn-primary text-sm"
+                disabled={emailVerifyLoading || emailVerifyResendIn > 0}
+                onClick={() => void handleRequestEmailCode()}
+              >
+                {emailVerifyLoading
+                  ? 'Отправка...'
+                  : emailVerifyResendIn > 0
+                    ? `Повтор через ${formatCountdown(emailVerifyResendIn)}`
+                    : 'Подтвердить почту'}
+              </button>
+            ) : (
+              <form onSubmit={handleConfirmEmailCode} className="space-y-3" noValidate>
+                <FormField id="emailVerifyCode" label="Код из письма" required>
+                  <FormInput
+                    id="emailVerifyCode"
+                    inputMode="numeric"
+                    autoComplete="one-time-code"
+                    value={emailVerifyCode}
+                    onChange={(e) => setEmailVerifyCode(e.target.value.replace(/\D/g, '').slice(0, 6))}
+                    placeholder="000000"
+                    className="tracking-[0.3em] text-center text-lg font-mono max-w-[12rem]"
+                  />
+                </FormField>
+                <p className="text-xs text-[var(--muted)]">
+                  Код действует 15 минут. Проверьте папку «Спам», если письма нет.
+                </p>
+                <div className="flex flex-wrap gap-2">
+                  <button type="submit" className="btn btn-primary text-sm" disabled={emailVerifyLoading}>
+                    {emailVerifyLoading ? 'Проверка...' : 'Подтвердить код'}
+                  </button>
+                  <button
+                    type="button"
+                    className="btn btn-secondary text-sm"
+                    disabled={emailVerifyLoading || emailVerifyResendIn > 0}
+                    onClick={() => void handleRequestEmailCode()}
+                  >
+                    {emailVerifyResendIn > 0
+                      ? `Отправить снова через ${formatCountdown(emailVerifyResendIn)}`
+                      : 'Отправить код снова'}
+                  </button>
+                  <button
+                    type="button"
+                    className="btn btn-secondary text-sm"
+                    disabled={emailVerifyLoading}
+                    onClick={() => {
+                      setEmailVerifyStep('idle');
+                      setEmailVerifyCode('');
+                    }}
+                  >
+                    Отмена
+                  </button>
+                </div>
+              </form>
+            )}
+          </div>
+        )}
 
         {tenantOwner ? (
           <form onSubmit={handleSubmit} className="card p-6 space-y-5" noValidate>
