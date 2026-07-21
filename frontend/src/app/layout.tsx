@@ -6,6 +6,7 @@ import { ThemeColorsApplier } from '@/components/ThemeColorsApplier';
 import { ToastProvider } from '@/components/Toast';
 import { PwaRegistrar } from '@/components/PwaRegistrar';
 import { PwaInstallPrompt } from '@/components/PwaInstallPrompt';
+import { HelpFaq } from '@/components/HelpFaq';
 import './globals.css';
 
 const manrope = Manrope({
@@ -65,6 +66,7 @@ export default function RootLayout({ children }: { children: React.ReactNode }) 
               {children}
               <PwaRegistrar />
               <PwaInstallPrompt />
+              <HelpFaq />
             </ToastProvider>
           </AuthProvider>
         </ThemeProvider>

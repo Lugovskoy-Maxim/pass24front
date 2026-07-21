@@ -3,6 +3,7 @@ import { InjectModel } from '@nestjs/mongoose';
 import { Model } from 'mongoose';
 import { AppSettings, AppSettingsDocument } from '../schemas/app-settings.schema';
 import { MSTYLE_BRAND_DEFAULTS, isLegacyBrandSettings } from '../brand/brand-defaults';
+import { DEFAULT_FAQ_ITEMS, FaqItem, normalizeFaqItems } from './faq-defaults';
 import { deepMergeUiLabels, UiLabels } from './ui-labels.defaults';
 
 const SETTINGS_KEY = 'global';
@@ -27,6 +28,7 @@ export interface SiteSettingsDto {
   smsRegistrationEnabled: boolean;
   smsRegistrationDisabledMessage: string;
   smsRegistrationCodeText: string;
+  faqItems: FaqItem[];
 }
 
 @Injectable()
@@ -62,7 +64,10 @@ export class SiteSettingsService implements OnModuleInit {
     return this.map(doc);
   }
 
-  async update(data: Partial<Omit<SiteSettingsDto, 'uiLabels'>> & { uiLabels?: Record<string, unknown> }): Promise<SiteSettingsDto> {
+  async update(
+    data: Partial<Omit<SiteSettingsDto, 'uiLabels' | 'faqItems'>>
+      & { uiLabels?: Record<string, unknown>; faqItems?: FaqItem[] },
+  ): Promise<SiteSettingsDto> {
     for (const field of ['siteIcon', 'siteIconLight', 'siteIconDark'] as const) {
       const value = data[field];
       if (value !== undefined && value.length > MAX_ICON_LENGTH) {
@@ -115,6 +120,9 @@ export class SiteSettingsService implements OnModuleInit {
         ? text
         : MSTYLE_BRAND_DEFAULTS.smsRegistrationCodeText;
     }
+    if (data.faqItems !== undefined) {
+      update.faqItems = normalizeFaqItems(data.faqItems);
+    }
 
     const doc = await this.appSettingsModel
       .findOneAndUpdate({ key: SETTINGS_KEY }, { $set: update }, { new: true, upsert: true })
@@ -150,6 +158,7 @@ export class SiteSettingsService implements OnModuleInit {
       smsRegistrationCodeText: doc?.smsRegistrationCodeText?.trim()?.includes('{code}')
         ? doc.smsRegistrationCodeText.trim()
         : MSTYLE_BRAND_DEFAULTS.smsRegistrationCodeText,
+      faqItems: normalizeFaqItems(doc?.faqItems?.length ? doc.faqItems : DEFAULT_FAQ_ITEMS),
     };
   }
 

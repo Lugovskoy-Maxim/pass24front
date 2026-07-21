@@ -1,7 +1,10 @@
 'use client';
 
 import { ChangeEvent, FormEvent, useEffect, useState } from 'react';
-import { Globe, ImageIcon, Mail, MessageSquare, Palette, Phone, RotateCcw, Trash2, Type, Upload } from 'lucide-react';
+import {
+  ArrowDown, ArrowUp, CircleHelp, Globe, ImageIcon, Mail, MessageSquare, Palette, Phone,
+  Plus, RotateCcw, Trash2, Type, Upload,
+} from 'lucide-react';
 import { useAuth } from '@/lib/auth';
 import { AdminLayout } from '@/components/AdminLayout';
 import { IconPickerField } from '@/components/IconPickerField';
@@ -9,19 +12,25 @@ import { SiteBrand } from '@/components/SiteBrand';
 import { SelectWrap } from '@/components/FormField';
 import { UiLabelsEditor } from '@/components/UiLabelsEditor';
 import { useToast } from '@/components/Toast';
-import { api, SiteSettings, getErrorMessage } from '@/lib/api';
+import { api, FaqItem, SiteSettings, getErrorMessage } from '@/lib/api';
 import { PageError } from '@/components/PageError';
 import { invalidateConfigCache } from '@/hooks/useConfig';
 import { MSTYLE_BRAND_DEFAULTS, resolveBrand } from '@/lib/brand-defaults';
+import { HELP_FAQ_ITEMS, resolveFaqItems } from '@/lib/help-faq-content';
 import { THEME_COLOR_DEFAULTS } from '@/lib/theme-colors';
 import { mergeUiLabels, UiLabels } from '@/lib/ui-labels';
 
 const MAX_ICON_BYTES = 80 * 1024;
+const MAX_FAQ_ITEMS = 50;
 
-type Tab = 'brand' | 'colors' | 'labels' | 'registration';
+type Tab = 'brand' | 'colors' | 'labels' | 'registration' | 'faq';
 
 function iconInputValue(value: string): string {
   return value.startsWith('data:') ? '' : value;
+}
+
+function newFaqId(): string {
+  return `faq-${Date.now().toString(36)}-${Math.random().toString(36).slice(2, 7)}`;
 }
 
 function normalizeSettings(s: SiteSettings): SiteSettings {
@@ -43,6 +52,7 @@ function normalizeSettings(s: SiteSettings): SiteSettings {
     smsRegistrationCodeText: s.smsRegistrationCodeText?.includes('{code}')
       ? s.smsRegistrationCodeText.trim()
       : MSTYLE_BRAND_DEFAULTS.smsRegistrationCodeText,
+    faqItems: resolveFaqItems(s.faqItems).map((item) => ({ ...item })),
   };
 }
 
@@ -101,13 +111,87 @@ export default function AdminSiteSettingsPage() {
     e.target.value = '';
   };
 
+  const updateFaqItems = (faqItems: FaqItem[]) => {
+    if (!settings) return;
+    setSettings({ ...settings, faqItems });
+  };
+
+  const addFaqItem = () => {
+    if (!settings) return;
+    const items = settings.faqItems || [];
+    if (items.length >= MAX_FAQ_ITEMS) {
+      toast(`Не больше ${MAX_FAQ_ITEMS} вопросов`, 'error');
+      return;
+    }
+    updateFaqItems([
+      ...items,
+      { id: newFaqId(), question: '', answer: '' },
+    ]);
+  };
+
+  const updateFaqItem = (index: number, patch: Partial<FaqItem>) => {
+    if (!settings?.faqItems) return;
+    updateFaqItems(
+      settings.faqItems.map((item, i) => (i === index ? { ...item, ...patch } : item)),
+    );
+  };
+
+  const removeFaqItem = (index: number) => {
+    if (!settings?.faqItems) return;
+    updateFaqItems(settings.faqItems.filter((_, i) => i !== index));
+  };
+
+  const moveFaqItem = (index: number, direction: -1 | 1) => {
+    if (!settings?.faqItems) return;
+    const next = index + direction;
+    if (next < 0 || next >= settings.faqItems.length) return;
+    const items = [...settings.faqItems];
+    const [row] = items.splice(index, 1);
+    items.splice(next, 0, row);
+    updateFaqItems(items);
+  };
+
+  const resetFaqDefaults = () => {
+    updateFaqItems(HELP_FAQ_ITEMS.map((item) => ({ ...item })));
+    toast('Загружены стандартные вопросы — не забудьте сохранить', 'info');
+  };
+
   const handleSubmit = async (e: FormEvent) => {
     e.preventDefault();
     if (!settings) return;
+
+    if (tab === 'faq') {
+      const cleaned = (settings.faqItems || [])
+        .map((item) => ({
+          id: item.id?.trim() || newFaqId(),
+          question: item.question.trim(),
+          answer: item.answer.trim(),
+        }))
+        .filter((item) => item.question || item.answer);
+      const incomplete = cleaned.find((item) => !item.question || !item.answer);
+      if (incomplete) {
+        toast('Заполните и вопрос, и ответ у каждой записи (или удалите пустые)', 'error');
+        return;
+      }
+      if (!cleaned.length) {
+        toast('Добавьте хотя бы один вопрос и ответ', 'error');
+        return;
+      }
+    }
+
     setSaving(true);
     try {
+      const payloadFaq = (settings.faqItems || [])
+        .map((item) => ({
+          id: item.id?.trim() || newFaqId(),
+          question: item.question.trim(),
+          answer: item.answer.trim(),
+        }))
+        .filter((item) => item.question && item.answer);
+
       const { settings: updated } = await api.admin.updateSiteSettings({
         ...settings,
+        faqItems: payloadFaq.length ? payloadFaq : HELP_FAQ_ITEMS.map((item) => ({ ...item })),
         uiLabels: labels as unknown as Record<string, unknown>,
       });
       setSettings(normalizeSettings(updated));
@@ -202,6 +286,14 @@ export default function AdminSiteSettingsPage() {
             Регистрация
           </button>
         )}
+        <button
+          type="button"
+          className={`btn text-sm ${tab === 'faq' ? 'btn-primary' : 'btn-secondary'}`}
+          onClick={() => setTab('faq')}
+        >
+          <CircleHelp className="w-4 h-4" />
+          Вопросы и ответы
+        </button>
       </div>
 
       <form onSubmit={handleSubmit}>
@@ -475,6 +567,107 @@ export default function AdminSiteSettingsPage() {
         {tab === 'labels' && (
           <div className="max-w-4xl">
             <UiLabelsEditor labels={labels} onChange={setLabels} />
+          </div>
+        )}
+
+        {tab === 'faq' && (
+          <div className="card p-6 max-w-3xl space-y-5">
+            <div className="flex flex-col sm:flex-row sm:items-start sm:justify-between gap-3">
+              <div>
+                <h2 className="text-base font-semibold mb-1">Вопросы и ответы</h2>
+                <p className="text-sm text-[var(--muted)]">
+                  Эти записи показываются в кнопке «Помощь» (внизу справа) на вкладке «Вопросы».
+                  Порядок в списке = порядок в панели помощи.
+                </p>
+              </div>
+              <div className="flex flex-wrap gap-2 shrink-0">
+                <button type="button" className="btn btn-secondary text-sm" onClick={resetFaqDefaults}>
+                  <RotateCcw className="w-4 h-4" />
+                  Стандартные
+                </button>
+                <button type="button" className="btn btn-secondary text-sm" onClick={addFaqItem}>
+                  <Plus className="w-4 h-4" />
+                  Добавить
+                </button>
+              </div>
+            </div>
+
+            <div className="space-y-4">
+              {(settings.faqItems || []).map((item, index) => (
+                <div
+                  key={item.id || `row-${index}`}
+                  className="rounded-lg border border-[var(--border)] bg-[var(--surface-muted)] p-4 space-y-3"
+                >
+                  <div className="flex items-center justify-between gap-2">
+                    <span className="text-xs font-semibold uppercase tracking-wide text-[var(--muted)]">
+                      Вопрос {index + 1}
+                    </span>
+                    <div className="flex items-center gap-1">
+                      <button
+                        type="button"
+                        className="btn btn-secondary text-xs px-2 py-1"
+                        disabled={index === 0}
+                        onClick={() => moveFaqItem(index, -1)}
+                        title="Выше"
+                        aria-label="Переместить выше"
+                      >
+                        <ArrowUp className="w-3.5 h-3.5" />
+                      </button>
+                      <button
+                        type="button"
+                        className="btn btn-secondary text-xs px-2 py-1"
+                        disabled={index >= (settings.faqItems?.length || 0) - 1}
+                        onClick={() => moveFaqItem(index, 1)}
+                        title="Ниже"
+                        aria-label="Переместить ниже"
+                      >
+                        <ArrowDown className="w-3.5 h-3.5" />
+                      </button>
+                      <button
+                        type="button"
+                        className="btn btn-danger text-xs px-2 py-1"
+                        onClick={() => removeFaqItem(index)}
+                        title="Удалить"
+                        aria-label="Удалить вопрос"
+                      >
+                        <Trash2 className="w-3.5 h-3.5" />
+                      </button>
+                    </div>
+                  </div>
+                  <div>
+                    <label className="label" htmlFor={`faq-q-${index}`}>Вопрос</label>
+                    <input
+                      id={`faq-q-${index}`}
+                      className="input"
+                      value={item.question}
+                      onChange={(e) => updateFaqItem(index, { question: e.target.value })}
+                      placeholder="Например: Не пришло SMS"
+                      maxLength={300}
+                    />
+                  </div>
+                  <div>
+                    <label className="label" htmlFor={`faq-a-${index}`}>Ответ</label>
+                    <textarea
+                      id={`faq-a-${index}`}
+                      className="input min-h-[100px] resize-y"
+                      value={item.answer}
+                      onChange={(e) => updateFaqItem(index, { answer: e.target.value })}
+                      placeholder="Краткий понятный ответ для пользователей"
+                      maxLength={2000}
+                    />
+                    <p className="text-xs text-[var(--muted)] mt-1">
+                      {item.answer.length}/2000
+                    </p>
+                  </div>
+                </div>
+              ))}
+
+              {!(settings.faqItems?.length) && (
+                <div className="text-sm text-[var(--muted)] border border-dashed border-[var(--border)] rounded-lg p-6 text-center">
+                  Список пуст. Нажмите «Добавить» или «Стандартные».
+                </div>
+              )}
+            </div>
           </div>
         )}
 

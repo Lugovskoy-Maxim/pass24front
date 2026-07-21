@@ -1,4 +1,35 @@
-import { IsBoolean, IsEmail, IsIn, IsObject, IsOptional, IsString, Matches, MaxLength } from 'class-validator';
+import { Type } from 'class-transformer';
+import {
+  ArrayMaxSize,
+  IsArray,
+  IsBoolean,
+  IsEmail,
+  IsIn,
+  IsNotEmpty,
+  IsObject,
+  IsOptional,
+  IsString,
+  Matches,
+  MaxLength,
+  ValidateNested,
+} from 'class-validator';
+
+export class FaqItemDto {
+  @IsOptional()
+  @IsString()
+  @MaxLength(64)
+  id?: string;
+
+  @IsString()
+  @IsNotEmpty({ message: 'Укажите вопрос' })
+  @MaxLength(300)
+  question: string;
+
+  @IsString()
+  @IsNotEmpty({ message: 'Укажите ответ' })
+  @MaxLength(2000)
+  answer: string;
+}
 
 export class UpdateSiteSettingsDto {
   @IsOptional()
@@ -85,4 +116,11 @@ export class UpdateSiteSettingsDto {
   @IsString()
   @MaxLength(300)
   smsRegistrationCodeText?: string;
+
+  @IsOptional()
+  @IsArray()
+  @ArrayMaxSize(50)
+  @ValidateNested({ each: true })
+  @Type(() => FaqItemDto)
+  faqItems?: FaqItemDto[];
 }

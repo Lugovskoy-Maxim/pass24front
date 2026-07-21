@@ -728,6 +728,12 @@ export const api = {
   },
 };
 
+export interface FaqItem {
+  id: string;
+  question: string;
+  answer: string;
+}
+
 export interface SiteSettings {
   siteName: string;
   siteIcon: string;
@@ -747,6 +753,7 @@ export interface SiteSettings {
   smsRegistrationEnabled?: boolean;
   smsRegistrationDisabledMessage?: string;
   smsRegistrationCodeText?: string;
+  faqItems?: FaqItem[];
 }
 
 export interface BcConfig extends SiteSettings {

@@ -66,6 +66,19 @@ export class AppSettings {
 
   @Prop({ default: 'Код подтверждения регистрации: {code}. Действует 15 минут.' })
   smsRegistrationCodeText: string;
+
+  /** Вопросы и ответы для панели помощи */
+  @Prop({
+    type: [
+      {
+        id: { type: String },
+        question: { type: String },
+        answer: { type: String },
+      },
+    ],
+    default: [],
+  })
+  faqItems: Array<{ id: string; question: string; answer: string }>;
 }
 
 export const AppSettingsSchema = SchemaFactory.createForClass(AppSettings);
