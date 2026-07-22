@@ -353,7 +353,7 @@ export default function AdminUsersPage() {
 
   // Авто-раскрытие компаний, если поиск совпал с сотрудником (пришли owners через employee search)
   useEffect(() => {
-    if (category !== 'tenants' || !debouncedSearch.trim()) return;
+    if (category !== 'tenants' || !(debouncedSearch ?? '').trim()) return;
     const next: Record<string, boolean> = {};
     users.forEach((u) => {
       if (u.employees?.length) next[u.id] = true;
