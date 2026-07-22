@@ -43,7 +43,8 @@ export default function AdminUsersPage() {
   const [businessCenters, setBusinessCenters] = useState<BusinessCenter[]>([]);
   const [filters, setFilters] = useState(EMPTY_FILTERS);
   const [appliedFilters, setAppliedFilters] = useState(EMPTY_FILTERS);
-  const debouncedSearch = useDebounce(filters.search);
+  // Всегда string — иначе useDebounce(string | undefined) ломает production typecheck
+  const debouncedSearch = useDebounce(filters.search ?? '');
   const [loading, setLoading] = useState(true);
   const [showForm, setShowForm] = useState(false);
   const [editId, setEditId] = useState<string | null>(null);
@@ -353,7 +354,7 @@ export default function AdminUsersPage() {
 
   // Авто-раскрытие компаний, если поиск совпал с сотрудником (пришли owners через employee search)
   useEffect(() => {
-    if (category !== 'tenants' || !(debouncedSearch ?? '').trim()) return;
+    if (category !== 'tenants' || !debouncedSearch.trim()) return;
     const next: Record<string, boolean> = {};
     users.forEach((u) => {
       if (u.employees?.length) next[u.id] = true;
