@@ -8,9 +8,10 @@
  * - CORS origins перечислены явно; для нового dev-порта добавьте origin сюда или через env (если расширите).
  */
 import { NestFactory } from '@nestjs/core';
-import { ValidationPipe } from '@nestjs/common';
+import { BadRequestException, ValidationPipe } from '@nestjs/common';
 import { DocumentBuilder, SwaggerModule } from '@nestjs/swagger';
 import { AppModule } from './app.module';
+import { AllExceptionsFilter } from './common/http-exception.filter';
 
 async function bootstrap() {
   const app = await NestFactory.create(AppModule);
@@ -31,11 +32,25 @@ async function bootstrap() {
     exposedHeaders: 'Content-Disposition, Content-Type, Content-Length',
   });
 
+  app.useGlobalFilters(new AllExceptionsFilter());
+
   app.useGlobalPipes(
     new ValidationPipe({
       whitelist: true, // выкидывает поля вне DTO
       transform: true, // class-transformer (вложенные DTO, числа из query)
       forbidNonWhitelisted: true, // 400 при лишних полях
+      exceptionFactory: (errors) => {
+        const messages = errors.flatMap((e) => {
+          if (e.constraints) return Object.values(e.constraints);
+          if (e.children?.length) {
+            return e.children.flatMap((c) => (c.constraints ? Object.values(c.constraints) : []));
+          }
+          return [];
+        });
+        return new BadRequestException(
+          messages.length ? messages : ['Проверьте введённые данные'],
+        );
+      },
     }),
   );
 

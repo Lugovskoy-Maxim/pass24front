@@ -38,8 +38,8 @@ export function PageError({
           <div className="min-w-0">
             <p className={`font-medium text-red-900 ${compact ? 'text-sm' : ''}`}>{heading}</p>
             <p className={`text-red-800 ${compact ? 'text-sm mt-0.5' : 'text-sm mt-1'}`}>{message}</p>
-            {status != null && (
-              <p className="text-xs text-red-700/80 mt-1">Код ответа: {status}</p>
+            {status != null && status !== 500 && status < 500 && (
+              <p className="text-xs text-red-700/80 mt-1">Если ошибка повторяется — обновите страницу или обратитесь к администратору.</p>
             )}
           </div>
         </div>

@@ -319,7 +319,7 @@ export default function AdminSiteSettingsPage() {
       invalidateConfigCache();
       toast('Настройки сохранены', 'success');
     } catch (err) {
-      toast(err instanceof Error ? err.message : 'Ошибка', 'error');
+      toast(getErrorMessage(err, 'Не удалось сохранить настройки'), 'error');
     } finally {
       setSaving(false);
     }

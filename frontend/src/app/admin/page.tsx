@@ -60,7 +60,7 @@ export default function AdminDashboardPage() {
       toast(result.message, 'success');
       load();
     } catch (e) {
-      toast(e instanceof Error ? e.message : 'Ошибка', 'error');
+      toast(getErrorMessage(e, 'Не удалось выполнить действие'), 'error');
     } finally {
       setSeeding(false);
     }

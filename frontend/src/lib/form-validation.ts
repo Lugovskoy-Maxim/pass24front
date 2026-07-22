@@ -47,29 +47,31 @@ export function validateLoginRegister(data: {
     if (isBlank(data.email)) {
       errors.email = 'Укажите логин, email или телефон';
     } else if (looksLikePhoneInput(data.email) && !isValidRuMobilePhone(data.email)) {
-      errors.email = 'Некорректный номер. Используйте формат +79XXXXXXXXX';
+      errors.email = 'Некорректный телефон. Формат: +7 9XX XXX-XX-XX';
     }
   } else if (data.verificationChannel === 'phone') {
-    if (!isValidRuMobilePhone(data.phone)) {
-      errors.phone = 'Укажите номер в формате +79XXXXXXXXX';
+    if (isBlank(data.phone)) {
+      errors.phone = 'Укажите номер телефона';
+    } else if (!isValidRuMobilePhone(data.phone)) {
+      errors.phone = 'Некорректный телефон. Формат: +7 9XX XXX-XX-XX';
     }
     if (!isBlank(data.email)) {
-      if (!isValidEmail(data.email)) errors.email = 'Некорректный email';
+      if (!isValidEmail(data.email)) errors.email = 'Проверьте формат email (name@company.ru)';
       else if (!isAllowedRegistrationEmail(data.email)) errors.email = REGISTRATION_EMAIL_POLICY_MESSAGE;
     }
   } else {
     if (isBlank(data.email)) errors.email = 'Укажите email';
-    else if (!isValidEmail(data.email)) errors.email = 'Некорректный email';
+    else if (!isValidEmail(data.email)) errors.email = 'Проверьте формат email (name@company.ru)';
     else if (data.mode === 'register' && !isAllowedRegistrationEmail(data.email)) {
       errors.email = REGISTRATION_EMAIL_POLICY_MESSAGE;
     }
     if (!isBlank(data.phone) && !isValidRuMobilePhone(data.phone)) {
-      errors.phone = 'Некорректный номер. Используйте формат +79XXXXXXXXX';
+      errors.phone = 'Некорректный телефон. Формат: +7 9XX XXX-XX-XX';
     }
   }
 
   if (isBlank(data.password)) errors.password = 'Укажите пароль';
-  else if (data.password.length < 6) errors.password = 'Минимум 6 символов';
+  else if (data.password.length < 6) errors.password = 'Пароль не короче 6 символов';
 
   if (data.mode === 'register') {
     if (isBlank(data.passwordConfirm)) errors.passwordConfirm = 'Повторите пароль';
@@ -84,8 +86,8 @@ export function validateLoginRegister(data: {
 
 export function validatePasswordResetRequest(email: string): FieldErrors {
   const errors: FieldErrors = {};
-  if (isBlank(email)) errors.email = 'Укажите email';
-  else if (!isValidEmail(email)) errors.email = 'Некорректный email';
+  if (isBlank(email)) errors.email = 'Укажите email, указанный при регистрации';
+  else if (!isValidEmail(email)) errors.email = 'Проверьте формат email';
   return errors;
 }
 
@@ -97,10 +99,10 @@ export function validatePasswordResetConfirm(data: {
   const errors: FieldErrors = {};
   const trimmed = data.code.trim();
   if (!trimmed) errors.code = 'Введите код из письма';
-  else if (!/^\d{6}$/.test(trimmed)) errors.code = 'Код состоит из 6 цифр';
+  else if (!/^\d{6}$/.test(trimmed)) errors.code = 'Код — 6 цифр без пробелов';
   if (isBlank(data.password)) errors.password = 'Укажите новый пароль';
-  else if (data.password.length < 6) errors.password = 'Минимум 6 символов';
-  if (isBlank(data.passwordConfirm)) errors.passwordConfirm = 'Повторите пароль';
+  else if (data.password.length < 6) errors.password = 'Пароль не короче 6 символов';
+  if (isBlank(data.passwordConfirm)) errors.passwordConfirm = 'Повторите новый пароль';
   else if (data.passwordConfirm !== data.password) errors.passwordConfirm = 'Пароли не совпадают';
   return errors;
 }
@@ -109,7 +111,7 @@ export function validateRegistrationCode(code: string, channel: 'email' | 'phone
   const errors: FieldErrors = {};
   const trimmed = code.trim();
   if (!trimmed) errors.code = channel === 'phone' ? 'Введите код из SMS' : 'Введите код из письма';
-  else if (!/^\d{6}$/.test(trimmed)) errors.code = 'Код состоит из 6 цифр';
+  else if (!/^\d{6}$/.test(trimmed)) errors.code = 'Код — 6 цифр без пробелов';
   return errors;
 }
 
@@ -138,25 +140,25 @@ export function validateNewPassForm(data: {
 }): FieldErrors {
   const errors: FieldErrors = {};
 
-  if (isBlank(data.visitorName)) errors.visitorName = 'Укажите имя посетителя';
+  if (isBlank(data.visitorName)) errors.visitorName = 'Укажите ФИО или имя посетителя';
 
   const dateError = validateBookableVisitDate(data.visitDate, data.bookableDates);
   if (dateError) errors.visitDate = dateError;
 
   if (data.passType === 'parking' && isBlank(data.vehiclePlate)) {
-    errors.vehiclePlate = 'Укажите гос. номер';
+    errors.vehiclePlate = 'Укажите государственный номер автомобиля';
   }
 
   if (data.tenantHasOffices) {
     if (data.tenantMultiBc && !data.propertyId) errors.propertyId = 'Выберите бизнес-центр';
-    if (!data.officeId) errors.officeId = 'Выберите офис';
+    if (!data.officeId) errors.officeId = 'Выберите офис из списка';
   } else if (!data.officeId && isBlank(data.office)) {
     errors.office = 'Укажите офис назначения';
   }
 
   if (data.sendEmail) {
-    if (isBlank(data.recipientEmail)) errors.recipientEmail = 'Укажите email получателя';
-    else if (!isValidEmail(data.recipientEmail)) errors.recipientEmail = 'Некорректный email';
+    if (isBlank(data.recipientEmail)) errors.recipientEmail = 'Укажите email, куда отправить пропуск';
+    else if (!isValidEmail(data.recipientEmail)) errors.recipientEmail = 'Проверьте формат email получателя';
   }
 
   return errors;

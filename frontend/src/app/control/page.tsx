@@ -185,7 +185,7 @@ function ControlPageContent() {
       toast(labels.toasts.rejected, 'success');
       await refreshAfterAction(id);
     } catch (err) {
-      toast(getErrorMessage(err, 'Ошибка'), 'error');
+      toast(getErrorMessage(err, 'Не удалось выполнить действие'), 'error');
     } finally {
       setActionId(null);
     }
@@ -198,7 +198,7 @@ function ControlPageContent() {
       toast(labels.toasts.checkedIn, 'success');
       await refreshAfterAction(id);
     } catch (err) {
-      toast(getErrorMessage(err, 'Ошибка'), 'error');
+      toast(getErrorMessage(err, 'Не удалось выполнить действие'), 'error');
     } finally {
       setActionId(null);
     }
@@ -211,7 +211,7 @@ function ControlPageContent() {
       toast(labels.toasts.checkedOut, 'success');
       await refreshAfterAction(id);
     } catch (err) {
-      toast(getErrorMessage(err, 'Ошибка'), 'error');
+      toast(getErrorMessage(err, 'Не удалось выполнить действие'), 'error');
     } finally {
       setActionId(null);
     }

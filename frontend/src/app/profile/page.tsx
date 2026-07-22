@@ -176,7 +176,7 @@ export default function ProfilePage() {
       await refreshUser();
       toast('Изменения отправлены на подтверждение администратору', 'success');
     } catch (err) {
-      toast(err instanceof Error ? err.message : 'Ошибка', 'error');
+      toast(getErrorMessage(err, 'Не удалось выполнить действие'), 'error');
     } finally {
       setSaving(false);
     }
@@ -204,7 +204,7 @@ export default function ProfilePage() {
       setEmployeeNameParts({ lastName: '', firstName: '', middleName: '' });
       toast(message || 'Приглашение отправлено', 'success');
     } catch (err) {
-      toast(getErrorMessage(err, 'Ошибка'), 'error');
+      toast(getErrorMessage(err, 'Не удалось выполнить действие'), 'error');
     } finally {
       setEmployeeSaving(false);
     }
@@ -230,7 +230,7 @@ export default function ProfilePage() {
       setEmployees((prev) => prev.map((e) => (e.id === id ? { ...e, ...employee } : e)));
       toast(message, 'success');
     } catch (err) {
-      toast(getErrorMessage(err, 'Ошибка'), 'error');
+      toast(getErrorMessage(err, 'Не удалось выполнить действие'), 'error');
     } finally {
       setTogglingEmployeeId(null);
     }
@@ -248,7 +248,7 @@ export default function ProfilePage() {
       setEmployees((prev) => prev.filter((e) => e.id !== id));
       toast('Сотрудник удалён', 'success');
     } catch (err) {
-      toast(getErrorMessage(err, 'Ошибка'), 'error');
+      toast(getErrorMessage(err, 'Не удалось выполнить действие'), 'error');
     } finally {
       setRemovingEmployeeId(null);
     }
@@ -298,7 +298,7 @@ export default function ProfilePage() {
       await refreshUser();
       toast('Заявка отменена', 'success');
     } catch (err) {
-      toast(err instanceof Error ? err.message : 'Ошибка', 'error');
+      toast(getErrorMessage(err, 'Не удалось выполнить действие'), 'error');
     } finally {
       setCancelling(false);
     }

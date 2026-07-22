@@ -141,7 +141,7 @@ export default function AdminUsersPage() {
       load();
       loadRegistrationRequests();
     } catch (err) {
-      toast(getErrorMessage(err, 'Ошибка'), 'error');
+      toast(getErrorMessage(err, 'Не удалось выполнить действие'), 'error');
     } finally {
       setModeratingId(null);
     }
@@ -158,7 +158,7 @@ export default function AdminUsersPage() {
       load();
       loadRegistrationRequests();
     } catch (err) {
-      toast(getErrorMessage(err, 'Ошибка'), 'error');
+      toast(getErrorMessage(err, 'Не удалось выполнить действие'), 'error');
     } finally {
       setModeratingId(null);
     }
@@ -172,7 +172,7 @@ export default function AdminUsersPage() {
       load();
       loadProfileRequests();
     } catch (err) {
-      toast(err instanceof Error ? err.message : 'Ошибка', 'error');
+      toast(getErrorMessage(err, 'Не удалось выполнить действие'), 'error');
     } finally {
       setModeratingId(null);
     }
@@ -186,7 +186,7 @@ export default function AdminUsersPage() {
       load();
       loadProfileRequests();
     } catch (err) {
-      toast(err instanceof Error ? err.message : 'Ошибка', 'error');
+      toast(getErrorMessage(err, 'Не удалось выполнить действие'), 'error');
     } finally {
       setModeratingId(null);
     }
@@ -398,7 +398,7 @@ export default function AdminUsersPage() {
       setShowForm(false);
       load();
     } catch (err) {
-      setError(err instanceof Error ? err.message : 'Ошибка');
+      setError(getErrorMessage(err, 'Не удалось сохранить'));
     } finally {
       setSaving(false);
     }

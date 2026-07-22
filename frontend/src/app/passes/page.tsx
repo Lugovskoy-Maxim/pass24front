@@ -177,7 +177,7 @@ function PassesPageContent() {
         : labels.toasts.actionDone;
       toast(toastMsg, 'success');
     } catch (err) {
-      toast(getErrorMessage(err, 'Ошибка'), 'error');
+      toast(getErrorMessage(err, 'Не удалось выполнить действие'), 'error');
     } finally {
       setActionLoading(false);
     }

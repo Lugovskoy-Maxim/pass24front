@@ -68,7 +68,7 @@ export function PassTicketStaffPanel({ passNumber, onPassUpdated }: PassTicketSt
         : labels.toasts.checkedOut;
       toast(toastMsg, 'success');
     } catch (err) {
-      toast(getErrorMessage(err, 'Ошибка'), 'error');
+      toast(getErrorMessage(err, 'Не удалось выполнить действие'), 'error');
     } finally {
       setActionLoading(false);
     }

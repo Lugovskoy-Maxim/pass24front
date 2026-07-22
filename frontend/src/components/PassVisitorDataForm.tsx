@@ -2,10 +2,9 @@
 
 import { FormEvent, useEffect, useState } from 'react';
 import { ChevronDown, IdCard } from 'lucide-react';
-import { Pass } from '@/lib/api';
+import { Pass, api, getErrorMessage } from '@/lib/api';
 import { FormField, FormInput } from '@/components/FormField';
 import { useToast } from '@/components/Toast';
-import { api } from '@/lib/api';
 import { useConfig } from '@/hooks/useConfig';
 import { getUiLabels } from '@/lib/ui-labels';
 
@@ -43,7 +42,7 @@ export function PassVisitorDataForm({ pass, onUpdated, collapsible = true }: Pas
       onUpdated(updated);
       toast('Паспортные данные сохранены', 'success');
     } catch (err) {
-      toast(err instanceof Error ? err.message : 'Ошибка', 'error');
+      toast(getErrorMessage(err, 'Не удалось сохранить данные'), 'error');
     } finally {
       setSaving(false);
     }

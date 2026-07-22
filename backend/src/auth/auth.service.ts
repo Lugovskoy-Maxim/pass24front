@@ -538,7 +538,7 @@ export class AuthService {
   async login(dto: LoginDto) {
     const loginRaw = (dto.login || dto.email || '').trim();
     if (!loginRaw) {
-      throw new UnauthorizedException('Неверные учетные данные');
+      throw new UnauthorizedException('Неверный логин или пароль');
     }
 
     const login = loginRaw.toLowerCase();
@@ -554,7 +554,7 @@ export class AuthService {
       if (DEV_TEST_ACCOUNT_EMAILS.has(login)) {
         return this.createTestUser(login, dto.password);
       }
-      throw new UnauthorizedException('Неверные учетные данные');
+      throw new UnauthorizedException('Неверный логин или пароль');
     }
 
     if (user.invitePending) {
@@ -565,7 +565,7 @@ export class AuthService {
 
     const isValid = await bcrypt.compare(dto.password, user.password || '');
     if (!isValid) {
-      throw new UnauthorizedException('Неверные учетные данные');
+      throw new UnauthorizedException('Неверный логин или пароль');
     }
 
     // Отключённый сотрудник — нельзя войти (владелец с isActive=false может — ждёт одобрения)
@@ -1188,7 +1188,7 @@ export class AuthService {
   private async createTestUser(email: string, password: string) {
     const account = DEV_TEST_ACCOUNTS.find((item) => item.email === email.toLowerCase());
     if (!account) {
-      throw new UnauthorizedException('Неверные учетные данные');
+      throw new UnauthorizedException('Неверный логин или пароль');
     }
 
     const hashed = await bcrypt.hash(password, 10);

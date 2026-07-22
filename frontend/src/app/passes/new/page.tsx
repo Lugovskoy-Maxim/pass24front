@@ -227,7 +227,7 @@ function NewPassForm() {
       window.location.assign(`/ticket/${encodeURIComponent(pass.passNumber)}`);
       return;
     } catch (err) {
-      const msg = getErrorMessage(err, 'Ошибка');
+      const msg = getErrorMessage(err, 'Не удалось отправить заявку');
       setFormError(msg);
       toast(msg, 'error');
     } finally {

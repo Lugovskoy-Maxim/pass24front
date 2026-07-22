@@ -44,7 +44,7 @@ export function PassTemplatesPicker({ enabledTypes, selectedId, onSelect }: Pass
       setTemplates(data);
       toast(imported > 0 ? `Импортировано шаблонов: ${imported}` : 'Новых шаблонов из пропусков нет', 'success');
     } catch (err) {
-      toast(getErrorMessage(err, 'Ошибка'), 'error');
+      toast(getErrorMessage(err, 'Не удалось выполнить действие'), 'error');
     } finally {
       setSyncing(false);
     }
@@ -58,7 +58,7 @@ export function PassTemplatesPicker({ enabledTypes, selectedId, onSelect }: Pass
       setTemplates((prev) => prev.filter((t) => t.id !== id));
       toast('Шаблон удалён', 'success');
     } catch (err) {
-      toast(getErrorMessage(err, 'Ошибка'), 'error');
+      toast(getErrorMessage(err, 'Не удалось выполнить действие'), 'error');
     } finally {
       setDeletingId(null);
     }

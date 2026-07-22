@@ -157,7 +157,7 @@ export default function AdminPermissionsPage() {
       await refreshUser();
       toast('Права и типы пропусков сохранены', 'success');
     } catch (err) {
-      toast(err instanceof Error ? err.message : 'Ошибка', 'error');
+      toast(getErrorMessage(err, 'Не удалось выполнить действие'), 'error');
     } finally {
       setSaving(false);
     }

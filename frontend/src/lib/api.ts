@@ -255,7 +255,7 @@ async function request<T>(path: string, options: RequestInit = {}): Promise<T> {
     res = await fetch(`${API_URL}${path}`, { ...options, headers });
   } catch (error) {
     throw new ApiError(
-      getErrorMessage(error, 'Сервер недоступен. Проверьте подключение к сети и что backend запущен.'),
+      getErrorMessage(error, 'Нет связи с сервером. Проверьте интернет и попробуйте снова.'),
       { isNetworkError: true },
     );
   }
@@ -456,7 +456,7 @@ export const api = {
       });
     } catch (error) {
       throw new ApiError(
-        getErrorMessage(error, 'Сервер недоступен. Проверьте подключение к сети и что backend запущен.'),
+        getErrorMessage(error, 'Нет связи с сервером. Проверьте интернет и попробуйте снова.'),
         { isNetworkError: true },
       );
     }
@@ -611,7 +611,7 @@ export const api = {
       res = await fetch(`${API_URL}/passes/public/${encodeURIComponent(passNumber)}`);
     } catch (error) {
       throw new ApiError(
-        getErrorMessage(error, 'Сервер недоступен. Проверьте подключение к сети и что backend запущен.'),
+        getErrorMessage(error, 'Нет связи с сервером. Проверьте интернет и попробуйте снова.'),
         { isNetworkError: true },
       );
     }
@@ -733,7 +733,7 @@ export const api = {
         });
       } catch (error) {
         throw new ApiError(
-          getErrorMessage(error, 'Сервер недоступен. Проверьте подключение к сети и что backend запущен.'),
+          getErrorMessage(error, 'Нет связи с сервером. Проверьте интернет и попробуйте снова.'),
           { isNetworkError: true },
         );
       }
@@ -757,7 +757,7 @@ export const api = {
         });
       } catch (error) {
         throw new ApiError(
-          getErrorMessage(error, 'Сервер недоступен. Проверьте подключение к сети и что backend запущен.'),
+          getErrorMessage(error, 'Нет связи с сервером. Проверьте интернет и попробуйте снова.'),
           { isNetworkError: true },
         );
       }

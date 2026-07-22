@@ -173,7 +173,7 @@ export default function AdminOfficesPage() {
       resetBcForm();
       toast('Бизнес-центр создан', 'success');
     } catch (err) {
-      toast(err instanceof Error ? err.message : 'Ошибка', 'error');
+      toast(getErrorMessage(err, 'Не удалось выполнить действие'), 'error');
     } finally {
       setSaving(false);
     }
@@ -223,7 +223,7 @@ export default function AdminOfficesPage() {
       resetBcForm();
       toast('Бизнес-центр обновлён', 'success');
     } catch (err) {
-      toast(err instanceof Error ? err.message : 'Ошибка', 'error');
+      toast(getErrorMessage(err, 'Не удалось выполнить действие'), 'error');
     } finally {
       setSaving(false);
     }
@@ -290,7 +290,7 @@ export default function AdminOfficesPage() {
       resetForm();
       load();
     } catch (err) {
-      toast(err instanceof Error ? err.message : 'Ошибка', 'error');
+      toast(getErrorMessage(err, 'Не удалось выполнить действие'), 'error');
     } finally {
       setSaving(false);
     }
@@ -307,7 +307,7 @@ export default function AdminOfficesPage() {
       resetForm();
       load();
     } catch (err) {
-      toast(err instanceof Error ? err.message : 'Ошибка', 'error');
+      toast(getErrorMessage(err, 'Не удалось выполнить действие'), 'error');
     } finally {
       setSaving(false);
     }
@@ -325,7 +325,7 @@ export default function AdminOfficesPage() {
       resetForm();
       load();
     } catch (err) {
-      toast(err instanceof Error ? err.message : 'Ошибка', 'error');
+      toast(getErrorMessage(err, 'Не удалось выполнить действие'), 'error');
     } finally {
       setSaving(false);
     }
@@ -363,7 +363,7 @@ export default function AdminOfficesPage() {
       toast(office.isActive ? 'Офис деактивирован' : 'Офис активирован', 'success');
       load();
     } catch (err) {
-      toast(err instanceof Error ? err.message : 'Ошибка', 'error');
+      toast(getErrorMessage(err, 'Не удалось выполнить действие'), 'error');
     }
   };
 
