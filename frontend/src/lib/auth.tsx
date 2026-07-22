@@ -1,5 +1,10 @@
 'use client';
 
+/**
+ * Глобальная сессия: user + JWT в localStorage (`pass24_token`).
+ * При mount — api.me() если токен есть.
+ * После login/logout/refreshUser обновляет React state.
+ */
 import { createContext, useContext, useEffect, useState, ReactNode } from 'react';
 import { api, User } from './api';
 

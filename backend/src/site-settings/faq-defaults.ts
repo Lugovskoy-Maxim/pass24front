@@ -1,14 +1,16 @@
+/**
+ * Дефолты и нормализация FAQ для панели «Помощь».
+ * Админка может переопределить; пустой/битый список → DEFAULT_FAQ_ITEMS.
+ */
 export interface FaqItem {
-  /** Может отсутствовать во входных DTO — normalizeFaqItems всегда проставляет id */
+  /** Во входных DTO может отсутствовать — normalize всегда проставляет id */
   id?: string;
   question: string;
   answer: string;
 }
 
-/** Нормализованный элемент с гарантированным id */
 export type NormalizedFaqItem = Required<Pick<FaqItem, 'id' | 'question' | 'answer'>>;
 
-/** Дефолтные вопросы/ответы для панели помощи */
 export const DEFAULT_FAQ_ITEMS: FaqItem[] = [
   {
     id: 'no-email-code',

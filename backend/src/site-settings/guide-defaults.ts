@@ -1,3 +1,8 @@
+/**
+ * Дефолты инструкций (вкладка «Инструкции» в Help FAQ).
+ * steps — нумерованный список; paragraphs — обычный текст.
+ * Админка: /admin/site → «Инструкции».
+ */
 export interface GuideSection {
   id?: string;
   title: string;

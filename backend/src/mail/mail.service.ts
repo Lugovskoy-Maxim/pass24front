@@ -20,6 +20,11 @@ export interface PassTicketEmailData {
 
 const PASS_FROM_DISPLAY_NAME = 'Пропуск.М-Стиль';
 
+/**
+ * SMTP (Nodemailer): билеты, OTP регистрации, сброс пароля, verify email.
+ * Без SMTP_HOST — isConfigured()=false, send* бросают BadRequest.
+ * В Docker dev письма смотреть в Mailpit :8025.
+ */
 @Injectable()
 export class MailService {
   private readonly logger = new Logger(MailService.name);

@@ -16,6 +16,13 @@ import {
 
 const ROLE_KEY_PATTERN = /^[a-z][a-z0-9_]*$/;
 
+/**
+ * Хранит и отдаёт матрицу прав (access_config, key=default).
+ * На старте ensureDefaults() дописывает недостающие системные/builtin роли.
+ *
+ * canViewAllPasses: false для tenant и для любого user с parentTenantId
+ * (сотрудники видят «все пропуска компании» через PassesService, не через view_all).
+ */
 @Injectable()
 export class AccessConfigService implements OnModuleInit {
   constructor(

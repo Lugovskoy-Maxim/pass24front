@@ -1,3 +1,12 @@
+/**
+ * Точка входа NestJS-приложения PASS24 / M-STYLE.
+ *
+ * Важно для разработки:
+ * - Все HTTP-маршруты доступны под префиксом `/api` (фронт ходит на NEXT_PUBLIC_API_URL=…/api).
+ * - Swagger UI: GET /api/docs
+ * - ValidationPipe режет неизвестные поля (forbidNonWhitelisted) — DTO должны описывать все принимаемые поля.
+ * - CORS origins перечислены явно; для нового dev-порта добавьте origin сюда или через env (если расширите).
+ */
 import { NestFactory } from '@nestjs/core';
 import { ValidationPipe } from '@nestjs/common';
 import { DocumentBuilder, SwaggerModule } from '@nestjs/swagger';
@@ -6,10 +15,9 @@ import { AppModule } from './app.module';
 async function bootstrap() {
   const app = await NestFactory.create(AppModule);
 
-  // Global prefix so all routes are under /api (matches frontend expectation)
+  // Должен совпадать с путём на фронте: `/api/...`
   app.setGlobalPrefix('api');
 
-  // CORS for frontend (Next.js on 3000)
   app.enableCors({
     origin: [
       'http://localhost:3000',
@@ -19,19 +27,18 @@ async function bootstrap() {
     credentials: true,
     methods: 'GET,HEAD,PUT,PATCH,POST,DELETE,OPTIONS',
     allowedHeaders: 'Content-Type, Accept, Authorization',
+    // Нужно для скачивания CSV (Content-Disposition)
     exposedHeaders: 'Content-Disposition, Content-Type, Content-Length',
   });
 
-  // Validation
   app.useGlobalPipes(
     new ValidationPipe({
-      whitelist: true,
-      transform: true,
-      forbidNonWhitelisted: true,
+      whitelist: true, // выкидывает поля вне DTO
+      transform: true, // class-transformer (вложенные DTO, числа из query)
+      forbidNonWhitelisted: true, // 400 при лишних полях
     }),
   );
 
-  // Swagger docs at /api/docs
   const config = new DocumentBuilder()
     .setTitle('PASS24 API')
     .setDescription('Пропускная система для бизнес-центров')

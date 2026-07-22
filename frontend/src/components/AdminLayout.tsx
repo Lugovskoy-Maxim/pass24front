@@ -1,5 +1,9 @@
 'use client';
 
+/**
+ * Shell админки: боковое меню фильтруется по permissions.
+ * Все страницы /admin/* требуют admin.panel (+ точечные права).
+ */
 import Link from 'next/link';
 import { usePathname } from 'next/navigation';
 import {

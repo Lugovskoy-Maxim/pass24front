@@ -1,3 +1,8 @@
+/**
+ * Пропуск (БД pass24).
+ * createdBy — id User из pass24_auth (логическая ссылка, без join между БД).
+ * Список компании фильтруется по createdBy ∈ team (owner + employees).
+ */
 import { Prop, Schema, SchemaFactory } from '@nestjs/mongoose';
 import { Document, Types } from 'mongoose';
 
@@ -8,6 +13,7 @@ export class Pass {
   @Prop({ required: true, unique: true })
   passNumber: string;
 
+  /** Автор заявки (User._id). При удалении employee → переназначается owner. */
   @Prop({ type: Types.ObjectId, ref: 'User' })
   createdBy?: Types.ObjectId;
 

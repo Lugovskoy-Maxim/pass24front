@@ -1,5 +1,10 @@
 'use client';
 
+/**
+ * Плавающая кнопка «Помощь» (все страницы через layout).
+ * Контент: FAQ + инструкции из GET /config (админка → Базовые настройки).
+ * Стили: globals.css `.help-faq*`. На mobile — выше bottom nav.
+ */
 import { useCallback, useEffect, useId, useMemo, useRef, useState } from 'react';
 import { BookOpen, CircleHelp, ChevronDown, Mail, Phone, X } from 'lucide-react';
 import { useConfig } from '@/hooks/useConfig';

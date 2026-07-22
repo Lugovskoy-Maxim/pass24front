@@ -1,3 +1,13 @@
+/**
+ * Корневой модуль API.
+ *
+ * Порядок импортов важен для DI: Database / глобальные Mail·Sms·SiteSettings·Access·Audit
+ * должны быть доступны Auth и Passes.
+ *
+ * Две Mongo-базы (см. docs/ARCHITECTURE.md):
+ * - MONGODB_URI        → pass24        (пропуска, офисы, audit, app_settings)
+ * - MONGODB_AUTH_URI   → pass24_auth   (users, registration_pending)
+ */
 import { Module } from '@nestjs/common';
 import { ConfigModule } from '@nestjs/config';
 import { AppController } from './app.controller';
@@ -31,12 +41,12 @@ import { SiteSettingsModule } from './site-settings/site-settings.module';
     DatabaseModule,
     AccessConfigModule,
     AuditModule,
-    MailModule,
-    SmsModule,
-    SiteSettingsModule,
+    MailModule, // @Global — OTP, билеты, сброс пароля
+    SmsModule, // @Global — SMS Aero (регистрация по телефону)
+    SiteSettingsModule, // бренд, FAQ, инструкции, SMS-флаги
     AuthModule,
     PassesModule,
-    AppConfigModule,
+    AppConfigModule, // публичный GET /config
     AdminModule,
   ],
   controllers: [AppController],

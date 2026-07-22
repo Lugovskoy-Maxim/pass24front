@@ -1,3 +1,7 @@
+/**
+ * Для сотрудника company id = parentTenantId; для owner = userId.
+ * Используется в фильтрах пропусков, офисах, export scope.
+ */
 import { Types } from 'mongoose';
 
 export function resolveTenantOwnerId(user?: { userId?: string; parentTenantId?: string }): string | undefined {

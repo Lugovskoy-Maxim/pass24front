@@ -1,5 +1,9 @@
 'use client';
 
+/**
+ * Публичный конфиг сайта (бренд, FAQ, guide, SMS flags).
+ * Модульный кэш + listeners: после admin save вызывайте invalidateConfigCache().
+ */
 import { useEffect, useState } from 'react';
 import { api, BcConfig } from '@/lib/api';
 
@@ -10,6 +14,7 @@ function notifyConfigListeners() {
   listeners.forEach((listener) => listener());
 }
 
+/** Сброс кэша после PATCH site-settings. */
 export function invalidateConfigCache() {
   cached = null;
   notifyConfigListeners();

@@ -1,5 +1,13 @@
 'use client';
 
+/**
+ * Админка «Базовые настройки» (/admin/site).
+ * Вкладки: бренд, цвета, UI labels, SMS-регистрация (только super-admin),
+ * FAQ, инструкции помощи. После save — invalidateConfigCache().
+ *
+ * FAQ/guide: шаги и абзацы в форме — multiline text → textToLines при submit.
+ * registration* поля PATCH только role=admin (бэкенд вырезает для bc_admin).
+ */
 import { ChangeEvent, FormEvent, useEffect, useState } from 'react';
 import {
   ArrowDown, ArrowUp, BookOpen, CircleHelp, Globe, ImageIcon, Mail, MessageSquare, Palette, Phone,
@@ -33,7 +41,7 @@ const MAX_GUIDE_SECTIONS = 40;
 
 type Tab = 'brand' | 'colors' | 'labels' | 'registration' | 'faq' | 'guide';
 
-/** Редакторская форма раздела: шаги и абзацы — многострочный текст */
+/** Редактор: steps/paragraphs как многострочный текст, на API — string[]. */
 type GuideSectionForm = {
   id: string;
   title: string;

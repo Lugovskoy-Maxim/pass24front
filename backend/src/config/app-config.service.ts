@@ -1,3 +1,7 @@
+/**
+ * Публичный GET /api/config — бренд, FAQ, guide, список БЦ, SMS-флаги.
+ * Без JWT. Кэшируется на фронте (useConfig).
+ */
 import { Injectable } from '@nestjs/common';
 import { InjectModel } from '@nestjs/mongoose';
 import { Model } from 'mongoose';

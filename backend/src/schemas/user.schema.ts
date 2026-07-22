@@ -1,3 +1,14 @@
+/**
+ * Пользователь (БД pass24_auth, collection users).
+ *
+ * Ключевые поля:
+ * - parentTenantId — сотрудник компании-арендатора (ссылка на owner)
+ * - isActive — false: pending-арендатор после регистрации ИЛИ отключённый сотрудник
+ * - emailVerified — подтверждение email кодом
+ * - password* / emailVerify* — OTP-поля (select:false у хэшей)
+ *
+ * bitrix24* — заготовка под будущую интеграцию, сейчас почти не используется.
+ */
 import { Prop, Schema, SchemaFactory } from '@nestjs/mongoose';
 import { Document, Types } from 'mongoose';
 import { UserRole } from './enums';
@@ -27,13 +38,14 @@ export class User {
   @Prop({ trim: true, lowercase: true, unique: true, sparse: true })
   email?: string;
 
-  /** Email подтверждён кодом при регистрации (или задан админом) */
+  /** true после OTP на email (регистрация по почте / verify / password reset). */
   @Prop({ default: false })
   emailVerified: boolean;
 
   @Prop({ select: false })
   password?: string;
 
+  /** OTP сброса пароля (select:false). */
   @Prop({ select: false })
   passwordResetCodeHash?: string;
 
@@ -43,6 +55,7 @@ export class User {
   @Prop()
   passwordResetLastSentAt?: Date;
 
+  /** OTP подтверждения email из профиля. */
   @Prop({ select: false })
   emailVerifyCodeHash?: string;
 
@@ -52,15 +65,19 @@ export class User {
   @Prop()
   emailVerifyLastSentAt?: Date;
 
+  /** tenant | security | bc_admin | admin | tenant_employee | кастом из access_config */
   @Prop({ type: String, default: 'tenant' })
   role: string;
 
+  /** БЦ для security/bc_admin (ObjectId Property). */
   @Prop({ type: [{ type: Types.ObjectId, ref: 'Property' }], default: [] })
-  properties: Types.ObjectId[]; // К каким объектам привязан пользователь
+  properties: Types.ObjectId[];
 
+  /** @deprecated LEGACY: квартира; в B2B-модели офисов почти не используется. */
   @Prop({ trim: true })
   apartment?: string;
 
+  /** @deprecated LEGACY: строковый офис; предпочтительно offices через Office.tenantId. */
   @Prop({ trim: true })
   office?: string;
 
@@ -71,32 +88,36 @@ export class User {
   company?: string;
 
   @Prop({ type: Object, default: {} })
-  meta: Record<string, any>; // Доп. данные (например, companyName для юр.лиц)
+  meta: Record<string, any>;
 
+  /**
+   * tenant owner: false до одобрения админом.
+   * employee: false = отключён владельцем.
+   */
   @Prop({ default: true })
   isActive: boolean;
 
   @Prop({ default: false })
-  isBlocked: boolean; // Персональная блокировка (как в описаниях системы)
+  isBlocked: boolean;
 
   @Prop()
   lastLoginAt?: Date;
 
+  /** Заготовка под push; сейчас не используется активно. */
   @Prop({ type: [{ type: String }], default: [] })
-  pushTokens: string[]; // Для мобильных уведомлений
+  pushTokens: string[];
 
-  /** Bitrix24 user ID — для будущей интеграции с приложением заявок */
+  /** FUTURE: интеграция Bitrix24. */
   @Prop({ trim: true, sparse: true })
   bitrix24UserId?: string;
 
-  /** Домен портала Bitrix24 (например, company.bitrix24.ru) */
   @Prop({ trim: true, lowercase: true })
   bitrix24Domain?: string;
 
   @Prop({ type: Object, default: null })
   bitrix24Meta?: Record<string, unknown> | null;
 
-  /** Владелец компании-арендатора (для сотрудников, заказывающих пропуска от лица компании) */
+  /** Ссылка на User-owner для сотрудника компании. */
   @Prop({ type: Types.ObjectId, ref: 'User' })
   parentTenantId?: Types.ObjectId;
 

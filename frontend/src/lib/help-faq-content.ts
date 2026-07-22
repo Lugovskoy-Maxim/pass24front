@@ -1,3 +1,9 @@
+/**
+ * Дефолты FAQ/инструкций на фронте (fallback, если /config ещё пуст).
+ * Актуальный контент после админки: config.faqItems / config.helpGuideSections
+ * (resolveFaqItems / resolveGuideSections).
+ * Backend-дефолты: site-settings/faq-defaults.ts, guide-defaults.ts — держите синхронно при смене текстов.
+ */
 import type { FaqItem, HelpGuideSection as ApiHelpGuideSection } from './api';
 
 export type HelpGuideSection = {
@@ -9,7 +15,6 @@ export type HelpGuideSection = {
 
 export type HelpFaqItem = FaqItem;
 
-/** Краткие инструкции для панели помощи */
 export const HELP_GUIDE_SECTIONS: HelpGuideSection[] = [
   {
     id: 'login',

@@ -8,6 +8,11 @@ import { AccessConfigService } from '../access/access-config.service';
 import { AUTH_CONNECTION } from '../database/auth-database.constants';
 import { User, UserDocument } from '../schemas';
 
+/**
+ * JWT → req.user для AuthGuard('jwt').
+ * Permissions подгружаются из access_config на каждый запрос (актуально после смены прав).
+ * Отключённый сотрудник (parentTenantId + isActive=false) отклоняется — даже со старым токеном.
+ */
 @Injectable()
 export class JwtStrategy extends PassportStrategy(Strategy) {
   constructor(
@@ -27,7 +32,6 @@ export class JwtStrategy extends PassportStrategy(Strategy) {
     if (!user) {
       throw new UnauthorizedException();
     }
-    // Отключённый сотрудник не может пользоваться API даже со старым JWT
     if (user.parentTenantId && user.isActive === false) {
       throw new UnauthorizedException('Учётная запись отключена владельцем компании');
     }
@@ -35,6 +39,7 @@ export class JwtStrategy extends PassportStrategy(Strategy) {
       throw new UnauthorizedException('Учётная запись заблокирована');
     }
     const permissions = await this.accessConfigService.getPermissionsForRole(user.role || 'tenant');
+    // Форма req.user, которую ждут controllers (userId, не sub)
     return {
       userId: payload.sub,
       email: payload.email,

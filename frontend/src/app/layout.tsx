@@ -1,3 +1,7 @@
+/**
+ * Root layout: тема, auth, toast, PWA, плавающая HelpFaq.
+ * Inline script до paint читает pass24-theme из localStorage (без мигания).
+ */
 import type { Metadata, Viewport } from 'next';
 import { Manrope } from 'next/font/google';
 import { AuthProvider } from '@/lib/auth';

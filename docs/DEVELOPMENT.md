@@ -152,16 +152,29 @@ pass24front/
 
 ## Полезные точки входа в коде
 
+Ключевые файлы снабжены **file-level JSDoc** (назначение, LEGACY/FUTURE, связь с env).
+
 | Задача | Где смотреть |
 |--------|----------------|
+| Bootstrap / CORS / ValidationPipe | `backend/src/main.ts` |
+| Корневые модули | `backend/src/app.module.ts` |
+| Две Mongo-базы | `database/database.module.ts`, `auth-database.module.ts` |
 | Логин / регистрация / SMS OTP | `backend/src/auth/auth.service.ts` |
+| JWT → req.user | `backend/src/auth/jwt.strategy.ts` |
 | Фильтр пропусков по компании | `backend/src/passes/passes.service.ts` → `buildAccessFilter` |
 | Права ролей | `backend/src/access/access.constants.ts` |
 | Настройки сайта / FAQ / guide | `backend/src/site-settings/` |
+| SMS Aero | `backend/src/sms/sms.service.ts` |
 | Клиент API | `frontend/src/lib/api.ts` |
 | Контекст авторизации | `frontend/src/lib/auth.tsx` |
 | Проверка permissions в UI | `frontend/src/lib/permissions.ts` |
 | Плавающая помощь | `frontend/src/components/HelpFaq.tsx` |
+
+Пометки в комментариях:
+
+- **`LEGACY`** — старое API/поле, оставлено для совместимости; не расширять без нужды  
+- **`FUTURE`** — заготовка (например Bitrix)  
+- **`@deprecated`** — явный alias, предпочтите новый путь |
 
 ## Сборка и типичные ошибки
 

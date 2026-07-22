@@ -1,3 +1,10 @@
+/**
+ * Админ API: /api/admin/*
+ * Guard: JWT + PermissionsGuard; класс требует admin.panel,
+ * методы — @RequireAllPermissions('admin.users'|offices|settings|…).
+ *
+ * site-settings: SMS-поля может менять только role===admin (см. updateSiteSettings).
+ */
 import { Body, Controller, Delete, Get, Param, Patch, Post, Query, Req, Res, UseGuards } from '@nestjs/common';
 import type { Response } from 'express';
 import { AuditQuery } from '../audit/audit.service';

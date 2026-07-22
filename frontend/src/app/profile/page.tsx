@@ -1,5 +1,10 @@
 'use client';
 
+/**
+ * Профиль: данные, verify email, заявка на смену ФИО (owner),
+ * управление сотрудниками (owner only): add / toggle isActive / hard delete.
+ * Сотрудник всегда создаётся как tenant_employee — без выбора роли.
+ */
 import { FormEvent, useCallback, useEffect, useState } from 'react';
 import { Building2, CheckCircle2, Clock, Mail, Phone, Shield, User as UserIcon, UserPlus, Users } from 'lucide-react';
 import { ProtectedLayout } from '@/components/ProtectedLayout';

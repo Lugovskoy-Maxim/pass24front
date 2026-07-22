@@ -26,6 +26,17 @@ const PASS_EXPORT_LIMIT = 10_000;
 const PASS_REPORT_PAGE_SIZE = 50;
 const PASS_LIST_PAGE_SIZE = 50;
 
+/**
+ * Бизнес-логика пропусков: список, создание, статусы, CSV, report, ticket email.
+ *
+ * Доступ (критично):
+ * - buildAccessFilter — Mongo-фильтр для list/export
+ * - ensurePassAccess — одна запись
+ * Для компании (owner + employees): все createdBy из getTenantTeamIds
+ *   (включая отключённых сотрудников, чтобы старые пропуска не «пропадали»).
+ *
+ * User читается из AUTH_CONNECTION; Pass/Office/Property — default DB.
+ */
 @Injectable()
 export class PassesService implements OnModuleInit {
   constructor(
@@ -39,8 +50,6 @@ export class PassesService implements OnModuleInit {
     private mailService: MailService,
     private configService: ConfigService,
   ) {}
-
-
 
   private generatePassNumber() {
     const year = new Date().getFullYear();
@@ -83,6 +92,10 @@ export class PassesService implements OnModuleInit {
     return false;
   }
 
+  /**
+   * Просрочка: pending/approved с visitDate < сегодня → expired.
+   * Вызывается onModuleInit и перед list/export.
+   */
   async expirePastPasses() {
     const today = this.getTodayDate();
     const toExpire = await this.passModel
@@ -110,6 +123,7 @@ export class PassesService implements OnModuleInit {
     return toExpire.length;
   }
 
+  /** LEGACY: createdBy мог сохраняться и string, и ObjectId — учитываем оба. */
   private createdByFilter(userId: string) {
     return {
       $or: [
@@ -123,11 +137,14 @@ export class PassesService implements OnModuleInit {
     return { createdBy: { $in: userIds } };
   }
 
+  /**
+   * Owner + все сотрудники (активные и нет).
+   * resolveTenantOwnerId: employee → parentTenantId, owner → userId.
+   */
   private async getTenantTeamIds(user?: { userId?: string; parentTenantId?: string }) {
     const ownerId = resolveTenantOwnerId(user);
     if (!ownerId) return [];
 
-    // Включаем и отключённых сотрудников — их старые пропуска остаются в списке компании
     const team = await this.userModel
       .find({
         $or: [
@@ -141,6 +158,12 @@ export class PassesService implements OnModuleInit {
     return team.map((member) => member._id as Types.ObjectId);
   }
 
+  /**
+   * Фильтр списка пропусков по роли.
+   * Tenant company → createdBy ∈ team (не «только свои»).
+   * Staff с view_all → без ограничения.
+   * Иначе view_own → createdBy = self.
+   */
   private async buildAccessFilter(user?: any) {
     if (!user?.role) return { _id: null };
 
@@ -148,7 +171,6 @@ export class PassesService implements OnModuleInit {
       const teamIds = await this.getTenantTeamIds(user);
       if (!teamIds.length) return { _id: null };
 
-      // Владелец и сотрудники компании видят все пропуска своей компании
       const canViewCompany =
         !user.parentTenantId
         || userHasPermission(user, 'passes.view_own')
@@ -1031,6 +1053,7 @@ export class PassesService implements OnModuleInit {
     return defaultProperty?.name;
   }
 
+  /** Проверка доступа к одному pass (детали, смена статуса, email). */
   private async ensurePassAccess(pass: any, user?: any) {
     if (!user?.role) throw new ForbiddenException('Нет доступа к этому пропуску');
 
@@ -1039,6 +1062,7 @@ export class PassesService implements OnModuleInit {
       const createdBy = pass.createdBy?.toString();
       const hasAccess = teamIds.some((id) => id.toString() === createdBy);
       if (!hasAccess) throw new ForbiddenException('Нет доступа к этому пропуску');
+      // Ранее employee видел только свои — снято: вся команда = вся компания
       return;
     }
 

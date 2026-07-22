@@ -1,3 +1,14 @@
+/**
+ * Каталог permissions, дефолтные матрицы ролей, типы пропусков.
+ *
+ * Источник правды для кода; в runtime админ может переопределить матрицу
+ * в коллекции access_config (AccessConfigService), но ключи permissions
+ * должны оставаться из ALL_PERMISSIONS.
+ *
+ * SYSTEM_ROLES нельзя назначать сотрудникам арендатора.
+ * BUILTIN_EMPLOYEE_ROLE (`tenant_employee`) — единственная роль при добавлении
+ * сотрудника владельцем компании (UI не даёт выбрать другую).
+ */
 export const ALL_PASS_TYPES = ['visitor', 'parking', 'delivery', 'contractor'] as const;
 
 export const ALL_PERMISSIONS = [

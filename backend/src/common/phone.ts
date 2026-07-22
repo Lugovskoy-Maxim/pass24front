@@ -1,4 +1,7 @@
-/** Russian mobile phone in E.164: +79XXXXXXXXX */
+/**
+ * Нормализация RU mobile → E.164 `+79XXXXXXXXX`.
+ * SMS Aero: ruPhoneToSmsNumber → только цифры `7900…`.
+ */
 export const RU_MOBILE_PHONE_REGEX = /^\+79\d{9}$/;
 
 export function normalizeRuMobilePhone(input?: string | null): string | null {

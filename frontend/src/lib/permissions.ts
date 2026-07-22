@@ -1,3 +1,9 @@
+/**
+ * UI-права и маршрутизация по ролям (зеркало backend permissions).
+ * Источник permissions — JWT/me (AccessConfigService на бэке).
+ * canViewAllPasses=false для всей company (owner+employee): список компании
+ * строится на бэке через team filter, не через permission view_all.
+ */
 import { ROLE_LABELS, User } from './api';
 
 export function isTenantOwner(user: User | null | undefined): boolean {
@@ -12,7 +18,7 @@ export function isTenantCompanyUser(user: User | null | undefined): boolean {
   return isTenantOwner(user) || isTenantEmployee(user);
 }
 
-/** Арендатор зарегистрировался, но админ ещё не активировал аккаунт. */
+/** Owner после регистрации, is_active=false — ждёт админа (не путать с отключённым employee). */
 export function isAwaitingAdminApproval(user: User | null | undefined): boolean {
   return !!user && user.is_active === false && isTenantOwner(user);
 }

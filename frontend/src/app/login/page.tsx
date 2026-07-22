@@ -1,5 +1,11 @@
 'use client';
 
+/**
+ * Вход / регистрация (email|SMS OTP) / сброс пароля.
+ * mode: login | register | forgot; registerStep: form | verify.
+ * SMS-вкладка зависит от config.smsRegistrationEnabled.
+ * Dev: кнопки быстрых учёток из GET /auth/dev-accounts (не production).
+ */
 import { useState, useEffect, FormEvent } from 'react';
 import { useRouter } from 'next/navigation';
 import { Mail, Phone } from 'lucide-react';

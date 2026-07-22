@@ -1,3 +1,7 @@
+/**
+ * Классификация учёток арендатора.
+ * isTenantCompanyUser: owner (role=tenant) ИЛИ employee (есть parentTenantId, role часто tenant_employee).
+ */
 import { SYSTEM_ROLES } from '../access/access.constants';
 
 export function isTenantOwner(user?: { role?: string; parentTenantId?: unknown }) {

@@ -1,5 +1,9 @@
 'use client';
 
+/**
+ * Нижняя навигация (sm only, .mobile-nav).
+ * Пункты зависят от permissions; max 5. HelpFaq/PWA учитывают высоту nav.
+ */
 import Link from 'next/link';
 import { usePathname } from 'next/navigation';
 import { List, Plus, ClipboardList, User, Settings } from 'lucide-react';

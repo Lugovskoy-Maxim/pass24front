@@ -11,9 +11,14 @@ import {
 } from './guide-defaults';
 import { deepMergeUiLabels, UiLabels } from './ui-labels.defaults';
 
+/** Единственный документ настроек сайта в app_settings. */
 const SETTINGS_KEY = 'global';
 const MAX_ICON_LENGTH = 120_000;
 
+/**
+ * DTO настроек для admin + публичного /config.
+ * faqItems / helpGuideSections — контент кнопки «Помощь» на фронте.
+ */
 export interface SiteSettingsDto {
   siteName: string;
   siteIcon: string;
@@ -37,6 +42,14 @@ export interface SiteSettingsDto {
   helpGuideSections: NormalizedGuideSection[];
 }
 
+/**
+ * Бренд, контакты, SMS-тексты, FAQ и инструкции помощи.
+ * Хранение: app_settings (операционная БД pass24).
+ * Публичный срез — AppConfigService.getPublicConfig().
+ *
+ * update() принимает «сырые» faq/guide (id optional) и нормализует
+ * через normalizeFaqItems / normalizeGuideSections — иначе TS/DTO optional id ломает build.
+ */
 @Injectable()
 export class SiteSettingsService implements OnModuleInit {
   constructor(
@@ -47,6 +60,7 @@ export class SiteSettingsService implements OnModuleInit {
     await this.ensureDefaults();
   }
 
+  /** Первый запуск или миграция с LEGACY бренда PASS24 → M-STYLE defaults. */
   async ensureDefaults() {
     const existing = await this.appSettingsModel.findOne({ key: SETTINGS_KEY });
     if (!existing) {

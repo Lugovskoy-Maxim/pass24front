@@ -1,3 +1,12 @@
+/**
+ * Отправка OTP через SMS Aero HTTP API v2 (gate.smsaero.ru).
+ *
+ * Env: SMS_ENABLED=true, SMSAERO_EMAIL, SMSAERO_API_KEY, SMSAERO_SIGN.
+ * Basic auth: email:apiKey. Номер — digits only (ruPhoneToSmsNumber).
+ * Rate-limit «1 SMS / 5 мин» — в AuthService (lastCodeSentAt), не здесь.
+ *
+ * SMPP в .env.example — справочно; для OTP используется HTTP, не SMPP.
+ */
 import {
   BadRequestException,
   Injectable,
@@ -26,6 +35,7 @@ export class SmsService {
       && !!this.configService.get<string>('SMSAERO_API_KEY');
   }
 
+  /** Авторизационное SMS с кодом регистрации. template должен содержать `{code}`. */
   async sendRegistrationCode(phone: string, code: string, template?: string) {
     if (!this.isConfigured()) {
       throw new BadRequestException(

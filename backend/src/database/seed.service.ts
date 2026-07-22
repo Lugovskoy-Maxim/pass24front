@@ -8,6 +8,10 @@ import { User, UserDocument } from '../schemas';
 import { UserRole } from '../schemas/enums';
 import { TestDataSeedService } from './test-data-seed.service';
 
+/**
+ * Старт приложения: одноразовая миграция users, супер-админ, dev-seed.
+ * Не путать с TestDataSeedService (тестовые tenant/security/admin@pass24.local).
+ */
 @Injectable()
 export class SeedService implements OnModuleInit {
   private readonly logger = new Logger(SeedService.name);
@@ -25,7 +29,10 @@ export class SeedService implements OnModuleInit {
     await this.seedDevTestData();
   }
 
-  /** Одноразовая миграция: users из pass24 → pass24_auth при первом запуске. */
+  /**
+   * LEGACY-миграция: users раньше жили в pass24; при пустой auth-БД копируем.
+   * Безопасно на новых установках (authCount > 0 → skip).
+   */
   private async migrateUsersFromMainDbIfNeeded() {
     const authCount = await this.userModel.estimatedDocumentCount();
     if (authCount > 0) return;

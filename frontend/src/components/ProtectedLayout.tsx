@@ -1,5 +1,9 @@
 'use client';
 
+/**
+ * Обёртка защищённых страниц: ждёт auth, редирект на /login,
+ * проверяет permissions / awaiting approval. Рендерит Header + MobileNav.
+ */
 import { useEffect } from 'react';
 import { useRouter } from 'next/navigation';
 import { useAuth } from '@/lib/auth';

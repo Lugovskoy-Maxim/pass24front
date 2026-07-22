@@ -30,7 +30,14 @@ import { AuthDatabaseModule } from './auth-database.module';
 import { SeedService } from './seed.service';
 import { TestDataSeedService } from './test-data-seed.service';
 
-/** Operational data: passes, offices, audit, etc. (not identity/auth). */
+/**
+ * Основное подключение Mongo (`MONGODB_URI` / pass24) + seed.
+ * Identity (users) — в AuthDatabaseModule.
+ *
+ * В feature-модулях: `imports: [DatabaseModule.forFeature()]`
+ * или `forFeatureOnly([...])` для подмножества схем.
+ */
+/** Операционные модели (не users). */
 const APP_FEATURES = [
   { name: Property.name, schema: PropertySchema },
   { name: Office.name, schema: OfficeSchema },

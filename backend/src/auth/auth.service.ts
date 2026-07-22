@@ -44,12 +44,25 @@ import { UpdateProfileDto } from './dto/update-profile.dto';
 import { DEV_TEST_ACCOUNTS, DEV_TEST_ACCOUNT_EMAILS } from '../database/dev-test-accounts';
 import { SiteSettingsService } from '../site-settings/site-settings.service';
 
-/** Интервал между отправками SMS-кодов (регистрация) */
+/** Антиспам: SMS OTP регистрации — не чаще 1 раза за интервал. */
 const SMS_RESEND_INTERVAL_MS = 5 * 60 * 1000;
-/** Интервал между письмами восстановления пароля / подтверждения email */
+/** Антиспам для email OTP (сброс пароля, verify email). */
 const EMAIL_CODE_RESEND_INTERVAL_MS = 5 * 60 * 1000;
+/** TTL одноразовых кодов (регистрация / reset / verify). */
 const CODE_TTL_MS = 15 * 60 * 1000;
 
+/**
+ * Идентичность: login, регистрация (email/SMS), password reset, email verify,
+ * CRUD сотрудников арендатора, профиль.
+ *
+ * User / RegistrationPending — AUTH_CONNECTION (pass24_auth).
+ * Office / Property / Pass — default connection (pass24).
+ *
+ * Модель арендатора:
+ * - role=tenant, без parentTenantId → владелец компании
+ * - parentTenantId → сотрудник (роль tenant_employee)
+ * После register/confirm пользователь isActive=false до одобрения админом.
+ */
 @Injectable()
 export class AuthService {
   constructor(
@@ -58,6 +71,7 @@ export class AuthService {
     private pendingModel: Model<RegistrationPendingDocument>,
     @InjectModel(Office.name) private officeModel: Model<OfficeDocument>,
     @InjectModel(Property.name) private propertyModel: Model<PropertyDocument>,
+    /** Нужен для переназначения пропусков при удалении сотрудника. */
     @InjectModel(Pass.name) private passModel: Model<PassDocument>,
     private jwtService: JwtService,
     private accessConfigService: AccessConfigService,
@@ -67,6 +81,10 @@ export class AuthService {
     private siteSettingsService: SiteSettingsService,
   ) {}
 
+  /**
+   * Шаг 1 регистрации: сохраняет pending + шлёт OTP (email или SMS).
+   * passwordConfirm обязателен; SMS rate-limit по lastCodeSentAt pending.
+   */
   async requestRegistrationCode(dto: RegisterDto) {
     if (dto.password !== dto.passwordConfirm) {
       throw new BadRequestException('Пароли не совпадают');
@@ -249,11 +267,15 @@ export class AuthService {
     };
   }
 
-  /** @deprecated Используйте requestRegistrationCode + confirmRegistration */
+  /**
+   * @deprecated LEGACY alias для старых клиентов.
+   * Эквивалент requestRegistrationCode; не добавляйте новую логику сюда.
+   */
   async register(dto: RegisterDto) {
     return this.requestRegistrationCode(dto);
   }
 
+  /** Сброс пароля по email. Если аккаунта нет — предлагаем contact admin (recoveryChannel). */
   async requestPasswordReset(dto: RequestPasswordResetDto) {
     const email = dto.email.toLowerCase().trim();
     const siteSettings = await this.siteSettingsService.get();
@@ -372,6 +394,7 @@ export class AuthService {
     };
   }
 
+  /** JWT-пользователь: код на свой email, если emailVerified=false. */
   async requestEmailVerification(userId: string) {
     const user = await this.userModel
       .findById(userId)
@@ -484,6 +507,11 @@ export class AuthService {
     };
   }
 
+  /**
+   * Вход по username | email | телефону.
+   * dto.email — LEGACY-поле для старых клиентов (дублирует login).
+   * createTestUser — только dev (DEV_TEST_ACCOUNTS), не production.
+   */
   async login(dto: LoginDto) {
     const loginRaw = (dto.login || dto.email || '').trim();
     if (!loginRaw) {
@@ -511,7 +539,7 @@ export class AuthService {
       throw new UnauthorizedException('Неверные учетные данные');
     }
 
-    // Отключённый сотрудник компании не может войти
+    // Отключённый сотрудник — нельзя войти (владелец с isActive=false может — ждёт одобрения)
     if (user.parentTenantId && user.isActive === false) {
       throw new UnauthorizedException(
         'Учётная запись отключена владельцем компании. Обратитесь к руководителю.',
@@ -651,6 +679,10 @@ export class AuthService {
     };
   }
 
+  /**
+   * Добавить сотрудника компании. Только owner (tenant без parentTenantId).
+   * Роль всегда BUILTIN_EMPLOYEE_ROLE — выбор типа у арендатора намеренно убран.
+   */
   async addTenantEmployee(userId: string, dto: CreateTenantEmployeeDto) {
     const owner = await this.userModel.findById(userId);
     if (!owner) throw new UnauthorizedException();
@@ -675,7 +707,6 @@ export class AuthService {
       throw new BadRequestException('Укажите фамилию и имя');
     }
 
-    // Арендатор не выбирает тип: всегда встроенная роль «Сотрудник компании»
     const employeeRole = BUILTIN_EMPLOYEE_ROLE;
     await this.accessConfigService.assertEmployeeRole(employeeRole);
     const roleLabel = BUILTIN_EMPLOYEE_ROLE_LABELS[employeeRole] || 'Сотрудник компании';
@@ -727,6 +758,7 @@ export class AuthService {
     };
   }
 
+  /** Вкл/выкл сотрудника. isActive=false → login и JWT (JwtStrategy) блокируются. */
   async setTenantEmployeeActive(userId: string, employeeId: string, isActive: boolean) {
     const owner = await this.userModel.findById(userId);
     if (!owner) throw new UnauthorizedException();
@@ -775,6 +807,11 @@ export class AuthService {
     };
   }
 
+  /**
+   * Полное удаление сотрудника (не soft-delete).
+   * Пропуска переназначаются owner — иначе createdBy указывал бы на удалённый _id
+   * и пропадал из company list.
+   */
   async removeTenantEmployee(userId: string, employeeId: string) {
     const owner = await this.userModel.findById(userId);
     if (!owner) throw new UnauthorizedException();
@@ -792,7 +829,6 @@ export class AuthService {
       employeeName: employee.fullName,
     };
 
-    // Переназначаем пропуска владельцу, чтобы они остались в списке компании
     const reassignResult = await this.passModel.updateMany(
       { createdBy: employee._id },
       { $set: { createdBy: owner._id } },

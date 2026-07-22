@@ -1,3 +1,8 @@
+/**
+ * HTTP-слой auth: /api/auth/*
+ * Публичные: login, register*, password-reset*.
+ * JWT: me, profile, email/verify, tenant/employees*.
+ */
 import { Body, Controller, Delete, Get, Param, Patch, Post, Req, UseGuards } from '@nestjs/common';
 import { AuthGuard } from '@nestjs/passport';
 import { AccessConfigService } from '../access/access-config.service';
@@ -39,6 +44,7 @@ export class AuthController {
     return this.authService.confirmRegistration(dto);
   }
 
+  /** @deprecated LEGACY: используйте /register/request-code */
   @Post('register')
   async register(@Body() dto: RegisterDto) {
     return this.authService.requestRegistrationCode(dto);

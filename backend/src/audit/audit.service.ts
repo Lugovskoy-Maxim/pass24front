@@ -1,3 +1,7 @@
+/**
+ * Журнал действий (audit_logs, operational DB).
+ * Вызывать после мутаций: user.*, pass.*, site_settings.*, tenant.employee_*.
+ */
 import { Injectable } from '@nestjs/common';
 import { InjectModel } from '@nestjs/mongoose';
 import { Model, Types } from 'mongoose';

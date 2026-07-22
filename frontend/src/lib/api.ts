@@ -1,3 +1,10 @@
+/**
+ * Единый HTTP-клиент к Nest API (`NEXT_PUBLIC_API_URL`, по умолчанию …/api).
+ *
+ * - Токен: localStorage `pass24_token` (см. getToken / request).
+ * - Типы User/Pass/SiteSettings — контракт с backend DTO (snake_case у user-полей).
+ * - Добавляя endpoint: метод здесь + вызов в UI + при необходимости Swagger на бэке.
+ */
 import {
   ApiError,
   getErrorMessage,
@@ -10,9 +17,11 @@ export { ApiError, getErrorMessage, getErrorStatus, isNetworkError } from './api
 
 const API_URL = process.env.NEXT_PUBLIC_API_URL || 'http://127.0.0.1:4000/api';
 
+/** Системные роли; сотрудники компании часто имеют custom key (tenant_employee). */
 export type SystemUserRole = 'tenant' | 'security' | 'bc_admin' | 'admin';
 export type UserRole = SystemUserRole | (string & {});
 
+/** LEGACY UI-цели визита; на бэке purpose часто выводится из passType (deriveVisitPurpose). */
 export const VISIT_PURPOSES = ['Гость', 'Встреча', 'Доставка', 'Рабочий', 'Сотрудник'] as const;
 
 export function getPassTicketUrl(passNumber: string) {
