@@ -372,29 +372,37 @@ export default function AdminUsersPage() {
     setSaving(true);
     try {
       const isCompanyEmployee = form.role === 'tenant_employee'
-        || users.flatMap((x) => x.employees || []).some((e) => e.id === editId);
-      const payload = {
+        || (!!editId && users.flatMap((x) => x.employees || []).some((e) => e.id === editId));
+      const base = {
         lastName: nameParts.lastName.trim(),
         firstName: nameParts.firstName.trim(),
         middleName: nameParts.middleName.trim() || undefined,
         fullName: buildFullName(nameParts),
         phone: form.phone || undefined,
         company: form.company || undefined,
-        // Роль сотрудника компании не меняем через этот select
-        role: isCompanyEmployee ? undefined : form.role,
         office: !isCompanyEmployee && form.role !== 'tenant' && form.role !== 'security' ? form.office || undefined : undefined,
         floor: !isCompanyEmployee && form.role !== 'tenant' && form.role !== 'security' ? form.floor || undefined : undefined,
         officeIds: form.role === 'tenant' && !isCompanyEmployee ? officeIds : undefined,
         propertyIds: form.role === 'security' || form.role === 'bc_admin' ? propertyIds : undefined,
       };
       if (editId) {
+        // Сотрудник компании: роль не отправляем (бэкенд её не меняет)
         await api.admin.updateUser(editId, {
-          ...payload,
+          ...base,
+          ...(isCompanyEmployee ? {} : { role: form.role }),
           isActive,
           ...(form.password ? { password: form.password } : {}),
         });
       } else {
-        await api.admin.createUser({ ...form, ...payload });
+        // createUser требует role: UserRole
+        await api.admin.createUser({
+          email: form.email,
+          password: form.password,
+          role: form.role,
+          ...base,
+          officeIds: form.role === 'tenant' ? officeIds : undefined,
+          propertyIds: form.role === 'security' || form.role === 'bc_admin' ? propertyIds : undefined,
+        });
       }
       setShowForm(false);
       load();
