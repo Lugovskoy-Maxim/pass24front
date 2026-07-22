@@ -571,7 +571,13 @@ function LoginPageInner() {
 
                 {verificationChannel === 'email' ? (
                   <>
-                    <FormField id="email" label="Email" required error={fieldErrors.email}>
+                    <FormField
+                      id="email"
+                      label="Email"
+                      required
+                      error={fieldErrors.email}
+                      hint="Только корпоративная почта в зоне .ru (не Gmail / Outlook / iCloud)"
+                    >
                       <FormInput
                         id="email"
                         type="email"
@@ -607,7 +613,12 @@ function LoginPageInner() {
                         placeholder={ph.phone}
                       />
                     </FormField>
-                    <FormField id="email" label="Email" hint="Необязательно" error={fieldErrors.email}>
+                    <FormField
+                      id="email"
+                      label="Email"
+                      hint="Необязательно · только .ru (не Gmail / Outlook / iCloud)"
+                      error={fieldErrors.email}
+                    >
                       <FormInput
                         id="email"
                         type="text"

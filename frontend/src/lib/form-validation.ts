@@ -2,6 +2,10 @@ import { isPersonNameValid, PersonNameParts } from './person-name';
 import { PassType } from './api';
 import { validateBookableVisitDate } from './bookable-visit-dates';
 import { isValidRuMobilePhone, looksLikePhoneInput, normalizeRuMobilePhone } from './phone';
+import {
+  isAllowedRegistrationEmail,
+  REGISTRATION_EMAIL_POLICY_MESSAGE,
+} from './email-policy';
 
 export type FieldErrors = Record<string, string | undefined>;
 
@@ -49,12 +53,16 @@ export function validateLoginRegister(data: {
     if (!isValidRuMobilePhone(data.phone)) {
       errors.phone = 'Укажите номер в формате +79XXXXXXXXX';
     }
-    if (!isBlank(data.email) && !isValidEmail(data.email)) {
-      errors.email = 'Некорректный email';
+    if (!isBlank(data.email)) {
+      if (!isValidEmail(data.email)) errors.email = 'Некорректный email';
+      else if (!isAllowedRegistrationEmail(data.email)) errors.email = REGISTRATION_EMAIL_POLICY_MESSAGE;
     }
   } else {
     if (isBlank(data.email)) errors.email = 'Укажите email';
     else if (!isValidEmail(data.email)) errors.email = 'Некорректный email';
+    else if (data.mode === 'register' && !isAllowedRegistrationEmail(data.email)) {
+      errors.email = REGISTRATION_EMAIL_POLICY_MESSAGE;
+    }
     if (!isBlank(data.phone) && !isValidRuMobilePhone(data.phone)) {
       errors.phone = 'Некорректный номер. Используйте формат +79XXXXXXXXX';
     }

@@ -21,6 +21,10 @@ import { MailService } from '../mail/mail.service';
 import { SmsService } from '../sms/sms.service';
 import { normalizeRuMobilePhone } from '../common/phone';
 import {
+  isAllowedRegistrationEmail,
+  REGISTRATION_EMAIL_POLICY_MESSAGE,
+} from '../common/email-policy';
+import {
   Office,
   OfficeDocument,
   Pass,
@@ -105,6 +109,10 @@ export class AuthService {
     if (channel === 'phone' && !phone) {
       throw new BadRequestException('Укажите номер телефона в формате +79XXXXXXXXX');
     }
+    // Email (основной или доп. при SMS) — только .ru / .рф / .su
+    if (email && !isAllowedRegistrationEmail(email)) {
+      throw new BadRequestException(REGISTRATION_EMAIL_POLICY_MESSAGE);
+    }
     let siteSettings: Awaited<ReturnType<SiteSettingsService['get']>> | null = null;
     if (channel === 'phone') {
       siteSettings = await this.siteSettingsService.get();
@@ -114,13 +122,13 @@ export class AuthService {
     }
 
     if (email) {
-      const existingEmail = await this.userModel.findOne({ email });
+      const existingEmail = await this.findUserByEmail(email);
       if (existingEmail) {
         throw new ConflictException('Пользователь с таким email уже существует');
       }
     }
     if (phone) {
-      const existingPhone = await this.userModel.findOne({ phone });
+      const existingPhone = await this.findUserByPhone(phone);
       if (existingPhone) {
         throw new ConflictException('Пользователь с таким телефоном уже существует');
       }
@@ -221,14 +229,18 @@ export class AuthService {
     }
 
     if (pending.email) {
-      const existingEmail = await this.userModel.findOne({ email: pending.email });
+      if (!isAllowedRegistrationEmail(pending.email)) {
+        await this.pendingModel.deleteOne(pendingFilter);
+        throw new BadRequestException(REGISTRATION_EMAIL_POLICY_MESSAGE);
+      }
+      const existingEmail = await this.findUserByEmail(pending.email);
       if (existingEmail) {
         await this.pendingModel.deleteOne(pendingFilter);
         throw new ConflictException('Пользователь с таким email уже существует');
       }
     }
     if (pending.phone) {
-      const existingPhone = await this.userModel.findOne({ phone: pending.phone });
+      const existingPhone = await this.findUserByPhone(pending.phone);
       if (existingPhone) {
         await this.pendingModel.deleteOne(pendingFilter);
         throw new ConflictException('Пользователь с таким телефоном уже существует');
@@ -237,19 +249,25 @@ export class AuthService {
 
     const emailVerified = pending.verificationChannel === 'email' && !!pending.email;
 
-    const user = await this.userModel.create({
-      email: pending.email,
-      phone: pending.phone,
-      fullName: pending.fullName,
-      lastName: pending.lastName,
-      firstName: pending.firstName,
-      middleName: pending.middleName,
-      company: pending.company,
-      role: 'tenant',
-      password: pending.password,
-      isActive: false,
-      emailVerified,
-    } as any);
+    let user: UserDocument;
+    try {
+      user = await this.userModel.create({
+        email: pending.email || undefined,
+        phone: pending.phone || undefined,
+        fullName: pending.fullName,
+        lastName: pending.lastName,
+        firstName: pending.firstName,
+        middleName: pending.middleName,
+        company: pending.company,
+        role: 'tenant',
+        password: pending.password,
+        isActive: false,
+        emailVerified,
+      } as any);
+    } catch (err) {
+      await this.pendingModel.deleteOne(pendingFilter);
+      throw this.mapUserCreateConflict(err);
+    }
 
     await this.pendingModel.deleteOne(pendingFilter);
 
@@ -1052,6 +1070,53 @@ export class AuthService {
     if (phone && !email) return 'phone';
     if (email) return 'email';
     throw new BadRequestException('Укажите email или телефон для подтверждения регистрации');
+  }
+
+  /** Варианты хранения телефона в БД (старые записи, разные форматы ввода). */
+  private phoneLookupVariants(phone: string): string[] {
+    const normalized = normalizeRuMobilePhone(phone);
+    if (!normalized) return [phone.trim()].filter(Boolean);
+    const digits = normalized.replace(/\D/g, '');
+    return [...new Set([
+      normalized,
+      digits,
+      `+${digits}`,
+      digits.startsWith('7') ? `8${digits.slice(1)}` : '',
+    ].filter(Boolean))];
+  }
+
+  private async findUserByPhone(phone: string) {
+    const variants = this.phoneLookupVariants(phone);
+    if (!variants.length) return null;
+    return this.userModel.findOne({ phone: { $in: variants } });
+  }
+
+  private async findUserByEmail(email: string) {
+    const normalized = email.toLowerCase().trim();
+    if (!normalized) return null;
+    return this.userModel.findOne({ email: normalized });
+  }
+
+  /** Mongo E11000 → понятный 409 вместо Internal Server Error. */
+  private mapUserCreateConflict(err: unknown): never {
+    const code = err && typeof err === 'object' && 'code' in err
+      ? (err as { code?: number }).code
+      : undefined;
+    if (code === 11000) {
+      const key = String(
+        (err as { keyPattern?: Record<string, unknown>; message?: string }).keyPattern
+          ? Object.keys((err as { keyPattern: Record<string, unknown> }).keyPattern).join(',')
+          : (err as { message?: string }).message || '',
+      ).toLowerCase();
+      if (key.includes('phone')) {
+        throw new ConflictException('Пользователь с таким телефоном уже существует');
+      }
+      if (key.includes('email')) {
+        throw new ConflictException('Пользователь с таким email уже существует');
+      }
+      throw new ConflictException('Пользователь с таким email или телефоном уже существует');
+    }
+    throw err;
   }
 
   private getRetryAfterSeconds(lastSentAt: Date, intervalMs: number): number {

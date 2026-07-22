@@ -28,9 +28,29 @@ function isNetworkMessage(message: string): boolean {
   return NETWORK_ERROR_MARKERS.some((marker) => lower.includes(marker));
 }
 
+function extractApiMessage(data?: { message?: unknown; error?: unknown }): string | undefined {
+  if (!data) return undefined;
+  if (typeof data.message === 'string' && data.message.trim()) return data.message.trim();
+  if (Array.isArray(data.message)) {
+    const parts = data.message
+      .map((item) => {
+        if (typeof item === 'string') return item;
+        if (item && typeof item === 'object' && 'message' in item) {
+          const m = (item as { message?: unknown }).message;
+          return typeof m === 'string' ? m : '';
+        }
+        return '';
+      })
+      .filter(Boolean);
+    if (parts.length) return parts.join('. ');
+  }
+  if (typeof data.error === 'string' && data.error.trim()) return data.error.trim();
+  return undefined;
+}
+
 export function messageForStatus(status: number, data?: { message?: unknown; error?: unknown }): string {
-  if (data?.message && typeof data.message === 'string') return data.message;
-  if (data?.error && typeof data.error === 'string') return data.error;
+  const fromBody = extractApiMessage(data);
+  if (fromBody) return fromBody;
 
   switch (status) {
     case 400:
@@ -42,7 +62,7 @@ export function messageForStatus(status: number, data?: { message?: unknown; err
     case 404:
       return 'Данные не найдены';
     case 409:
-      return 'Конфликт данных — обновите страницу и попробуйте снова';
+      return 'Пользователь с таким email или телефоном уже существует';
     case 422:
       return 'Ошибка проверки данных';
     case 429:
@@ -89,9 +109,12 @@ export async function parseErrorBody(res: Response): Promise<{ message?: string;
 
   if (contentType.includes('application/json')) {
     const data = await res.json().catch(() => ({}));
+    const extracted = extractApiMessage(data as { message?: unknown; error?: unknown });
     return {
-      message: typeof data.message === 'string' ? data.message : undefined,
-      error: typeof data.error === 'string' ? data.error : undefined,
+      message: extracted,
+      error: typeof (data as { error?: unknown }).error === 'string'
+        ? (data as { error: string }).error
+        : undefined,
     };
   }
 
