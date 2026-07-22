@@ -116,7 +116,7 @@ export class AdminService {
     const tenantCountFilter = await this.buildUserFilter({ ...params, category: 'tenants', role: undefined });
     const staffCountFilter = await this.buildUserFilter({ ...params, category: 'staff', role: undefined });
 
-    const [users, total, counts] = await Promise.all([
+    let [users, total, counts] = await Promise.all([
       this.userModel.find(filter).sort({ createdAt: -1 }).lean(),
       this.userModel.countDocuments(filter),
       Promise.all([
@@ -124,12 +124,44 @@ export class AdminService {
         this.userModel.countDocuments(staffCountFilter),
       ]).then(([tenants, staff]) => ({ tenants, staff })),
     ]);
+
+    // Поиск по сотрудникам компании: подтянуть владельцев, у которых сотрудник совпал
+    if (params.category === 'tenants' && params.search?.trim()) {
+      const rx = new RegExp(params.search.trim().replace(/[.*+?^${}()|[\]\\]/g, '\\$&'), 'i');
+      const matchingEmployees = await this.userModel
+        .find({
+          parentTenantId: { $exists: true, $ne: null },
+          $or: [{ fullName: rx }, { email: rx }, { company: rx }],
+        })
+        .select('parentTenantId')
+        .lean();
+      const extraOwnerIds = [
+        ...new Set(
+          matchingEmployees
+            .map((e) => e.parentTenantId?.toString())
+            .filter((id): id is string => !!id && !users.some((u) => u._id.toString() === id)),
+        ),
+      ];
+      if (extraOwnerIds.length) {
+        const extraOwners = await this.userModel
+          .find({
+            _id: { $in: extraOwnerIds.map((id) => new Types.ObjectId(id)) },
+            role: 'tenant',
+            $or: [{ parentTenantId: null }, { parentTenantId: { $exists: false } }],
+          })
+          .lean();
+        users = [...users, ...extraOwners];
+        total = users.length;
+      }
+    }
+
     const passCounts = await this.passModel.aggregate([
       { $group: { _id: '$createdBy', count: { $sum: 1 } } },
     ]);
     const countMap = new Map(passCounts.map((p) => [p._id?.toString(), p.count]));
 
-    const officeLinks = await this.officeModel.find({ tenantId: { $in: users.map((u) => u._id) } }).lean();
+    const ownerIds = users.map((u) => u._id);
+    const officeLinks = await this.officeModel.find({ tenantId: { $in: ownerIds } }).lean();
     const officesByTenant = officeLinks.reduce((acc, office) => {
       const key = office.tenantId?.toString();
       if (!key) return acc;
@@ -137,6 +169,21 @@ export class AdminService {
       acc[key].push(office);
       return acc;
     }, {} as Record<string, typeof officeLinks>);
+
+    // Сотрудники, привязанные к владельцам (для вкладки «Арендаторы»)
+    const employeeDocs = params.category === 'tenants' && ownerIds.length
+      ? await this.userModel
+          .find({ parentTenantId: { $in: ownerIds } })
+          .sort({ fullName: 1 })
+          .lean()
+      : [];
+    const employeesByOwner = employeeDocs.reduce((acc, e) => {
+      const key = e.parentTenantId?.toString();
+      if (!key) return acc;
+      if (!acc[key]) acc[key] = [];
+      acc[key].push(e);
+      return acc;
+    }, {} as Record<string, typeof employeeDocs>);
 
     const propertyIds = [
       ...new Set(users.flatMap((u) => (u.properties || []).map((p) => p.toString()))),
@@ -155,14 +202,33 @@ export class AdminService {
 
     return {
       users: users.map((u) => {
-        const tenantOffices = (officesByTenant[u._id.toString()] || []).map((o) =>
+        const ownerId = u._id.toString();
+        const tenantOffices = (officesByTenant[ownerId] || []).map((o) =>
           this.mapOffice(o, propertyMapByOffice, new Map()),
         );
         const businessCenters = (u.properties || []).map((pid) => ({
           id: pid.toString(),
           name: propertyMap.get(pid.toString())?.name || 'БЦ',
         }));
-        return this.mapUser(u, countMap.get(u._id.toString()) || 0, tenantOffices, businessCenters);
+        const team = (employeesByOwner[ownerId] || []).map((e) =>
+          this.mapUser(
+            e,
+            countMap.get(e._id.toString()) || 0,
+            [],
+            [],
+            {
+              parentTenantName: u.fullName,
+              company: e.company || u.company,
+            },
+          ),
+        );
+        return this.mapUser(
+          u,
+          countMap.get(ownerId) || 0,
+          tenantOffices,
+          businessCenters,
+          { employees: team },
+        );
       }),
       total,
       counts,
@@ -427,28 +493,40 @@ export class AdminService {
     }
     if (dto.phone !== undefined) user.phone = dto.phone;
     if (dto.company !== undefined) user.company = dto.company;
-    if (dto.role !== undefined) user.role = dto.role;
-    if (dto.office !== undefined) user.office = dto.office;
-    if (dto.floor !== undefined) user.floor = dto.floor;
-    if (dto.isActive !== undefined) user.isActive = dto.isActive;
+    // Сотрудник компании: роль и parentTenantId не меняем через admin update
+    if (dto.role !== undefined && !user.parentTenantId) {
+      user.role = dto.role;
+    }
+    if (dto.office !== undefined && !user.parentTenantId) user.office = dto.office;
+    if (dto.floor !== undefined && !user.parentTenantId) user.floor = dto.floor;
+    if (dto.isActive !== undefined) {
+      if (user.parentTenantId && user.invitePending && dto.isActive) {
+        throw new BadRequestException(
+          'Сотрудник ещё не принял приглашение — нельзя активировать до задания пароля по ссылке.',
+        );
+      }
+      user.isActive = dto.isActive;
+    }
     if (dto.password) user.password = await bcrypt.hash(dto.password, 10);
 
-    if (dto.role && dto.role !== 'tenant' && prevRole === 'tenant') {
-      await this.assignOfficesToTenant(id, []);
-    }
-    if (dto.role && !['security', 'bc_admin'].includes(dto.role) && ['security', 'bc_admin'].includes(prevRole)) {
-      user.properties = [];
-    }
-    if (dto.role === 'tenant' && prevRole !== 'tenant') {
-      user.properties = [];
-    }
-    if (dto.propertyIds !== undefined && ['security', 'bc_admin'].includes(user.role)) {
-      user.properties = dto.propertyIds.map((pid) => new Types.ObjectId(pid));
+    if (!user.parentTenantId) {
+      if (dto.role && dto.role !== 'tenant' && prevRole === 'tenant') {
+        await this.assignOfficesToTenant(id, []);
+      }
+      if (dto.role && !['security', 'bc_admin'].includes(dto.role) && ['security', 'bc_admin'].includes(prevRole)) {
+        user.properties = [];
+      }
+      if (dto.role === 'tenant' && prevRole !== 'tenant') {
+        user.properties = [];
+      }
+      if (dto.propertyIds !== undefined && ['security', 'bc_admin'].includes(user.role)) {
+        user.properties = dto.propertyIds.map((pid) => new Types.ObjectId(pid));
+      }
     }
 
     await user.save();
 
-    if (dto.officeIds !== undefined && user.role === 'tenant') {
+    if (dto.officeIds !== undefined && user.role === 'tenant' && !user.parentTenantId) {
       await this.assignOfficesToTenant(id, dto.officeIds);
     }
 
@@ -1046,10 +1124,22 @@ export class AdminService {
     return properties.map((p) => ({ id: p._id.toString(), name: p.name }));
   }
 
-  private mapUser(user: any, passesCount: number, offices: any[] = [], businessCenters: { id: string; name: string }[] = []) {
+  private mapUser(
+    user: any,
+    passesCount: number,
+    offices: any[] = [],
+    businessCenters: { id: string; name: string }[] = [],
+    extra?: {
+      employees?: any[];
+      parentTenantName?: string;
+      company?: string;
+    },
+  ) {
     const nameParts = user.lastName || user.firstName
       ? { lastName: user.lastName || '', firstName: user.firstName || '', middleName: user.middleName || '' }
       : splitFullName(user.fullName);
+    const parentTenantId = user.parentTenantId?.toString() || undefined;
+    const invitePending = !!user.invitePending;
     return {
       id: user._id.toString(),
       email: user.email,
@@ -1059,17 +1149,24 @@ export class AdminService {
       firstName: nameParts.firstName,
       middleName: nameParts.middleName,
       phone: user.phone,
-      company: user.company,
+      company: extra?.company ?? user.company,
       role: user.role || 'tenant',
       office: user.office,
       floor: user.floor,
-      isActive: user.isActive !== false,
+      isActive: user.isActive !== false && !invitePending,
+      invitePending,
+      inviteExpiresAt: user.inviteExpiresAt || undefined,
+      parentTenantId,
+      parentTenantName: extra?.parentTenantName,
+      isTenantOwner: (user.role === 'tenant' || user.role === 'tenant_employee') && !parentTenantId,
       createdAt: user.createdAt,
       passesCount,
       offices,
       businessCenters,
       propertyIds: businessCenters.map((bc) => bc.id),
       profileChangeRequest: mapProfileChangeRequest(user.profileChangeRequest),
+      employees: extra?.employees,
+      employeesCount: extra?.employees?.length ?? undefined,
     };
   }
 

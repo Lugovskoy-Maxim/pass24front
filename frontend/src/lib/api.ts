@@ -970,12 +970,23 @@ export interface AdminUser {
   office?: string;
   floor?: string;
   isActive: boolean;
+  /** Сотрудник компании ещё не принял приглашение */
+  invitePending?: boolean;
+  inviteExpiresAt?: string;
+  /** Owner компании-арендатора */
+  isTenantOwner?: boolean;
+  /** Id владельца, если это сотрудник компании */
+  parentTenantId?: string;
+  parentTenantName?: string;
   profileChangeRequest?: ProfileChangeRequest | null;
   createdAt: string;
   passesCount?: number;
   offices?: TenantOffice[];
   businessCenters?: { id: string; name: string }[];
   propertyIds?: string[];
+  /** Сотрудники компании (только у владельца на вкладке «Арендаторы») */
+  employees?: AdminUser[];
+  employeesCount?: number;
 }
 
 export interface CreateUserData {
@@ -1163,8 +1174,12 @@ export const ROLE_LABELS: Record<SystemUserRole, string> = {
   admin: 'Супер-администратор',
 };
 
+const EXTRA_ROLE_LABELS: Record<string, string> = {
+  tenant_employee: 'Сотрудник компании',
+};
+
 export function getRoleLabel(role: string): string {
-  return ROLE_LABELS[role as SystemUserRole] || role;
+  return ROLE_LABELS[role as SystemUserRole] || EXTRA_ROLE_LABELS[role] || role;
 }
 
 export const AUDIT_LABELS: Record<string, string> = {

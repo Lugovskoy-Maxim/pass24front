@@ -1,7 +1,7 @@
 'use client';
 
-import { useEffect, useState, useCallback, FormEvent } from 'react';
-import { Plus, Search, Pencil, Link2, X, Users, Building2, UserCog, Check, Clock, Trash2 } from 'lucide-react';
+import { useEffect, useState, useCallback, FormEvent, Fragment } from 'react';
+import { Plus, Search, Pencil, Link2, X, Users, Building2, UserCog, Check, Clock, Trash2, ChevronDown, ChevronRight, User } from 'lucide-react';
 import { AdminLayout } from '@/components/AdminLayout';
 import { api, AdminUser, BusinessCenter, CreateUserData, Office, ProfileChangeRequest, ROLE_LABELS, UserCategory, UserFilters, UserRole, formatTenantOffices, getErrorMessage, getRoleLabel } from '@/lib/api';
 import { PageError } from '@/components/PageError';
@@ -54,6 +54,7 @@ export default function AdminUsersPage() {
   const [officePickerSearch, setOfficePickerSearch] = useState('');
   const [isActive, setIsActive] = useState(true);
   const [deletingUserId, setDeletingUserId] = useState<string | null>(null);
+  const [expandedOwners, setExpandedOwners] = useState<Record<string, boolean>>({});
   const [error, setError] = useState('');
   const [loadError, setLoadError] = useState('');
   const [loadErrorCause, setLoadErrorCause] = useState<unknown>(null);
@@ -230,10 +231,14 @@ export default function AdminUsersPage() {
 
   const openEdit = (u: AdminUser) => {
     setEditId(u.id);
+    // Сотрудник компании: роль не меняем на tenant/staff в форме — только профиль
+    const formRole = u.parentTenantId
+      ? (u.role as UserRole)
+      : u.role;
     setForm({
       email: u.email,
       password: '',
-      role: u.role,
+      role: formRole,
       phone: u.phone || '',
       company: u.company || '',
       office: u.office || '',
@@ -247,9 +252,12 @@ export default function AdminUsersPage() {
     setOfficeIds(u.offices?.map((o) => o.id) || []);
     setPropertyIds(u.propertyIds || u.businessCenters?.map((bc) => bc.id) || []);
     setOfficePickerSearch('');
-    setIsActive(u.isActive);
+    setIsActive(u.isActive && !u.invitePending);
     setShowForm(true);
     setError('');
+    window.setTimeout(() => {
+      document.getElementById('admin-user-form')?.scrollIntoView({ behavior: 'smooth', block: 'nearest' });
+    }, 50);
   };
 
   const toggleOffice = (id: string) => {
@@ -257,10 +265,17 @@ export default function AdminUsersPage() {
   };
 
   const handleDeleteUser = async (u: AdminUser) => {
-    const kind = category === 'tenants' ? 'арендатора' : 'сотрудника';
-    const extra = category === 'tenants'
+    const isCompanyEmployee = !!u.parentTenantId;
+    const kind = isCompanyEmployee
+      ? 'сотрудника компании'
+      : category === 'tenants'
+        ? 'арендатора'
+        : 'сотрудника';
+    const extra = !isCompanyEmployee && category === 'tenants'
       ? '\nОфисы компании будут отвязаны. Если есть сотрудники компании — сначала удалите их.'
-      : '';
+      : isCompanyEmployee
+        ? '\nПропуска сотрудника будут переназначены владельцу компании.'
+        : '';
     if (!window.confirm(`Удалить ${kind} «${u.fullName}» (${u.email})?${extra}\n\nДействие нельзя отменить.`)) {
       return;
     }
@@ -303,13 +318,48 @@ export default function AdminUsersPage() {
   const selectedOfficeChips = allOffices.filter((o) => officeIds.includes(o.id));
 
   const formatBindings = (u: AdminUser) => {
-    if (u.role === 'tenant' && u.offices?.length) return formatTenantOffices(u.offices);
+    if ((u.role === 'tenant' || u.isTenantOwner) && u.offices?.length) return formatTenantOffices(u.offices);
     if ((u.role === 'security' || u.role === 'bc_admin') && u.businessCenters?.length) {
       return u.businessCenters.map((bc) => bc.name).join(' · ');
     }
     if (u.office) return `оф. ${u.office}`;
     return '—';
   };
+
+  const toggleOwnerExpanded = (ownerId: string) => {
+    setExpandedOwners((prev) => ({ ...prev, [ownerId]: !prev[ownerId] }));
+  };
+
+  const statusBadge = (u: AdminUser) => {
+    if (u.invitePending) {
+      return (
+        <span className="text-xs px-2 py-0.5 rounded-full bg-sky-50 text-sky-800">
+          Приглашение
+        </span>
+      );
+    }
+    if (u.isActive) {
+      return <span className="text-xs px-2 py-0.5 rounded-full bg-emerald-50 text-emerald-700">Активен</span>;
+    }
+    if (u.role === 'tenant' && !u.parentTenantId && !u.offices?.length) {
+      return (
+        <span className="text-xs px-2 py-0.5 rounded-full bg-amber-50 text-amber-800">
+          Ожидает подтверждения
+        </span>
+      );
+    }
+    return <span className="text-xs px-2 py-0.5 rounded-full bg-red-50 text-red-600">Отключён</span>;
+  };
+
+  // Авто-раскрытие компаний, если поиск совпал с сотрудником (пришли owners через employee search)
+  useEffect(() => {
+    if (category !== 'tenants' || !debouncedSearch.trim()) return;
+    const next: Record<string, boolean> = {};
+    users.forEach((u) => {
+      if (u.employees?.length) next[u.id] = true;
+    });
+    if (Object.keys(next).length) setExpandedOwners((prev) => ({ ...prev, ...next }));
+  }, [users, category, debouncedSearch]);
 
   const handleSubmit = async (e: FormEvent) => {
     e.preventDefault();
@@ -320,6 +370,8 @@ export default function AdminUsersPage() {
     }
     setSaving(true);
     try {
+      const isCompanyEmployee = form.role === 'tenant_employee'
+        || users.flatMap((x) => x.employees || []).some((e) => e.id === editId);
       const payload = {
         lastName: nameParts.lastName.trim(),
         firstName: nameParts.firstName.trim(),
@@ -327,11 +379,12 @@ export default function AdminUsersPage() {
         fullName: buildFullName(nameParts),
         phone: form.phone || undefined,
         company: form.company || undefined,
-        role: form.role,
-        office: form.role !== 'tenant' && form.role !== 'security' ? form.office || undefined : undefined,
-        floor: form.role !== 'tenant' && form.role !== 'security' ? form.floor || undefined : undefined,
-        officeIds: form.role === 'tenant' ? officeIds : [],
-        propertyIds: form.role === 'security' || form.role === 'bc_admin' ? propertyIds : [],
+        // Роль сотрудника компании не меняем через этот select
+        role: isCompanyEmployee ? undefined : form.role,
+        office: !isCompanyEmployee && form.role !== 'tenant' && form.role !== 'security' ? form.office || undefined : undefined,
+        floor: !isCompanyEmployee && form.role !== 'tenant' && form.role !== 'security' ? form.floor || undefined : undefined,
+        officeIds: form.role === 'tenant' && !isCompanyEmployee ? officeIds : undefined,
+        propertyIds: form.role === 'security' || form.role === 'bc_admin' ? propertyIds : undefined,
       };
       if (editId) {
         await api.admin.updateUser(editId, {
@@ -354,7 +407,7 @@ export default function AdminUsersPage() {
   return (
     <AdminLayout title="Пользователи">
       <p className="text-[var(--muted)] -mt-4 mb-6">
-        Арендаторы привязаны к офисам, сотрудники — к бизнес-центрам
+        Арендаторы и их сотрудники компании · сотрудники БЦ (ресепшн, админы) — к бизнес-центрам
       </p>
 
       {loadError && (
@@ -587,15 +640,21 @@ export default function AdminUsersPage() {
       )}
 
       {showForm && (
-        <form onSubmit={handleSubmit} className="card p-5 mb-6 space-y-4">
-          <h2 className="font-semibold">{editId ? 'Редактирование' : 'Новый пользователь'}</h2>
+        <form id="admin-user-form" onSubmit={handleSubmit} className="card p-5 mb-6 space-y-4">
+          <h2 className="font-semibold">
+            {editId
+              ? (users.flatMap((x) => x.employees || []).some((e) => e.id === editId)
+                ? 'Редактирование сотрудника компании'
+                : 'Редактирование')
+              : 'Новый пользователь'}
+          </h2>
           <div className="grid sm:grid-cols-2 gap-3">
             <div><label className="label">Email *</label><input className="input" type="email" value={form.email} onChange={(e) => setForm({ ...form, email: e.target.value })} required disabled={!!editId} /></div>
             <div><label className="label">{editId ? 'Новый пароль' : 'Пароль *'}</label><input className="input" type="password" value={form.password} onChange={(e) => setForm({ ...form, password: e.target.value })} required={!editId} minLength={6} /></div>
             <div className="sm:col-span-2">
               <PersonNameFields
                 value={nameParts}
-                labels={getUserNameLabels(form.role)}
+                labels={getUserNameLabels(form.role === 'tenant' || form.role === 'tenant_employee' ? 'tenant' : form.role)}
                 onChange={setNameParts}
               />
             </div>
@@ -606,11 +665,23 @@ export default function AdminUsersPage() {
                   className="input"
                   value={form.role}
                   onChange={(e) => setForm({ ...form, role: e.target.value as UserRole })}
+                  disabled={!!editId && !!users.flatMap((x) => x.employees || []).some((e) => e.id === editId)}
                 >
-                  {category === 'tenants'
+                  {form.role === 'tenant_employee' && (
+                    <option value="tenant_employee">{getRoleLabel('tenant_employee')}</option>
+                  )}
+                  {category === 'tenants' && form.role !== 'tenant_employee'
                     ? <option value="tenant">{ROLE_LABELS.tenant}</option>
-                    : STAFF_ROLES.map((role) => <option key={role} value={role}>{getRoleLabel(role)}</option>)}
-                  {category === 'staff' && <option value="tenant">{ROLE_LABELS.tenant}</option>}
+                    : null}
+                  {category === 'staff' && form.role !== 'tenant_employee' && STAFF_ROLES.map((role) => (
+                    <option key={role} value={role}>{getRoleLabel(role)}</option>
+                  ))}
+                  {category === 'staff' && form.role !== 'tenant_employee' && (
+                    <option value="tenant">{ROLE_LABELS.tenant}</option>
+                  )}
+                  {category === 'tenants' && form.role !== 'tenant_employee' && form.role !== 'tenant' && (
+                    <option value={form.role}>{getRoleLabel(form.role)}</option>
+                  )}
                 </select>
               </div>
             </div>
@@ -618,7 +689,17 @@ export default function AdminUsersPage() {
             <div><label className="label">Телефон</label><input className="input" value={form.phone} onChange={(e) => setForm({ ...form, phone: e.target.value })} /></div>
           </div>
 
-          {form.role === 'tenant' && (
+          {editId && users.flatMap((x) => x.employees || []).some((e) => e.id === editId) && (
+            <div className="rounded-lg border border-[var(--border)] bg-[var(--surface-muted)] p-3 text-sm text-[var(--muted)]">
+              Сотрудник компании
+              {users.find((x) => x.employees?.some((e) => e.id === editId))?.fullName
+                ? ` «${users.find((x) => x.employees?.some((e) => e.id === editId))?.fullName}»`
+                : ''}
+              . Офисы наследуются от владельца; приглашения отправляет владелец из профиля.
+            </div>
+          )}
+
+          {form.role === 'tenant' && !users.flatMap((x) => x.employees || []).some((e) => e.id === editId) && (
             <div className="border border-[var(--border)] rounded-lg p-4 bg-[var(--surface-muted)] space-y-3">
               <div className="flex items-center justify-between gap-2">
                 <div className="flex items-center gap-2">
@@ -763,103 +844,195 @@ export default function AdminUsersPage() {
       )}
 
       <div className="card overflow-hidden">
-        <table className="w-full text-sm">
-          <thead className="surface-muted text-[var(--muted)]">
-            <tr>
-              <th className="text-left p-3 font-medium">ФИО</th>
-              <th className="text-left p-3 font-medium hidden lg:table-cell">Email</th>
-              {category === 'tenants' && (
-                <th className="text-left p-3 font-medium hidden md:table-cell">Компания</th>
-              )}
-              {category === 'staff' && (
-                <th className="text-left p-3 font-medium">Роль</th>
-              )}
-              <th className="text-left p-3 font-medium hidden sm:table-cell">
-                {category === 'tenants' ? 'Офисы' : 'Бизнес-центры'}
-              </th>
-              <th className="text-left p-3 font-medium">Статус</th>
-              <th className="p-3 w-20 text-right">Действия</th>
-            </tr>
-          </thead>
-          <tbody>
-            {loading ? (
-              <tr><td colSpan={6} className="p-8 text-center text-[var(--muted)]">Загрузка...</td></tr>
-            ) : users.length === 0 ? (
+        <div className="overflow-x-auto">
+          <table className="w-full text-sm min-w-[640px]">
+            <thead className="surface-muted text-[var(--muted)]">
               <tr>
-                <td colSpan={6} className="p-8 text-center text-[var(--muted)]">
-                  {category === 'tenants' ? 'Арендаторы не найдены' : 'Сотрудники не найдены'}
-                </td>
-              </tr>
-            ) : users.map((u) => (
-              <tr key={u.id} className="border-t border-[var(--border)] hover:bg-[var(--surface-muted)]">
-                <td className="p-3">
-                  <div className="font-medium flex items-center gap-2 flex-wrap">
-                    {u.fullName}
-                    {u.profileChangeRequest && (
-                      <span className="text-[10px] px-1.5 py-0.5 rounded-full bg-amber-100 text-amber-800">
-                        на модерации
-                      </span>
-                    )}
-                  </div>
-                  <div className="text-xs text-[var(--muted)] lg:hidden">
-                    {u.email || '—'}
-                    {u.email && (
-                      <span className={`ml-1.5 text-[10px] ${u.emailVerified ? 'text-emerald-700' : 'text-slate-500'}`}>
-                        ({u.emailVerified ? 'подтверждён' : 'не подтверждён'})
-                      </span>
-                    )}
-                  </div>
-                  <div className="text-xs text-[var(--muted)] sm:hidden mt-1">
-                    {formatBindings(u)}
-                  </div>
-                </td>
-                <td className="p-3 hidden lg:table-cell text-[var(--muted)]">
-                  <div>{u.email || '—'}</div>
-                  {u.email && (
-                    <div className={`text-[10px] mt-0.5 ${u.emailVerified ? 'text-emerald-700' : 'text-slate-500'}`}>
-                      {u.emailVerified ? 'подтверждён' : 'не подтверждён'}
-                    </div>
-                  )}
-                </td>
+                <th className="text-left p-3 font-medium">ФИО</th>
+                <th className="text-left p-3 font-medium hidden lg:table-cell">Email</th>
                 {category === 'tenants' && (
-                  <td className="p-3 hidden md:table-cell text-[var(--muted)]">{u.company || '—'}</td>
+                  <th className="text-left p-3 font-medium hidden md:table-cell">Компания</th>
                 )}
                 {category === 'staff' && (
-                  <td className="p-3">{getRoleLabel(u.role)}</td>
+                  <th className="text-left p-3 font-medium">Роль</th>
                 )}
-                <td className="p-3 hidden sm:table-cell text-[var(--muted)] max-w-xs text-xs">
-                  {formatBindings(u)}
-                </td>
-                <td className="p-3">
-                  <span className={`text-xs px-2 py-0.5 rounded-full ${u.isActive ? 'bg-emerald-50 text-emerald-700' : u.role === 'tenant' && !u.offices?.length ? 'bg-amber-50 text-amber-800' : 'bg-red-50 text-red-600'}`}>
-                    {u.isActive ? 'Активен' : u.role === 'tenant' && !u.offices?.length ? 'Ожидает подтверждения' : 'Отключён'}
-                  </span>
-                </td>
-                <td className="p-3">
-                  <div className="flex items-center justify-end gap-1">
-                    <button
-                      type="button"
-                      className="p-1.5 rounded-md border border-[var(--border)] hover:bg-[var(--surface-muted)]"
-                      onClick={() => openEdit(u)}
-                      title="Редактировать"
-                    >
-                      <Pencil className="w-4 h-4" />
-                    </button>
-                    <button
-                      type="button"
-                      className="p-1.5 rounded-md border border-red-200 hover:bg-red-50 text-red-600"
-                      onClick={() => handleDeleteUser(u)}
-                      disabled={deletingUserId === u.id}
-                      title="Удалить"
-                    >
-                      <Trash2 className="w-4 h-4" />
-                    </button>
-                  </div>
-                </td>
+                <th className="text-left p-3 font-medium hidden sm:table-cell">
+                  {category === 'tenants' ? 'Офисы / команда' : 'Бизнес-центры'}
+                </th>
+                <th className="text-left p-3 font-medium">Статус</th>
+                <th className="p-3 w-20 text-right">Действия</th>
               </tr>
-            ))}
-          </tbody>
-        </table>
+            </thead>
+            <tbody>
+              {loading ? (
+                <tr><td colSpan={6} className="p-8 text-center text-[var(--muted)]">Загрузка...</td></tr>
+              ) : users.length === 0 ? (
+                <tr>
+                  <td colSpan={6} className="p-8 text-center text-[var(--muted)]">
+                    {category === 'tenants' ? 'Арендаторы не найдены' : 'Сотрудники не найдены'}
+                  </td>
+                </tr>
+              ) : users.map((u) => {
+                const employees = u.employees || [];
+                const empCount = u.employeesCount ?? employees.length;
+                const expanded = !!expandedOwners[u.id];
+                const canExpand = category === 'tenants' && empCount > 0;
+
+                return (
+                  <Fragment key={u.id}>
+                    <tr className="border-t border-[var(--border)] hover:bg-[var(--surface-muted)]">
+                      <td className="p-3">
+                        <div className="flex items-start gap-1.5">
+                          {category === 'tenants' ? (
+                            <button
+                              type="button"
+                              className={`mt-0.5 p-0.5 rounded shrink-0 ${canExpand ? 'hover:bg-[var(--surface)] text-[var(--text)]' : 'text-transparent pointer-events-none'}`}
+                              onClick={() => canExpand && toggleOwnerExpanded(u.id)}
+                              aria-expanded={expanded}
+                              aria-label={expanded ? 'Свернуть сотрудников' : 'Показать сотрудников'}
+                              disabled={!canExpand}
+                            >
+                              {expanded ? <ChevronDown className="w-4 h-4" /> : <ChevronRight className="w-4 h-4" />}
+                            </button>
+                          ) : null}
+                          <div className="min-w-0">
+                            <div className="font-medium flex items-center gap-2 flex-wrap">
+                              {u.fullName}
+                              {category === 'tenants' && (
+                                <span className="text-[10px] px-1.5 py-0.5 rounded-full bg-[var(--surface-muted)] text-[var(--muted)] font-normal">
+                                  Владелец
+                                </span>
+                              )}
+                              {u.profileChangeRequest && (
+                                <span className="text-[10px] px-1.5 py-0.5 rounded-full bg-amber-100 text-amber-800">
+                                  на модерации
+                                </span>
+                              )}
+                            </div>
+                            <div className="text-xs text-[var(--muted)] lg:hidden">
+                              {u.email || '—'}
+                            </div>
+                            {canExpand && (
+                              <button
+                                type="button"
+                                className="mt-1 text-xs text-[var(--primary)] hover:underline inline-flex items-center gap-1"
+                                onClick={() => toggleOwnerExpanded(u.id)}
+                              >
+                                <Users className="w-3 h-3" />
+                                {expanded ? 'Скрыть' : 'Сотрудники'} ({empCount})
+                              </button>
+                            )}
+                            {category === 'tenants' && empCount === 0 && (
+                              <div className="mt-1 text-[11px] text-[var(--muted)]">Нет сотрудников</div>
+                            )}
+                            <div className="text-xs text-[var(--muted)] sm:hidden mt-1">
+                              {formatBindings(u)}
+                            </div>
+                          </div>
+                        </div>
+                      </td>
+                      <td className="p-3 hidden lg:table-cell text-[var(--muted)]">
+                        <div>{u.email || '—'}</div>
+                        {u.email && (
+                          <div className={`text-[10px] mt-0.5 ${u.emailVerified ? 'text-emerald-700' : 'text-slate-500'}`}>
+                            {u.emailVerified ? 'подтверждён' : 'не подтверждён'}
+                          </div>
+                        )}
+                      </td>
+                      {category === 'tenants' && (
+                        <td className="p-3 hidden md:table-cell text-[var(--muted)]">{u.company || '—'}</td>
+                      )}
+                      {category === 'staff' && (
+                        <td className="p-3">{getRoleLabel(u.role)}</td>
+                      )}
+                      <td className="p-3 hidden sm:table-cell text-[var(--muted)] max-w-xs text-xs">
+                        {formatBindings(u)}
+                      </td>
+                      <td className="p-3">{statusBadge(u)}</td>
+                      <td className="p-3">
+                        <div className="flex items-center justify-end gap-1">
+                          <button
+                            type="button"
+                            className="p-1.5 rounded-md border border-[var(--border)] hover:bg-[var(--surface-muted)]"
+                            onClick={() => openEdit(u)}
+                            title="Редактировать"
+                          >
+                            <Pencil className="w-4 h-4" />
+                          </button>
+                          <button
+                            type="button"
+                            className="p-1.5 rounded-md border border-red-200 hover:bg-red-50 text-red-600"
+                            onClick={() => handleDeleteUser(u)}
+                            disabled={deletingUserId === u.id}
+                            title="Удалить"
+                          >
+                            <Trash2 className="w-4 h-4" />
+                          </button>
+                        </div>
+                      </td>
+                    </tr>
+
+                    {expanded && employees.map((emp) => (
+                      <tr
+                        key={emp.id}
+                        className="border-t border-[var(--border)] bg-[var(--surface-muted)]/60"
+                      >
+                        <td className="p-3 pl-10 sm:pl-12">
+                          <div className="flex items-start gap-2">
+                            <User className="w-4 h-4 mt-0.5 text-[var(--muted)] shrink-0" />
+                            <div className="min-w-0">
+                              <div className="font-medium flex items-center gap-2 flex-wrap">
+                                {emp.fullName}
+                                <span className="text-[10px] px-1.5 py-0.5 rounded-full bg-violet-50 text-violet-800 font-normal">
+                                  Сотрудник
+                                </span>
+                              </div>
+                              <div className="text-xs text-[var(--muted)] lg:hidden">{emp.email || '—'}</div>
+                              {emp.phone && (
+                                <div className="text-[11px] text-[var(--muted)] mt-0.5">{emp.phone}</div>
+                              )}
+                            </div>
+                          </div>
+                        </td>
+                        <td className="p-3 hidden lg:table-cell text-[var(--muted)]">
+                          <div>{emp.email || '—'}</div>
+                        </td>
+                        <td className="p-3 hidden md:table-cell text-[var(--muted)] text-xs">
+                          {emp.company || u.company || '—'}
+                        </td>
+                        <td className="p-3 hidden sm:table-cell text-[var(--muted)] text-xs">
+                          Как у владельца · {getRoleLabel(emp.role)}
+                        </td>
+                        <td className="p-3">{statusBadge(emp)}</td>
+                        <td className="p-3">
+                          <div className="flex items-center justify-end gap-1">
+                            <button
+                              type="button"
+                              className="p-1.5 rounded-md border border-[var(--border)] hover:bg-[var(--surface-muted)]"
+                              onClick={() => openEdit(emp)}
+                              title="Редактировать сотрудника"
+                            >
+                              <Pencil className="w-4 h-4" />
+                            </button>
+                            <button
+                              type="button"
+                              className="p-1.5 rounded-md border border-red-200 hover:bg-red-50 text-red-600"
+                              onClick={() => handleDeleteUser(emp)}
+                              disabled={deletingUserId === emp.id}
+                              title="Удалить сотрудника"
+                            >
+                              <Trash2 className="w-4 h-4" />
+                            </button>
+                          </div>
+                        </td>
+                      </tr>
+                    ))}
+                  </Fragment>
+                );
+              })}
+            </tbody>
+          </table>
+        </div>
       </div>
     </AdminLayout>
   );
