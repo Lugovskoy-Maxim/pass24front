@@ -7,6 +7,8 @@ import { useToast } from '@/components/Toast';
 import { api, AuditEntry, AuditFilters, AUDIT_ENTITY_LABELS, AUDIT_LABELS, formatAuditEntity, getErrorMessage } from '@/lib/api';
 import { PageError } from '@/components/PageError';
 import { useAutoRefresh } from '@/hooks/useAutoRefresh';
+import { useConfig } from '@/hooks/useConfig';
+import { getUiLabels } from '@/lib/ui-labels';
 
 const PAGE_SIZE = 50;
 
@@ -20,6 +22,7 @@ const EMPTY_FILTERS: AuditFilters = {
 
 export default function AdminAuditPage() {
   const { toast } = useToast();
+  const ph = getUiLabels(useConfig()).placeholders;
   const [entries, setEntries] = useState<AuditEntry[]>([]);
   const [total, setTotal] = useState(0);
   const [offset, setOffset] = useState(0);
@@ -171,7 +174,7 @@ export default function AdminAuditPage() {
             <Search className="absolute left-3 top-1/2 -translate-y-1/2 w-4 h-4 text-[var(--muted)]" />
             <input
               className="input input--icon-left"
-              placeholder="Поиск по пользователю, номеру пропуска, ФИО..."
+              placeholder={ph.auditSearch}
               value={filters.search || ''}
               onChange={(e) => setFilters((prev) => ({ ...prev, search: e.target.value }))}
               onKeyDown={(e) => { if (e.key === 'Enter') applyFilters(); }}

@@ -6,6 +6,8 @@ import { Pass } from '@/lib/api';
 import { FormField, FormInput } from '@/components/FormField';
 import { useToast } from '@/components/Toast';
 import { api } from '@/lib/api';
+import { useConfig } from '@/hooks/useConfig';
+import { getUiLabels } from '@/lib/ui-labels';
 
 interface PassVisitorDataFormProps {
   pass: Pass;
@@ -15,6 +17,7 @@ interface PassVisitorDataFormProps {
 
 export function PassVisitorDataForm({ pass, onUpdated, collapsible = true }: PassVisitorDataFormProps) {
   const { toast } = useToast();
+  const ph = getUiLabels(useConfig()).placeholders;
   const [series, setSeries] = useState(pass.visitorPassportSeries || '');
   const [number, setNumber] = useState(pass.visitorPassportNumber || '');
   const [issuedBy, setIssuedBy] = useState(pass.visitorPassportIssuedBy || '');
@@ -50,14 +53,14 @@ export function PassVisitorDataForm({ pass, onUpdated, collapsible = true }: Pas
     <>
       <div className="grid grid-cols-2 gap-2">
         <FormField id={`passport-series-${pass.id}`} label="Серия">
-          <FormInput id={`passport-series-${pass.id}`} value={series} onChange={(e) => setSeries(e.target.value)} placeholder="4510" maxLength={10} />
+          <FormInput id={`passport-series-${pass.id}`} value={series} onChange={(e) => setSeries(e.target.value)} placeholder={ph.passportSeries} maxLength={10} />
         </FormField>
         <FormField id={`passport-number-${pass.id}`} label="Номер">
-          <FormInput id={`passport-number-${pass.id}`} value={number} onChange={(e) => setNumber(e.target.value)} placeholder="123456" maxLength={20} />
+          <FormInput id={`passport-number-${pass.id}`} value={number} onChange={(e) => setNumber(e.target.value)} placeholder={ph.passportNumber} maxLength={20} />
         </FormField>
       </div>
       <FormField id={`passport-issued-${pass.id}`} label="Кем выдан">
-        <FormInput id={`passport-issued-${pass.id}`} value={issuedBy} onChange={(e) => setIssuedBy(e.target.value)} placeholder="ОУФМС..." />
+        <FormInput id={`passport-issued-${pass.id}`} value={issuedBy} onChange={(e) => setIssuedBy(e.target.value)} placeholder={ph.passportIssuedBy} />
       </FormField>
       <button type="submit" className="btn btn-secondary text-sm w-full" disabled={saving}>
         {saving ? 'Сохранение...' : 'Сохранить'}

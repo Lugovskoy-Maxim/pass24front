@@ -1,18 +1,23 @@
 'use client';
 
-import { APP_VERSION } from '@/lib/app-version';
+import { useConfig } from '@/hooks/useConfig';
+import { resolveAppVersion } from '@/lib/app-version';
 
 /**
- * Маленькая метка версии (v.DDMMYY) — footer защищённых страниц и login.
+ * Маленькая метка версии — footer страниц.
+ * Значение из админки (Базовые настройки → Версия сайта), иначе дата сборки.
  */
 export function AppVersion({ className = '' }: { className?: string }) {
+  const config = useConfig();
+  const version = resolveAppVersion(config?.appVersion);
+
   return (
     <div
       className={`app-version text-center select-none ${className}`.trim()}
-      title={`Версия приложения ${APP_VERSION}`}
-      aria-label={`Версия ${APP_VERSION}`}
+      title={`Версия сайта ${version}`}
+      aria-label={`Версия ${version}`}
     >
-      {APP_VERSION}
+      {version}
     </div>
   );
 }

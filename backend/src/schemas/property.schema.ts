@@ -7,7 +7,7 @@ export type PropertyDocument = Property & Document;
 @Schema({ timestamps: true, collection: 'properties' })
 export class Property {
   @Prop({ required: true, trim: true })
-  name: string; // Название объекта (ЖК "Солнечный", БЦ "Атриум" и т.д.)
+  name: string; // Название объекта (БЦ «Добрынинский», БЦ «Добрынинский-2» и т.д.)
 
   @Prop({ required: true, trim: true })
   address: string;

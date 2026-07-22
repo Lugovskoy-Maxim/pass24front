@@ -21,6 +21,8 @@ const MAX_ICON_LENGTH = 120_000;
  */
 export interface SiteSettingsDto {
   siteName: string;
+  /** Версия UI (v.DDMMYY). Пустая строка — фронт использует дату сборки. */
+  appVersion: string;
   siteIcon: string;
   siteIconLight: string;
   siteIconDark: string;
@@ -86,6 +88,7 @@ export class SiteSettingsService implements OnModuleInit {
 
   async update(data: {
     siteName?: string;
+    appVersion?: string;
     siteIcon?: string;
     siteIconLight?: string;
     siteIconDark?: string;
@@ -121,6 +124,10 @@ export class SiteSettingsService implements OnModuleInit {
 
     const update: Partial<AppSettings> = {};
     if (data.siteName !== undefined) update.siteName = data.siteName.trim() || MSTYLE_BRAND_DEFAULTS.siteName;
+    if (data.appVersion !== undefined) {
+      // Пустая строка допустима — сброс на версию сборки фронта
+      update.appVersion = data.appVersion.trim().slice(0, 32);
+    }
     if (data.siteIcon !== undefined) update.siteIcon = data.siteIcon.trim();
     if (data.siteIconLight !== undefined) {
       update.siteIconLight = data.siteIconLight.trim();
@@ -185,6 +192,7 @@ export class SiteSettingsService implements OnModuleInit {
 
     return {
       siteName: doc?.siteName?.trim() || MSTYLE_BRAND_DEFAULTS.siteName,
+      appVersion: (doc?.appVersion ?? '').toString().trim().slice(0, 32),
       siteIcon: siteIconLight,
       siteIconLight,
       siteIconDark,

@@ -2,10 +2,12 @@ import { BcConfig } from '@/lib/api';
 
 export const MSTYLE_BRAND_DEFAULTS = {
   siteName: 'M-STYLE',
+  /** Пусто — AppVersion берёт дату сборки. В админке можно задать v.DDMMYY */
+  appVersion: '',
   siteIcon: '/brand/mstyle-logo-light.svg',
   siteIconLight: '/brand/mstyle-logo-light.svg',
   siteIconDark: '/brand/mstyle-logo.svg',
-  siteTagline: 'Пропуска для арендаторов бизнес-центра',
+  siteTagline: 'Пропуска для арендаторов БЦ Добрынинский и БЦ Добрынинский-2',
   sitePhone: '+7 495 663-00-00',
   siteEmail: 'renta@mstyle.ru',
   brandMarkType: 'image' as const,

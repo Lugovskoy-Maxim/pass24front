@@ -1,7 +1,7 @@
 'use client';
 
 import { useEffect, useState, useCallback, FormEvent } from 'react';
-import { Plus, Search, Pencil, Link2, X, Users, Building2, UserCog, Check, Clock } from 'lucide-react';
+import { Plus, Search, Pencil, Link2, X, Users, Building2, UserCog, Check, Clock, Trash2 } from 'lucide-react';
 import { AdminLayout } from '@/components/AdminLayout';
 import { api, AdminUser, BusinessCenter, CreateUserData, Office, ProfileChangeRequest, ROLE_LABELS, UserCategory, UserFilters, UserRole, formatTenantOffices, getErrorMessage, getRoleLabel } from '@/lib/api';
 import { PageError } from '@/components/PageError';
@@ -10,6 +10,8 @@ import { useDebounce } from '@/hooks/useDebounce';
 import { useAutoRefresh } from '@/hooks/useAutoRefresh';
 import { PersonNameFields } from '@/components/PersonNameFields';
 import { buildFullName, getUserNameLabels, isPersonNameValid, PersonNameParts, splitFullName } from '@/lib/person-name';
+import { useConfig } from '@/hooks/useConfig';
+import { getUiLabels } from '@/lib/ui-labels';
 
 const EMPTY: CreateUserData = {
   email: '', password: '', role: 'tenant', phone: '', company: '', office: '', floor: '', officeIds: [], propertyIds: [],
@@ -29,6 +31,7 @@ const EMPTY_FILTERS: Omit<UserFilters, 'category'> = {
 
 export default function AdminUsersPage() {
   const { toast } = useToast();
+  const ph = getUiLabels(useConfig()).placeholders;
   const [category, setCategory] = useState<UserCategory>('tenants');
   const [profileRequests, setProfileRequests] = useState<Array<{ user: AdminUser; request: ProfileChangeRequest }>>([]);
   const [registrationRequests, setRegistrationRequests] = useState<AdminUser[]>([]);
@@ -48,7 +51,9 @@ export default function AdminUsersPage() {
   const [nameParts, setNameParts] = useState<PersonNameParts>(EMPTY_NAME);
   const [officeIds, setOfficeIds] = useState<string[]>([]);
   const [propertyIds, setPropertyIds] = useState<string[]>([]);
+  const [officePickerSearch, setOfficePickerSearch] = useState('');
   const [isActive, setIsActive] = useState(true);
+  const [deletingUserId, setDeletingUserId] = useState<string | null>(null);
   const [error, setError] = useState('');
   const [loadError, setLoadError] = useState('');
   const [loadErrorCause, setLoadErrorCause] = useState<unknown>(null);
@@ -217,6 +222,7 @@ export default function AdminUsersPage() {
     setNameParts(EMPTY_NAME);
     setOfficeIds([]);
     setPropertyIds([]);
+    setOfficePickerSearch('');
     setIsActive(true);
     setShowForm(true);
     setError('');
@@ -240,6 +246,7 @@ export default function AdminUsersPage() {
     );
     setOfficeIds(u.offices?.map((o) => o.id) || []);
     setPropertyIds(u.propertyIds || u.businessCenters?.map((bc) => bc.id) || []);
+    setOfficePickerSearch('');
     setIsActive(u.isActive);
     setShowForm(true);
     setError('');
@@ -247,6 +254,27 @@ export default function AdminUsersPage() {
 
   const toggleOffice = (id: string) => {
     setOfficeIds((prev) => (prev.includes(id) ? prev.filter((x) => x !== id) : [...prev, id]));
+  };
+
+  const handleDeleteUser = async (u: AdminUser) => {
+    const kind = category === 'tenants' ? 'арендатора' : 'сотрудника';
+    const extra = category === 'tenants'
+      ? '\nОфисы компании будут отвязаны. Если есть сотрудники компании — сначала удалите их.'
+      : '';
+    if (!window.confirm(`Удалить ${kind} «${u.fullName}» (${u.email})?${extra}\n\nДействие нельзя отменить.`)) {
+      return;
+    }
+    setDeletingUserId(u.id);
+    try {
+      await api.admin.deleteUser(u.id);
+      toast('Пользователь удалён', 'success');
+      if (editId === u.id) setShowForm(false);
+      load();
+    } catch (err) {
+      toast(getErrorMessage(err, 'Ошибка удаления'), 'error');
+    } finally {
+      setDeletingUserId(null);
+    }
   };
 
   const toggleProperty = (id: string) => {
@@ -259,6 +287,20 @@ export default function AdminUsersPage() {
     acc[key].push(office);
     return acc;
   }, {} as Record<string, Office[]>);
+
+  const officePickerQuery = officePickerSearch.trim().toLowerCase();
+  const filteredOfficesByBc = Object.entries(officesByBc).reduce((acc, [bc, list]) => {
+    const filtered = officePickerQuery
+      ? list.filter((o) => {
+          const hay = `${o.number} ${o.floor || ''} ${o.company || ''} ${o.tenantName || ''} ${bc}`.toLowerCase();
+          return hay.includes(officePickerQuery);
+        })
+      : list;
+    if (filtered.length) acc[bc] = filtered;
+    return acc;
+  }, {} as Record<string, Office[]>);
+
+  const selectedOfficeChips = allOffices.filter((o) => officeIds.includes(o.id));
 
   const formatBindings = (u: AdminUser) => {
     if (u.role === 'tenant' && u.offices?.length) return formatTenantOffices(u.offices);
@@ -352,7 +394,7 @@ export default function AdminUsersPage() {
             <Search className="absolute left-3 top-1/2 -translate-y-1/2 w-4 h-4 text-[var(--muted)]" />
             <input
               className="input input--icon-left"
-              placeholder="ФИО, email, компания..."
+              placeholder={ph.userSearch}
               value={filters.search}
               onChange={(e) => setFilters((prev) => ({ ...prev, search: e.target.value }))}
               onKeyDown={(e) => { if (e.key === 'Enter') applyFilters(); }}
@@ -577,44 +619,106 @@ export default function AdminUsersPage() {
           </div>
 
           {form.role === 'tenant' && (
-            <div className="border border-[var(--border)] rounded-lg p-4 bg-[var(--surface-muted)]">
-              <div className="flex items-center gap-2 mb-3">
-                <Link2 className="w-4 h-4 text-[var(--primary)]" />
-                <span className="font-medium text-sm">Привязка к офисам</span>
+            <div className="border border-[var(--border)] rounded-lg p-4 bg-[var(--surface-muted)] space-y-3">
+              <div className="flex items-center justify-between gap-2">
+                <div className="flex items-center gap-2">
+                  <Link2 className="w-4 h-4 text-[var(--primary)]" />
+                  <span className="font-medium text-sm">Привязка к офисам</span>
+                </div>
+                {officeIds.length > 0 && (
+                  <button
+                    type="button"
+                    className="text-xs text-[var(--muted)] hover:text-[var(--primary)]"
+                    onClick={() => setOfficeIds([])}
+                  >
+                    Снять все
+                  </button>
+                )}
               </div>
+              <p className="text-xs text-[var(--muted)]">
+                Выберите офисы компании. Занятый офис при сохранении перейдёт к этому арендатору.
+              </p>
+
+              {selectedOfficeChips.length > 0 && (
+                <div className="flex flex-wrap gap-1.5">
+                  {selectedOfficeChips.map((o) => (
+                    <button
+                      key={o.id}
+                      type="button"
+                      className="inline-flex items-center gap-1 text-xs px-2 py-1 rounded-full bg-[var(--status-approved-soft)] text-[var(--status-approved)] border border-[var(--status-approved-border)]"
+                      onClick={() => toggleOffice(o.id)}
+                      title="Убрать"
+                    >
+                      {o.businessCenterName ? `${o.businessCenterName}: ` : ''}оф. {o.number}
+                      <X className="w-3 h-3" />
+                    </button>
+                  ))}
+                </div>
+              )}
+
               {allOffices.length === 0 ? (
                 <p className="text-sm text-amber-700 bg-amber-50 p-3 rounded-md">
                   Сначала добавьте офисы в реестре или создайте тестовые данные.
                 </p>
               ) : (
-                <div className="border border-[var(--border)] rounded-lg divide-y divide-[var(--border)] max-h-64 overflow-y-auto bg-[var(--surface)]">
-                  {Object.entries(officesByBc).map(([bc, offices]) => (
-                    <div key={bc} className="p-3">
-                      <div className="text-xs font-semibold text-[var(--muted)] uppercase mb-2">{bc}</div>
-                      <div className="space-y-2">
-                        {offices.map((office) => (
-                          <label key={office.id} className="flex items-center gap-2 text-sm cursor-pointer">
-                            <input
-                              type="checkbox"
-                              checked={officeIds.includes(office.id)}
-                              onChange={() => toggleOffice(office.id)}
-                            />
-                            <span>
-                              оф. {office.number}{office.floor ? `, ${office.floor} эт.` : ''}
-                              {office.company && <span className="text-[var(--muted)]"> · {office.company}</span>}
-                              {office.tenantId && office.tenantId !== editId && (
-                                <span className="text-xs text-amber-600 ml-1">(занят: {office.tenantName})</span>
-                              )}
-                            </span>
-                          </label>
-                        ))}
-                      </div>
-                    </div>
-                  ))}
-                </div>
+                <>
+                  <div className="relative">
+                    <Search className="absolute left-3 top-1/2 -translate-y-1/2 w-4 h-4 text-[var(--muted)]" />
+                    <input
+                      className="input input--icon-left text-sm"
+                      value={officePickerSearch}
+                      onChange={(e) => setOfficePickerSearch(e.target.value)}
+                      placeholder="Поиск офиса, БЦ, компании..."
+                    />
+                  </div>
+                  <div className="border border-[var(--border)] rounded-lg divide-y divide-[var(--border)] max-h-64 overflow-y-auto bg-[var(--surface)]">
+                    {Object.keys(filteredOfficesByBc).length === 0 ? (
+                      <div className="p-4 text-sm text-[var(--muted)] text-center">Ничего не найдено</div>
+                    ) : (
+                      Object.entries(filteredOfficesByBc).map(([bc, offices]) => (
+                        <div key={bc} className="p-3">
+                          <div className="text-xs font-semibold text-[var(--muted)] uppercase mb-2">{bc}</div>
+                          <div className="space-y-1.5">
+                            {offices.map((office) => {
+                              const checked = officeIds.includes(office.id);
+                              const occupiedByOther = !!(office.tenantId && office.tenantId !== editId);
+                              return (
+                                <label
+                                  key={office.id}
+                                  className={`flex items-start gap-2.5 text-sm cursor-pointer rounded-md px-2 py-1.5 -mx-1 ${
+                                    checked ? 'bg-[var(--status-approved-soft)]' : 'hover:bg-[var(--surface-muted)]'
+                                  }`}
+                                >
+                                  <input
+                                    type="checkbox"
+                                    className="mt-0.5"
+                                    checked={checked}
+                                    onChange={() => toggleOffice(office.id)}
+                                  />
+                                  <span className="min-w-0">
+                                    <span className="font-medium">оф. {office.number}</span>
+                                    {office.floor ? <span className="text-[var(--muted)]"> · {office.floor} эт.</span> : null}
+                                    {occupiedByOther ? (
+                                      <span className="block text-[11px] text-amber-700 mt-0.5">
+                                        Занят: {office.tenantName || 'другой арендатор'}
+                                        {office.company ? ` (${office.company})` : ''} — при сохранении перейдёт сюда
+                                      </span>
+                                    ) : office.company ? (
+                                      <span className="block text-[11px] text-[var(--muted)]">{office.company}</span>
+                                    ) : null}
+                                  </span>
+                                </label>
+                              );
+                            })}
+                          </div>
+                        </div>
+                      ))
+                    )}
+                  </div>
+                </>
               )}
-              <p className="text-xs text-[var(--muted)] mt-2">
-                {officeIds.length > 0 ? `Выбрано офисов: ${officeIds.length}` : 'Офисы не выбраны'}
+              <p className="text-xs text-[var(--muted)]">
+                {officeIds.length > 0 ? `Выбрано офисов: ${officeIds.length}` : 'Офисы не выбраны — заказ пропусков будет недоступен'}
               </p>
             </div>
           )}
@@ -674,7 +778,7 @@ export default function AdminUsersPage() {
                 {category === 'tenants' ? 'Офисы' : 'Бизнес-центры'}
               </th>
               <th className="text-left p-3 font-medium">Статус</th>
-              <th className="p-3 w-10" />
+              <th className="p-3 w-20 text-right">Действия</th>
             </tr>
           </thead>
           <tbody>
@@ -705,6 +809,9 @@ export default function AdminUsersPage() {
                       </span>
                     )}
                   </div>
+                  <div className="text-xs text-[var(--muted)] sm:hidden mt-1">
+                    {formatBindings(u)}
+                  </div>
                 </td>
                 <td className="p-3 hidden lg:table-cell text-[var(--muted)]">
                   <div>{u.email || '—'}</div>
@@ -729,9 +836,25 @@ export default function AdminUsersPage() {
                   </span>
                 </td>
                 <td className="p-3">
-                  <button className="p-1 hover:text-[var(--primary)]" onClick={() => openEdit(u)} title="Редактировать">
-                    <Pencil className="w-4 h-4" />
-                  </button>
+                  <div className="flex items-center justify-end gap-1">
+                    <button
+                      type="button"
+                      className="p-1.5 rounded-md border border-[var(--border)] hover:bg-[var(--surface-muted)]"
+                      onClick={() => openEdit(u)}
+                      title="Редактировать"
+                    >
+                      <Pencil className="w-4 h-4" />
+                    </button>
+                    <button
+                      type="button"
+                      className="p-1.5 rounded-md border border-red-200 hover:bg-red-50 text-red-600"
+                      onClick={() => handleDeleteUser(u)}
+                      disabled={deletingUserId === u.id}
+                      title="Удалить"
+                    >
+                      <Trash2 className="w-4 h-4" />
+                    </button>
+                  </div>
                 </td>
               </tr>
             ))}

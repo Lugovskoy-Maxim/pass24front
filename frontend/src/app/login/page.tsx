@@ -13,6 +13,7 @@ import { useAuth } from '@/lib/auth';
 import { getHomePath } from '@/lib/permissions';
 import { api, getErrorMessage, UserRole } from '@/lib/api';
 import { useConfig } from '@/hooks/useConfig';
+import { getUiLabels } from '@/lib/ui-labels';
 import { SiteBrand } from '@/components/SiteBrand';
 import { PersonNameFields } from '@/components/PersonNameFields';
 import { FormErrorBanner, FormField, FormInput, PasswordInput } from '@/components/FormField';
@@ -91,6 +92,8 @@ function LoginPageInner() {
   const [adminContact, setAdminContact] = useState<{ phone?: string; email?: string } | null>(null);
   const { login: authLogin, requestRegistrationCode, confirmRegistration } = useAuth();
   const config = useConfig();
+  const labels = getUiLabels(config);
+  const ph = labels.placeholders;
   const { theme } = useTheme();
   const { toast } = useToast();
   const smsRegistrationEnabled = config?.smsRegistrationEnabled !== false;
@@ -537,7 +540,7 @@ function LoginPageInner() {
                     value={company}
                     onChange={(e) => { setCompany(e.target.value); clearFieldError('company'); }}
                     invalid={!!fieldErrors.company}
-                    placeholder="ООО «Название»"
+                    placeholder={ph.company}
                   />
                 </FormField>
 
@@ -576,6 +579,7 @@ function LoginPageInner() {
                         onChange={(e) => { setEmail(e.target.value); clearFieldError('email'); }}
                         invalid={!!fieldErrors.email}
                         autoComplete="email"
+                        placeholder={ph.email}
                       />
                     </FormField>
                     <FormField id="phone" label="Телефон" error={fieldErrors.phone}>
@@ -586,7 +590,7 @@ function LoginPageInner() {
                         onChange={(e) => { setPhone(e.target.value); clearFieldError('phone'); }}
                         onBlur={handlePhoneBlur}
                         invalid={!!fieldErrors.phone}
-                        placeholder="+7 (999) 000-00-00"
+                        placeholder={ph.phone}
                       />
                     </FormField>
                   </>
@@ -600,7 +604,7 @@ function LoginPageInner() {
                         onChange={(e) => { setPhone(e.target.value); clearFieldError('phone'); }}
                         onBlur={handlePhoneBlur}
                         invalid={!!fieldErrors.phone}
-                        placeholder="+7 (999) 000-00-00"
+                        placeholder={ph.phone}
                       />
                     </FormField>
                     <FormField id="email" label="Email" hint="Необязательно" error={fieldErrors.email}>
@@ -611,6 +615,7 @@ function LoginPageInner() {
                         onChange={(e) => { setEmail(e.target.value); clearFieldError('email'); }}
                         invalid={!!fieldErrors.email}
                         autoComplete="email"
+                        placeholder={ph.email}
                       />
                     </FormField>
                   </>
@@ -635,7 +640,7 @@ function LoginPageInner() {
                       clearFieldError('code');
                     }}
                     invalid={!!fieldErrors.code}
-                    placeholder="000000"
+                    placeholder={ph.verificationCode}
                     className="tracking-[0.3em] text-center text-lg font-mono"
                   />
                 </FormField>
@@ -662,7 +667,7 @@ function LoginPageInner() {
                     }}
                     invalid={!!fieldErrors.email}
                     autoComplete="username"
-                    placeholder="admin, email@example.com или +7 (999) 000-00-00"
+                    placeholder={ph.login}
                   />
                 </FormField>
                 <FormField id="password" label="Пароль" required error={fieldErrors.password}>
@@ -718,7 +723,7 @@ function LoginPageInner() {
                   onChange={(e) => { setResetEmail(e.target.value); clearFieldError('email'); }}
                   invalid={!!fieldErrors.email}
                   autoComplete="email"
-                  placeholder="email@example.com"
+                  placeholder={ph.email}
                 />
               </FormField>
             )}
@@ -739,7 +744,7 @@ function LoginPageInner() {
                       clearFieldError('code');
                     }}
                     invalid={!!fieldErrors.code}
-                    placeholder="000000"
+                    placeholder={ph.verificationCode}
                     className="tracking-[0.3em] text-center text-lg font-mono"
                   />
                 </FormField>

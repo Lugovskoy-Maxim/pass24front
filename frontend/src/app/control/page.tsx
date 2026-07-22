@@ -340,7 +340,7 @@ function ControlPageContent() {
           <Search className="absolute left-3 top-1/2 -translate-y-1/2 w-4 h-4 text-[var(--muted)]" />
           <input
             className="input input--icon-left font-mono"
-            placeholder="Номер пропуска, ФИО, телефон или паспорт"
+            placeholder={labels.reception.lookupPlaceholder}
             value={lookupQuery}
             onChange={(e) => setLookupQuery(e.target.value)}
           />

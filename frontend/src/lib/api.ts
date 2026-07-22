@@ -667,6 +667,9 @@ export const api = {
     updateUser: (id: string, data: Partial<CreateUserData & { isActive: boolean }>) =>
       request<{ user: AdminUser }>(`/admin/users/${id}`, { method: 'PATCH', body: JSON.stringify(data) }),
 
+    deleteUser: (id: string) =>
+      request<{ message: string; id: string }>(`/admin/users/${id}`, { method: 'DELETE' }),
+
     getRegistrationRequests: () =>
       request<{ requests: AdminUser[] }>('/admin/registration-requests'),
 
@@ -796,6 +799,8 @@ export interface HelpGuideSection {
 
 export interface SiteSettings {
   siteName: string;
+  /** Версия сайта (v.DDMMYY). Пусто — дата сборки фронта. */
+  appVersion?: string;
   siteIcon: string;
   siteIconLight: string;
   siteIconDark: string;

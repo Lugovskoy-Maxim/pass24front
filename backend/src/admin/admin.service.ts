@@ -173,7 +173,12 @@ export class AdminService {
     const filter: Record<string, unknown> = {};
 
     if (params.category === 'tenants') {
+      // Только владельцы компаний (без parentTenantId — это сотрудники)
       filter.role = 'tenant';
+      filter.$and = [
+        ...(Array.isArray(filter.$and) ? filter.$and : []),
+        { $or: [{ parentTenantId: null }, { parentTenantId: { $exists: false } }] },
+      ];
     } else if (params.category === 'staff') {
       if (params.role && STAFF_ROLES.includes(params.role as (typeof STAFF_ROLES)[number])) {
         filter.role = params.role;
@@ -784,13 +789,29 @@ export class AdminService {
     if (dto.areaSqm !== undefined) office.areaSqm = dto.areaSqm;
     if (dto.isActive !== undefined) office.isActive = dto.isActive;
     if (dto.tenantId !== undefined) {
-      office.tenantId = dto.tenantId ? new Types.ObjectId(dto.tenantId) : undefined;
+      if (dto.tenantId) {
+        office.tenantId = new Types.ObjectId(dto.tenantId);
+        // Подтянуть название компании арендатора, если не передали явно
+        if (dto.company === undefined) {
+          const tenant = await this.userModel.findById(dto.tenantId).select('company').lean();
+          if (tenant?.company) office.company = tenant.company;
+        }
+      } else {
+        // Явно снять привязку
+        office.set('tenantId', null);
+      }
     }
 
     await office.save();
 
+    // Если сняли tenantId через null — $unset для чистоты запросов
+    if (dto.tenantId !== undefined && !dto.tenantId) {
+      await this.officeModel.updateOne({ _id: office._id }, { $unset: { tenantId: 1 } });
+    }
+
     if (prevTenantId) await this.syncTenantProperties(prevTenantId);
-    if (office.tenantId) await this.syncTenantProperties(office.tenantId.toString());
+    const nextTenantId = office.tenantId?.toString();
+    if (nextTenantId) await this.syncTenantProperties(nextTenantId);
 
     const property = await this.propertyModel.findById(office.property).lean();
     const tenant = office.tenantId ? await this.userModel.findById(office.tenantId).lean() : null;
@@ -874,20 +895,48 @@ export class AdminService {
   }
 
   private async assignOfficesToTenant(tenantId: string, officeIds: string[]) {
+    const tenantOid = new Types.ObjectId(tenantId);
+    const targetOids = officeIds.map((id) => new Types.ObjectId(id));
+
+    // Кто был привязан к этим офисам раньше (чужие арендаторы + текущий)
+    const affectedBefore = await this.officeModel
+      .find({
+        $or: [
+          { tenantId: tenantOid },
+          ...(targetOids.length ? [{ _id: { $in: targetOids }, tenantId: { $exists: true, $ne: null } }] : []),
+        ],
+      })
+      .select('tenantId')
+      .lean();
+    const affectedTenantIds = new Set<string>(
+      affectedBefore.map((o) => o.tenantId?.toString()).filter((id): id is string => !!id),
+    );
+    affectedTenantIds.add(tenantId);
+
     await this.officeModel.updateMany(
-      { tenantId: new Types.ObjectId(tenantId) },
+      { tenantId: tenantOid },
       { $unset: { tenantId: 1 } },
     );
-    if (officeIds.length) {
+    if (targetOids.length) {
+      const tenant = await this.userModel.findById(tenantId).select('company').lean();
       await this.officeModel.updateMany(
-        { _id: { $in: officeIds.map((id) => new Types.ObjectId(id)) } },
-        { $set: { tenantId: new Types.ObjectId(tenantId) } },
+        { _id: { $in: targetOids } },
+        {
+          $set: {
+            tenantId: tenantOid,
+            ...(tenant?.company ? { company: tenant.company } : {}),
+          },
+        },
       );
     }
-    await this.syncTenantProperties(tenantId);
+
+    for (const id of affectedTenantIds) {
+      await this.syncTenantProperties(id);
+    }
   }
 
   private async syncTenantProperties(tenantId: string) {
+    if (!tenantId || !Types.ObjectId.isValid(tenantId)) return;
     const offices = await this.officeModel.find({ tenantId: new Types.ObjectId(tenantId), isActive: true }).lean();
     const propertyIds = [...new Set(offices.map((o) => o.property.toString()))];
     const primary = offices[0];
@@ -895,9 +944,78 @@ export class AdminService {
     await this.userModel.findByIdAndUpdate(tenantId, {
       properties: propertyIds.map((id) => new Types.ObjectId(id)),
       ...(primary
-        ? { office: primary.number, floor: primary.floor, company: primary.company }
-        : {}),
+        ? {
+            office: primary.number,
+            floor: primary.floor,
+            // company офиса не затираем company пользователя, если у user уже есть
+          }
+        : { office: '', floor: '' }),
     });
+  }
+
+  /**
+   * Удаление пользователя админом.
+   * - tenant owner: нельзя, если есть сотрудники; офисы отвязываются
+   * - employee (parentTenantId): пропуска переназначаются owner
+   * - staff/admin: нельзя удалить последнего admin / себя
+   */
+  async deleteUser(id: string, actor?: AuditActor) {
+    const user = await this.userModel.findById(id);
+    if (!user) throw new NotFoundException('Пользователь не найден');
+
+    if (actor?.userId && actor.userId === id) {
+      throw new BadRequestException('Нельзя удалить собственную учётную запись');
+    }
+
+    if (user.role === 'admin') {
+      const activeAdmins = await this.userModel.countDocuments({ role: 'admin', isActive: { $ne: false } });
+      if (activeAdmins <= 1) {
+        throw new BadRequestException('Нельзя удалить последнего администратора');
+      }
+    }
+
+    const isTenantOwner = user.role === 'tenant' && !user.parentTenantId;
+    const isEmployee = !!user.parentTenantId;
+
+    if (isTenantOwner) {
+      const employeesCount = await this.userModel.countDocuments({ parentTenantId: user._id });
+      if (employeesCount > 0) {
+        throw new BadRequestException(
+          `Нельзя удалить арендатора: у компании ${employeesCount} сотрудник(ов). Сначала удалите сотрудников (из профиля владельца или перенесите учётные записи).`,
+        );
+      }
+      await this.officeModel.updateMany(
+        { tenantId: user._id },
+        { $unset: { tenantId: 1 } },
+      );
+    }
+
+    if (isEmployee) {
+      await this.passModel.updateMany(
+        { createdBy: user._id },
+        { $set: { createdBy: user.parentTenantId } },
+      );
+    }
+
+    const snapshot = {
+      email: user.email,
+      fullName: user.fullName,
+      role: user.role,
+      company: user.company,
+      parentTenantId: user.parentTenantId?.toString(),
+    };
+
+    await this.userModel.deleteOne({ _id: user._id });
+
+    await this.auditService.log({
+      action: 'user.delete',
+      entityType: 'user',
+      entityId: id,
+      actor,
+      details: snapshot,
+    });
+
+    return { message: 'Пользователь удалён', id };
   }
 
   private mapOffice(

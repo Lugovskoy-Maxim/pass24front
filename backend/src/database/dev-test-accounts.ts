@@ -16,7 +16,7 @@ export const DEV_TEST_ACCOUNTS: DevTestAccount[] = [
     password: 'tenant123',
     role: 'tenant',
     fullName: 'Арендатор Тестовый',
-    company: 'ООО «Ромашка»',
+    company: 'ООО «М-СТИЛЬ ОФИС»',
     office: '401',
     floor: '4',
   },

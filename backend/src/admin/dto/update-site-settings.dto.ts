@@ -63,6 +63,12 @@ export class UpdateSiteSettingsDto {
   @MaxLength(120)
   siteName?: string;
 
+  /** Версия сайта в UI, напр. v.220726. Пусто — дата сборки фронта. */
+  @IsOptional()
+  @IsString()
+  @MaxLength(32)
+  appVersion?: string;
+
   @IsOptional()
   @IsString()
   @MaxLength(120000)

@@ -19,7 +19,7 @@ export class Authorization {
   property: Types.ObjectId;
 
   @Prop({ trim: true })
-  description?: string; // "Доверенность на пропуска для сотрудников ООО Ромашка"
+  description?: string; // "Доверенность на пропуска для сотрудников ООО «М-СТИЛЬ ОФИС»"
 
   @Prop({ type: Date })
   validFrom?: Date;

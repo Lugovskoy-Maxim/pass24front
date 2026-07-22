@@ -9,6 +9,8 @@ import { api, AccessConfig, PassType, ROLE_LABELS, getErrorMessage } from '@/lib
 import { PageError } from '@/components/PageError';
 import { FormField, FormInput } from '@/components/FormField';
 import { hasPermission } from '@/lib/permissions';
+import { useConfig } from '@/hooks/useConfig';
+import { getUiLabels } from '@/lib/ui-labels';
 
 const ROLE_KEY_PATTERN = /^[a-z][a-z0-9_]*$/;
 
@@ -46,6 +48,7 @@ export default function AdminPermissionsPage() {
   const { toast } = useToast();
   const { user, refreshUser } = useAuth();
   const [config, setConfig] = useState<AccessConfig | null>(null);
+  const ph = getUiLabels(useConfig()).placeholders;
   const [saving, setSaving] = useState(false);
   const [loadError, setLoadError] = useState('');
   const [loadErrorCause, setLoadErrorCause] = useState<unknown>(null);
@@ -219,7 +222,7 @@ export default function AdminPermissionsPage() {
                   setNewRoleLabel(e.target.value);
                   if (!newRoleKey) setNewRoleKey(transliterateRoleKey(e.target.value));
                 }}
-                placeholder="Менеджер"
+                placeholder={ph.roleName}
               />
             </FormField>
             <FormField id="newRoleKey" label="Код (латиница)" className="flex-1" hint="a-z, 0-9, _">
@@ -227,7 +230,7 @@ export default function AdminPermissionsPage() {
                 id="newRoleKey"
                 value={newRoleKey}
                 onChange={(e) => setNewRoleKey(e.target.value.toLowerCase().replace(/[^a-z0-9_]/g, ''))}
-                placeholder="manager"
+                placeholder={ph.roleKey}
               />
             </FormField>
             <div className="sm:self-end">

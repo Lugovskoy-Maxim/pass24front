@@ -15,10 +15,13 @@ import { getBookableVisitDates, parseClosedWeekdays } from '@/lib/bookable-visit
 import { getLocalDateString } from '@/lib/local-date';
 import { getVisitorNameLabel } from '@/lib/person-name';
 import { canOrderPasses, hasPermission, isTenantCompanyUser } from '@/lib/permissions';
+import { getUiLabels } from '@/lib/ui-labels';
 
 function NewPassForm() {
   const { user } = useAuth();
   const config = useConfig();
+  const labels = getUiLabels(config);
+  const ph = labels.placeholders;
   const { toast } = useToast();
   const router = useRouter();
   const searchParams = useSearchParams();
@@ -299,7 +302,7 @@ function NewPassForm() {
             type="tel"
             value={visitorPhone}
             onChange={(e) => setVisitorPhone(e.target.value)}
-            placeholder="+7 900 000-00-00"
+            placeholder={ph.phone}
           />
         </FormField>
 
@@ -312,7 +315,7 @@ function NewPassForm() {
                 value={vehiclePlate}
                 onChange={(e) => { setVehiclePlate(e.target.value); clearFieldError('vehiclePlate'); }}
                 invalid={!!fieldErrors.vehiclePlate}
-                placeholder="А123ВС777"
+                placeholder={ph.vehiclePlate}
               />
             </FormField>
             <FormField id="vehicleModel" label="Марка / модель">
@@ -386,7 +389,7 @@ function NewPassForm() {
               value={office}
               onChange={(e) => { setOffice(e.target.value); clearFieldError('office'); }}
               invalid={!!fieldErrors.office}
-              placeholder="401"
+              placeholder={ph.officeNumber}
             />
           </FormField>
         )}
@@ -396,7 +399,7 @@ function NewPassForm() {
             id="comment"
             value={comment}
             onChange={(e) => setComment(e.target.value)}
-            placeholder="Дополнительная информация"
+            placeholder={ph.passComment}
           />
         </FormField>
 
@@ -424,7 +427,7 @@ function NewPassForm() {
                 value={recipientEmail}
                 onChange={(e) => { setRecipientEmail(e.target.value); clearFieldError('recipientEmail'); }}
                 invalid={!!fieldErrors.recipientEmail}
-                placeholder="visitor@example.com"
+                placeholder={ph.guestEmail}
               />
             </FormField>
           )}

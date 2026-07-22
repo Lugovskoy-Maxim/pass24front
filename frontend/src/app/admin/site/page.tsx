@@ -85,6 +85,7 @@ function normalizeSettings(s: SiteSettings): SiteSettings {
   const legacy = s.siteIcon?.trim() || '';
   return {
     ...s,
+    appVersion: (s.appVersion ?? '').toString().trim().slice(0, 32),
     siteIconLight: s.siteIconLight?.trim() || legacy || MSTYLE_BRAND_DEFAULTS.siteIconLight,
     siteIconDark: s.siteIconDark?.trim() || legacy || MSTYLE_BRAND_DEFAULTS.siteIconDark,
     brandMarkType: s.brandMarkType === 'text' ? 'text' : 'image',
@@ -393,7 +394,7 @@ export default function AdminSiteSettingsPage() {
           onClick={() => setTab('labels')}
         >
           <Type className="w-4 h-4" />
-          Названия и кнопки
+          Тексты и плейсхолдеры
         </button>
         {isSuperAdmin && (
           <button
@@ -436,6 +437,22 @@ export default function AdminSiteSettingsPage() {
                   placeholder={MSTYLE_BRAND_DEFAULTS.siteName}
                   required
                 />
+              </div>
+
+              <div>
+                <label className="label" htmlFor="appVersion">Версия сайта</label>
+                <input
+                  id="appVersion"
+                  className="input"
+                  value={settings.appVersion || ''}
+                  onChange={(e) => setSettings({ ...settings, appVersion: e.target.value })}
+                  placeholder="v.220726"
+                  maxLength={32}
+                />
+                <p className="text-xs text-[var(--muted)] mt-1">
+                  Показывается мелким шрифтом внизу страниц (например <span className="font-mono">v.220726</span>).
+                  Оставьте пустым — подставится дата сборки фронтенда.
+                </p>
               </div>
 
               <div>
@@ -768,7 +785,7 @@ export default function AdminSiteSettingsPage() {
                       className="input"
                       value={item.question}
                       onChange={(e) => updateFaqItem(index, { question: e.target.value })}
-                      placeholder="Например: Не пришло SMS"
+                      placeholder="Например: Как заказать пропуск в БЦ Добрынинский?"
                       maxLength={300}
                     />
                   </div>
@@ -779,7 +796,7 @@ export default function AdminSiteSettingsPage() {
                       className="input min-h-[100px] resize-y"
                       value={item.answer}
                       onChange={(e) => updateFaqItem(index, { answer: e.target.value })}
-                      placeholder="Краткий понятный ответ для пользователей"
+                      placeholder="Краткий ответ для арендаторов M-STYLE / БЦ Добрынинский"
                       maxLength={2000}
                     />
                     <p className="text-xs text-[var(--muted)] mt-1">
@@ -868,7 +885,7 @@ export default function AdminSiteSettingsPage() {
                       className="input"
                       value={item.title}
                       onChange={(e) => updateGuideForm(index, { title: e.target.value })}
-                      placeholder="Например: Заказ пропуска"
+                      placeholder="Например: Заказ пропуска в БЦ Добрынинский"
                       maxLength={200}
                     />
                   </div>
@@ -881,7 +898,7 @@ export default function AdminSiteSettingsPage() {
                       className="input min-h-[110px] resize-y"
                       value={item.stepsText}
                       onChange={(e) => updateGuideForm(index, { stepsText: e.target.value })}
-                      placeholder={'Раздел «Пропуска» → «Заказать пропуск».\nУкажите данные посетителя...'}
+                      placeholder={'Раздел «Пропуска» → «Заказать пропуск».\nУкажите посетителя, офис ООО «М-СТИЛЬ ОФИС» и дату визита в БЦ Добрынинский.'}
                     />
                   </div>
                   <div>
@@ -893,7 +910,7 @@ export default function AdminSiteSettingsPage() {
                       className="input min-h-[80px] resize-y"
                       value={item.paragraphsText}
                       onChange={(e) => updateGuideForm(index, { paragraphsText: e.target.value })}
-                      placeholder="Дополнительные пояснения без нумерации"
+                      placeholder="Например: Пропуск действует только на дату визита в БЦ Добрынинский или БЦ Добрынинский-2."
                     />
                     <p className="text-xs text-[var(--muted)] mt-1">
                       Нужен хотя бы один шаг или абзац. Шаги в панели помощи показываются нумерованным списком.
@@ -992,6 +1009,7 @@ export default function AdminSiteSettingsPage() {
                   setSettings({
                     ...settings,
                     siteName: MSTYLE_BRAND_DEFAULTS.siteName,
+                    appVersion: MSTYLE_BRAND_DEFAULTS.appVersion,
                     siteIcon: MSTYLE_BRAND_DEFAULTS.siteIconLight,
                     siteIconLight: MSTYLE_BRAND_DEFAULTS.siteIconLight,
                     siteIconDark: MSTYLE_BRAND_DEFAULTS.siteIconDark,

@@ -8,6 +8,8 @@ import { useDebounce } from '@/hooks/useDebounce';
 import { api, Office, AdminUser, BusinessCenter, BcPassSettings, DEFAULT_BC_PASS_SETTINGS, getErrorMessage } from '@/lib/api';
 import { parseClosedWeekdays, serializeClosedWeekdays, WEEKDAY_OPTIONS } from '@/lib/bookable-visit-dates';
 import { PageError } from '@/components/PageError';
+import { useConfig } from '@/hooks/useConfig';
+import { getUiLabels } from '@/lib/ui-labels';
 
 type OfficeFilters = {
   search: string;
@@ -34,6 +36,7 @@ function getInitialOfficeView(): OfficeViewMode {
 
 export default function AdminOfficesPage() {
   const { toast } = useToast();
+  const ph = getUiLabels(useConfig()).placeholders;
   const [offices, setOffices] = useState<Office[]>([]);
   const [tenants, setTenants] = useState<AdminUser[]>([]);
   const [businessCenters, setBusinessCenters] = useState<BusinessCenter[]>([]);
@@ -58,6 +61,7 @@ export default function AdminOfficesPage() {
   const [areaSqm, setAreaSqm] = useState('');
   const [company, setCompany] = useState('');
   const [tenantId, setTenantId] = useState('');
+  const [tenantSearch, setTenantSearch] = useState('');
   const [officeFilters, setOfficeFilters] = useState<OfficeFilters>(EMPTY_OFFICE_FILTERS);
   const [appliedOfficeFilters, setAppliedOfficeFilters] = useState<OfficeFilters>(EMPTY_OFFICE_FILTERS);
   const [officeView, setOfficeView] = useState<OfficeViewMode>('table');
@@ -110,6 +114,7 @@ export default function AdminOfficesPage() {
     setAreaSqm('');
     setCompany('');
     setTenantId('');
+    setTenantSearch('');
     setShowForm(false);
     setEditingId(null);
     setBindingOfficeId(null);
@@ -242,13 +247,27 @@ export default function AdminOfficesPage() {
     setShowForm(false);
     setTenantId(office.tenantId || '');
     setCompany(office.company || '');
+    setTenantSearch('');
+    // Прокрутка к панели привязки
+    window.setTimeout(() => {
+      document.getElementById('office-binding-panel')?.scrollIntoView({ behavior: 'smooth', block: 'nearest' });
+    }, 50);
   };
 
-  const handleTenantSelect = (id: string, forOffice?: Office) => {
+  const handleTenantSelect = (id: string) => {
     setTenantId(id);
     const tenant = tenants.find((t) => t.id === id);
-    if (tenant?.company && !company) setCompany(tenant.company);
-    if (forOffice && tenant?.company) setCompany(tenant.company);
+    // Всегда подставляем компанию арендатора при выборе (можно править вручную)
+    if (tenant) {
+      setCompany(tenant.company || '');
+    } else {
+      setCompany('');
+    }
+  };
+
+  const clearBinding = () => {
+    setTenantId('');
+    setCompany('');
   };
 
   const handleCreate = async (e: FormEvent) => {
@@ -314,7 +333,12 @@ export default function AdminOfficesPage() {
 
   const handleDeleteOffice = async (office: Office) => {
     const label = `офис ${office.number}${office.businessCenterName ? ` (${office.businessCenterName})` : ''}`;
-    if (!window.confirm(`Удалить ${label}? Это действие нельзя отменить.`)) {
+    const tenantNote = office.tenantName
+      ? `\nАрендатор «${office.tenantName}» будет отвязан.`
+      : '';
+    if (!window.confirm(
+      `Удалить ${label}?${tenantNote}\n\nНельзя удалить, если есть пропуска или шаблоны по этому офису.\nДействие нельзя отменить.`,
+    )) {
       return;
     }
 
@@ -460,13 +484,29 @@ export default function AdminOfficesPage() {
     return `${t.fullName}${t.company ? ` (${t.company})` : ''}${offices}`;
   };
 
-  const BindingSelect = ({ office }: { office?: Office }) => (
+  const bindingOffice = bindingOfficeId
+    ? offices.find((o) => o.id === bindingOfficeId) || null
+    : null;
+
+  const filteredTenantsForBinding = useMemo(() => {
+    const q = tenantSearch.trim().toLowerCase();
+    if (!q) return tenants;
+    return tenants.filter((t) => {
+      const hay = `${t.fullName} ${t.company || ''} ${t.email || ''}`.toLowerCase();
+      return hay.includes(q);
+    });
+  }, [tenants, tenantSearch]);
+
+  const selectedTenant = tenantId ? tenants.find((t) => t.id === tenantId) : undefined;
+
+  /** Компактный select для формы создания/редактирования офиса */
+  const BindingSelectCompact = () => (
     <div className="space-y-2">
       <div className="select-wrap">
         <select
           className="input text-sm"
           value={tenantId}
-          onChange={(e) => handleTenantSelect(e.target.value, office)}
+          onChange={(e) => handleTenantSelect(e.target.value)}
         >
           <option value="">Не назначен</option>
           {tenants.map((t) => (
@@ -475,12 +515,15 @@ export default function AdminOfficesPage() {
         </select>
       </div>
       {tenantId && (
-        <input
-          className="input text-sm"
-          value={company}
-          onChange={(e) => setCompany(e.target.value)}
-          placeholder="Компания в офисе"
-        />
+        <div>
+          <label className="label text-xs">Компания на табличке</label>
+          <input
+            className="input text-sm"
+            value={company}
+            onChange={(e) => setCompany(e.target.value)}
+            placeholder={ph.company}
+          />
+        </div>
       )}
     </div>
   );
@@ -523,11 +566,11 @@ export default function AdminOfficesPage() {
             <h3 className="font-medium text-sm">Новый бизнес-центр</h3>
             <div>
               <label className="label">Название БЦ *</label>
-              <input className="input" value={bcName} onChange={(e) => setBcName(e.target.value)} required placeholder="БЦ Атриум" />
+              <input className="input" value={bcName} onChange={(e) => setBcName(e.target.value)} required placeholder={ph.businessCenterName} />
             </div>
             <div>
               <label className="label">Адрес *</label>
-              <input className="input" value={bcAddress} onChange={(e) => setBcAddress(e.target.value)} required placeholder="ул. Тверская, 12" />
+              <input className="input" value={bcAddress} onChange={(e) => setBcAddress(e.target.value)} required placeholder={ph.businessCenterAddress} />
             </div>
             <div className="flex gap-2">
               <button type="submit" className="btn btn-primary text-sm" disabled={saving}>
@@ -816,7 +859,7 @@ export default function AdminOfficesPage() {
             <Search className="absolute left-3 top-1/2 -translate-y-1/2 w-4 h-4 text-[var(--muted)]" />
             <input
               className="input input--icon-left"
-              placeholder="Офис, компания, арендатор, БЦ..."
+              placeholder={ph.officeSearch}
               value={officeFilters.search}
               onChange={(e) => {
                 const next = { ...officeFilters, search: e.target.value };
@@ -887,6 +930,147 @@ export default function AdminOfficesPage() {
         </div>
       </div>
 
+      {bindingOffice && (
+        <div
+          id="office-binding-panel"
+          className="card p-5 mb-6 border-2 border-[var(--primary)]/30 shadow-sm max-w-2xl"
+        >
+          <div className="flex flex-col sm:flex-row sm:items-start justify-between gap-3 mb-4">
+            <div>
+              <div className="flex items-center gap-2 text-[var(--primary)] mb-1">
+                <Link2 className="w-5 h-5" />
+                <h3 className="font-semibold text-[var(--text)]">Привязка арендатора</h3>
+              </div>
+              <p className="text-sm text-[var(--muted)]">
+                Офис <span className="font-mono font-semibold text-[var(--text)]">{bindingOffice.number}</span>
+                {bindingOffice.businessCenterName ? ` · ${bindingOffice.businessCenterName}` : ''}
+                {bindingOffice.floor ? ` · ${bindingOffice.floor} эт.` : ''}
+              </p>
+            </div>
+            <button type="button" className="btn btn-secondary text-sm shrink-0" onClick={resetForm}>
+              <X className="w-4 h-4" />
+              Закрыть
+            </button>
+          </div>
+
+          {bindingOffice.tenantId && (
+            <div className="rounded-lg border border-[var(--border)] bg-[var(--surface-muted)] p-3 mb-4 flex flex-col sm:flex-row sm:items-center justify-between gap-2">
+              <div className="text-sm">
+                <div className="text-xs text-[var(--muted)] mb-0.5">Сейчас привязан</div>
+                <div className="font-medium">{bindingOffice.tenantName || 'Арендатор'}</div>
+                {bindingOffice.company && (
+                  <div className="text-xs text-[var(--muted)]">{bindingOffice.company}</div>
+                )}
+              </div>
+              <button
+                type="button"
+                className="btn btn-secondary text-xs"
+                disabled={saving}
+                onClick={() => {
+                  clearBinding();
+                }}
+              >
+                Снять привязку
+              </button>
+            </div>
+          )}
+
+          <div className="space-y-3">
+            <div>
+              <label className="label">Выберите арендатора (владельца компании)</label>
+              <div className="relative mb-2">
+                <Search className="absolute left-3 top-1/2 -translate-y-1/2 w-4 h-4 text-[var(--muted)]" />
+                <input
+                  className="input input--icon-left text-sm"
+                  value={tenantSearch}
+                  onChange={(e) => setTenantSearch(e.target.value)}
+                  placeholder="Поиск: ФИО, компания, email..."
+                />
+              </div>
+              <div className="border border-[var(--border)] rounded-lg max-h-56 overflow-y-auto divide-y divide-[var(--border)] bg-[var(--surface)]">
+                <label className={`flex items-start gap-3 p-3 cursor-pointer hover:bg-[var(--surface-muted)] ${!tenantId ? 'bg-[var(--status-approved-soft)]' : ''}`}>
+                  <input
+                    type="radio"
+                    name="office-tenant"
+                    className="mt-1"
+                    checked={!tenantId}
+                    onChange={() => clearBinding()}
+                  />
+                  <span className="text-sm">
+                    <span className="font-medium">Не назначен</span>
+                    <span className="block text-xs text-[var(--muted)]">Офис свободен, пропуска компании недоступны</span>
+                  </span>
+                </label>
+                {filteredTenantsForBinding.length === 0 ? (
+                  <div className="p-4 text-sm text-[var(--muted)] text-center">
+                    {tenants.length === 0 ? 'Нет активных арендаторов' : 'Никого не найдено'}
+                  </div>
+                ) : (
+                  filteredTenantsForBinding.map((t) => {
+                    const officesCount = t.offices?.length || 0;
+                    return (
+                      <label
+                        key={t.id}
+                        className={`flex items-start gap-3 p-3 cursor-pointer hover:bg-[var(--surface-muted)] ${
+                          tenantId === t.id ? 'bg-[var(--status-approved-soft)]' : ''
+                        }`}
+                      >
+                        <input
+                          type="radio"
+                          name="office-tenant"
+                          className="mt-1"
+                          checked={tenantId === t.id}
+                          onChange={() => handleTenantSelect(t.id)}
+                        />
+                        <span className="text-sm min-w-0">
+                          <span className="font-medium">{t.fullName}</span>
+                          {t.company && (
+                            <span className="block text-xs text-[var(--muted)] truncate">{t.company}</span>
+                          )}
+                          <span className="block text-xs text-[var(--muted)] truncate">
+                            {t.email}
+                            {officesCount > 0 ? ` · уже ${officesCount} оф.` : ''}
+                          </span>
+                        </span>
+                      </label>
+                    );
+                  })
+                )}
+              </div>
+            </div>
+
+            {tenantId && (
+              <div>
+                <label className="label">Компания на табличке офиса</label>
+                <input
+                  className="input"
+                  value={company}
+                  onChange={(e) => setCompany(e.target.value)}
+                  placeholder={selectedTenant?.company || ph.company}
+                />
+                <p className="text-xs text-[var(--muted)] mt-1">
+                  Подставляется из профиля арендатора; можно изменить только для этого офиса.
+                </p>
+              </div>
+            )}
+          </div>
+
+          <div className="flex flex-wrap gap-2 mt-5 pt-4 border-t border-[var(--border)]">
+            <button
+              type="button"
+              className="btn btn-primary"
+              disabled={saving}
+              onClick={() => saveBinding(bindingOffice.id)}
+            >
+              {saving ? 'Сохранение...' : 'Сохранить привязку'}
+            </button>
+            <button type="button" className="btn btn-secondary" onClick={resetForm}>
+              Отмена
+            </button>
+          </div>
+        </div>
+      )}
+
       {(showForm || editingId) && (
         <form onSubmit={editingId ? (e) => { e.preventDefault(); handleUpdate(editingId); } : handleCreate} className="card p-5 mb-6 space-y-4 max-w-lg">
           <h3 className="font-semibold">{editingId ? 'Редактирование офиса' : 'Новый офис'}</h3>
@@ -904,11 +1088,11 @@ export default function AdminOfficesPage() {
           <div className="grid grid-cols-2 gap-3">
             <div>
               <label className="label">Номер офиса *</label>
-              <input className="input" value={number} onChange={(e) => setNumber(e.target.value)} required disabled={!!editingId} />
+              <input className="input" value={number} onChange={(e) => setNumber(e.target.value)} required disabled={!!editingId} placeholder={ph.officeNumberShort} />
             </div>
             <div>
               <label className="label">Этаж</label>
-              <input className="input" value={floor} onChange={(e) => setFloor(e.target.value)} placeholder="Необязательно" disabled={!!editingId} />
+              <input className="input" value={floor} onChange={(e) => setFloor(e.target.value)} placeholder={ph.officeFloor} disabled={!!editingId} />
             </div>
           </div>
           <div>
@@ -921,7 +1105,7 @@ export default function AdminOfficesPage() {
               <Link2 className="w-4 h-4 text-[var(--primary)]" />
               <span className="font-medium text-sm">Привязка арендатора</span>
             </div>
-            <BindingSelect />
+            <BindingSelectCompact />
           </div>
 
           <div className="flex gap-2">
@@ -991,30 +1175,28 @@ export default function AdminOfficesPage() {
                     {office.areaSqm ? `${office.areaSqm} м²` : '—'}
                   </td>
                   <td className="p-3 min-w-[10rem]">
-                    {bindingOfficeId === office.id ? (
-                      <div className="space-y-2 min-w-[12rem]">
-                        <BindingSelect office={office} />
-                        <div className="flex gap-1 justify-end">
-                          <button className="btn btn-primary text-xs py-1 px-2" disabled={saving} onClick={() => saveBinding(office.id)}>
-                            {saving ? '...' : 'Сохранить'}
+                    <div>
+                      {bindingOfficeId === office.id ? (
+                        <span className="text-xs font-medium text-[var(--primary)]">Редактируется выше ↑</span>
+                      ) : (
+                        <>
+                          <div className={office.tenantName ? 'font-medium' : 'text-[var(--muted)]'}>
+                            {office.tenantName || 'Не назначен'}
+                          </div>
+                          {office.company && office.tenantName && (
+                            <div className="text-[11px] text-[var(--muted)] line-clamp-1">{office.company}</div>
+                          )}
+                          <button
+                            type="button"
+                            className="text-xs text-[var(--primary)] hover:underline mt-0.5 inline-flex items-center gap-1"
+                            onClick={() => startBinding(office)}
+                          >
+                            <Link2 className="w-3 h-3" />
+                            {office.tenantId ? 'Сменить' : 'Назначить'}
                           </button>
-                          <button className="btn btn-secondary text-xs py-1 px-2" onClick={resetForm}>Отмена</button>
-                        </div>
-                      </div>
-                    ) : (
-                      <div>
-                        <div className={office.tenantName ? 'font-medium' : 'text-[var(--muted)]'}>
-                          {office.tenantName || 'Не назначен'}
-                        </div>
-                        <button
-                          type="button"
-                          className="text-xs text-[var(--primary)] hover:underline mt-0.5"
-                          onClick={() => startBinding(office)}
-                        >
-                          Изменить
-                        </button>
-                      </div>
-                    )}
+                        </>
+                      )}
+                    </div>
                   </td>
                   <td className="p-3 whitespace-nowrap">
                     <span className={`text-xs px-2 py-0.5 rounded-full ${
@@ -1027,8 +1209,16 @@ export default function AdminOfficesPage() {
                     <div className="flex items-center justify-end gap-1">
                       <button
                         type="button"
+                        className="p-1.5 rounded-md border border-[var(--border)] hover:bg-[var(--surface-muted)] text-[var(--primary)]"
+                        title={office.tenantId ? 'Сменить арендатора' : 'Назначить арендатора'}
+                        onClick={() => startBinding(office)}
+                      >
+                        <Link2 className="w-4 h-4" />
+                      </button>
+                      <button
+                        type="button"
                         className="p-1.5 rounded-md border border-[var(--border)] hover:bg-[var(--surface-muted)]"
-                        title="Изменить"
+                        title="Изменить офис"
                         onClick={() => startEdit(office)}
                       >
                         <Pencil className="w-4 h-4" />
@@ -1112,40 +1302,38 @@ export default function AdminOfficesPage() {
                             Арендатор
                           </span>
                           {bindingOfficeId === office.id ? (
-                            <div className="w-full space-y-2">
-                              <BindingSelect office={office} />
-                              <div className="flex gap-1 justify-end">
-                                <button className="btn btn-primary text-xs py-1 px-2" disabled={saving} onClick={() => saveBinding(office.id)}>
-                                  {saving ? '...' : 'Сохранить'}
-                                </button>
-                                <button className="btn btn-secondary text-xs py-1 px-2" onClick={resetForm}>Отмена</button>
-                              </div>
-                            </div>
+                            <span className="text-xs font-medium text-[var(--primary)] text-right">
+                              Редактируется выше ↑
+                            </span>
                           ) : (
                             <div className="text-right">
                               <div className={office.tenantName ? 'font-medium' : 'text-[var(--muted)]'}>
                                 {office.tenantName || 'Не назначен'}
                               </div>
-                              <button
-                                type="button"
-                                className="text-xs text-[var(--primary)] hover:underline mt-0.5"
-                                onClick={() => startBinding(office)}
-                              >
-                                Изменить
-                              </button>
+                              {office.company && office.tenantName && (
+                                <div className="text-[11px] text-[var(--muted)]">{office.company}</div>
+                              )}
                             </div>
                           )}
                         </div>
                       </div>
 
-                      <div className="flex gap-1 pt-3 border-t border-[var(--border)]">
+                      <div className="flex flex-wrap gap-1 pt-3 border-t border-[var(--border)]">
                         <button
                           type="button"
-                          className="btn btn-secondary text-xs flex-1"
+                          className="btn btn-primary text-xs flex-1 min-w-[7rem]"
+                          onClick={() => startBinding(office)}
+                        >
+                          <Link2 className="w-3.5 h-3.5" />
+                          {office.tenantId ? 'Арендатор' : 'Назначить'}
+                        </button>
+                        <button
+                          type="button"
+                          className="btn btn-secondary text-xs"
                           onClick={() => startEdit(office)}
+                          title="Редактировать офис"
                         >
                           <Pencil className="w-3.5 h-3.5" />
-                          Изменить
                         </button>
                         <button
                           type="button"

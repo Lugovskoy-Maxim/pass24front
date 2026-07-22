@@ -11,6 +11,10 @@ export class AppSettings {
   @Prop({ default: 'M-STYLE' })
   siteName: string;
 
+  /** Версия сайта для UI (например v.220726). Пусто — fallback на дату сборки фронта. */
+  @Prop({ default: '' })
+  appVersion: string;
+
   @Prop({ default: '/brand/mstyle-logo-light.svg' })
   siteIcon: string;
 

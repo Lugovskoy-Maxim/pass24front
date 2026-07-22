@@ -35,8 +35,8 @@ export class TestDataSeedService {
     };
 
     const bcData = [
-      { name: 'БЦ Атриум', address: 'ул. Тверская, 12', code: 'atrium' },
-      { name: 'БЦ Сити Плаза', address: 'Пресненская наб., 8', code: 'city-plaza' },
+      { name: 'БЦ Добрынинский', address: 'Москва, Партийный пер. 1/57, стр. 3', code: 'dobryninsky' },
+      { name: 'БЦ Добрынинский-2', address: 'Москва, Партийный пер. 1/57, стр. 3', code: 'dobryninsky-2' },
     ];
 
     const bcMap = new Map<string, PropertyDocument>();
@@ -77,8 +77,8 @@ export class TestDataSeedService {
     }
 
     const tenantOffices = [
-      { bc: 'atrium', number: '401', floor: '4', areaSqm: 85, company: tenantAccount.company },
-      { bc: 'city-plaza', number: '1201', floor: '12', areaSqm: 120, company: tenantAccount.company },
+      { bc: 'dobryninsky', number: '401', floor: '4', areaSqm: 85, company: tenantAccount.company },
+      { bc: 'dobryninsky-2', number: '1201', floor: '12', areaSqm: 120, company: tenantAccount.company },
     ];
 
     for (const officeSpec of tenantOffices) {

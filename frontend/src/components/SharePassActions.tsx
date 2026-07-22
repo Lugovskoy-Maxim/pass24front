@@ -354,7 +354,7 @@ export function SharePassActions({
                   <input
                     className="input text-sm w-full"
                     type="email"
-                    placeholder="email@example.com"
+                    placeholder={labels.placeholders.guestEmail}
                     value={email}
                     onChange={(e) => setEmail(e.target.value)}
                     autoFocus

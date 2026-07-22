@@ -1,9 +1,11 @@
 export const MSTYLE_BRAND_DEFAULTS = {
   siteName: 'M-STYLE',
+  /** Пусто: на фронте показывается версия сборки. Админ может задать, напр. v.220726 */
+  appVersion: '',
   siteIcon: '/brand/mstyle-logo-light.svg',
   siteIconLight: '/brand/mstyle-logo-light.svg',
   siteIconDark: '/brand/mstyle-logo.svg',
-  siteTagline: 'Пропуска для арендаторов бизнес-центра',
+  siteTagline: 'Пропуска для арендаторов БЦ Добрынинский и БЦ Добрынинский-2',
   sitePhone: '+7 495 663-00-00',
   siteEmail: 'renta@mstyle.ru',
   brandMarkType: 'image',

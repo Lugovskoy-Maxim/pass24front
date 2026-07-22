@@ -32,6 +32,8 @@ import {
   splitFullName,
 } from '@/lib/person-name';
 import { useAutoRefresh } from '@/hooks/useAutoRefresh';
+import { useConfig } from '@/hooks/useConfig';
+import { getUiLabels } from '@/lib/ui-labels';
 
 function ProfileInfoRow({
   icon: Icon,
@@ -62,6 +64,8 @@ function formatCountdown(seconds: number): string {
 export default function ProfilePage() {
   const { user, refreshUser } = useAuth();
   const { toast } = useToast();
+  const config = useConfig();
+  const ph = getUiLabels(config).placeholders;
   const [nameParts, setNameParts] = useState<PersonNameParts>({ lastName: '', firstName: '', middleName: '' });
   const [phone, setPhone] = useState('');
   const [company, setCompany] = useState('');
@@ -404,7 +408,7 @@ export default function ProfilePage() {
                     autoComplete="one-time-code"
                     value={emailVerifyCode}
                     onChange={(e) => setEmailVerifyCode(e.target.value.replace(/\D/g, '').slice(0, 6))}
-                    placeholder="000000"
+                    placeholder={ph.verificationCode}
                     className="tracking-[0.3em] text-center text-lg font-mono max-w-[12rem]"
                   />
                 </FormField>
@@ -461,10 +465,10 @@ export default function ProfilePage() {
 
             <div className="form-grid-2">
               <FormField id="phone" label="Телефон">
-                <FormInput id="phone" type="tel" value={phone} onChange={(e) => setPhone(e.target.value)} placeholder="+7 900 000-00-00" />
+                <FormInput id="phone" type="tel" value={phone} onChange={(e) => setPhone(e.target.value)} placeholder={ph.phone} />
               </FormField>
               <FormField id="company" label="Компания">
-                <FormInput id="company" value={company} onChange={(e) => setCompany(e.target.value)} placeholder="ООО «...»" />
+                <FormInput id="company" value={company} onChange={(e) => setCompany(e.target.value)} placeholder={ph.company} />
               </FormField>
             </div>
 
@@ -596,6 +600,7 @@ export default function ProfilePage() {
                     value={employeeEmail}
                     onChange={(e) => { setEmployeeEmail(e.target.value); clearFieldError('email'); }}
                     invalid={!!fieldErrors.email}
+                    placeholder={ph.employeeEmail}
                   />
                 </FormField>
                 <FormField id="employeePhone" label="Телефон">
@@ -604,7 +609,7 @@ export default function ProfilePage() {
                     type="tel"
                     value={employeePhone}
                     onChange={(e) => setEmployeePhone(e.target.value)}
-                    placeholder="+7 900 000-00-00"
+                    placeholder={ph.phone}
                   />
                 </FormField>
               </div>

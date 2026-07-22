@@ -98,6 +98,12 @@ export class AdminController {
     return this.adminService.updateUser(id, dto, req.user);
   }
 
+  @Delete('users/:id')
+  @RequireAllPermissions('admin.users')
+  deleteUser(@Param('id') id: string, @Req() req: any) {
+    return this.adminService.deleteUser(id, req.user);
+  }
+
   @Get('registration-requests')
   @RequireAllPermissions('admin.users')
   getRegistrationRequests() {
@@ -259,7 +265,7 @@ export class AdminController {
       action: 'site_settings.update',
       entityType: 'app_settings',
       actor: req.user,
-      details: { siteName: settings.siteName },
+      details: { siteName: settings.siteName, appVersion: settings.appVersion },
     });
     return { settings };
   }

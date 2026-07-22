@@ -11,6 +11,38 @@ type Section = {
 
 const SECTIONS: Section[] = [
   {
+    id: 'placeholders',
+    title: 'Плейсхолдеры полей',
+    description: 'Подсказки внутри полей ввода (серый текст, пока поле пустое). Меняйте под ваш БЦ и компанию.',
+    fields: [
+      { path: 'placeholders.company', label: 'Компания' },
+      { path: 'placeholders.email', label: 'Email' },
+      { path: 'placeholders.phone', label: 'Телефон' },
+      { path: 'placeholders.login', label: 'Логин (вход)' },
+      { path: 'placeholders.verificationCode', label: 'Код подтверждения' },
+      { path: 'placeholders.employeeEmail', label: 'Email сотрудника' },
+      { path: 'placeholders.vehiclePlate', label: 'Гос. номер авто' },
+      { path: 'placeholders.officeNumber', label: 'Офис (заказ пропуска)' },
+      { path: 'placeholders.passComment', label: 'Комментарий к пропуску' },
+      { path: 'placeholders.guestEmail', label: 'Email гостя (отправка)' },
+      { path: 'placeholders.passportSeries', label: 'Паспорт: серия' },
+      { path: 'placeholders.passportNumber', label: 'Паспорт: номер' },
+      { path: 'placeholders.passportIssuedBy', label: 'Паспорт: кем выдан' },
+      { path: 'passes.searchPlaceholder', label: 'Поиск пропусков' },
+      { path: 'reception.lookupPlaceholder', label: 'Поиск на ресепшн' },
+      { path: 'reception.rejectPlaceholder', label: 'Причина отклонения' },
+      { path: 'placeholders.businessCenterName', label: 'Название БЦ (админ)' },
+      { path: 'placeholders.businessCenterAddress', label: 'Адрес БЦ (админ)' },
+      { path: 'placeholders.officeSearch', label: 'Поиск офисов (админ)' },
+      { path: 'placeholders.officeNumberShort', label: 'Номер офиса (админ)' },
+      { path: 'placeholders.officeFloor', label: 'Этаж офиса (админ)' },
+      { path: 'placeholders.userSearch', label: 'Поиск пользователей (админ)' },
+      { path: 'placeholders.auditSearch', label: 'Поиск в журнале (админ)' },
+      { path: 'placeholders.roleName', label: 'Название роли (админ)' },
+      { path: 'placeholders.roleKey', label: 'Код роли (админ)' },
+    ],
+  },
+  {
     id: 'nav',
     title: 'Меню навигации',
     description: 'Пункты в шапке сайта',
@@ -267,7 +299,7 @@ export function UiLabelsEditor({ labels, onChange }: UiLabelsEditorProps) {
   return (
     <div className="space-y-4">
       {SECTIONS.map((section) => (
-        <details key={section.id} className="card overflow-hidden group" open={section.id === 'buttons'}>
+        <details key={section.id} className="card overflow-hidden group" open={section.id === 'placeholders'}>
           <summary className="px-4 py-3 cursor-pointer font-semibold text-sm surface-muted border-b border-[var(--border)] hover:bg-[var(--surface-elevated)] transition-colors list-none flex items-center justify-between">
             <span>{section.title}</span>
             <span className="text-xs text-[var(--muted)] font-normal">{section.fields.length} полей</span>
