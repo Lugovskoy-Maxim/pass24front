@@ -9,6 +9,7 @@ import { ConfirmRegistrationDto } from './dto/confirm-registration.dto';
 import { CreateTenantEmployeeDto } from './dto/create-tenant-employee.dto';
 import { RegisterDto } from './dto/register.dto';
 import { RequestPasswordResetDto } from './dto/request-password-reset.dto';
+import { SetTenantEmployeeActiveDto } from './dto/set-tenant-employee-active.dto';
 import { UpdateProfileDto } from './dto/update-profile.dto';
 
 @Controller('auth')
@@ -93,6 +94,16 @@ export class AuthController {
   @Post('tenant/employees')
   addTenantEmployee(@Req() req: any, @Body() dto: CreateTenantEmployeeDto) {
     return this.authService.addTenantEmployee(req.user.userId, dto);
+  }
+
+  @UseGuards(AuthGuard('jwt'))
+  @Patch('tenant/employees/:id')
+  setTenantEmployeeActive(
+    @Req() req: any,
+    @Param('id') id: string,
+    @Body() dto: SetTenantEmployeeActiveDto,
+  ) {
+    return this.authService.setTenantEmployeeActive(req.user.userId, id, dto.isActive);
   }
 
   @UseGuards(AuthGuard('jwt'))

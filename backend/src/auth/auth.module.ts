@@ -12,6 +12,8 @@ import { AccessConfigModule } from '../access/access-config.module';
 import {
   Office,
   OfficeSchema,
+  Pass,
+  PassSchema,
   Property,
   PropertySchema,
   RegistrationPending,
@@ -30,6 +32,7 @@ import {
     MongooseModule.forFeature([
       { name: Office.name, schema: OfficeSchema },
       { name: Property.name, schema: PropertySchema },
+      { name: Pass.name, schema: PassSchema },
     ]),
     PassportModule.register({ defaultStrategy: 'jwt' }),
     JwtModule.registerAsync({

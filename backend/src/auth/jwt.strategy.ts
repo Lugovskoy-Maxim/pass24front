@@ -27,6 +27,13 @@ export class JwtStrategy extends PassportStrategy(Strategy) {
     if (!user) {
       throw new UnauthorizedException();
     }
+    // Отключённый сотрудник не может пользоваться API даже со старым JWT
+    if (user.parentTenantId && user.isActive === false) {
+      throw new UnauthorizedException('Учётная запись отключена владельцем компании');
+    }
+    if (user.isBlocked) {
+      throw new UnauthorizedException('Учётная запись заблокирована');
+    }
     const permissions = await this.accessConfigService.getPermissionsForRole(user.role || 'tenant');
     return {
       userId: payload.sub,

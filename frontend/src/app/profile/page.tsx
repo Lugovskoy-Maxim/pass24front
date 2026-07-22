@@ -68,6 +68,7 @@ export default function ProfilePage() {
   const [employeesLoading, setEmployeesLoading] = useState(false);
   const [employeeSaving, setEmployeeSaving] = useState(false);
   const [removingEmployeeId, setRemovingEmployeeId] = useState<string | null>(null);
+  const [togglingEmployeeId, setTogglingEmployeeId] = useState<string | null>(null);
   const [employeeNameParts, setEmployeeNameParts] = useState<PersonNameParts>({ lastName: '', firstName: '', middleName: '' });
   const [employeeEmail, setEmployeeEmail] = useState('');
   const [employeePhone, setEmployeePhone] = useState('');
@@ -115,7 +116,7 @@ export default function ProfilePage() {
       api.getTenantEmployeeRoles(),
     ])
       .then(([{ employees: list }, { roles }]) => {
-        setEmployees(list.filter((e) => e.is_active));
+        setEmployees(list);
         setEmployeeRoles(roles);
         setEmployeeRole((prev) => prev || roles[0]?.key || '');
       })
@@ -216,7 +217,25 @@ export default function ProfilePage() {
     }
   };
 
-  const handleRemoveEmployee = async (id: string) => {
+  const handleToggleEmployee = async (id: string, isActive: boolean) => {
+    setTogglingEmployeeId(id);
+    try {
+      const { employee, message } = await api.setTenantEmployeeActive(id, isActive);
+      setEmployees((prev) => prev.map((e) => (e.id === id ? { ...e, ...employee } : e)));
+      toast(message, 'success');
+    } catch (err) {
+      toast(getErrorMessage(err, 'Ошибка'), 'error');
+    } finally {
+      setTogglingEmployeeId(null);
+    }
+  };
+
+  const handleRemoveEmployee = async (id: string, name: string) => {
+    const ok = window.confirm(
+      `Удалить сотрудника «${name}» навсегда?\n\nОтключённого сотрудника можно снова включить. Удаление необратимо — войти с этим email будет нельзя, пока не добавите заново.`,
+    );
+    if (!ok) return;
+
     setRemovingEmployeeId(id);
     try {
       await api.removeTenantEmployee(id);
@@ -468,7 +487,8 @@ export default function ProfilePage() {
               <div>
                 <h2 className="font-semibold">Сотрудники компании</h2>
                 <p className="text-sm text-[var(--muted)] mt-1">
-                  Добавленные сотрудники смогут входить в систему и заказывать пропуска от лица {user.company || 'вашей компании'}.
+                  Сотрудники видят все пропуска компании и могут заказывать их от лица {user.company || 'вашей компании'}.
+                  Отключённый не войдёт в систему; удаление — навсегда.
                 </p>
               </div>
             </div>
@@ -477,25 +497,53 @@ export default function ProfilePage() {
               <p className="text-sm text-[var(--muted)] animate-pulse">Загрузка...</p>
             ) : employees.length > 0 ? (
               <ul className="divide-y divide-[var(--border)] border border-[var(--border)] rounded-lg">
-                {employees.map((employee) => (
-                  <li key={employee.id} className="flex items-center justify-between gap-3 px-4 py-3 text-sm">
-                    <div className="min-w-0">
-                      <div className="font-medium">{employee.full_name}</div>
-                      <div className="text-[var(--muted)] truncate">{employee.email}</div>
-                      {employee.role_label && (
-                        <div className="text-xs text-[var(--muted)] mt-0.5">{employee.role_label}</div>
-                      )}
-                    </div>
-                    <button
-                      type="button"
-                      className="btn btn-secondary text-xs shrink-0"
-                      disabled={removingEmployeeId === employee.id}
-                      onClick={() => handleRemoveEmployee(employee.id)}
-                    >
-                      {removingEmployeeId === employee.id ? 'Удаление...' : 'Удалить'}
-                    </button>
-                  </li>
-                ))}
+                {employees.map((employee) => {
+                  const busy = removingEmployeeId === employee.id || togglingEmployeeId === employee.id;
+                  return (
+                    <li key={employee.id} className="flex flex-col sm:flex-row sm:items-center justify-between gap-3 px-4 py-3 text-sm">
+                      <div className="min-w-0">
+                        <div className="font-medium flex flex-wrap items-center gap-2">
+                          {employee.full_name}
+                          <span
+                            className={`text-[10px] px-1.5 py-0.5 rounded-full ${
+                              employee.is_active
+                                ? 'bg-emerald-50 text-emerald-700'
+                                : 'bg-slate-100 text-slate-600'
+                            }`}
+                          >
+                            {employee.is_active ? 'активен' : 'отключён'}
+                          </span>
+                        </div>
+                        <div className="text-[var(--muted)] truncate">{employee.email}</div>
+                        {employee.role_label && (
+                          <div className="text-xs text-[var(--muted)] mt-0.5">{employee.role_label}</div>
+                        )}
+                      </div>
+                      <div className="flex flex-wrap gap-2 shrink-0">
+                        <button
+                          type="button"
+                          className="btn btn-secondary text-xs"
+                          disabled={busy}
+                          onClick={() => void handleToggleEmployee(employee.id, !employee.is_active)}
+                        >
+                          {togglingEmployeeId === employee.id
+                            ? 'Сохранение...'
+                            : employee.is_active
+                              ? 'Отключить'
+                              : 'Включить'}
+                        </button>
+                        <button
+                          type="button"
+                          className="btn btn-danger text-xs"
+                          disabled={busy}
+                          onClick={() => void handleRemoveEmployee(employee.id, employee.full_name)}
+                        >
+                          {removingEmployeeId === employee.id ? 'Удаление...' : 'Удалить'}
+                        </button>
+                      </div>
+                    </li>
+                  );
+                })}
               </ul>
             ) : (
               <p className="text-sm text-[var(--muted)]">Пока нет добавленных сотрудников</p>

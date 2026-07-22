@@ -4,6 +4,11 @@ import { Model } from 'mongoose';
 import { AppSettings, AppSettingsDocument } from '../schemas/app-settings.schema';
 import { MSTYLE_BRAND_DEFAULTS, isLegacyBrandSettings } from '../brand/brand-defaults';
 import { DEFAULT_FAQ_ITEMS, NormalizedFaqItem, normalizeFaqItems } from './faq-defaults';
+import {
+  DEFAULT_GUIDE_SECTIONS,
+  NormalizedGuideSection,
+  normalizeGuideSections,
+} from './guide-defaults';
 import { deepMergeUiLabels, UiLabels } from './ui-labels.defaults';
 
 const SETTINGS_KEY = 'global';
@@ -29,6 +34,7 @@ export interface SiteSettingsDto {
   smsRegistrationDisabledMessage: string;
   smsRegistrationCodeText: string;
   faqItems: NormalizedFaqItem[];
+  helpGuideSections: NormalizedGuideSection[];
 }
 
 @Injectable()
@@ -85,6 +91,12 @@ export class SiteSettingsService implements OnModuleInit {
     smsRegistrationCodeText?: string;
     /** Сырой список из DTO — id опционален, нормализуется внутри */
     faqItems?: Array<{ id?: string; question?: string; answer?: string }>;
+    helpGuideSections?: Array<{
+      id?: string;
+      title?: string;
+      steps?: string[];
+      paragraphs?: string[];
+    }>;
   }): Promise<SiteSettingsDto> {
     for (const field of ['siteIcon', 'siteIconLight', 'siteIconDark'] as const) {
       const value = data[field];
@@ -141,6 +153,9 @@ export class SiteSettingsService implements OnModuleInit {
     if (data.faqItems !== undefined) {
       update.faqItems = normalizeFaqItems(data.faqItems);
     }
+    if (data.helpGuideSections !== undefined) {
+      update.helpGuideSections = normalizeGuideSections(data.helpGuideSections);
+    }
 
     const doc = await this.appSettingsModel
       .findOneAndUpdate({ key: SETTINGS_KEY }, { $set: update }, { new: true, upsert: true })
@@ -177,6 +192,9 @@ export class SiteSettingsService implements OnModuleInit {
         ? doc.smsRegistrationCodeText.trim()
         : MSTYLE_BRAND_DEFAULTS.smsRegistrationCodeText,
       faqItems: normalizeFaqItems(doc?.faqItems?.length ? doc.faqItems : DEFAULT_FAQ_ITEMS),
+      helpGuideSections: normalizeGuideSections(
+        doc?.helpGuideSections?.length ? doc.helpGuideSections : DEFAULT_GUIDE_SECTIONS,
+      ),
     };
   }
 

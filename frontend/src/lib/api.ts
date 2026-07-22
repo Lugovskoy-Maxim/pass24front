@@ -374,6 +374,12 @@ export const api = {
       body: JSON.stringify(data),
     }),
 
+  setTenantEmployeeActive: (id: string, isActive: boolean) =>
+    request<{ message: string; employee: TenantEmployee }>(`/auth/tenant/employees/${id}`, {
+      method: 'PATCH',
+      body: JSON.stringify({ isActive }),
+    }),
+
   removeTenantEmployee: (id: string) =>
     request<{ message: string }>(`/auth/tenant/employees/${id}`, { method: 'DELETE' }),
 
@@ -746,6 +752,13 @@ export interface FaqItem {
   answer: string;
 }
 
+export interface HelpGuideSection {
+  id: string;
+  title: string;
+  steps?: string[];
+  paragraphs?: string[];
+}
+
 export interface SiteSettings {
   siteName: string;
   siteIcon: string;
@@ -766,6 +779,7 @@ export interface SiteSettings {
   smsRegistrationDisabledMessage?: string;
   smsRegistrationCodeText?: string;
   faqItems?: FaqItem[];
+  helpGuideSections?: HelpGuideSection[];
 }
 
 export interface BcConfig extends SiteSettings {

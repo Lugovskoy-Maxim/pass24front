@@ -56,6 +56,7 @@ export class AppConfigService {
       smsRegistrationEnabled: site.smsRegistrationEnabled,
       smsRegistrationDisabledMessage: site.smsRegistrationDisabledMessage,
       faqItems: site.faqItems,
+      helpGuideSections: site.helpGuideSections,
     };
   }
 }

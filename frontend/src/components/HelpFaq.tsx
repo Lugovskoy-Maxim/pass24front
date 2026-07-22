@@ -1,22 +1,26 @@
 'use client';
 
-import { useCallback, useEffect, useId, useRef, useState } from 'react';
+import { useCallback, useEffect, useId, useMemo, useRef, useState } from 'react';
 import { BookOpen, CircleHelp, ChevronDown, Mail, Phone, X } from 'lucide-react';
 import { useConfig } from '@/hooks/useConfig';
-import { HELP_GUIDE_SECTIONS, resolveFaqItems } from '@/lib/help-faq-content';
+import { resolveFaqItems, resolveGuideSections } from '@/lib/help-faq-content';
 
 type TabId = 'guide' | 'faq';
 
 export function HelpFaq() {
   const [open, setOpen] = useState(false);
   const [tab, setTab] = useState<TabId>('faq');
-  const [expandedGuide, setExpandedGuide] = useState<string | null>(HELP_GUIDE_SECTIONS[0]?.id ?? null);
+  const [expandedGuide, setExpandedGuide] = useState<string | null>(null);
   const [expandedFaq, setExpandedFaq] = useState<string | null>(null);
   const panelRef = useRef<HTMLDivElement>(null);
   const triggerRef = useRef<HTMLButtonElement>(null);
   const titleId = useId();
   const config = useConfig();
-  const faqItems = resolveFaqItems(config?.faqItems);
+  const faqItems = useMemo(() => resolveFaqItems(config?.faqItems), [config?.faqItems]);
+  const guideSections = useMemo(
+    () => resolveGuideSections(config?.helpGuideSections),
+    [config?.helpGuideSections],
+  );
 
   const close = useCallback(() => setOpen(false), []);
 
@@ -51,6 +55,16 @@ export function HelpFaq() {
       panelRef.current?.querySelector<HTMLElement>('button, [href], input, [tabindex]:not([tabindex="-1"])')?.focus();
     }
   }, [open]);
+
+  useEffect(() => {
+    if (!guideSections.length) {
+      setExpandedGuide(null);
+      return;
+    }
+    setExpandedGuide((prev) => (
+      prev && guideSections.some((s) => s.id === prev) ? prev : guideSections[0].id
+    ));
+  }, [guideSections]);
 
   const toggleGuide = (id: string) => {
     setExpandedGuide((prev) => (prev === id ? null : id));
@@ -158,39 +172,47 @@ export function HelpFaq() {
 
           {tab === 'guide' && (
             <ul className="help-faq__list">
-              {HELP_GUIDE_SECTIONS.map((section) => {
-                const isOpen = expandedGuide === section.id;
-                return (
-                  <li key={section.id} className="help-faq__item">
-                    <button
-                      type="button"
-                      className="help-faq__item-trigger"
-                      aria-expanded={isOpen}
-                      onClick={() => toggleGuide(section.id)}
-                    >
-                      <span>{section.title}</span>
-                      <ChevronDown
-                        className={`help-faq__chevron ${isOpen ? 'help-faq__chevron--open' : ''}`}
-                        aria-hidden
-                      />
-                    </button>
-                    {isOpen && (
-                      <div className="help-faq__item-body">
-                        {section.paragraphs?.map((p) => (
-                          <p key={p}>{p}</p>
-                        ))}
-                        {section.steps && section.steps.length > 0 && (
-                          <ol className="help-faq__steps">
-                            {section.steps.map((step) => (
-                              <li key={step}>{step}</li>
-                            ))}
-                          </ol>
-                        )}
-                      </div>
-                    )}
-                  </li>
-                );
-              })}
+              {guideSections.length === 0 ? (
+                <li className="help-faq__item">
+                  <div className="help-faq__item-body" style={{ padding: '0.75rem' }}>
+                    <p>Инструкции пока не заполнены. Обратитесь к администратору.</p>
+                  </div>
+                </li>
+              ) : (
+                guideSections.map((section) => {
+                  const isOpen = expandedGuide === section.id;
+                  return (
+                    <li key={section.id} className="help-faq__item">
+                      <button
+                        type="button"
+                        className="help-faq__item-trigger"
+                        aria-expanded={isOpen}
+                        onClick={() => toggleGuide(section.id)}
+                      >
+                        <span>{section.title}</span>
+                        <ChevronDown
+                          className={`help-faq__chevron ${isOpen ? 'help-faq__chevron--open' : ''}`}
+                          aria-hidden
+                        />
+                      </button>
+                      {isOpen && (
+                        <div className="help-faq__item-body">
+                          {section.paragraphs?.map((p) => (
+                            <p key={p}>{p}</p>
+                          ))}
+                          {section.steps && section.steps.length > 0 && (
+                            <ol className="help-faq__steps">
+                              {section.steps.map((step) => (
+                                <li key={step}>{step}</li>
+                              ))}
+                            </ol>
+                          )}
+                        </div>
+                      )}
+                    </li>
+                  );
+                })
+              )}
             </ul>
           )}
         </div>

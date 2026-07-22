@@ -127,11 +127,12 @@ export class PassesService implements OnModuleInit {
     const ownerId = resolveTenantOwnerId(user);
     if (!ownerId) return [];
 
+    // Включаем и отключённых сотрудников — их старые пропуска остаются в списке компании
     const team = await this.userModel
       .find({
         $or: [
           { _id: new Types.ObjectId(ownerId) },
-          { parentTenantId: new Types.ObjectId(ownerId), isActive: { $ne: false } },
+          { parentTenantId: new Types.ObjectId(ownerId) },
         ],
       })
       .select('_id')
@@ -147,13 +148,15 @@ export class PassesService implements OnModuleInit {
       const teamIds = await this.getTenantTeamIds(user);
       if (!teamIds.length) return { _id: null };
 
-      if (user.parentTenantId) {
-        if (userHasPermission(user, 'passes.view_own')) {
-          return this.createdByFilter(user.userId);
-        }
-        return { _id: null };
-      }
+      // Владелец и сотрудники компании видят все пропуска своей компании
+      const canViewCompany =
+        !user.parentTenantId
+        || userHasPermission(user, 'passes.view_own')
+        || userHasPermission(user, 'passes.create')
+        || await this.accessConfigService.hasPermission(user.role, 'passes.view_own')
+        || await this.accessConfigService.hasPermission(user.role, 'passes.create');
 
+      if (!canViewCompany) return { _id: null };
       return this.createdByTeamFilter(teamIds);
     }
 
@@ -1036,10 +1039,6 @@ export class PassesService implements OnModuleInit {
       const createdBy = pass.createdBy?.toString();
       const hasAccess = teamIds.some((id) => id.toString() === createdBy);
       if (!hasAccess) throw new ForbiddenException('Нет доступа к этому пропуску');
-
-      if (user.parentTenantId && createdBy !== user.userId) {
-        throw new ForbiddenException('Нет доступа к этому пропуску');
-      }
       return;
     }
 

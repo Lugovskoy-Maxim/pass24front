@@ -79,6 +79,25 @@ export class AppSettings {
     default: [],
   })
   faqItems: Array<{ id: string; question: string; answer: string }>;
+
+  /** Разделы инструкций для панели помощи */
+  @Prop({
+    type: [
+      {
+        id: { type: String },
+        title: { type: String },
+        steps: { type: [String], default: [] },
+        paragraphs: { type: [String], default: [] },
+      },
+    ],
+    default: [],
+  })
+  helpGuideSections: Array<{
+    id: string;
+    title: string;
+    steps: string[];
+    paragraphs: string[];
+  }>;
 }
 
 export const AppSettingsSchema = SchemaFactory.createForClass(AppSettings);

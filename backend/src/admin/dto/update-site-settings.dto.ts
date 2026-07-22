@@ -31,6 +31,32 @@ export class FaqItemDto {
   answer: string;
 }
 
+export class HelpGuideSectionDto {
+  @IsOptional()
+  @IsString()
+  @MaxLength(64)
+  id?: string;
+
+  @IsString()
+  @IsNotEmpty({ message: 'Укажите заголовок раздела' })
+  @MaxLength(200)
+  title: string;
+
+  @IsOptional()
+  @IsArray()
+  @ArrayMaxSize(30)
+  @IsString({ each: true })
+  @MaxLength(500, { each: true })
+  steps?: string[];
+
+  @IsOptional()
+  @IsArray()
+  @ArrayMaxSize(30)
+  @IsString({ each: true })
+  @MaxLength(500, { each: true })
+  paragraphs?: string[];
+}
+
 export class UpdateSiteSettingsDto {
   @IsOptional()
   @IsString()
@@ -123,4 +149,11 @@ export class UpdateSiteSettingsDto {
   @ValidateNested({ each: true })
   @Type(() => FaqItemDto)
   faqItems?: FaqItemDto[];
+
+  @IsOptional()
+  @IsArray()
+  @ArrayMaxSize(40)
+  @ValidateNested({ each: true })
+  @Type(() => HelpGuideSectionDto)
+  helpGuideSections?: HelpGuideSectionDto[];
 }

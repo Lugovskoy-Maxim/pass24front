@@ -21,6 +21,8 @@ import { normalizeRuMobilePhone } from '../common/phone';
 import {
   Office,
   OfficeDocument,
+  Pass,
+  PassDocument,
   Property,
   PropertyDocument,
   RegistrationPending,
@@ -55,6 +57,7 @@ export class AuthService {
     private pendingModel: Model<RegistrationPendingDocument>,
     @InjectModel(Office.name) private officeModel: Model<OfficeDocument>,
     @InjectModel(Property.name) private propertyModel: Model<PropertyDocument>,
+    @InjectModel(Pass.name) private passModel: Model<PassDocument>,
     private jwtService: JwtService,
     private accessConfigService: AccessConfigService,
     private auditService: AuditService,
@@ -507,6 +510,17 @@ export class AuthService {
       throw new UnauthorizedException('Неверные учетные данные');
     }
 
+    // Отключённый сотрудник компании не может войти
+    if (user.parentTenantId && user.isActive === false) {
+      throw new UnauthorizedException(
+        'Учётная запись отключена владельцем компании. Обратитесь к руководителю.',
+      );
+    }
+
+    if (user.isBlocked) {
+      throw new UnauthorizedException('Учётная запись заблокирована');
+    }
+
     const offices = await this.getUserOffices(user._id.toString(), user.parentTenantId?.toString());
     const token = this.generateToken(user);
     return { user: await this.toUserDto(user, offices), token };
@@ -715,6 +729,54 @@ export class AuthService {
     };
   }
 
+  async setTenantEmployeeActive(userId: string, employeeId: string, isActive: boolean) {
+    const owner = await this.userModel.findById(userId);
+    if (!owner) throw new UnauthorizedException();
+    if (owner.role !== 'tenant' || owner.parentTenantId) {
+      throw new ForbiddenException('Управлять сотрудниками может только владелец компании');
+    }
+
+    const employee = await this.userModel.findById(employeeId);
+    if (!employee || employee.parentTenantId?.toString() !== owner._id.toString()) {
+      throw new NotFoundException('Сотрудник не найден');
+    }
+
+    employee.isActive = !!isActive;
+    await employee.save();
+
+    await this.auditService.log({
+      action: isActive ? 'tenant.employee_enabled' : 'tenant.employee_disabled',
+      entityType: 'user',
+      entityId: employee._id,
+      actor: { userId, email: owner.email, role: owner.role },
+      details: {
+        employeeEmail: employee.email,
+        employeeName: employee.fullName,
+        isActive: !!isActive,
+      },
+    });
+
+    const { roles } = await this.accessConfigService.getEmployeeAssignableRoles();
+    const roleLabel = roles.find((item) => item.key === employee.role)?.label || employee.role;
+
+    return {
+      message: isActive ? 'Сотрудник включён' : 'Сотрудник отключён',
+      employee: {
+        id: employee._id.toString(),
+        email: employee.email,
+        full_name: employee.fullName,
+        last_name: employee.lastName,
+        first_name: employee.firstName,
+        middle_name: employee.middleName,
+        phone: employee.phone,
+        is_active: employee.isActive !== false,
+        role: employee.role,
+        role_label: roleLabel,
+        created_at: (employee as any).createdAt,
+      },
+    };
+  }
+
   async removeTenantEmployee(userId: string, employeeId: string) {
     const owner = await this.userModel.findById(userId);
     if (!owner) throw new UnauthorizedException();
@@ -727,18 +789,31 @@ export class AuthService {
       throw new NotFoundException('Сотрудник не найден');
     }
 
-    employee.isActive = false;
-    await employee.save();
+    const snapshot = {
+      employeeEmail: employee.email,
+      employeeName: employee.fullName,
+    };
+
+    // Переназначаем пропуска владельцу, чтобы они остались в списке компании
+    const reassignResult = await this.passModel.updateMany(
+      { createdBy: employee._id },
+      { $set: { createdBy: owner._id } },
+    );
+
+    await this.userModel.deleteOne({ _id: employee._id });
 
     await this.auditService.log({
-      action: 'tenant.employee_removed',
+      action: 'tenant.employee_deleted',
       entityType: 'user',
-      entityId: employee._id,
+      entityId: employeeId,
       actor: { userId, email: owner.email, role: owner.role },
-      details: { employeeEmail: employee.email, employeeName: employee.fullName },
+      details: {
+        ...snapshot,
+        reassignedPasses: reassignResult.modifiedCount || 0,
+      },
     });
 
-    return { message: 'Сотрудник деактивирован' };
+    return { message: 'Сотрудник удалён' };
   }
 
   async getUserOffices(userId: string, parentTenantId?: string) {

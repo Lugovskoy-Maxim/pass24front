@@ -2,7 +2,7 @@
 
 import { ChangeEvent, FormEvent, useEffect, useState } from 'react';
 import {
-  ArrowDown, ArrowUp, CircleHelp, Globe, ImageIcon, Mail, MessageSquare, Palette, Phone,
+  ArrowDown, ArrowUp, BookOpen, CircleHelp, Globe, ImageIcon, Mail, MessageSquare, Palette, Phone,
   Plus, RotateCcw, Trash2, Type, Upload,
 } from 'lucide-react';
 import { useAuth } from '@/lib/auth';
@@ -12,18 +12,34 @@ import { SiteBrand } from '@/components/SiteBrand';
 import { SelectWrap } from '@/components/FormField';
 import { UiLabelsEditor } from '@/components/UiLabelsEditor';
 import { useToast } from '@/components/Toast';
-import { api, FaqItem, SiteSettings, getErrorMessage } from '@/lib/api';
+import { api, FaqItem, HelpGuideSection, SiteSettings, getErrorMessage } from '@/lib/api';
 import { PageError } from '@/components/PageError';
 import { invalidateConfigCache } from '@/hooks/useConfig';
 import { MSTYLE_BRAND_DEFAULTS, resolveBrand } from '@/lib/brand-defaults';
-import { HELP_FAQ_ITEMS, resolveFaqItems } from '@/lib/help-faq-content';
+import {
+  HELP_FAQ_ITEMS,
+  HELP_GUIDE_SECTIONS,
+  linesToText,
+  resolveFaqItems,
+  resolveGuideSections,
+  textToLines,
+} from '@/lib/help-faq-content';
 import { THEME_COLOR_DEFAULTS } from '@/lib/theme-colors';
 import { mergeUiLabels, UiLabels } from '@/lib/ui-labels';
 
 const MAX_ICON_BYTES = 80 * 1024;
 const MAX_FAQ_ITEMS = 50;
+const MAX_GUIDE_SECTIONS = 40;
 
-type Tab = 'brand' | 'colors' | 'labels' | 'registration' | 'faq';
+type Tab = 'brand' | 'colors' | 'labels' | 'registration' | 'faq' | 'guide';
+
+/** Редакторская форма раздела: шаги и абзацы — многострочный текст */
+type GuideSectionForm = {
+  id: string;
+  title: string;
+  stepsText: string;
+  paragraphsText: string;
+};
 
 function iconInputValue(value: string): string {
   return value.startsWith('data:') ? '' : value;
@@ -31,6 +47,30 @@ function iconInputValue(value: string): string {
 
 function newFaqId(): string {
   return `faq-${Date.now().toString(36)}-${Math.random().toString(36).slice(2, 7)}`;
+}
+
+function newGuideId(): string {
+  return `guide-${Date.now().toString(36)}-${Math.random().toString(36).slice(2, 7)}`;
+}
+
+function toGuideForm(sections: HelpGuideSection[]): GuideSectionForm[] {
+  return sections.map((s) => ({
+    id: s.id,
+    title: s.title,
+    stepsText: linesToText(s.steps),
+    paragraphsText: linesToText(s.paragraphs),
+  }));
+}
+
+function fromGuideForm(forms: GuideSectionForm[]): HelpGuideSection[] {
+  return forms
+    .map((s, index) => ({
+      id: s.id?.trim() || newGuideId() || `guide-${index + 1}`,
+      title: s.title.trim(),
+      steps: textToLines(s.stepsText),
+      paragraphs: textToLines(s.paragraphsText),
+    }))
+    .filter((s) => s.title && (s.steps.length > 0 || s.paragraphs.length > 0));
 }
 
 function normalizeSettings(s: SiteSettings): SiteSettings {
@@ -53,6 +93,11 @@ function normalizeSettings(s: SiteSettings): SiteSettings {
       ? s.smsRegistrationCodeText.trim()
       : MSTYLE_BRAND_DEFAULTS.smsRegistrationCodeText,
     faqItems: resolveFaqItems(s.faqItems).map((item) => ({ ...item })),
+    helpGuideSections: resolveGuideSections(s.helpGuideSections).map((item) => ({
+      ...item,
+      steps: [...(item.steps || [])],
+      paragraphs: [...(item.paragraphs || [])],
+    })),
   };
 }
 
@@ -61,6 +106,7 @@ export default function AdminSiteSettingsPage() {
   const { toast } = useToast();
   const isSuperAdmin = user?.role === 'admin';
   const [settings, setSettings] = useState<SiteSettings | null>(null);
+  const [guideForms, setGuideForms] = useState<GuideSectionForm[]>([]);
   const [loadError, setLoadError] = useState('');
   const [loadErrorCause, setLoadErrorCause] = useState<unknown>(null);
   const [labels, setLabels] = useState<UiLabels>(mergeUiLabels());
@@ -72,7 +118,9 @@ export default function AdminSiteSettingsPage() {
     setLoadErrorCause(null);
     api.admin.getSiteSettings()
       .then(({ settings: s }) => {
-        setSettings(normalizeSettings(s));
+        const normalized = normalizeSettings(s);
+        setSettings(normalized);
+        setGuideForms(toGuideForm(normalized.helpGuideSections || []));
         setLabels(mergeUiLabels(s.uiLabels));
       })
       .catch((err) => {
@@ -156,6 +204,39 @@ export default function AdminSiteSettingsPage() {
     toast('Загружены стандартные вопросы — не забудьте сохранить', 'info');
   };
 
+  const addGuideSection = () => {
+    if (guideForms.length >= MAX_GUIDE_SECTIONS) {
+      toast(`Не больше ${MAX_GUIDE_SECTIONS} разделов`, 'error');
+      return;
+    }
+    setGuideForms([
+      ...guideForms,
+      { id: newGuideId(), title: '', stepsText: '', paragraphsText: '' },
+    ]);
+  };
+
+  const updateGuideForm = (index: number, patch: Partial<GuideSectionForm>) => {
+    setGuideForms(guideForms.map((item, i) => (i === index ? { ...item, ...patch } : item)));
+  };
+
+  const removeGuideSection = (index: number) => {
+    setGuideForms(guideForms.filter((_, i) => i !== index));
+  };
+
+  const moveGuideSection = (index: number, direction: -1 | 1) => {
+    const next = index + direction;
+    if (next < 0 || next >= guideForms.length) return;
+    const items = [...guideForms];
+    const [row] = items.splice(index, 1);
+    items.splice(next, 0, row);
+    setGuideForms(items);
+  };
+
+  const resetGuideDefaults = () => {
+    setGuideForms(toGuideForm(HELP_GUIDE_SECTIONS));
+    toast('Загружены стандартные инструкции — не забудьте сохранить', 'info');
+  };
+
   const handleSubmit = async (e: FormEvent) => {
     e.preventDefault();
     if (!settings) return;
@@ -179,6 +260,24 @@ export default function AdminSiteSettingsPage() {
       }
     }
 
+    if (tab === 'guide') {
+      const incomplete = guideForms.find((item) => {
+        const hasTitle = !!item.title.trim();
+        const hasBody = textToLines(item.stepsText).length > 0 || textToLines(item.paragraphsText).length > 0;
+        const empty = !hasTitle && !item.stepsText.trim() && !item.paragraphsText.trim();
+        if (empty) return false;
+        return !hasTitle || !hasBody;
+      });
+      if (incomplete) {
+        toast('У каждого раздела укажите заголовок и хотя бы один шаг или абзац (или удалите пустые)', 'error');
+        return;
+      }
+      if (!fromGuideForm(guideForms).length) {
+        toast('Добавьте хотя бы один раздел инструкций', 'error');
+        return;
+      }
+    }
+
     setSaving(true);
     try {
       const payloadFaq = (settings.faqItems || [])
@@ -189,12 +288,24 @@ export default function AdminSiteSettingsPage() {
         }))
         .filter((item) => item.question && item.answer);
 
+      const payloadGuide = fromGuideForm(guideForms);
+
       const { settings: updated } = await api.admin.updateSiteSettings({
         ...settings,
         faqItems: payloadFaq.length ? payloadFaq : HELP_FAQ_ITEMS.map((item) => ({ ...item })),
+        helpGuideSections: payloadGuide.length
+          ? payloadGuide
+          : HELP_GUIDE_SECTIONS.map((item) => ({
+              id: item.id,
+              title: item.title,
+              steps: item.steps || [],
+              paragraphs: item.paragraphs || [],
+            })),
         uiLabels: labels as unknown as Record<string, unknown>,
       });
-      setSettings(normalizeSettings(updated));
+      const normalized = normalizeSettings(updated);
+      setSettings(normalized);
+      setGuideForms(toGuideForm(normalized.helpGuideSections || []));
       setLabels(mergeUiLabels(updated.uiLabels));
       invalidateConfigCache();
       toast('Настройки сохранены', 'success');
@@ -293,6 +404,14 @@ export default function AdminSiteSettingsPage() {
         >
           <CircleHelp className="w-4 h-4" />
           Вопросы и ответы
+        </button>
+        <button
+          type="button"
+          className={`btn text-sm ${tab === 'guide' ? 'btn-primary' : 'btn-secondary'}`}
+          onClick={() => setTab('guide')}
+        >
+          <BookOpen className="w-4 h-4" />
+          Инструкции
         </button>
       </div>
 
@@ -663,6 +782,119 @@ export default function AdminSiteSettingsPage() {
               ))}
 
               {!(settings.faqItems?.length) && (
+                <div className="text-sm text-[var(--muted)] border border-dashed border-[var(--border)] rounded-lg p-6 text-center">
+                  Список пуст. Нажмите «Добавить» или «Стандартные».
+                </div>
+              )}
+            </div>
+          </div>
+        )}
+
+        {tab === 'guide' && (
+          <div className="card p-6 max-w-3xl space-y-5">
+            <div className="flex flex-col sm:flex-row sm:items-start sm:justify-between gap-3">
+              <div>
+                <h2 className="text-base font-semibold mb-1">Инструкции</h2>
+                <p className="text-sm text-[var(--muted)]">
+                  Разделы вкладки «Инструкции» в кнопке «Помощь». Каждый пункт шага или абзац — с новой строки.
+                </p>
+              </div>
+              <div className="flex flex-wrap gap-2 shrink-0">
+                <button type="button" className="btn btn-secondary text-sm" onClick={resetGuideDefaults}>
+                  <RotateCcw className="w-4 h-4" />
+                  Стандартные
+                </button>
+                <button type="button" className="btn btn-secondary text-sm" onClick={addGuideSection}>
+                  <Plus className="w-4 h-4" />
+                  Добавить
+                </button>
+              </div>
+            </div>
+
+            <div className="space-y-4">
+              {guideForms.map((item, index) => (
+                <div
+                  key={item.id || `guide-${index}`}
+                  className="rounded-lg border border-[var(--border)] bg-[var(--surface-muted)] p-4 space-y-3"
+                >
+                  <div className="flex items-center justify-between gap-2">
+                    <span className="text-xs font-semibold uppercase tracking-wide text-[var(--muted)]">
+                      Раздел {index + 1}
+                    </span>
+                    <div className="flex items-center gap-1">
+                      <button
+                        type="button"
+                        className="btn btn-secondary text-xs px-2 py-1"
+                        disabled={index === 0}
+                        onClick={() => moveGuideSection(index, -1)}
+                        title="Выше"
+                        aria-label="Переместить выше"
+                      >
+                        <ArrowUp className="w-3.5 h-3.5" />
+                      </button>
+                      <button
+                        type="button"
+                        className="btn btn-secondary text-xs px-2 py-1"
+                        disabled={index >= guideForms.length - 1}
+                        onClick={() => moveGuideSection(index, 1)}
+                        title="Ниже"
+                        aria-label="Переместить ниже"
+                      >
+                        <ArrowDown className="w-3.5 h-3.5" />
+                      </button>
+                      <button
+                        type="button"
+                        className="btn btn-danger text-xs px-2 py-1"
+                        onClick={() => removeGuideSection(index)}
+                        title="Удалить"
+                        aria-label="Удалить раздел"
+                      >
+                        <Trash2 className="w-3.5 h-3.5" />
+                      </button>
+                    </div>
+                  </div>
+                  <div>
+                    <label className="label" htmlFor={`guide-title-${index}`}>Заголовок</label>
+                    <input
+                      id={`guide-title-${index}`}
+                      className="input"
+                      value={item.title}
+                      onChange={(e) => updateGuideForm(index, { title: e.target.value })}
+                      placeholder="Например: Заказ пропуска"
+                      maxLength={200}
+                    />
+                  </div>
+                  <div>
+                    <label className="label" htmlFor={`guide-steps-${index}`}>
+                      Шаги (по одному на строку)
+                    </label>
+                    <textarea
+                      id={`guide-steps-${index}`}
+                      className="input min-h-[110px] resize-y"
+                      value={item.stepsText}
+                      onChange={(e) => updateGuideForm(index, { stepsText: e.target.value })}
+                      placeholder={'Раздел «Пропуска» → «Заказать пропуск».\nУкажите данные посетителя...'}
+                    />
+                  </div>
+                  <div>
+                    <label className="label" htmlFor={`guide-p-${index}`}>
+                      Абзацы (по одному на строку)
+                    </label>
+                    <textarea
+                      id={`guide-p-${index}`}
+                      className="input min-h-[80px] resize-y"
+                      value={item.paragraphsText}
+                      onChange={(e) => updateGuideForm(index, { paragraphsText: e.target.value })}
+                      placeholder="Дополнительные пояснения без нумерации"
+                    />
+                    <p className="text-xs text-[var(--muted)] mt-1">
+                      Нужен хотя бы один шаг или абзац. Шаги в панели помощи показываются нумерованным списком.
+                    </p>
+                  </div>
+                </div>
+              ))}
+
+              {!guideForms.length && (
                 <div className="text-sm text-[var(--muted)] border border-dashed border-[var(--border)] rounded-lg p-6 text-center">
                   Список пуст. Нажмите «Добавить» или «Стандартные».
                 </div>

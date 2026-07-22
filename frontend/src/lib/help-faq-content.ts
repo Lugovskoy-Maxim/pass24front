@@ -1,4 +1,4 @@
-import type { FaqItem } from './api';
+import type { FaqItem, HelpGuideSection as ApiHelpGuideSection } from './api';
 
 export type HelpGuideSection = {
   id: string;
@@ -140,4 +140,44 @@ export function resolveFaqItems(items?: FaqItem[] | null): HelpFaqItem[] {
     }))
     .filter((item) => item.question && item.answer);
   return normalized.length ? normalized : HELP_FAQ_ITEMS;
+}
+
+function cleanLines(lines?: string[] | null): string[] {
+  if (!Array.isArray(lines)) return [];
+  return lines.map((line) => String(line || '').trim()).filter(Boolean);
+}
+
+/** Публичные инструкции: из настроек сайта или дефолт */
+export function resolveGuideSections(
+  items?: ApiHelpGuideSection[] | HelpGuideSection[] | null,
+): HelpGuideSection[] {
+  if (!Array.isArray(items) || items.length === 0) {
+    return HELP_GUIDE_SECTIONS;
+  }
+  const normalized = items
+    .map((item, index) => {
+      const title = (item.title || '').trim();
+      const steps = cleanLines(item.steps);
+      const paragraphs = cleanLines(item.paragraphs);
+      return {
+        id: (item.id || `guide-${index + 1}`).trim(),
+        title,
+        steps,
+        paragraphs,
+      };
+    })
+    .filter((item) => item.title && (item.steps.length > 0 || item.paragraphs.length > 0));
+  return normalized.length ? normalized : HELP_GUIDE_SECTIONS;
+}
+
+/** Для админ-формы: шаги/абзацы как многострочный текст */
+export function linesToText(lines?: string[] | null): string {
+  return cleanLines(lines).join('\n');
+}
+
+export function textToLines(text: string): string[] {
+  return text
+    .split(/\r?\n/)
+    .map((line) => line.trim())
+    .filter(Boolean);
 }

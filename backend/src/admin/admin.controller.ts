@@ -235,6 +235,12 @@ export class AdminController {
         question: item.question,
         answer: item.answer,
       })),
+      helpGuideSections: dto.helpGuideSections?.map((item) => ({
+        id: item.id,
+        title: item.title,
+        steps: item.steps,
+        paragraphs: item.paragraphs,
+      })),
     };
     if (req.user?.role !== 'admin') {
       delete payload.smsRegistrationEnabled;
