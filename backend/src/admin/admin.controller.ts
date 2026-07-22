@@ -259,6 +259,7 @@ export class AdminController {
       delete payload.smsRegistrationEnabled;
       delete payload.smsRegistrationDisabledMessage;
       delete payload.smsRegistrationCodeText;
+      delete payload.blockedEmailDomains;
     }
     const settings = await this.siteSettingsService.update(payload);
     await this.auditService.log({

@@ -232,6 +232,7 @@ function LoginPageInner() {
       company: mode === 'register' ? company : undefined,
       phone: mode === 'register' ? phone : undefined,
       verificationChannel: effectiveChannel,
+      blockedEmailDomains: config?.blockedEmailDomains,
     });
     setFieldErrors(errors);
     if (hasFieldErrors(errors)) return;

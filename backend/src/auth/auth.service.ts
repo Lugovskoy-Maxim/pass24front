@@ -109,13 +109,12 @@ export class AuthService {
     if (channel === 'phone' && !phone) {
       throw new BadRequestException('Укажите номер телефона в формате +79XXXXXXXXX');
     }
-    // Email (основной или доп. при SMS) — только .ru / .рф / .su
-    if (email && !isAllowedRegistrationEmail(email)) {
+    let siteSettings = await this.siteSettingsService.get();
+    // Email (основной или доп. при SMS): зона .ru + список запрещённых доменов из админки
+    if (email && !isAllowedRegistrationEmail(email, { blockedDomains: siteSettings.blockedEmailDomains })) {
       throw new BadRequestException(REGISTRATION_EMAIL_POLICY_MESSAGE);
     }
-    let siteSettings: Awaited<ReturnType<SiteSettingsService['get']>> | null = null;
     if (channel === 'phone') {
-      siteSettings = await this.siteSettingsService.get();
       if (!siteSettings.smsRegistrationEnabled) {
         throw new BadRequestException(siteSettings.smsRegistrationDisabledMessage);
       }
@@ -184,7 +183,6 @@ export class AuthService {
     );
 
     if (channel === 'phone') {
-      if (!siteSettings) siteSettings = await this.siteSettingsService.get();
       await this.smsService.sendRegistrationCode(phone!, code, siteSettings.smsRegistrationCodeText);
     } else {
       await this.mailService.sendRegistrationCode(email!, code);
@@ -229,7 +227,8 @@ export class AuthService {
     }
 
     if (pending.email) {
-      if (!isAllowedRegistrationEmail(pending.email)) {
+      const emailPolicy = await this.siteSettingsService.get();
+      if (!isAllowedRegistrationEmail(pending.email, { blockedDomains: emailPolicy.blockedEmailDomains })) {
         await this.pendingModel.deleteOne(pendingFilter);
         throw new BadRequestException(REGISTRATION_EMAIL_POLICY_MESSAGE);
       }

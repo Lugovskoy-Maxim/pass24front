@@ -40,8 +40,11 @@ export function validateLoginRegister(data: {
   company?: string;
   phone?: string;
   verificationChannel?: 'email' | 'phone';
+  /** Запрещённые домены из /api/config (админка). null/undefined — дефолтный список. */
+  blockedEmailDomains?: string[] | null;
 }): FieldErrors {
   const errors: FieldErrors = {};
+  const emailOpts = { blockedDomains: data.blockedEmailDomains };
 
   if (data.mode === 'login') {
     if (isBlank(data.email)) {
@@ -57,12 +60,12 @@ export function validateLoginRegister(data: {
     }
     if (!isBlank(data.email)) {
       if (!isValidEmail(data.email)) errors.email = 'Проверьте формат email (name@company.ru)';
-      else if (!isAllowedRegistrationEmail(data.email)) errors.email = REGISTRATION_EMAIL_POLICY_MESSAGE;
+      else if (!isAllowedRegistrationEmail(data.email, emailOpts)) errors.email = REGISTRATION_EMAIL_POLICY_MESSAGE;
     }
   } else {
     if (isBlank(data.email)) errors.email = 'Укажите email';
     else if (!isValidEmail(data.email)) errors.email = 'Проверьте формат email (name@company.ru)';
-    else if (data.mode === 'register' && !isAllowedRegistrationEmail(data.email)) {
+    else if (data.mode === 'register' && !isAllowedRegistrationEmail(data.email, emailOpts)) {
       errors.email = REGISTRATION_EMAIL_POLICY_MESSAGE;
     }
     if (!isBlank(data.phone) && !isValidRuMobilePhone(data.phone)) {

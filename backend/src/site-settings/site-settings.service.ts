@@ -3,6 +3,10 @@ import { InjectModel } from '@nestjs/mongoose';
 import { Model } from 'mongoose';
 import { AppSettings, AppSettingsDocument } from '../schemas/app-settings.schema';
 import { MSTYLE_BRAND_DEFAULTS, isLegacyBrandSettings } from '../brand/brand-defaults';
+import {
+  normalizeBlockedEmailDomains,
+  resolveBlockedEmailDomains,
+} from '../common/email-policy';
 import { DEFAULT_FAQ_ITEMS, NormalizedFaqItem, normalizeFaqItems } from './faq-defaults';
 import {
   DEFAULT_GUIDE_SECTIONS,
@@ -40,6 +44,8 @@ export interface SiteSettingsDto {
   smsRegistrationEnabled: boolean;
   smsRegistrationDisabledMessage: string;
   smsRegistrationCodeText: string;
+  /** Запрещённые домены email при регистрации (редактируется в админке). */
+  blockedEmailDomains: string[];
   faqItems: NormalizedFaqItem[];
   helpGuideSections: NormalizedGuideSection[];
 }
@@ -106,6 +112,7 @@ export class SiteSettingsService implements OnModuleInit {
     smsRegistrationEnabled?: boolean;
     smsRegistrationDisabledMessage?: string;
     smsRegistrationCodeText?: string;
+    blockedEmailDomains?: string[];
     /** Сырой список из DTO — id опционален, нормализуется внутри */
     faqItems?: Array<{ id?: string; question?: string; answer?: string }>;
     helpGuideSections?: Array<{
@@ -171,6 +178,10 @@ export class SiteSettingsService implements OnModuleInit {
         ? text
         : MSTYLE_BRAND_DEFAULTS.smsRegistrationCodeText;
     }
+    if (data.blockedEmailDomains !== undefined) {
+      // Пустой массив допустим: только проверка зоны .ru, без списка free-mail
+      update.blockedEmailDomains = normalizeBlockedEmailDomains(data.blockedEmailDomains);
+    }
     if (data.faqItems !== undefined) {
       update.faqItems = normalizeFaqItems(data.faqItems);
     }
@@ -213,6 +224,10 @@ export class SiteSettingsService implements OnModuleInit {
       smsRegistrationCodeText: doc?.smsRegistrationCodeText?.trim()?.includes('{code}')
         ? doc.smsRegistrationCodeText.trim()
         : MSTYLE_BRAND_DEFAULTS.smsRegistrationCodeText,
+      blockedEmailDomains: resolveBlockedEmailDomains(
+        // undefined field → defaults; explicit [] stays empty
+        Array.isArray(doc?.blockedEmailDomains) ? doc!.blockedEmailDomains : undefined,
+      ),
       faqItems: normalizeFaqItems(doc?.faqItems?.length ? doc.faqItems : DEFAULT_FAQ_ITEMS),
       helpGuideSections: normalizeGuideSections(
         doc?.helpGuideSections?.length ? doc.helpGuideSections : DEFAULT_GUIDE_SECTIONS,

@@ -71,6 +71,13 @@ export class AppSettings {
   @Prop({ default: 'Код подтверждения регистрации: {code}. Действует 15 минут.' })
   smsRegistrationCodeText: string;
 
+  /**
+   * Запрещённые email-домены при регистрации (gmail.com, outlook.com…).
+   * null/отсутствует — дефолтный список; [] — без доп. блокировок (остаётся проверка зоны .ru).
+   */
+  @Prop({ type: [String], default: undefined })
+  blockedEmailDomains?: string[];
+
   /** Вопросы и ответы для панели помощи */
   @Prop({
     type: [

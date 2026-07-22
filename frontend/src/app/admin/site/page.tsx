@@ -25,6 +25,12 @@ import { PageError } from '@/components/PageError';
 import { invalidateConfigCache } from '@/hooks/useConfig';
 import { MSTYLE_BRAND_DEFAULTS, resolveBrand } from '@/lib/brand-defaults';
 import {
+  DEFAULT_BLOCKED_EMAIL_DOMAINS,
+  formatBlockedDomainsText,
+  parseBlockedDomainsText,
+  resolveBlockedEmailDomains,
+} from '@/lib/email-policy';
+import {
   HELP_FAQ_ITEMS,
   HELP_GUIDE_SECTIONS,
   linesToText,
@@ -101,6 +107,9 @@ function normalizeSettings(s: SiteSettings): SiteSettings {
     smsRegistrationCodeText: s.smsRegistrationCodeText?.includes('{code}')
       ? s.smsRegistrationCodeText.trim()
       : MSTYLE_BRAND_DEFAULTS.smsRegistrationCodeText,
+    blockedEmailDomains: resolveBlockedEmailDomains(
+      Array.isArray(s.blockedEmailDomains) ? s.blockedEmailDomains : undefined,
+    ),
     faqItems: resolveFaqItems(s.faqItems).map((item) => ({ ...item })),
     helpGuideSections: resolveGuideSections(s.helpGuideSections).map((item) => ({
       ...item,
@@ -991,6 +1000,46 @@ export default function AdminSiteSettingsPage() {
                 Используйте <code className="text-[var(--text)]">{'{code}'}</code> для подстановки 6-значного кода.
                 Текст должен содержать этот шаблон. Рекомендуемая длина — до 70 символов (одно SMS).
               </p>
+            </div>
+
+            <div className="border-t border-[var(--border)] pt-5 space-y-3">
+              <div>
+                <h2 className="text-base font-semibold mb-1">Запрещённые email-домены</h2>
+                <p className="text-sm text-[var(--muted)]">
+                  При регистрации нельзя указать адрес на этих доменах (Gmail, Outlook, iCloud и т.п.).
+                  По-прежнему разрешены только зоны <strong>.ru</strong> / <strong>.рф</strong> / <strong>.su</strong>.
+                </p>
+              </div>
+              <div>
+                <label className="label" htmlFor="blockedEmailDomains">
+                  Список доменов (по одному на строку)
+                </label>
+                <textarea
+                  id="blockedEmailDomains"
+                  className="input min-h-[200px] resize-y font-mono text-sm"
+                  value={formatBlockedDomainsText(settings.blockedEmailDomains)}
+                  onChange={(e) => setSettings({
+                    ...settings,
+                    blockedEmailDomains: parseBlockedDomainsText(e.target.value),
+                  })}
+                  placeholder={DEFAULT_BLOCKED_EMAIL_DOMAINS.join('\n')}
+                  spellCheck={false}
+                />
+                <p className="text-xs text-[var(--muted)] mt-1">
+                  Пример: <code className="text-[var(--text)]">gmail.com</code>. Без символа @.
+                  Пустой список — блокировка free-mail отключена (остаётся только правило зоны .ru).
+                </p>
+              </div>
+              <button
+                type="button"
+                className="btn btn-secondary text-sm"
+                onClick={() => setSettings({
+                  ...settings,
+                  blockedEmailDomains: [...DEFAULT_BLOCKED_EMAIL_DOMAINS],
+                })}
+              >
+                Восстановить стандартный список
+              </button>
             </div>
           </div>
         )}

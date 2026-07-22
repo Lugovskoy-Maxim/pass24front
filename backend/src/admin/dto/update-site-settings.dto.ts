@@ -149,6 +149,14 @@ export class UpdateSiteSettingsDto {
   @MaxLength(300)
   smsRegistrationCodeText?: string;
 
+  /** Запрещённые email-домены при регистрации (по одному: gmail.com). */
+  @IsOptional()
+  @IsArray()
+  @ArrayMaxSize(200)
+  @IsString({ each: true })
+  @MaxLength(120, { each: true })
+  blockedEmailDomains?: string[];
+
   @IsOptional()
   @IsArray()
   @ArrayMaxSize(50)

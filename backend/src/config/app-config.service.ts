@@ -60,6 +60,7 @@ export class AppConfigService {
       uiLabels: site.uiLabels,
       smsRegistrationEnabled: site.smsRegistrationEnabled,
       smsRegistrationDisabledMessage: site.smsRegistrationDisabledMessage,
+      blockedEmailDomains: site.blockedEmailDomains,
       faqItems: site.faqItems,
       helpGuideSections: site.helpGuideSections,
     };

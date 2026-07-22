@@ -818,6 +818,8 @@ export interface SiteSettings {
   smsRegistrationEnabled?: boolean;
   smsRegistrationDisabledMessage?: string;
   smsRegistrationCodeText?: string;
+  /** Запрещённые email-домены при регистрации (из админки). */
+  blockedEmailDomains?: string[];
   faqItems?: FaqItem[];
   helpGuideSections?: HelpGuideSection[];
 }
