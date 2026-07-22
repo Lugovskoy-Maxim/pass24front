@@ -264,8 +264,10 @@ async function request<T>(path: string, options: RequestInit = {}): Promise<T> {
   if (!res.ok) {
     if (res.status === 401 && typeof window !== 'undefined') {
       localStorage.removeItem('pass24_token');
-      if (!window.location.pathname.startsWith('/login')) {
-        window.location.href = '/login';
+      const path = window.location.pathname;
+      if (!path.startsWith('/login') && !path.startsWith('/invite')) {
+        const next = path && path !== '/' ? `?next=${encodeURIComponent(path + window.location.search)}` : '';
+        window.location.href = `/login${next}`;
       }
     }
     await throwForResponse(res);
@@ -524,8 +526,10 @@ export const api = {
 
       if (res.status === 401 && typeof window !== 'undefined') {
         localStorage.removeItem('pass24_token');
-        if (!window.location.pathname.startsWith('/login')) {
-          window.location.href = '/login';
+        const path = window.location.pathname;
+        if (!path.startsWith('/login') && !path.startsWith('/invite')) {
+          const next = path && path !== '/' ? `?next=${encodeURIComponent(path + window.location.search)}` : '';
+          window.location.href = `/login${next}`;
         }
       }
 

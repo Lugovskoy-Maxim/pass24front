@@ -227,8 +227,7 @@ function PassesPageContent() {
     </>
   );
 
-  if (user && !canViewPassesList) return null;
-
+  // Нельзя return null до ProtectedLayout — иначе редирект/проверка прав не сработает
   return (
     <ProtectedLayout anyPermissions={['passes.view_own', 'passes.view_all', 'admin.panel']}>
       <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-4 mb-6">

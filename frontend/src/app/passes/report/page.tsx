@@ -164,8 +164,7 @@ export default function PassesReportPage() {
   const currentPage = Math.floor(offset / PAGE_SIZE) + 1;
   const showTenantFilter = (options?.tenants.length ?? 0) > 0;
 
-  if (!user || !canViewPasses(user)) return null;
-
+  // Нельзя return null до ProtectedLayout — иначе гость увидит пустую страницу без редиректа
   return (
     <ProtectedLayout anyPermissions={['passes.view_own', 'passes.view_all', 'admin.panel']}>
       <div className="flex flex-col sm:flex-row sm:items-start justify-between gap-4 mb-6">

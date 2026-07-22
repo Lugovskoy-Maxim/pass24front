@@ -196,7 +196,8 @@ function NewPassForm() {
       office,
       sendEmail,
       recipientEmail,
-      tenantHasOffices: tenantOffices.length > 0,
+      // Компания всегда выбирает офис из списка (только свои)
+      tenantHasOffices: tenantCompanyUser || tenantOffices.length > 0,
       tenantMultiBc: bcOptions.length > 1,
     });
     setFieldErrors(errors);
@@ -232,12 +233,15 @@ function NewPassForm() {
   };
 
   if (user && !canOrderPasses(user)) {
+    const companyNoOffices = isTenantCompanyUser(user) && (user.offices?.length ?? 0) === 0;
     return (
       <ProtectedLayout permissions={['passes.create']}>
         <h1 className="page-title mb-2">Заказ пропуска</h1>
         <div className="card p-6 max-w-xl space-y-4 border-[var(--alert-border)] bg-[var(--alert-surface-subtle)]">
           <p className="text-[var(--alert-text)]">
-            Заказ пропусков недоступен: офис не назначен. Дождитесь подтверждения регистрации и назначения офиса администратором.
+            {companyNoOffices
+              ? 'Заказ пропусков недоступен: у компании нет закреплённых офисов. Обратитесь к администратору бизнес-центра.'
+              : 'Заказ пропусков недоступен: офис не назначен. Дождитесь подтверждения регистрации и назначения офиса администратором.'}
           </p>
           <button type="button" className="btn btn-secondary" onClick={() => router.back()}>Назад</button>
         </div>

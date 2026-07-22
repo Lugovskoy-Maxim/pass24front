@@ -135,7 +135,10 @@ export default function ProfilePage() {
     return () => window.clearTimeout(timer);
   }, [emailVerifyResendIn]);
 
-  if (!user) return null;
+  // Нельзя return null до ProtectedLayout — иначе не сработает редирект на /login
+  if (!user) {
+    return <ProtectedLayout><div className="animate-pulse text-[var(--muted)]">Загрузка…</div></ProtectedLayout>;
+  }
 
   const needsEmailVerification = !!user.email && !user.email_verified;
 

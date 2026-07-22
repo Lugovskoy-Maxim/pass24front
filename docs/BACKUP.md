@@ -77,35 +77,51 @@ cmd /c "type pass24_....gz | docker exec -i pass24-mongo mongorestore --archive 
 
 ---
 
-## Вариант B. База на **сервере** (Linux), копии на **этот** ПК
+## Вариант B. База на **сервере** Linux `192.168.200.9`, копии на **этот** ПК
 
-На сервере уже есть:
+Прод: **192.168.200.9**, каталог приложения обычно `/opt/pass24front`.
+
+На сервере:
 
 - `scripts/mongo-backup.sh` — dump в `/opt/pass24front/backups/mongo`
 - `scripts/setup-mongo-backup-cron.sh` — cron каждый день в 02:00
 
-### 1. Бэкап на сервере (если cron ещё не стоит)
+### 1. Бэкап на сервере (один раз + cron)
 
-```bash
-ssh user@ВАШ_СЕРВЕР
-cd /opt/pass24front
-sudo chmod +x scripts/mongo-backup.sh scripts/setup-mongo-backup-cron.sh
-sudo ./scripts/setup-mongo-backup-cron.sh   # один раз
-sudo ./scripts/mongo-backup.sh              # сразу сейчас
-ls -la backups/mongo/
+В PowerShell / CMD на Windows (подставьте свой логин, например `user` или `it`):
+
+```powershell
+ssh user@192.168.200.9
 ```
 
-### 2. Скачать на Windows
+Введите **пароль** по запросу. Дальше на сервере:
+
+```bash
+cd /opt/pass24front
+sudo chmod +x scripts/mongo-backup.sh scripts/setup-mongo-backup-cron.sh
+sudo ./scripts/mongo-backup.sh              # бэкап сейчас
+sudo ./scripts/setup-mongo-backup-cron.sh   # каждый день в 02:00
+ls -lah backups/mongo/
+```
+
+### 2. Скачать на Windows (вход **по паролю**)
+
+Ключ SSH **не обязателен**. При `ssh` / `scp` Windows спросит пароль — введите его.
 
 ```powershell
 cd C:\Users\it\Documents\GitHub\pass24front
 
-# Только скачать уже сделанные бэкапы
+# Только скачать уже готовые .gz с сервера (пароль 1–2 раза)
 .\scripts\mongo-backup-from-server.ps1 -Server "user@192.168.200.9"
 
-# Сначала сделать dump на сервере, потом скачать
+# Сделать dump на сервере, потом скачать (пароль несколько раз: ssh + scp)
 .\scripts\mongo-backup-from-server.ps1 -Server "user@192.168.200.9" -RunRemoteBackupFirst
 ```
+
+Если `sudo` на сервере тоже просит пароль при `-RunRemoteBackupFirst`, проще:
+
+1. Зайти по SSH, выполнить `sudo ./scripts/mongo-backup.sh`
+2. На Windows запустить скрипт **без** `-RunRemoteBackupFirst`
 
 Куда кладётся:
 
@@ -113,17 +129,31 @@ cd C:\Users\it\Documents\GitHub\pass24front
 C:\Users\it\Documents\pass24-backups\from-server\YYYYMMDD_HHMMSS\
 ```
 
-Нужен **OpenSSH Client** (обычно уже есть в Windows 10/11) и доступ `ssh user@host` без ошибок.
+Нужен **OpenSSH Client** (Параметры Windows → Приложения → Доп. компоненты → OpenSSH Client).
 
-### 3. Автоскачивание с сервера (Планировщик)
+### 3. Ручное копирование (если скрипт не удобен)
 
-Действие:
+```powershell
+# Создать папку
+New-Item -ItemType Directory -Force -Path "$env:USERPROFILE\Documents\pass24-backups\from-server" | Out-Null
 
+# Скачать все дампы (спросит пароль)
+scp "user@192.168.200.9:/opt/pass24front/backups/mongo/*.gz" "$env:USERPROFILE\Documents\pass24-backups\from-server\"
 ```
-powershell.exe -NoProfile -ExecutionPolicy Bypass -File "C:\Users\it\Documents\GitHub\pass24front\scripts\mongo-backup-from-server.ps1" -Server "user@192.168.200.9" -RunRemoteBackupFirst
-```
 
-Рекомендуется вход по **SSH-ключу** без пароля, иначе задание «зависнет» на вводе пароля.
+### 4. Автоскачивание и пароль
+
+Планировщик Windows **не умеет** сам вводить SSH-пароль — задание зависнет.
+
+Варианты:
+
+| Способ | Комментарий |
+|--------|-------------|
+| **Вручную 1–2 раза в неделю** `mongo-backup-from-server.ps1` | Нормально при входе по паролю |
+| **Cron только на сервере** | Бэкапы лежат на `192.168.200.9` в `backups/mongo`; на ПК копируете когда нужно |
+| **SSH-ключ** (опционально) | Тогда можно повесить Планировщик без пароля |
+
+Хранить пароль в скрипте **нельзя** (небезопасно). Для автомата — только ключ.
 
 ---
 

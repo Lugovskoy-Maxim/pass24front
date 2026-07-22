@@ -1808,6 +1808,15 @@ input[type="checkbox"]:not(.checkbox) {
   color: #dc2626;
 }
 
+/* Метка версии (v.DDMMYY) */
+.app-version {
+  font-size: 0.625rem;
+  line-height: 1.2;
+  letter-spacing: 0.04em;
+  color: var(--muted);
+  opacity: 0.75;
+}
+
 /* ── Help / FAQ floating panel ── */
 .help-faq {
   position: fixed;

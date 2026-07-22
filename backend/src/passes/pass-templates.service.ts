@@ -160,6 +160,7 @@ export class PassTemplatesService {
   private async resolveOfficeFields(dto: CreatePassTemplateDto, user: any) {
     const tenantOwnerId = tenantOwnerObjectId(user);
 
+    // Owner и employee: только офисы компании (tenantId = owner)
     if (isTenantCompanyUser(user)) {
       if (!tenantOwnerId) {
         throw new ForbiddenException('Создание шаблонов недоступно');
@@ -170,11 +171,11 @@ export class PassTemplatesService {
       });
       if (!assignedOffices) {
         throw new ForbiddenException(
-          'Создание шаблонов недоступно: офис не назначен. Обратитесь к администратору.',
+          'Создание шаблонов недоступно: у компании нет закреплённых офисов. Обратитесь к администратору.',
         );
       }
       if (!dto.officeId) {
-        throw new BadRequestException('Выберите офис из списка');
+        throw new BadRequestException('Выберите офис компании из списка');
       }
     }
 
@@ -189,7 +190,7 @@ export class PassTemplatesService {
     if (!office || !office.isActive) throw new NotFoundException('Офис не найден');
 
     if (isTenantCompanyUser(user) && office.tenantId?.toString() !== tenantOwnerId?.toString()) {
-      throw new ForbiddenException('Вы можете использовать только свои офисы');
+      throw new ForbiddenException('Можно использовать только офисы своей компании');
     }
 
     const property = await this.propertyModel.findById(office.property).lean();

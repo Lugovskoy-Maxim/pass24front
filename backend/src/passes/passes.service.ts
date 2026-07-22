@@ -945,6 +945,7 @@ export class PassesService implements OnModuleInit {
   private async resolveOfficeFields(dto: CreatePassDto, user: any) {
     const tenantOwnerId = tenantOwnerObjectId(user);
 
+    // Owner и employee компании: только офисы, закреплённые за этой компанией (tenantId)
     if (isTenantCompanyUser(user)) {
       if (!tenantOwnerId) {
         throw new ForbiddenException('Заказ пропусков недоступен');
@@ -955,11 +956,11 @@ export class PassesService implements OnModuleInit {
       });
       if (!assignedOffices) {
         throw new ForbiddenException(
-          'Заказ пропусков недоступен: офис не назначен. Обратитесь к администратору.',
+          'Заказ пропусков недоступен: у компании нет закреплённых офисов. Обратитесь к администратору.',
         );
       }
       if (!dto.officeId) {
-        throw new BadRequestException('Выберите офис из списка');
+        throw new BadRequestException('Выберите офис компании из списка');
       }
     }
 
@@ -970,9 +971,12 @@ export class PassesService implements OnModuleInit {
       }
 
       if (isTenantCompanyUser(user)) {
+        // Сотрудник и владелец — только в офисы своей компании, не чужие и не «свободный» ввод
         const ownsOffice = office.tenantId?.toString() === tenantOwnerId?.toString();
         if (!ownsOffice) {
-          throw new ForbiddenException('Вы можете заказывать пропуска только в свои офисы');
+          throw new ForbiddenException(
+            'Можно заказывать пропуска только в офисы своей компании',
+          );
         }
       }
 

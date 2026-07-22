@@ -6,8 +6,8 @@
  * SMS-вкладка зависит от config.smsRegistrationEnabled.
  * Dev: кнопки быстрых учёток из GET /auth/dev-accounts (не production).
  */
-import { useState, useEffect, FormEvent } from 'react';
-import { useRouter } from 'next/navigation';
+import { useState, useEffect, FormEvent, Suspense } from 'react';
+import { useRouter, useSearchParams } from 'next/navigation';
 import { Mail, Phone } from 'lucide-react';
 import { useAuth } from '@/lib/auth';
 import { getHomePath } from '@/lib/permissions';
@@ -16,6 +16,7 @@ import { useConfig } from '@/hooks/useConfig';
 import { SiteBrand } from '@/components/SiteBrand';
 import { PersonNameFields } from '@/components/PersonNameFields';
 import { FormErrorBanner, FormField, FormInput, PasswordInput } from '@/components/FormField';
+import { AppVersion } from '@/components/AppVersion';
 import { buildFullName, getUserNameLabels, PersonNameParts } from '@/lib/person-name';
 import {
   FieldErrors,
@@ -47,13 +48,23 @@ function formatCountdown(seconds: number): string {
   return `${m}:${String(s).padStart(2, '0')}`;
 }
 
-export default function LoginPage() {
+function safeNextPath(raw: string | null): string | null {
+  if (!raw) return null;
+  // Только внутренние пути (защита от open redirect)
+  if (!raw.startsWith('/') || raw.startsWith('//')) return null;
+  if (raw.startsWith('/login') || raw.startsWith('/invite')) return null;
+  return raw;
+}
+
+function LoginPageInner() {
   const { user, loading: authLoading } = useAuth();
   const router = useRouter();
+  const searchParams = useSearchParams();
+  const nextPath = safeNextPath(searchParams.get('next'));
 
   useEffect(() => {
-    if (!authLoading && user) router.replace(getHomePath(user));
-  }, [user, authLoading, router]);
+    if (!authLoading && user) router.replace(nextPath || getHomePath(user));
+  }, [user, authLoading, router, nextPath]);
 
   const [mode, setMode] = useState<PageMode>('login');
   const [registerStep, setRegisterStep] = useState<'form' | 'verify'>('form');
@@ -121,8 +132,9 @@ export default function LoginPage() {
 
   if (authLoading || user) {
     return (
-      <div className="min-h-screen flex items-center justify-center">
+      <div className="min-h-screen flex flex-col items-center justify-center gap-3">
         <div className="animate-pulse text-[var(--muted)]">Загрузка...</div>
+        <AppVersion />
       </div>
     );
   }
@@ -134,7 +146,7 @@ export default function LoginPage() {
     try {
       const normalizedLogin = normalizeRuMobilePhone(loginValue) || loginValue.trim().toLowerCase();
       const loggedIn = await authLogin(normalizedLogin, loginPassword);
-      router.push(getHomePath(loggedIn));
+      router.push(nextPath || getHomePath(loggedIn));
     } catch (err) {
       setFormError(getErrorMessage(err, 'Ошибка входа'));
     } finally {
@@ -852,7 +864,23 @@ export default function LoginPage() {
             </div>
           )}
         </div>
+        <AppVersion className="mt-6" />
       </div>
     </div>
+  );
+}
+
+export default function LoginPage() {
+  return (
+    <Suspense
+      fallback={(
+        <div className="min-h-screen flex flex-col items-center justify-center gap-3">
+          <div className="animate-pulse text-[var(--muted)]">Загрузка...</div>
+          <AppVersion />
+        </div>
+      )}
+    >
+      <LoginPageInner />
+    </Suspense>
   );
 }

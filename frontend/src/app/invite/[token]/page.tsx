@@ -9,6 +9,7 @@ import { useParams, useRouter } from 'next/navigation';
 import { Mail } from 'lucide-react';
 import { api, getErrorMessage } from '@/lib/api';
 import { FormErrorBanner, FormField, FormInput, PasswordInput } from '@/components/FormField';
+import { AppVersion } from '@/components/AppVersion';
 import { SiteBrand } from '@/components/SiteBrand';
 import { ThemeToggle } from '@/components/ThemeToggle';
 import { useConfig } from '@/hooks/useConfig';
@@ -173,6 +174,7 @@ export default function InviteAcceptPage() {
             </form>
           )}
         </div>
+        <AppVersion className="mt-6" />
       </div>
     </div>
   );

@@ -59,11 +59,18 @@ export function canViewPassCharts(user: User | null | undefined): boolean {
   return !isTenantCompanyUser(user);
 }
 
-/** Арендатор без назначенного офиса не может заказывать пропуска. */
+/**
+ * Можно ли заказывать пропуска.
+ * Сотрудник/владелец компании — только если у компании есть закреплённые офисы;
+ * иначе кнопка «Заказать» скрыта и форма недоступна.
+ */
 export function canOrderPasses(user: User | null | undefined): boolean {
   if (!hasPermission(user, 'passes.create')) return false;
-  if (!isTenantOwner(user)) return true;
-  return (user?.offices?.length ?? 0) > 0;
+  // Компания (owner + employee): только в свои офисы; без офисов — нельзя
+  if (isTenantCompanyUser(user)) {
+    return (user?.offices?.length ?? 0) > 0;
+  }
+  return true;
 }
 
 export function canUseReception(user: User | null | undefined): boolean {
