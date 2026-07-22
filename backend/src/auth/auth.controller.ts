@@ -1,6 +1,6 @@
 /**
  * HTTP-слой auth: /api/auth/*
- * Публичные: login, register*, password-reset*.
+ * Публичные: login, register*, password-reset*, invite*.
  * JWT: me, profile, email/verify, tenant/employees*.
  */
 import { Body, Controller, Delete, Get, Param, Patch, Post, Req, UseGuards } from '@nestjs/common';
@@ -8,6 +8,7 @@ import { AuthGuard } from '@nestjs/passport';
 import { AccessConfigService } from '../access/access-config.service';
 import { AuthService } from './auth.service';
 import { LoginDto } from './dto/login.dto';
+import { AcceptInviteDto } from './dto/accept-invite.dto';
 import { ConfirmEmailVerifyDto } from './dto/confirm-email-verify.dto';
 import { ConfirmPasswordResetDto } from './dto/confirm-password-reset.dto';
 import { ConfirmRegistrationDto } from './dto/confirm-registration.dto';
@@ -27,6 +28,18 @@ export class AuthController {
   @Post('login')
   async login(@Body() dto: LoginDto) {
     return this.authService.login(dto);
+  }
+
+  /** Публично: сведения о приглашении (без JWT). */
+  @Get('invite/:token')
+  getInviteInfo(@Param('token') token: string) {
+    return this.authService.getInviteInfo(token);
+  }
+
+  /** Публично: задать пароль по invite-ссылке. */
+  @Post('invite/accept')
+  acceptInvite(@Body() dto: AcceptInviteDto) {
+    return this.authService.acceptInvite(dto);
   }
 
   @Get('dev-accounts')
@@ -100,6 +113,12 @@ export class AuthController {
   @Post('tenant/employees')
   addTenantEmployee(@Req() req: any, @Body() dto: CreateTenantEmployeeDto) {
     return this.authService.addTenantEmployee(req.user.userId, dto);
+  }
+
+  @UseGuards(AuthGuard('jwt'))
+  @Post('tenant/employees/:id/resend-invite')
+  resendTenantEmployeeInvite(@Req() req: any, @Param('id') id: string) {
+    return this.authService.resendTenantEmployeeInvite(req.user.userId, id);
   }
 
   @UseGuards(AuthGuard('jwt'))

@@ -92,10 +92,28 @@ export class User {
 
   /**
    * tenant owner: false до одобрения админом.
-   * employee: false = отключён владельцем.
+   * employee: false = отключён владельцем ИЛИ ещё не принял invite (см. invitePending).
    */
   @Prop({ default: true })
   isActive: boolean;
+
+  /**
+   * Сотрудник создан приглашением, пароль ещё не задан.
+   * true + isActive=false → «ожидает приглашения»; после accept → false + isActive=true.
+   */
+  @Prop({ default: false })
+  invitePending: boolean;
+
+  /** SHA-256 хэш одноразового invite-токена (select:false). */
+  @Prop({ select: false })
+  inviteTokenHash?: string;
+
+  /** Срок действия ссылки-приглашения (72 ч). */
+  @Prop()
+  inviteExpiresAt?: Date;
+
+  @Prop()
+  inviteLastSentAt?: Date;
 
   @Prop({ default: false })
   isBlocked: boolean;

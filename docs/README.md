@@ -6,6 +6,7 @@
 | [ARCHITECTURE.md](./ARCHITECTURE.md) | Разработчики | Архитектура, БД, роли, жизненный цикл |
 | [API.md](./API.md) | Backend / интеграция | Основные HTTP-эндпоинты |
 | [CONTRIBUTING.md](./CONTRIBUTING.md) | Команда | Процесс изменений, PR, деплой |
+| [BACKUP.md](./BACKUP.md) | DevOps / владелец | Бэкапы MongoDB (Windows + сервер) |
 | [Инструкция_пользователя.docx](./Инструкция_пользователя.docx) | Конечные пользователи | Руководство UI (генерация: `scripts/generate_user_guide.py`) |
 | [../deploy/UPDATE.md](../deploy/UPDATE.md) | DevOps | Обновление продакшена |
 

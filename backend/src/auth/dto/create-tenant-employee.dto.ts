@@ -1,5 +1,6 @@
-import { IsEmail, IsNotEmpty, IsOptional, IsString, MinLength } from 'class-validator';
+import { IsEmail, IsNotEmpty, IsOptional, IsString } from 'class-validator';
 
+/** Пароль не задаётся владельцем — сотрудник получает email-приглашение. */
 export class CreateTenantEmployeeDto {
   @IsEmail()
   email: string;
@@ -15,10 +16,6 @@ export class CreateTenantEmployeeDto {
   @IsOptional()
   @IsString()
   middleName?: string;
-
-  @IsNotEmpty()
-  @MinLength(6)
-  password: string;
 
   @IsOptional()
   @IsString()

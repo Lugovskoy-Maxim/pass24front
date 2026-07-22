@@ -93,6 +93,9 @@ export interface TenantEmployee {
   middle_name?: string;
   phone?: string;
   is_active: boolean;
+  /** true — письмо-приглашение отправлено, пароль ещё не задан */
+  invite_pending?: boolean;
+  invite_expires_at?: string;
   role: string;
   role_label: string;
   created_at: string;
@@ -374,10 +377,30 @@ export const api = {
     lastName: string;
     firstName: string;
     middleName?: string;
-    password: string;
     phone?: string;
   }) =>
-    request<{ employee: TenantEmployee }>('/auth/tenant/employees', {
+    request<{ message: string; employee: TenantEmployee }>('/auth/tenant/employees', {
+      method: 'POST',
+      body: JSON.stringify(data),
+    }),
+
+  resendTenantEmployeeInvite: (id: string) =>
+    request<{ message: string; employee: TenantEmployee; retryAfterSeconds?: number }>(
+      `/auth/tenant/employees/${id}/resend-invite`,
+      { method: 'POST', body: JSON.stringify({}) },
+    ),
+
+  getInviteInfo: (token: string) =>
+    request<{
+      valid: boolean;
+      email?: string;
+      full_name?: string;
+      company?: string;
+      expires_at?: string;
+    }>(`/auth/invite/${encodeURIComponent(token)}`),
+
+  acceptInvite: (data: { token: string; password: string; passwordConfirm: string }) =>
+    request<{ message: string; email?: string }>('/auth/invite/accept', {
       method: 'POST',
       body: JSON.stringify(data),
     }),

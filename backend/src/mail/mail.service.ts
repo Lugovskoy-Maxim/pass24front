@@ -222,8 +222,83 @@ export class MailService {
     }
   }
 
-  private getAppHost(): string {
+  /**
+   * Приглашение сотрудника: ссылка на /invite/{token}, TTL 72 ч.
+   * PUBLIC_APP_URL — origin фронта (без /api).
+   */
+  async sendEmployeeInvite(params: {
+    to: string;
+    inviteUrl: string;
+    employeeName: string;
+    companyName?: string;
+    inviterName?: string;
+    expiresHours: number;
+  }) {
+    if (!this.transporter) {
+      throw new BadRequestException(
+        'Почтовый сервер не настроен. Приглашение сотрудника временно недоступно.',
+      );
+    }
+
+    const from = this.getPassFromAddress();
+    const company = params.companyName?.trim() || 'компанию';
+    const who = params.inviterName?.trim() || 'Руководитель';
+    const html = `
+      <div style="font-family:Inter,Arial,sans-serif;max-width:480px;margin:0 auto;color:#0f172a">
+        <div style="padding:24px;border:1px solid #e2e8f0;border-radius:12px;background:#fff">
+          <h2 style="margin:0 0 12px;font-size:20px">Приглашение в систему пропусков</h2>
+          <p style="margin:0 0 16px;line-height:1.5;color:#475569">
+            Здравствуйте${params.employeeName ? `, ${params.employeeName}` : ''}!<br/>
+            ${who} приглашает вас в ${company}.
+            Перейдите по ссылке и задайте пароль для входа (ссылка действует ${params.expiresHours} ч.):
+          </p>
+          <div style="text-align:center;margin:20px 0">
+            <a href="${params.inviteUrl}"
+               style="display:inline-block;background:#eb711c;color:#fff;text-decoration:none;padding:12px 24px;border-radius:8px;font-weight:600">
+              Принять приглашение
+            </a>
+          </div>
+          <p style="margin:0;font-size:12px;color:#64748b;word-break:break-all">
+            Если кнопка не работает, откройте ссылку:<br/>
+            <a href="${params.inviteUrl}">${params.inviteUrl}</a>
+          </p>
+          <p style="margin:16px 0 0;font-size:13px;color:#64748b">
+            Если вы не ожидали это письмо, просто проигнорируйте его.
+          </p>
+        </div>
+      </div>
+    `;
+
+    try {
+      await this.transporter.sendMail({
+        from,
+        to: params.to,
+        subject: `Приглашение: доступ к пропускам${params.companyName ? ` — ${params.companyName}` : ''}`,
+        text: [
+          `Здравствуйте${params.employeeName ? `, ${params.employeeName}` : ''}!`,
+          `${who} приглашает вас в ${company}.`,
+          `Откройте ссылку и задайте пароль (действует ${params.expiresHours} ч.):`,
+          params.inviteUrl,
+        ].join('\n'),
+        html,
+      });
+      this.logger.log(`Employee invite emailed to ${params.to}`);
+      return { sent: true };
+    } catch (err) {
+      const message = err instanceof Error ? err.message : 'Неизвестная ошибка SMTP';
+      this.logger.error(`Employee invite email failed to ${params.to}: ${message}`);
+      throw new InternalServerErrorException('Не удалось отправить приглашение на почту');
+    }
+  }
+
+  /** Origin фронта для ссылок в письмах (без trailing slash). */
+  getPublicAppOrigin(): string {
     return (this.configService.get<string>('PUBLIC_APP_URL') || 'https://pass.mstyle.ru')
+      .replace(/\/$/, '');
+  }
+
+  private getAppHost(): string {
+    return this.getPublicAppOrigin()
       .replace(/^https?:\/\//, '')
       .replace(/\/$/, '');
   }

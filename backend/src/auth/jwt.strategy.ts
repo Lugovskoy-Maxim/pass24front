@@ -32,6 +32,11 @@ export class JwtStrategy extends PassportStrategy(Strategy) {
     if (!user) {
       throw new UnauthorizedException();
     }
+    if (user.invitePending) {
+      throw new UnauthorizedException(
+        'Аккаунт не активирован. Откройте ссылку из письма-приглашения.',
+      );
+    }
     if (user.parentTenantId && user.isActive === false) {
       throw new UnauthorizedException('Учётная запись отключена владельцем компании');
     }

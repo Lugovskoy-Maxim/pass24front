@@ -4,8 +4,8 @@
 
 ```
 ┌─────────────┐     JWT      ┌──────────────────┐
-│  Next.js    │ ──────────► │  NestJS /api     │
-│  frontend   │ ◄────────── │                  │
+│  Next.js    │ ──────────►  │  NestJS /api     │
+│  frontend   │ ◄──────────  │                  │
 └─────────────┘   JSON       └────────┬─────────┘
                                       │
                     ┌─────────────────┼─────────────────┐
@@ -82,7 +82,12 @@ Permissions задаются в `access.constants.ts` и могут переоп
 - Офисы привязаны к `tenantId` владельца.
 - Список пропусков компании: все `createdBy` в команде владельца (owner + employees).  
   Реализация: `PassesService.getTenantTeamIds` + `buildAccessFilter`.
-- Владелец: включает/отключает/удаляет сотрудников (`PATCH`/`DELETE` `/auth/tenant/employees/:id`).
+- **Приглашение сотрудника (без пароля от owner):**
+  1. Owner POST `/auth/tenant/employees` (ФИО + email) → user `invitePending=true`, `isActive=false`
+  2. Email со ссылкой `/invite/{token}` (TTL **72 ч**, SHA-256 hash в `inviteTokenHash`)
+  3. Сотрудник POST `/auth/invite/accept` → пароль, `isActive=true`, invite сброшен
+  4. Resend: POST `/auth/tenant/employees/:id/resend-invite` (не чаще 1/5 мин)
+- Владелец: включает/отключает (после активации) / удаляет (`PATCH`/`DELETE`).
 - При удалении сотрудника его пропуска переназначаются владельцу.
 
 ## Жизненный цикл пропуска

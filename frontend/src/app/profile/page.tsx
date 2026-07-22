@@ -76,11 +76,11 @@ export default function ProfilePage() {
   const [employeeNameParts, setEmployeeNameParts] = useState<PersonNameParts>({ lastName: '', firstName: '', middleName: '' });
   const [employeeEmail, setEmployeeEmail] = useState('');
   const [employeePhone, setEmployeePhone] = useState('');
-  const [employeePassword, setEmployeePassword] = useState('');
   const [emailVerifyStep, setEmailVerifyStep] = useState<'idle' | 'code'>('idle');
   const [emailVerifyCode, setEmailVerifyCode] = useState('');
   const [emailVerifyLoading, setEmailVerifyLoading] = useState(false);
   const [emailVerifyResendIn, setEmailVerifyResendIn] = useState(0);
+  const [resendingInviteId, setResendingInviteId] = useState<string | null>(null);
 
   const tenantOwner = isTenantOwner(user);
   const tenantEmployee = isTenantEmployee(user);
@@ -179,30 +179,40 @@ export default function ProfilePage() {
     e.preventDefault();
     const errors = validateProfileForm(employeeNameParts);
     if (!employeeEmail.trim()) errors.email = 'Укажите email';
-    if (!employeePassword || employeePassword.length < 6) errors.password = 'Минимум 6 символов';
     setFieldErrors(errors);
     if (hasFieldErrors(errors)) return;
 
     setEmployeeSaving(true);
     try {
-      const { employee } = await api.addTenantEmployee({
+      const { employee, message } = await api.addTenantEmployee({
         email: employeeEmail.trim(),
         lastName: employeeNameParts.lastName.trim(),
         firstName: employeeNameParts.firstName.trim(),
         middleName: employeeNameParts.middleName.trim() || undefined,
-        password: employeePassword,
         phone: employeePhone.trim() || undefined,
       });
       setEmployees((prev) => [employee, ...prev]);
       setEmployeeEmail('');
       setEmployeePhone('');
-      setEmployeePassword('');
       setEmployeeNameParts({ lastName: '', firstName: '', middleName: '' });
-      toast('Сотрудник добавлен', 'success');
+      toast(message || 'Приглашение отправлено', 'success');
     } catch (err) {
       toast(getErrorMessage(err, 'Ошибка'), 'error');
     } finally {
       setEmployeeSaving(false);
+    }
+  };
+
+  const handleResendInvite = async (id: string) => {
+    setResendingInviteId(id);
+    try {
+      const { employee, message } = await api.resendTenantEmployeeInvite(id);
+      setEmployees((prev) => prev.map((e) => (e.id === id ? { ...e, ...employee } : e)));
+      toast(message, 'success');
+    } catch (err) {
+      toast(getErrorMessage(err, 'Не удалось отправить приглашение'), 'error');
+    } finally {
+      setResendingInviteId(null);
     }
   };
 
@@ -476,8 +486,8 @@ export default function ProfilePage() {
               <div>
                 <h2 className="font-semibold">Сотрудники компании</h2>
                 <p className="text-sm text-[var(--muted)] mt-1">
-                  Сотрудники видят все пропуска компании и могут заказывать их от лица {user.company || 'вашей компании'}.
-                  Отключённый не войдёт в систему; удаление — навсегда.
+                  Укажите email — сотруднику придёт ссылка (72 часа), он сам задаст пароль.
+                  Сотрудники видят все пропуска {user.company || 'компании'}.
                 </p>
               </div>
             </div>
@@ -487,40 +497,65 @@ export default function ProfilePage() {
             ) : employees.length > 0 ? (
               <ul className="divide-y divide-[var(--border)] border border-[var(--border)] rounded-lg">
                 {employees.map((employee) => {
-                  const busy = removingEmployeeId === employee.id || togglingEmployeeId === employee.id;
+                  const pending = !!employee.invite_pending;
+                  const busy =
+                    removingEmployeeId === employee.id
+                    || togglingEmployeeId === employee.id
+                    || resendingInviteId === employee.id;
+                  const statusLabel = pending
+                    ? 'ожидает'
+                    : employee.is_active
+                      ? 'активен'
+                      : 'отключён';
+                  const statusClass = pending
+                    ? 'bg-amber-50 text-amber-800'
+                    : employee.is_active
+                      ? 'bg-emerald-50 text-emerald-700'
+                      : 'bg-slate-100 text-slate-600';
                   return (
                     <li key={employee.id} className="flex flex-col sm:flex-row sm:items-center justify-between gap-3 px-4 py-3 text-sm">
                       <div className="min-w-0">
                         <div className="font-medium flex flex-wrap items-center gap-2">
                           {employee.full_name}
-                          <span
-                            className={`text-[10px] px-1.5 py-0.5 rounded-full ${
-                              employee.is_active
-                                ? 'bg-emerald-50 text-emerald-700'
-                                : 'bg-slate-100 text-slate-600'
-                            }`}
-                          >
-                            {employee.is_active ? 'активен' : 'отключён'}
+                          <span className={`text-[10px] px-1.5 py-0.5 rounded-full ${statusClass}`}>
+                            {statusLabel}
                           </span>
                         </div>
                         <div className="text-[var(--muted)] truncate">{employee.email}</div>
                         {employee.role_label && (
                           <div className="text-xs text-[var(--muted)] mt-0.5">{employee.role_label}</div>
                         )}
+                        {pending && (
+                          <div className="text-xs text-amber-800/90 mt-1">
+                            Письмо с ссылкой отправлено. Действует 72 часа.
+                          </div>
+                        )}
                       </div>
                       <div className="flex flex-wrap gap-2 shrink-0">
-                        <button
-                          type="button"
-                          className="btn btn-secondary text-xs"
-                          disabled={busy}
-                          onClick={() => void handleToggleEmployee(employee.id, !employee.is_active)}
-                        >
-                          {togglingEmployeeId === employee.id
-                            ? 'Сохранение...'
-                            : employee.is_active
-                              ? 'Отключить'
-                              : 'Включить'}
-                        </button>
+                        {pending && (
+                          <button
+                            type="button"
+                            className="btn btn-secondary text-xs"
+                            disabled={busy}
+                            onClick={() => void handleResendInvite(employee.id)}
+                          >
+                            {resendingInviteId === employee.id ? 'Отправка…' : 'Отправить снова'}
+                          </button>
+                        )}
+                        {!pending && (
+                          <button
+                            type="button"
+                            className="btn btn-secondary text-xs"
+                            disabled={busy}
+                            onClick={() => void handleToggleEmployee(employee.id, !employee.is_active)}
+                          >
+                            {togglingEmployeeId === employee.id
+                              ? 'Сохранение...'
+                              : employee.is_active
+                                ? 'Отключить'
+                                : 'Включить'}
+                          </button>
+                        )}
                         <button
                           type="button"
                           className="btn btn-danger text-xs"
@@ -541,7 +576,7 @@ export default function ProfilePage() {
             <form onSubmit={handleAddEmployee} className="border-t border-[var(--border)] pt-5 space-y-4" noValidate>
               <div className="flex items-center gap-2 text-sm font-medium">
                 <UserPlus className="w-4 h-4" />
-                Добавить сотрудника
+                Пригласить сотрудника
               </div>
               <PersonNameFields
                 value={employeeNameParts}
@@ -551,7 +586,7 @@ export default function ProfilePage() {
                 onClearError={clearFieldError}
               />
               <div className="form-grid-2">
-                <FormField id="employeeEmail" label="Email" required error={fieldErrors.email}>
+                <FormField id="employeeEmail" label="Email" required error={fieldErrors.email} hint="На этот адрес уйдёт ссылка">
                   <FormInput
                     id="employeeEmail"
                     type="email"
@@ -570,17 +605,8 @@ export default function ProfilePage() {
                   />
                 </FormField>
               </div>
-              <FormField id="employeePassword" label="Пароль для входа" required error={fieldErrors.password} hint="Минимум 6 символов">
-                <FormInput
-                  id="employeePassword"
-                  type="password"
-                  value={employeePassword}
-                  onChange={(e) => { setEmployeePassword(e.target.value); clearFieldError('password'); }}
-                  invalid={!!fieldErrors.password}
-                />
-              </FormField>
               <button type="submit" className="btn btn-primary" disabled={employeeSaving}>
-                {employeeSaving ? 'Добавление...' : 'Добавить сотрудника'}
+                {employeeSaving ? 'Отправка…' : 'Отправить приглашение'}
               </button>
             </form>
           </div>

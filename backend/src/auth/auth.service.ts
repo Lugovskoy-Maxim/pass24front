@@ -11,6 +11,7 @@ import { mapProfileChangeRequest, profileFieldsEqual } from '../common/profile-c
 import { InjectModel } from '@nestjs/mongoose';
 import { Model, Types } from 'mongoose';
 import * as bcrypt from 'bcryptjs';
+import * as crypto from 'crypto';
 import { JwtService } from '@nestjs/jwt';
 import { AccessConfigService } from '../access/access-config.service';
 import { BUILTIN_EMPLOYEE_ROLE, BUILTIN_EMPLOYEE_ROLE_LABELS } from '../access/access.constants';
@@ -33,6 +34,7 @@ import {
 } from '../schemas';
 import { parseClosedWeekdays } from '../common/bookable-visit-dates';
 import { resolveTenantOwnerId } from '../common/tenant-owner';
+import { AcceptInviteDto } from './dto/accept-invite.dto';
 import { ConfirmEmailVerifyDto } from './dto/confirm-email-verify.dto';
 import { ConfirmPasswordResetDto } from './dto/confirm-password-reset.dto';
 import { ConfirmRegistrationDto } from './dto/confirm-registration.dto';
@@ -46,10 +48,13 @@ import { SiteSettingsService } from '../site-settings/site-settings.service';
 
 /** Антиспам: SMS OTP регистрации — не чаще 1 раза за интервал. */
 const SMS_RESEND_INTERVAL_MS = 5 * 60 * 1000;
-/** Антиспам для email OTP (сброс пароля, verify email). */
+/** Антиспам для email OTP (сброс пароля, verify email, resend invite). */
 const EMAIL_CODE_RESEND_INTERVAL_MS = 5 * 60 * 1000;
 /** TTL одноразовых кодов (регистрация / reset / verify). */
 const CODE_TTL_MS = 15 * 60 * 1000;
+/** Срок жизни ссылки-приглашения сотрудника. */
+const INVITE_TTL_MS = 72 * 60 * 60 * 1000;
+const INVITE_TTL_HOURS = 72;
 
 /**
  * Идентичность: login, регистрация (email/SMS), password reset, email verify,
@@ -534,6 +539,12 @@ export class AuthService {
       throw new UnauthorizedException('Неверные учетные данные');
     }
 
+    if (user.invitePending) {
+      throw new UnauthorizedException(
+        'Аккаунт ещё не активирован. Откройте ссылку из письма-приглашения и задайте пароль.',
+      );
+    }
+
     const isValid = await bcrypt.compare(dto.password, user.password || '');
     if (!isValid) {
       throw new UnauthorizedException('Неверные учетные данные');
@@ -663,25 +674,13 @@ export class AuthService {
     const roleLabelMap = new Map(roles.map((item) => [item.key, item.label]));
 
     return {
-      employees: employees.map((e) => ({
-        id: e._id.toString(),
-        email: e.email,
-        full_name: e.fullName,
-        last_name: e.lastName,
-        first_name: e.firstName,
-        middle_name: e.middleName,
-        phone: e.phone,
-        is_active: e.isActive !== false,
-        role: e.role,
-        role_label: roleLabelMap.get(e.role) || e.role,
-        created_at: (e as any).createdAt,
-      })),
+      employees: employees.map((e) => this.mapEmployeeDto(e, roleLabelMap)),
     };
   }
 
   /**
-   * Добавить сотрудника компании. Только owner (tenant без parentTenantId).
-   * Роль всегда BUILTIN_EMPLOYEE_ROLE — выбор типа у арендатора намеренно убран.
+   * Пригласить сотрудника: без пароля, письмо со ссылкой (72 ч).
+   * isActive=false, invitePending=true до accept.
    */
   async addTenantEmployee(userId: string, dto: CreateTenantEmployeeDto) {
     const owner = await this.userModel.findById(userId);
@@ -711,7 +710,10 @@ export class AuthService {
     await this.accessConfigService.assertEmployeeRole(employeeRole);
     const roleLabel = BUILTIN_EMPLOYEE_ROLE_LABELS[employeeRole] || 'Сотрудник компании';
 
-    const passwordHash = await bcrypt.hash(dto.password, 10);
+    const { rawToken, tokenHash, expiresAt } = this.createInviteToken();
+    // Случайный хэш — вход по паролю невозможен, пока не примут invite
+    const placeholderPassword = await bcrypt.hash(crypto.randomBytes(32).toString('hex'), 10);
+
     const employee = await this.userModel.create({
       email,
       fullName: personName.fullName,
@@ -722,13 +724,26 @@ export class AuthService {
       company: owner.company,
       role: employeeRole,
       parentTenantId: owner._id,
-      password: passwordHash,
-      isActive: true,
-      emailVerified: true,
+      password: placeholderPassword,
+      isActive: false,
+      invitePending: true,
+      inviteTokenHash: tokenHash,
+      inviteExpiresAt: expiresAt,
+      inviteLastSentAt: new Date(),
+      emailVerified: false,
     } as any);
 
+    await this.mailService.sendEmployeeInvite({
+      to: email,
+      inviteUrl: this.buildInviteUrl(rawToken),
+      employeeName: personName.fullName,
+      companyName: owner.company,
+      inviterName: owner.fullName,
+      expiresHours: INVITE_TTL_HOURS,
+    });
+
     await this.auditService.log({
-      action: 'tenant.employee_added',
+      action: 'tenant.employee_invited',
       entityType: 'user',
       entityId: employee._id,
       actor: { userId, email: owner.email, role: owner.role },
@@ -742,23 +757,117 @@ export class AuthService {
     });
 
     return {
-      employee: {
-        id: employee._id.toString(),
-        email: employee.email,
-        full_name: employee.fullName,
-        last_name: employee.lastName,
-        first_name: employee.firstName,
-        middle_name: employee.middleName,
-        phone: employee.phone,
-        is_active: true,
-        role: employee.role,
-        role_label: roleLabel,
-        created_at: (employee as any).createdAt,
-      },
+      message: `Приглашение отправлено на ${email}`,
+      employee: this.mapEmployeeDto(employee.toObject ? employee.toObject() : employee),
     };
   }
 
-  /** Вкл/выкл сотрудника. isActive=false → login и JWT (JwtStrategy) блокируются. */
+  /** Повторная отправка invite (rate limit 5 мин). */
+  async resendTenantEmployeeInvite(userId: string, employeeId: string) {
+    const owner = await this.userModel.findById(userId);
+    if (!owner) throw new UnauthorizedException();
+    if (owner.role !== 'tenant' || owner.parentTenantId) {
+      throw new ForbiddenException('Управлять сотрудниками может только владелец компании');
+    }
+
+    const employee = await this.userModel
+      .findById(employeeId)
+      .select('+inviteTokenHash')
+      .exec();
+    if (!employee || employee.parentTenantId?.toString() !== owner._id.toString()) {
+      throw new NotFoundException('Сотрудник не найден');
+    }
+    if (!employee.invitePending) {
+      throw new BadRequestException('Сотрудник уже активировал аккаунт — приглашение не требуется');
+    }
+
+    if (employee.inviteLastSentAt) {
+      const retryAfterSeconds = this.getRetryAfterSeconds(
+        employee.inviteLastSentAt,
+        EMAIL_CODE_RESEND_INTERVAL_MS,
+      );
+      if (retryAfterSeconds > 0) {
+        throw new BadRequestException(
+          `Повторная отправка возможна через ${this.formatRetryWait(retryAfterSeconds)}. Не чаще 1 раза в 5 минут.`,
+        );
+      }
+    }
+
+    const { rawToken, tokenHash, expiresAt } = this.createInviteToken();
+    employee.inviteTokenHash = tokenHash;
+    employee.inviteExpiresAt = expiresAt;
+    employee.inviteLastSentAt = new Date();
+    employee.isActive = false;
+    await employee.save();
+
+    await this.mailService.sendEmployeeInvite({
+      to: employee.email!,
+      inviteUrl: this.buildInviteUrl(rawToken),
+      employeeName: employee.fullName || '',
+      companyName: owner.company,
+      inviterName: owner.fullName,
+      expiresHours: INVITE_TTL_HOURS,
+    });
+
+    return {
+      message: `Приглашение повторно отправлено на ${employee.email}`,
+      employee: this.mapEmployeeDto(employee.toObject()),
+      retryAfterSeconds: Math.floor(EMAIL_CODE_RESEND_INTERVAL_MS / 1000),
+    };
+  }
+
+  /** Публично: проверить токен приглашения (для страницы /invite). */
+  async getInviteInfo(token: string) {
+    const employee = await this.findEmployeeByInviteToken(token);
+    return {
+      valid: true,
+      email: employee.email,
+      full_name: employee.fullName,
+      company: employee.company,
+      expires_at: employee.inviteExpiresAt,
+    };
+  }
+
+  /** Публично: задать пароль по invite-токену и активировать. */
+  async acceptInvite(dto: AcceptInviteDto) {
+    if (dto.password !== dto.passwordConfirm) {
+      throw new BadRequestException('Пароли не совпадают');
+    }
+
+    const employee = await this.findEmployeeByInviteToken(dto.token);
+    const passwordHash = await bcrypt.hash(dto.password, 10);
+
+    await this.userModel.updateOne(
+      { _id: employee._id },
+      {
+        $set: {
+          password: passwordHash,
+          isActive: true,
+          invitePending: false,
+          emailVerified: true,
+        },
+        $unset: {
+          inviteTokenHash: 1,
+          inviteExpiresAt: 1,
+          inviteLastSentAt: 1,
+        },
+      },
+    );
+
+    await this.auditService.log({
+      action: 'tenant.employee_invite_accepted',
+      entityType: 'user',
+      entityId: employee._id,
+      details: { email: employee.email },
+    });
+
+    return {
+      message: 'Пароль задан. Войдите с email и новым паролем.',
+      email: employee.email,
+    };
+  }
+
+  /** Вкл/выкл. Нельзя «включить» invitePending — только resend + accept. */
   async setTenantEmployeeActive(userId: string, employeeId: string, isActive: boolean) {
     const owner = await this.userModel.findById(userId);
     if (!owner) throw new UnauthorizedException();
@@ -769,6 +878,12 @@ export class AuthService {
     const employee = await this.userModel.findById(employeeId);
     if (!employee || employee.parentTenantId?.toString() !== owner._id.toString()) {
       throw new NotFoundException('Сотрудник не найден');
+    }
+
+    if (isActive && employee.invitePending) {
+      throw new BadRequestException(
+        'Сотрудник ещё не принял приглашение. Отправьте ссылку повторно — после задания пароля аккаунт станет активным.',
+      );
     }
 
     employee.isActive = !!isActive;
@@ -786,24 +901,69 @@ export class AuthService {
       },
     });
 
-    const { roles } = await this.accessConfigService.getEmployeeAssignableRoles();
-    const roleLabel = roles.find((item) => item.key === employee.role)?.label || employee.role;
-
     return {
       message: isActive ? 'Сотрудник включён' : 'Сотрудник отключён',
-      employee: {
-        id: employee._id.toString(),
-        email: employee.email,
-        full_name: employee.fullName,
-        last_name: employee.lastName,
-        first_name: employee.firstName,
-        middle_name: employee.middleName,
-        phone: employee.phone,
-        is_active: employee.isActive !== false,
-        role: employee.role,
-        role_label: roleLabel,
-        created_at: (employee as any).createdAt,
-      },
+      employee: this.mapEmployeeDto(employee.toObject()),
+    };
+  }
+
+  private createInviteToken(): { rawToken: string; tokenHash: string; expiresAt: Date } {
+    const rawToken = crypto.randomBytes(32).toString('hex');
+    const tokenHash = crypto.createHash('sha256').update(rawToken).digest('hex');
+    const expiresAt = new Date(Date.now() + INVITE_TTL_MS);
+    return { rawToken, tokenHash, expiresAt };
+  }
+
+  private buildInviteUrl(rawToken: string): string {
+    return `${this.mailService.getPublicAppOrigin()}/invite/${rawToken}`;
+  }
+
+  private async findEmployeeByInviteToken(rawToken: string): Promise<UserDocument> {
+    const token = (rawToken || '').trim();
+    if (!token || token.length < 32) {
+      throw new BadRequestException('Некорректная ссылка приглашения');
+    }
+    const tokenHash = crypto.createHash('sha256').update(token).digest('hex');
+    const employee = await this.userModel
+      .findOne({ inviteTokenHash: tokenHash, invitePending: true })
+      .select('+inviteTokenHash')
+      .exec();
+
+    if (!employee) {
+      throw new BadRequestException('Ссылка приглашения недействительна или уже использована');
+    }
+    if (!employee.inviteExpiresAt || employee.inviteExpiresAt.getTime() < Date.now()) {
+      throw new BadRequestException(
+        'Срок действия ссылки истёк (72 часа). Попросите руководителя отправить приглашение снова.',
+      );
+    }
+    return employee;
+  }
+
+  private mapEmployeeDto(
+    e: any,
+    roleLabelMap?: Map<string, string>,
+  ) {
+    const role = e.role || BUILTIN_EMPLOYEE_ROLE;
+    const roleLabel =
+      roleLabelMap?.get(role)
+      || BUILTIN_EMPLOYEE_ROLE_LABELS[role]
+      || role;
+    const invitePending = !!e.invitePending;
+    return {
+      id: e._id.toString(),
+      email: e.email,
+      full_name: e.fullName,
+      last_name: e.lastName,
+      first_name: e.firstName,
+      middle_name: e.middleName,
+      phone: e.phone,
+      is_active: e.isActive !== false && !invitePending,
+      invite_pending: invitePending,
+      invite_expires_at: e.inviteExpiresAt || undefined,
+      role,
+      role_label: roleLabel,
+      created_at: e.createdAt,
     };
   }
 
