@@ -367,7 +367,6 @@ export const api = {
     middleName?: string;
     password: string;
     phone?: string;
-    role?: string;
   }) =>
     request<{ employee: TenantEmployee }>('/auth/tenant/employees', {
       method: 'POST',

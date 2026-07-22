@@ -2,6 +2,19 @@
 
 Система заказа и контроля пропусков для **бизнес-центров** с офисами в аренду. Аналог pass24.ru, адаптированный под B2B: арендаторы заказывают пропуска для посетителей, курьеров и парковки, ресепшн контролирует вход.
 
+## Документация для разработчиков
+
+| Документ | Описание |
+|----------|----------|
+| [docs/README.md](docs/README.md) | Индекс всей документации |
+| [docs/DEVELOPMENT.md](docs/DEVELOPMENT.md) | Локальный запуск, env, структура |
+| [docs/ARCHITECTURE.md](docs/ARCHITECTURE.md) | Архитектура, роли, БД, lifecycle |
+| [docs/API.md](docs/API.md) | Краткий справочник API |
+| [docs/CONTRIBUTING.md](docs/CONTRIBUTING.md) | Коммиты, чеклисты, деплой |
+| [deploy/UPDATE.md](deploy/UPDATE.md) | Обновление продакшена |
+
+Swagger live: `http://localhost:4000/api/docs` (после старта backend).
+
 ## Функционал
 
 | Роль | Возможности |
@@ -26,11 +39,15 @@
 ## Структура
 
 ```
-pass24/
-├── backend/     # NestJS + MongoDB
-├── frontend/    # Next.js + React + Tailwind
+pass24front/
+├── backend/           # NestJS + MongoDB
+├── frontend/          # Next.js + React + Tailwind
+├── docs/              # Документация (dev + user guide)
+├── deploy/            # nginx, UPDATE.md
+├── scripts/           # install, update, backup
 ├── docker-compose.yml
 ├── docker-compose.dev.yml
+├── docker-compose.prod.yml
 ├── backend/Dockerfile
 └── frontend/Dockerfile
 ```
@@ -38,14 +55,18 @@ pass24/
 ## Быстрый старт
 
 ```bash
-# Backend
-cd backend && npm install && npm run seed && npm run dev
+# Backend (seed супер-админа — при старте приложения)
+cd backend && npm ci && npm run start:dev
 
-# Frontend
-cd frontend && npm install && npm run dev
+# Frontend (другой терминал)
+cd frontend
+echo NEXT_PUBLIC_API_URL=http://127.0.0.1:4000/api > .env.local
+npm ci && npm run dev
 ```
 
 Откройте http://localhost:3000
+
+Подробности и env: [docs/DEVELOPMENT.md](docs/DEVELOPMENT.md).
 
 ## Запуск через Docker Compose (рекомендуется)
 
@@ -144,10 +165,15 @@ cp docker/.env.example .env
 
 ## API
 
+Полный интерактивный список: **Swagger** `/api/docs`.  
+Краткий справочник: [docs/API.md](docs/API.md).
+
 | Метод | Endpoint | Описание |
 |-------|----------|----------|
 | POST | /api/auth/login | Вход |
+| POST | /api/auth/register/request-code | Регистрация + OTP |
 | POST | /api/passes | Заказ пропуска |
+| GET | /api/config | Публичные настройки сайта |
 | GET | /api/passes/journal | Журнал ресепшн |
 | POST | /api/passes/:id/check-in | Вход в БЦ |
 | GET | /api/admin/dashboard | Статистика (admin) |

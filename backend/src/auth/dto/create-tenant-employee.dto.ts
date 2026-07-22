@@ -23,8 +23,4 @@ export class CreateTenantEmployeeDto {
   @IsOptional()
   @IsString()
   phone?: string;
-
-  @IsOptional()
-  @IsString()
-  role?: string;
 }

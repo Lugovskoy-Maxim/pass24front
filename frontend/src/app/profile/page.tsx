@@ -10,7 +10,6 @@ import { useToast } from '@/components/Toast';
 import { useAuth } from '@/lib/auth';
 import {
   api,
-  EmployeeRole,
   formatTenantOffices,
   getErrorMessage,
   TenantEmployee,
@@ -73,8 +72,6 @@ export default function ProfilePage() {
   const [employeeEmail, setEmployeeEmail] = useState('');
   const [employeePhone, setEmployeePhone] = useState('');
   const [employeePassword, setEmployeePassword] = useState('');
-  const [employeeRole, setEmployeeRole] = useState('');
-  const [employeeRoles, setEmployeeRoles] = useState<EmployeeRole[]>([]);
   const [emailVerifyStep, setEmailVerifyStep] = useState<'idle' | 'code'>('idle');
   const [emailVerifyCode, setEmailVerifyCode] = useState('');
   const [emailVerifyLoading, setEmailVerifyLoading] = useState(false);
@@ -111,14 +108,9 @@ export default function ProfilePage() {
     if (!tenantOwner) return Promise.resolve();
     const silent = options?.silent;
     if (!silent) setEmployeesLoading(true);
-    return Promise.all([
-      api.getTenantEmployees(),
-      api.getTenantEmployeeRoles(),
-    ])
-      .then(([{ employees: list }, { roles }]) => {
+    return api.getTenantEmployees()
+      .then(({ employees: list }) => {
         setEmployees(list);
-        setEmployeeRoles(roles);
-        setEmployeeRole((prev) => prev || roles[0]?.key || '');
       })
       .catch(() => setEmployees([]))
       .finally(() => {
@@ -129,13 +121,6 @@ export default function ProfilePage() {
   useEffect(() => {
     void loadEmployees();
   }, [loadEmployees]);
-
-  useEffect(() => {
-    if (!employeeRoles.length) return;
-    setEmployeeRole((prev) => (
-      prev && employeeRoles.some((role) => role.key === prev) ? prev : employeeRoles[0].key
-    ));
-  }, [employeeRoles]);
 
   useAutoRefresh(() => loadEmployees({ silent: true }), { enabled: tenantOwner && !employeeSaving });
 
@@ -202,7 +187,6 @@ export default function ProfilePage() {
         middleName: employeeNameParts.middleName.trim() || undefined,
         password: employeePassword,
         phone: employeePhone.trim() || undefined,
-        role: employeeRole || undefined,
       });
       setEmployees((prev) => [employee, ...prev]);
       setEmployeeEmail('');
@@ -590,27 +574,7 @@ export default function ProfilePage() {
                   invalid={!!fieldErrors.password}
                 />
               </FormField>
-              {employeeRoles.length > 0 ? (
-                <FormField id="employeeRole" label="Тип пользователя">
-                  <select
-                    id="employeeRole"
-                    className="form-input w-full"
-                    value={employeeRole || employeeRoles[0]?.key || ''}
-                    onChange={(e) => setEmployeeRole(e.target.value)}
-                  >
-                    {employeeRoles.map((role) => (
-                      <option key={role.key} value={role.key}>
-                        {role.label}
-                      </option>
-                    ))}
-                  </select>
-                </FormField>
-              ) : (
-                <p className="text-sm text-amber-700 bg-amber-50 border border-amber-200 rounded-lg px-3 py-2">
-                  Нет доступных типов сотрудников. Обратитесь к администратору системы.
-                </p>
-              )}
-              <button type="submit" className="btn btn-primary" disabled={employeeSaving || employeeRoles.length === 0}>
+              <button type="submit" className="btn btn-primary" disabled={employeeSaving}>
                 {employeeSaving ? 'Добавление...' : 'Добавить сотрудника'}
               </button>
             </form>

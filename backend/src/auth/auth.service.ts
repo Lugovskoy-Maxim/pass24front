@@ -13,6 +13,7 @@ import { Model, Types } from 'mongoose';
 import * as bcrypt from 'bcryptjs';
 import { JwtService } from '@nestjs/jwt';
 import { AccessConfigService } from '../access/access-config.service';
+import { BUILTIN_EMPLOYEE_ROLE, BUILTIN_EMPLOYEE_ROLE_LABELS } from '../access/access.constants';
 import { AuditService } from '../audit/audit.service';
 import { AUTH_CONNECTION } from '../database/auth-database.constants';
 import { MailService } from '../mail/mail.service';
@@ -674,13 +675,10 @@ export class AuthService {
       throw new BadRequestException('Укажите фамилию и имя');
     }
 
-    const assignable = await this.accessConfigService.getEmployeeAssignableRoles();
-    const employeeRole = dto.role || assignable.roles[0]?.key;
-    if (!employeeRole) {
-      throw new BadRequestException('Сначала создайте тип пользователя в разделе «Права и типы пропусков»');
-    }
+    // Арендатор не выбирает тип: всегда встроенная роль «Сотрудник компании»
+    const employeeRole = BUILTIN_EMPLOYEE_ROLE;
     await this.accessConfigService.assertEmployeeRole(employeeRole);
-    const roleLabel = assignable.roles.find((item) => item.key === employeeRole)?.label || employeeRole;
+    const roleLabel = BUILTIN_EMPLOYEE_ROLE_LABELS[employeeRole] || 'Сотрудник компании';
 
     const passwordHash = await bcrypt.hash(dto.password, 10);
     const employee = await this.userModel.create({
