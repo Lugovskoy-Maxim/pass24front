@@ -19,6 +19,16 @@ cd /opt/pass24front && ./scripts/update.sh
 2. Скачает последние изменения с GitHub
 3. Пересоберёт и перезапустит Docker-контейнеры
 
+В начале вывода должно быть что-то вроде:
+`Коммит: 0a2520e — fix(build): type debouncedSearch...`  
+(актуальный короткий hash с `main`).
+
+Если сборка frontend падает со **старой** ошибкой TypeScript, а коммит уже новый — пересоберите без кэша:
+
+```bash
+cd /opt/pass24front && NO_CACHE=1 ./scripts/update.sh
+```
+
 ---
 
 ## Пошагово (если нужно вручную)
