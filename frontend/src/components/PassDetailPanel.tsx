@@ -166,7 +166,10 @@ export function PassDetailPanel({
           </div>
 
           {actions && (
-            <div className="pass-card__actions px-4 py-3 border-b border-[var(--border)] bg-[var(--surface-muted)] space-y-2">
+            <div
+              className="pass-card__actions pass-card__actions--stack px-4 py-3 border-b border-[var(--border)] bg-[var(--surface-muted)]"
+              onClick={(e) => e.stopPropagation()}
+            >
               {actions}
             </div>
           )}

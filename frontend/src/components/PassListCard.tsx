@@ -4,8 +4,6 @@ import Link from 'next/link';
 import {
   Building2,
   Car,
-  ChevronRight,
-  Clock,
   MapPin,
   Package,
   Phone,
@@ -40,9 +38,19 @@ interface PassListCardProps {
   showCreator?: boolean;
   href?: string;
   onClick?: () => void;
+  /** Quick actions between main info and office block (e.g. check-in / reject on reception). */
+  actions?: React.ReactNode;
 }
 
-export function PassListCard({ pass, labels: labelsProp, selected, showCreator, href, onClick }: PassListCardProps) {
+export function PassListCard({
+  pass,
+  labels: labelsProp,
+  selected,
+  showCreator,
+  href,
+  onClick,
+  actions,
+}: PassListCardProps) {
   const config = useConfig();
   const labels = labelsProp || getUiLabels(config);
   const Icon = TYPE_ICONS[pass.passType as PassType] || User;
@@ -62,7 +70,7 @@ export function PassListCard({ pass, labels: labelsProp, selected, showCreator, 
   const className = [
     'w-full max-w-full text-left rounded-lg block min-w-0 overflow-hidden',
     getPassCardShellClass({
-      interactive: true,
+      interactive: !!(onClick || href),
       selected,
       overdue: stillInside,
       status: pass.status,
@@ -74,24 +82,25 @@ export function PassListCard({ pass, labels: labelsProp, selected, showCreator, 
       <div className={getPassStatusStripeClass(pass.status, stillInside)} aria-hidden />
 
       <div className="pass-card__body pass-card__body--row px-3 py-2.5 min-w-0">
-        <div className={`w-8 h-8 rounded-lg shrink-0 ${getPassIconTileClass(pass.status, stillInside)} mt-0.5`}>
+        <div className={`w-9 h-9 rounded-lg shrink-0 ${getPassIconTileClass(pass.status, stillInside)} self-center`}>
           <Icon className="w-4 h-4" />
         </div>
 
-        <div className="pass-card__main flex-1 min-w-0">
-          <div className="pass-card__title text-sm" title={pass.visitorName}>
-            {pass.visitorName}
+        <div className="pass-card__main flex-1 min-w-0 self-center">
+          <div className="flex items-center gap-2 min-w-0 flex-wrap">
+            <div className="pass-card__title text-sm" title={pass.visitorName}>
+              {pass.visitorName}
+            </div>
+            <div className="pass-card__badges">
+              <StatusBadge status={pass.status} labels={labels} size="sm" overdueKind={overdueKind} />
+            </div>
           </div>
 
-          <div className="pass-card__badges mt-1">
-            <StatusBadge status={pass.status} labels={labels} size="sm" overdueKind={overdueKind} />
-          </div>
-
-          <div className="pass-card__mono text-xs font-semibold mt-1 opacity-90" title={pass.passNumber}>
+          <div className="pass-card__mono text-xs font-semibold mt-0.5 opacity-90" title={pass.passNumber}>
             {pass.passNumber}
           </div>
 
-          <p className="pass-card__meta-line mt-1 text-[11px] text-[var(--muted)]" title={metaParts.join(' · ')}>
+          <p className="pass-card__meta-line mt-0.5 text-[11px] text-[var(--muted)]" title={metaParts.join(' · ')}>
             {metaParts.join(' · ')}
             <span className="pass-card__office--inline ml-1">· {officeInline}</span>
           </p>
@@ -129,7 +138,17 @@ export function PassListCard({ pass, labels: labelsProp, selected, showCreator, 
           </div>
         </div>
 
-        <div className="pass-card__office pass-card__office--side shrink-0 flex flex-col items-end gap-1 min-w-[2.75rem] max-w-[4.5rem]">
+        {actions && (
+          <div
+            className="pass-card__quick-actions"
+            onClick={(e) => e.stopPropagation()}
+            onKeyDown={(e) => e.stopPropagation()}
+          >
+            {actions}
+          </div>
+        )}
+
+        <div className="pass-card__office pass-card__office--side shrink-0 self-center min-w-[2.75rem] max-w-[4.5rem]">
           <div className="text-center w-full min-w-0">
             <div className="text-[9px] uppercase tracking-wide text-[var(--muted)] leading-none mb-0.5 truncate">
               {labels.card.office}
@@ -143,7 +162,6 @@ export function PassListCard({ pass, labels: labelsProp, selected, showCreator, 
               </div>
             )}
           </div>
-          <ChevronRight className={`w-4 h-4 shrink-0 ${selected ? 'text-[var(--text)]' : 'text-[var(--muted)]'}`} />
         </div>
       </div>
     </div>
@@ -153,9 +171,25 @@ export function PassListCard({ pass, labels: labelsProp, selected, showCreator, 
     return <Link href={href} className={className}>{inner}</Link>;
   }
 
-  return (
-    <button type="button" onClick={onClick} className={className}>
-      {inner}
-    </button>
-  );
+  // Use div (not button) so nested action controls are valid HTML
+  if (onClick) {
+    return (
+      <div
+        role="button"
+        tabIndex={0}
+        onClick={onClick}
+        onKeyDown={(e) => {
+          if (e.key === 'Enter' || e.key === ' ') {
+            e.preventDefault();
+            onClick();
+          }
+        }}
+        className={`${className} cursor-pointer`}
+      >
+        {inner}
+      </div>
+    );
+  }
+
+  return <div className={className}>{inner}</div>;
 }

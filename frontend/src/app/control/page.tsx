@@ -47,6 +47,7 @@ function ControlPageContent() {
   const [loadErrorCause, setLoadErrorCause] = useState<unknown>(null);
   const [actionId, setActionId] = useState<string | null>(null);
   const [rejectReason, setRejectReason] = useState<Record<string, string>>({});
+  const [rejectOpenId, setRejectOpenId] = useState<string | null>(null);
   const [lookupQuery, setLookupQuery] = useState('');
   const [lookupLoading, setLookupLoading] = useState(false);
   const [selected, setSelected] = useState<Pass | null>(null);
@@ -182,6 +183,7 @@ function ControlPageContent() {
     try {
       await api.updateStatus(id, 'rejected', reason);
       setRejectReason((prev) => ({ ...prev, [id]: '' }));
+      setRejectOpenId(null);
       toast(labels.toasts.rejected, 'success');
       await refreshAfterAction(id);
     } catch (err) {
@@ -217,11 +219,98 @@ function ControlPageContent() {
     }
   };
 
-  const renderActions = (pass: Pass) => {
+  /** Compact actions for list cards: main info | actions | office */
+  const renderCardActions = (pass: Pass) => {
+    if (isAwaitingEntry(pass.status)) {
+      const rejecting = rejectOpenId === pass.id;
+      return (
+        <>
+          <button
+            type="button"
+            className="btn btn-success btn-sm"
+            disabled={actionId === pass.id}
+            onClick={() => handleCheckIn(pass.id)}
+            title={labels.buttons.checkIn}
+          >
+            <LogIn className="w-3.5 h-3.5" />
+            {labels.buttons.checkIn}
+          </button>
+          {rejecting ? (
+            <>
+              <input
+                className="input"
+                placeholder="Причина отказа"
+                value={rejectReason[pass.id] || ''}
+                onChange={(e) => setRejectReason((prev) => ({ ...prev, [pass.id]: e.target.value }))}
+                onKeyDown={(e) => {
+                  if (e.key === 'Enter' && rejectReason[pass.id]?.trim()) {
+                    e.preventDefault();
+                    handleReject(pass.id);
+                  }
+                  if (e.key === 'Escape') setRejectOpenId(null);
+                }}
+                autoFocus
+              />
+              <div className="flex gap-1">
+                <button
+                  type="button"
+                  className="btn btn-danger btn-sm flex-1"
+                  disabled={actionId === pass.id || !rejectReason[pass.id]?.trim()}
+                  onClick={() => handleReject(pass.id)}
+                >
+                  {labels.buttons.reject}
+                </button>
+                <button
+                  type="button"
+                  className="btn btn-secondary btn-sm"
+                  disabled={actionId === pass.id}
+                  onClick={() => setRejectOpenId(null)}
+                  aria-label={labels.buttons.cancel}
+                >
+                  <X className="w-3.5 h-3.5" />
+                </button>
+              </div>
+            </>
+          ) : (
+            <button
+              type="button"
+              className="btn btn-danger btn-sm"
+              disabled={actionId === pass.id}
+              onClick={() => {
+                setRejectOpenId(pass.id);
+                setSelected(pass);
+              }}
+              title={labels.buttons.reject}
+            >
+              {labels.buttons.reject}
+            </button>
+          )}
+        </>
+      );
+    }
+    if (pass.status === 'active' && passRequiresCheckout(pass)) {
+      return (
+        <button
+          type="button"
+          className="btn btn-primary btn-sm"
+          disabled={actionId === pass.id}
+          onClick={() => handleCheckOut(pass.id)}
+          title={labels.buttons.checkOut}
+        >
+          <LogOut className="w-3.5 h-3.5" />
+          {labels.buttons.checkOut}
+        </button>
+      );
+    }
+    return null;
+  };
+
+  const renderDetailActions = (pass: Pass) => {
     if (isAwaitingEntry(pass.status)) {
       return (
         <>
           <button
+            type="button"
             className="btn btn-success w-full"
             disabled={actionId === pass.id}
             onClick={() => handleCheckIn(pass.id)}
@@ -236,6 +325,7 @@ function ControlPageContent() {
             onChange={(e) => setRejectReason((prev) => ({ ...prev, [pass.id]: e.target.value }))}
           />
           <button
+            type="button"
             className="btn btn-danger w-full"
             disabled={actionId === pass.id || !rejectReason[pass.id]?.trim()}
             onClick={() => handleReject(pass.id)}
@@ -248,6 +338,7 @@ function ControlPageContent() {
     if (pass.status === 'active' && passRequiresCheckout(pass)) {
       return (
         <button
+          type="button"
           className="btn btn-primary w-full"
           disabled={actionId === pass.id}
           onClick={() => handleCheckOut(pass.id)}
@@ -322,22 +413,23 @@ function ControlPageContent() {
 
   return (
     <ProtectedLayout anyPermissions={['passes.reception', 'passes.lookup', 'admin.panel']}>
-      <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-4 mb-6">
+      <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-3 mb-5">
         <div>
           <h1 className="page-title">{labels.pages.receptionTitle}</h1>
-          <p className="text-[var(--muted)]">{labels.pages.receptionSubtitle}</p>
+          <p className="text-[var(--muted)] text-sm mt-0.5">{labels.pages.receptionSubtitle}</p>
         </div>
         <input
           className="input input--auto"
           type="date"
           value={date}
           onChange={(e) => setDate(e.target.value)}
+          aria-label="Дата журнала"
         />
       </div>
 
-      <form onSubmit={handleLookup} className="card p-4 mb-6 flex flex-col sm:flex-row gap-3">
-        <div className="relative flex-1">
-          <Search className="absolute left-3 top-1/2 -translate-y-1/2 w-4 h-4 text-[var(--muted)]" />
+      <form onSubmit={handleLookup} className="card p-3 sm:p-4 mb-5 flex flex-col sm:flex-row gap-2.5 sm:gap-3 sm:items-center">
+        <div className="relative flex-1 min-w-0">
+          <Search className="absolute left-3 top-1/2 -translate-y-1/2 w-4 h-4 text-[var(--muted)] pointer-events-none" />
           <input
             className="input input--icon-left font-mono"
             placeholder={labels.reception.lookupPlaceholder}
@@ -345,9 +437,27 @@ function ControlPageContent() {
             onChange={(e) => setLookupQuery(e.target.value)}
           />
         </div>
-        <button type="submit" className="btn btn-primary" disabled={lookupLoading || !lookupQuery.trim()}>
-          {lookupLoading ? '...' : labels.buttons.lookup}
-        </button>
+        <div className="flex gap-2 shrink-0">
+          {lookupQuery.trim() && (
+            <button
+              type="button"
+              className="btn btn-secondary"
+              onClick={() => {
+                setLookupQuery('');
+                journalSearchRef.current = '';
+                setJournalSearch('');
+                setSelected(null);
+                load();
+              }}
+              aria-label="Очистить поиск"
+            >
+              <X className="w-4 h-4" />
+            </button>
+          )}
+          <button type="submit" className="btn btn-primary flex-1 sm:flex-none" disabled={lookupLoading || !lookupQuery.trim()}>
+            {lookupLoading ? '...' : labels.buttons.lookup}
+          </button>
+        </div>
       </form>
 
       {showOverdueAlerts && overdueCount > 0 && !overdueSectionInView && (
@@ -355,14 +465,14 @@ function ControlPageContent() {
           passes={overduePasses}
           labels={labels}
           onActionClick={scrollToOverdueSection}
-          className="mb-6"
+          className="mb-5"
         />
       )}
 
-      <div className="mb-6">
+      <div className="mb-5">
         <button
           type="button"
-          className="btn btn-secondary text-sm"
+          className="btn btn-secondary btn-sm"
           onClick={() => setStatsOpen((open) => !open)}
           aria-expanded={statsOpen}
         >
@@ -371,7 +481,7 @@ function ControlPageContent() {
         </button>
 
         {statsOpen && (
-          <div className="grid grid-cols-2 sm:grid-cols-3 lg:grid-cols-6 gap-3 mt-3">
+          <div className="grid grid-cols-2 sm:grid-cols-3 lg:grid-cols-5 gap-2.5 mt-3">
             {statCards.map(({ key, label, value, icon: Icon, onClick }) => {
               const clickable = !!onClick && value > 0;
               const Tag = clickable ? 'button' : 'div';
@@ -381,14 +491,14 @@ function ControlPageContent() {
                   type={clickable ? 'button' : undefined}
                   onClick={clickable ? onClick : undefined}
                   className={[
-                    'card p-3 text-center',
+                    'card p-2.5 text-center transition-transform',
                     getAccentStatClass(key),
-                    clickable ? 'cursor-pointer accent-stat--interactive' : '',
+                    clickable ? 'cursor-pointer accent-stat--interactive hover:-translate-y-0.5' : '',
                   ].filter(Boolean).join(' ')}
                 >
-                  <Icon className={`w-5 h-5 mx-auto mb-1 accent-stat__icon--${key}`} />
-                  <div className={`text-xl font-bold accent-stat__value--${key}`}>{value}</div>
-                  <div className="text-xs text-[var(--muted)]">{label}</div>
+                  <Icon className={`w-4 h-4 mx-auto mb-1 accent-stat__icon--${key}`} />
+                  <div className={`text-lg font-bold leading-none accent-stat__value--${key}`}>{value}</div>
+                  <div className="text-[11px] text-[var(--muted)] mt-0.5">{label}</div>
                 </Tag>
               );
             })}
@@ -419,7 +529,7 @@ function ControlPageContent() {
         />
       )}
 
-      <div className="grid lg:grid-cols-[minmax(0,1fr)_minmax(320px,400px)] gap-5 items-start">
+      <div className="grid lg:grid-cols-[minmax(0,1fr)_minmax(300px,380px)] gap-4 lg:gap-5 items-start">
         <div className="min-w-0">
           {loading ? (
             <ListSkeleton rows={4} />
@@ -432,15 +542,15 @@ function ControlPageContent() {
               />
             </div>
           ) : (
-            <div className="space-y-5">
+            <div className="space-y-4">
               {showOverdueAlerts && overduePasses.length > 0 && (
                 <section id="reception-section-overdue" ref={setOverdueSectionEl} className="scroll-mt-4">
-                  <h2 className={`text-sm font-semibold mb-2 flex items-center gap-2 uppercase tracking-wide ${getSectionHeadingClass('overdue')}`}>
-                    <AlertCircle className="w-4 h-4" />
+                  <h2 className={`text-xs font-semibold mb-2 flex items-center gap-2 uppercase tracking-wide ${getSectionHeadingClass('overdue')}`}>
+                    <AlertCircle className="w-3.5 h-3.5" />
                     {labels.reception.sectionOverdue}
                     <span className="font-normal normal-case opacity-80">({overduePasses.length})</span>
                   </h2>
-                  <div className="flex flex-col gap-1.5 rounded-lg border theme-alert-subtle p-2">
+                  <div className="flex flex-col gap-2 rounded-lg border theme-alert-subtle p-2">
                     {overduePasses.map((pass) => (
                       <PassListCard
                         key={pass.id}
@@ -448,6 +558,7 @@ function ControlPageContent() {
                         labels={labels}
                         selected={selected?.id === pass.id}
                         onClick={() => setSelected(pass)}
+                        actions={renderCardActions(pass)}
                       />
                     ))}
                   </div>
@@ -461,13 +572,13 @@ function ControlPageContent() {
                 return (
                   <section key={key} id={`reception-section-${key}`} className="scroll-mt-4">
                     <h2
-                      className={`text-sm font-semibold mb-2 flex items-center gap-2 uppercase tracking-wide ${getSectionHeadingClass(key)}`}
+                      className={`text-xs font-semibold mb-2 flex items-center gap-2 uppercase tracking-wide ${getSectionHeadingClass(key)}`}
                     >
-                      <Icon className="w-4 h-4 shrink-0" />
+                      <Icon className="w-3.5 h-3.5 shrink-0" />
                       {title}
-                      <span className="font-normal normal-case">({sectionPasses.length})</span>
+                      <span className="font-normal normal-case opacity-70">({sectionPasses.length})</span>
                     </h2>
-                    <div className="flex flex-col gap-1.5">
+                    <div className="flex flex-col gap-2">
                       {sectionPasses.map((pass) => (
                         <PassListCard
                           key={pass.id}
@@ -475,6 +586,7 @@ function ControlPageContent() {
                           labels={labels}
                           selected={selected?.id === pass.id}
                           onClick={() => setSelected(pass)}
+                          actions={renderCardActions(pass)}
                         />
                       ))}
                     </div>
@@ -486,9 +598,9 @@ function ControlPageContent() {
         </div>
 
         {selected && (
-          <div className="lg:sticky lg:top-20 space-y-3 min-w-0 max-w-full">
+          <div className="lg:sticky lg:top-20 space-y-2 min-w-0 max-w-full">
             <div className="flex items-center justify-between px-1">
-              <h2 className="text-base font-semibold text-[var(--muted)] uppercase tracking-wide text-[11px]">
+              <h2 className="font-semibold text-[var(--muted)] uppercase tracking-wide text-[11px]">
                 {labels.reception.selectedPass}
               </h2>
               <button
@@ -504,7 +616,7 @@ function ControlPageContent() {
               pass={selected}
               labels={labels}
               showCreator
-              actions={renderActions(selected)}
+              actions={renderDetailActions(selected)}
               onPassUpdated={(updated) => {
                 setPasses((prev) => prev.map((p) => (p.id === updated.id ? updated : p)));
                 setSelected(updated);

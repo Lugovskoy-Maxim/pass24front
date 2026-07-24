@@ -59,9 +59,9 @@ export const DEFAULT_UI_LABELS = {
   },
   buttons: {
     approve: 'Одобрить',
-    reject: 'Отклонить',
-    checkIn: 'Пропустить на вход',
-    checkOut: 'Зафиксировать выход',
+    reject: 'Отказать',
+    checkIn: 'Впустить',
+    checkOut: 'Выпустить',
     cancel: 'Отменить',
     cancelRequest: 'Отменить заявку',
     order: 'Заказать пропуск',
