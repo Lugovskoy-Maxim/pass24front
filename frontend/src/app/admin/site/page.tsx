@@ -217,11 +217,6 @@ export default function AdminSiteSettingsPage() {
     updateFaqItems(items);
   };
 
-  const resetFaqDefaults = () => {
-    updateFaqItems(HELP_FAQ_ITEMS.map((item) => ({ ...item })));
-    toast('Загружены стандартные вопросы — не забудьте сохранить', 'info');
-  };
-
   const addGuideSection = () => {
     if (guideForms.length >= MAX_GUIDE_SECTIONS) {
       toast(`Не больше ${MAX_GUIDE_SECTIONS} разделов`, 'error');
@@ -250,9 +245,11 @@ export default function AdminSiteSettingsPage() {
     setGuideForms(items);
   };
 
-  const resetGuideDefaults = () => {
+  /** Reset both FAQ questions and help guide sections to built-in defaults */
+  const resetHelpContent = () => {
+    updateFaqItems(HELP_FAQ_ITEMS.map((item) => ({ ...item })));
     setGuideForms(toGuideForm(HELP_GUIDE_SECTIONS));
-    toast('Загружены стандартные инструкции — не забудьте сохранить', 'info');
+    toast('Вопросы и инструкции сброшены к стандартным — не забудьте сохранить', 'info');
   };
 
   const handleSubmit = async (e: FormEvent) => {
@@ -734,9 +731,14 @@ export default function AdminSiteSettingsPage() {
                 </p>
               </div>
               <div className="flex flex-wrap gap-2 shrink-0">
-                <button type="button" className="btn btn-secondary text-sm" onClick={resetFaqDefaults}>
+                <button
+                  type="button"
+                  className="btn btn-secondary text-sm"
+                  onClick={resetHelpContent}
+                  title="Сбросить вопросы и инструкции к стандартным"
+                >
                   <RotateCcw className="w-4 h-4" />
-                  Стандартные
+                  Сбросить
                 </button>
                 <button type="button" className="btn btn-secondary text-sm" onClick={addFaqItem}>
                   <Plus className="w-4 h-4" />
@@ -817,7 +819,7 @@ export default function AdminSiteSettingsPage() {
 
               {!(settings.faqItems?.length) && (
                 <div className="text-sm text-[var(--muted)] border border-dashed border-[var(--border)] rounded-lg p-6 text-center">
-                  Список пуст. Нажмите «Добавить» или «Стандартные».
+                  Список пуст. Нажмите «Добавить» или «Сбросить».
                 </div>
               )}
             </div>
@@ -834,9 +836,14 @@ export default function AdminSiteSettingsPage() {
                 </p>
               </div>
               <div className="flex flex-wrap gap-2 shrink-0">
-                <button type="button" className="btn btn-secondary text-sm" onClick={resetGuideDefaults}>
+                <button
+                  type="button"
+                  className="btn btn-secondary text-sm"
+                  onClick={resetHelpContent}
+                  title="Сбросить вопросы и инструкции к стандартным"
+                >
                   <RotateCcw className="w-4 h-4" />
-                  Стандартные
+                  Сбросить
                 </button>
                 <button type="button" className="btn btn-secondary text-sm" onClick={addGuideSection}>
                   <Plus className="w-4 h-4" />
@@ -930,7 +937,7 @@ export default function AdminSiteSettingsPage() {
 
               {!guideForms.length && (
                 <div className="text-sm text-[var(--muted)] border border-dashed border-[var(--border)] rounded-lg p-6 text-center">
-                  Список пуст. Нажмите «Добавить» или «Стандартные».
+                  Список пуст. Нажмите «Добавить» или «Сбросить».
                 </div>
               )}
             </div>

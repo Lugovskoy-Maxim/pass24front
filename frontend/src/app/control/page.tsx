@@ -5,6 +5,7 @@ import { useSearchParams } from 'next/navigation';
 import { BarChart3, LogIn, LogOut, Users, CheckCircle, Clock, AlertCircle, Search, X } from 'lucide-react';
 import { ProtectedLayout } from '@/components/ProtectedLayout';
 import { PassListCard } from '@/components/PassListCard';
+import { PassDetailModal } from '@/components/PassDetailModal';
 import { PassDetailPanel } from '@/components/PassDetailPanel';
 import { getReceptionSections } from '@/components/ReceptionPassCard';
 import { useToast } from '@/components/Toast';
@@ -51,9 +52,18 @@ function ControlPageContent() {
   const [lookupQuery, setLookupQuery] = useState('');
   const [lookupLoading, setLookupLoading] = useState(false);
   const [selected, setSelected] = useState<Pass | null>(null);
+  const [isMobile, setIsMobile] = useState(false);
   const [overdueSectionEl, setOverdueSectionEl] = useState<HTMLElement | null>(null);
   const [statsOpen, setStatsOpen] = useState(false);
   const overdueSectionInView = useElementInView(overdueSectionEl);
+
+  useEffect(() => {
+    const mq = window.matchMedia('(max-width: 1023px)');
+    const update = () => setIsMobile(mq.matches);
+    update();
+    mq.addEventListener('change', update);
+    return () => mq.removeEventListener('change', update);
+  }, []);
 
   const load = useCallback((options?: { silent?: boolean }) => {
     const silent = options?.silent;
@@ -99,6 +109,10 @@ function ControlPageContent() {
         return passes.find((p) => p.id === prev.id)
           || overduePasses.find((p) => p.id === prev.id)
           || null;
+      }
+      // On mobile, don't auto-open the detail modal
+      if (typeof window !== 'undefined' && window.matchMedia('(max-width: 1023px)').matches) {
+        return null;
       }
       return overduePasses[0] || passes[0] || null;
     });
@@ -276,10 +290,7 @@ function ControlPageContent() {
               type="button"
               className="btn btn-danger btn-sm"
               disabled={actionId === pass.id}
-              onClick={() => {
-                setRejectOpenId(pass.id);
-                setSelected(pass);
-              }}
+              onClick={() => setRejectOpenId(pass.id)}
               title={labels.buttons.reject}
             >
               {labels.buttons.reject}
@@ -551,21 +562,12 @@ function ControlPageContent() {
           )}
         </div>
 
-        {selected && (
-          <aside className="lg:sticky lg:top-20 space-y-2 min-w-0 max-w-full" aria-label={labels.reception.selectedPass}>
-            <div className="flex items-center justify-between gap-2 px-0.5">
-              <h2 className="font-semibold text-[var(--muted)] uppercase tracking-wide text-[11px]">
-                {labels.reception.selectedPass}
-              </h2>
-              <button
-                type="button"
-                className="p-1.5 rounded-md text-[var(--muted)] hover:text-[var(--text)] hover:bg-[var(--surface-muted)] lg:hidden"
-                onClick={() => setSelected(null)}
-                aria-label={labels.passes.close}
-              >
-                <X className="w-4 h-4" />
-              </button>
-            </div>
+        {/* Desktop: sticky side panel */}
+        {selected && !isMobile && (
+          <aside className="sticky top-20 space-y-2 min-w-0 max-w-full" aria-label={labels.reception.selectedPass}>
+            <h2 className="font-semibold text-[var(--muted)] uppercase tracking-wide text-[11px] px-0.5">
+              {labels.reception.selectedPass}
+            </h2>
             <PassDetailPanel
               pass={selected}
               labels={labels}
@@ -578,6 +580,26 @@ function ControlPageContent() {
           </aside>
         )}
       </div>
+
+      {/* Mobile: detail as bottom-sheet modal */}
+      <PassDetailModal
+        open={!!selected && isMobile}
+        title={labels.reception.selectedPass}
+        closeLabel={labels.passes.close}
+        onClose={() => setSelected(null)}
+      >
+        {selected && (
+          <PassDetailPanel
+            pass={selected}
+            labels={labels}
+            showCreator
+            onPassUpdated={(updated) => {
+              setPasses((prev) => prev.map((p) => (p.id === updated.id ? updated : p)));
+              setSelected(updated);
+            }}
+          />
+        )}
+      </PassDetailModal>
     </ProtectedLayout>
   );
 }

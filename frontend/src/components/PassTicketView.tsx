@@ -78,7 +78,7 @@ export function PassTicketView({
             {ticket.passNumber}
           </p>
           <div className="flex flex-wrap items-center justify-center gap-1.5 pass-ticket__badges">
-            <span className="text-[10px] px-2 py-0.5 rounded-full surface-muted border border-[var(--border)] text-[var(--muted)]">
+            <span className="text-[10px] px-2 py-0.5 rounded-[var(--radius-sm)] surface-muted border border-[var(--border)] text-[var(--muted)]">
               {typeLabel}
             </span>
           </div>

@@ -1,6 +1,6 @@
 'use client';
 
-import { useState } from 'react';
+import { useEffect, useState } from 'react';
 import Link from 'next/link';
 import {
   Building2,
@@ -18,7 +18,7 @@ import {
   User,
   UserCircle,
 } from 'lucide-react';
-import { Pass, TYPE_LABELS, PassType } from '@/lib/api';
+import { api, Pass, TYPE_LABELS, PassType } from '@/lib/api';
 import {
   getGuestOverdueKind,
   getOverdueCardMessage,
@@ -33,20 +33,38 @@ import {
 import { useConfig } from '@/hooks/useConfig';
 import { useAuth } from '@/lib/auth';
 import { canViewAllPasses, canUseReception, hasPermission } from '@/lib/permissions';
-import { buildHistoryHref } from '@/lib/visit-history';
+import { buildHistoryHref, formatVisitCount } from '@/lib/visit-history';
 import { passShowsVisitTimeline } from '@/lib/pass-checkout';
 import { PassVisitTimeline } from './PassVisitTimeline';
 import { PassVisitorDataForm } from './PassVisitorDataForm';
 import { StatusBadge } from './StatusBadge';
 
-function HistoryLink({ href, label }: { href: string; label: string }) {
+function HistoryLink({
+  href,
+  label,
+  count,
+  title,
+}: {
+  href: string;
+  label: string;
+  /** Total matching visits; shown as a badge when > 0 */
+  count?: number | null;
+  title?: string;
+}) {
+  const hasMatches = typeof count === 'number' && count > 0;
   return (
     <Link
       href={href}
-      className="inline-flex items-center gap-1 text-[11px] text-link hover:underline"
+      className={`pass-detail__history-link ${hasMatches ? 'pass-detail__history-link--match' : ''}`}
+      title={title || (hasMatches ? formatVisitCount(count) : undefined)}
     >
-      <History className="w-3 h-3" />
-      {label}
+      <History className="w-3.5 h-3.5 shrink-0" />
+      <span>{label}</span>
+      {hasMatches && (
+        <span className="pass-detail__history-count" aria-label={formatVisitCount(count)}>
+          {count}
+        </span>
+      )}
     </Link>
   );
 }
@@ -142,6 +160,9 @@ export function PassDetailPanel({
   const canSeeHistory = canViewAllPasses(user) || canUseReception(user) || hasPermission(user, 'admin.panel');
   const canEditPassport = canUseReception(user) || hasPermission(user, 'passes.approve') || hasPermission(user, 'admin.panel');
 
+  const [visitorVisitCount, setVisitorVisitCount] = useState<number | null>(null);
+  const [phoneVisitCount, setPhoneVisitCount] = useState<number | null>(null);
+
   const visitorHistoryHref = buildHistoryHref({
     scope: 'visitor',
     visitorName: pass.visitorName,
@@ -150,10 +171,75 @@ export function PassDetailPanel({
     visitorPassportNumber: pass.visitorPassportNumber,
   });
 
+  // Load matching visit totals for reception / staff detail view
+  useEffect(() => {
+    if (!canSeeHistory) {
+      setVisitorVisitCount(null);
+      setPhoneVisitCount(null);
+      return;
+    }
+
+    let cancelled = false;
+    setVisitorVisitCount(null);
+    setPhoneVisitCount(null);
+
+    const hasVisitorIdentity = !!(
+      pass.visitorName?.trim()
+      || pass.visitorPhone?.trim()
+      || pass.visitorPassportSeries?.trim()
+      || pass.visitorPassportNumber?.trim()
+    );
+
+    if (hasVisitorIdentity) {
+      api.getPassHistory({
+        scope: 'visitor',
+        visitorName: pass.visitorName || undefined,
+        visitorPhone: pass.visitorPhone || undefined,
+        visitorPassportSeries: pass.visitorPassportSeries || undefined,
+        visitorPassportNumber: pass.visitorPassportNumber || undefined,
+        limit: 1,
+      })
+        .then(({ total }) => {
+          if (!cancelled) setVisitorVisitCount(typeof total === 'number' ? total : 0);
+        })
+        .catch(() => {
+          if (!cancelled) setVisitorVisitCount(null);
+        });
+    }
+
+    // Separate phone-only match count when phone differs from composite query usefulness
+    if (pass.visitorPhone?.trim()) {
+      api.getPassHistory({
+        scope: 'visitor',
+        visitorPhone: pass.visitorPhone,
+        limit: 1,
+      })
+        .then(({ total }) => {
+          if (!cancelled) setPhoneVisitCount(typeof total === 'number' ? total : 0);
+        })
+        .catch(() => {
+          if (!cancelled) setPhoneVisitCount(null);
+        });
+    }
+
+    return () => {
+      cancelled = true;
+    };
+  }, [
+    canSeeHistory,
+    pass.id,
+    pass.visitorName,
+    pass.visitorPhone,
+    pass.visitorPassportSeries,
+    pass.visitorPassportNumber,
+  ]);
+
   const officeLabel = [
     `${labels.card.office} ${pass.office}`,
     pass.floor ? `${pass.floor} ${labels.card.floorSuffix}` : '',
   ].filter(Boolean).join(' · ');
+
+  const returningVisitor = typeof visitorVisitCount === 'number' && visitorVisitCount > 1;
 
   return (
     <div className={`${getPassCardShellClass({ overdue: stillInside })} pass-detail min-w-0 max-w-full overflow-visible`}>
@@ -186,7 +272,7 @@ export function PassDetailPanel({
                     size="sm"
                     overdueKind={overdueKind}
                   />
-                  <span className="text-[11px] px-2 py-0.5 rounded-full bg-[var(--surface-elevated)] border border-[var(--border)] text-[var(--muted)] max-w-full min-w-0 truncate">
+                  <span className="text-[11px] px-2 py-0.5 rounded-[var(--radius-sm)] bg-[var(--surface-elevated)] border border-[var(--border)] text-[var(--muted)] max-w-full min-w-0 truncate">
                     {TYPE_LABELS[pass.passType as PassType] || pass.passType}
                   </span>
                 </div>
@@ -199,8 +285,22 @@ export function PassDetailPanel({
                 </div>
 
                 {canSeeHistory && (
-                  <div className="mt-1.5">
-                    <HistoryLink href={visitorHistoryHref} label="История визитов" />
+                  <div className="mt-1.5 flex flex-wrap items-center gap-2">
+                    <HistoryLink
+                      href={visitorHistoryHref}
+                      label="История визитов"
+                      count={visitorVisitCount}
+                      title={
+                        typeof visitorVisitCount === 'number' && visitorVisitCount > 0
+                          ? `Совпадений: ${formatVisitCount(visitorVisitCount)}`
+                          : 'История визитов по ФИО, телефону или паспорту'
+                      }
+                    />
+                    {returningVisitor && (
+                      <span className="pass-detail__return-badge" title="Гость уже был в БЦ">
+                        повторный визит
+                      </span>
+                    )}
                   </div>
                 )}
               </div>
@@ -332,6 +432,12 @@ export function PassDetailPanel({
                       <HistoryLink
                         href={buildHistoryHref({ scope: 'visitor', visitorPhone: pass.visitorPhone })}
                         label="история"
+                        count={phoneVisitCount}
+                        title={
+                          typeof phoneVisitCount === 'number' && phoneVisitCount > 0
+                            ? `По телефону: ${formatVisitCount(phoneVisitCount)}`
+                            : 'История по телефону'
+                        }
                       />
                     )}
                   </span>

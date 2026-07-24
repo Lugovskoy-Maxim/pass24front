@@ -171,7 +171,7 @@ export function PassCardBase({
                     overdueKind={overdueKind}
                   />
                 )}
-                <span className="text-xs px-2 py-0.5 rounded-full bg-[var(--surface-elevated)] border border-[var(--border)] text-[var(--muted)] max-w-full min-w-0 truncate">
+                <span className="text-xs px-2 py-0.5 rounded-[var(--radius-sm)] bg-[var(--surface-elevated)] border border-[var(--border)] text-[var(--muted)] max-w-full min-w-0 truncate">
                   {TYPE_LABELS[pass.passType as PassType] || pass.passType}
                 </span>
               </div>
