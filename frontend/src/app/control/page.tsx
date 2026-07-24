@@ -2,7 +2,7 @@
 
 import { Suspense, useEffect, useState, useCallback, useRef, FormEvent } from 'react';
 import { useSearchParams } from 'next/navigation';
-import { BarChart3, LogIn, LogOut, Users, CheckCircle, Clock, AlertCircle, Search, X } from 'lucide-react';
+import { BarChart3, Building2, LogIn, LogOut, Users, CheckCircle, Clock, AlertCircle, Search, X } from 'lucide-react';
 import { ProtectedLayout } from '@/components/ProtectedLayout';
 import { PassListCard } from '@/components/PassListCard';
 import { PassDetailModal } from '@/components/PassDetailModal';
@@ -34,7 +34,14 @@ function ControlPageContent() {
   const config = useConfig();
   const labels = getUiLabels(config);
   const showOverdueAlerts = canSeeOverdueAlerts(user);
-  const { passes: overduePasses, refresh: refreshOverdue } = useOverdueGuests(showOverdueAlerts);
+  /** Охрана/bc_admin с закреплёнными БЦ — по умолчанию только «свои» */
+  const canScopeByProperty = (user?.property_ids?.length ?? 0) > 0;
+  const [showAllProperties, setShowAllProperties] = useState(false);
+  const allProperties = canScopeByProperty && showAllProperties;
+  const { passes: overduePasses, refresh: refreshOverdue } = useOverdueGuests(
+    showOverdueAlerts,
+    { allProperties },
+  );
   const overdueIds = new Set(overduePasses.map((pass) => pass.id));
   const receptionSections = getReceptionSections(labels);
   const searchParams = useSearchParams();
@@ -71,7 +78,7 @@ function ControlPageContent() {
       setLoading(true);
       setLoadError('');
     }
-    return api.getJournal(date, journalSearchRef.current || undefined)
+    return api.getJournal(date, journalSearchRef.current || undefined, { allProperties })
       .then((data) => {
         setPasses(data.passes);
         setStats(data.stats);
@@ -87,7 +94,7 @@ function ControlPageContent() {
       .finally(() => {
         if (!silent) setLoading(false);
       });
-  }, [date]);
+  }, [date, allProperties]);
 
   useEffect(() => { load(); }, [load]);
 
@@ -130,7 +137,7 @@ function ControlPageContent() {
 
     setLookupLoading(true);
     try {
-      const data = await api.getJournal(date, trimmed);
+      const data = await api.getJournal(date, trimmed, { allProperties });
       setPasses(data.passes);
       setStats(data.stats);
 
@@ -170,7 +177,7 @@ function ControlPageContent() {
     } finally {
       setLookupLoading(false);
     }
-  }, [toast, labels, date, load]);
+  }, [toast, labels, date, load, allProperties]);
 
   useEffect(() => {
     const passFromUrl = searchParams.get('pass');
@@ -378,18 +385,36 @@ function ControlPageContent() {
 
   return (
     <ProtectedLayout anyPermissions={['passes.reception', 'passes.lookup', 'admin.panel']}>
-      <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-3 mb-5">
-        <div>
+      <div className="flex flex-col sm:flex-row sm:items-start justify-between gap-3 mb-5">
+        <div className="min-w-0">
           <h1 className="page-title">{labels.pages.receptionTitle}</h1>
           <p className="text-[var(--muted)] text-sm mt-0.5">{labels.pages.receptionSubtitle}</p>
+          {canScopeByProperty && (
+            <p className="text-xs text-[var(--muted)] mt-1.5">
+              {showAllProperties ? labels.reception.allPropertiesHint : labels.reception.scopedHint}
+            </p>
+          )}
         </div>
-        <input
-          className="input input--auto"
-          type="date"
-          value={date}
-          onChange={(e) => setDate(e.target.value)}
-          aria-label="Дата журнала"
-        />
+        <div className="flex flex-wrap items-center gap-2 shrink-0">
+          {canScopeByProperty && (
+            <button
+              type="button"
+              className={`btn btn-sm ${showAllProperties ? 'btn-primary' : 'btn-secondary'}`}
+              onClick={() => setShowAllProperties((v) => !v)}
+              title={showAllProperties ? labels.reception.showMyProperties : labels.reception.showAllProperties}
+            >
+              <Building2 className="w-3.5 h-3.5" />
+              {showAllProperties ? labels.reception.showMyProperties : labels.reception.showAllProperties}
+            </button>
+          )}
+          <input
+            className="input input--auto"
+            type="date"
+            value={date}
+            onChange={(e) => setDate(e.target.value)}
+            aria-label="Дата журнала"
+          />
+        </div>
       </div>
 
       <form onSubmit={handleLookup} className="card p-3 sm:p-4 mb-5 flex flex-col sm:flex-row gap-2.5 sm:gap-3 sm:items-center">

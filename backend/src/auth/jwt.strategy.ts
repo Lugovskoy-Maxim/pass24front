@@ -53,6 +53,8 @@ export class JwtStrategy extends PassportStrategy(Strategy) {
       parentTenantId: user.parentTenantId?.toString(),
       isActive: user.isActive !== false,
       permissions,
+      /** БЦ, закреплённые за security / bc_admin */
+      propertyIds: (user.properties || []).map((p) => p.toString()),
     };
   }
 }

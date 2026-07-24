@@ -137,6 +137,10 @@ export const DEFAULT_UI_LABELS = {
     journalLoading: 'Загрузка журнала...',
     journalEmpty: 'На выбранную дату пропусков нет',
     selectedPass: 'Выбранный пропуск',
+    showAllProperties: 'Показать все',
+    showMyProperties: 'Только мой БЦ',
+    scopedHint: 'Показаны пропуска вашего БЦ',
+    allPropertiesHint: 'Показаны пропуска всех бизнес-центров',
   },
   timeline: {
     request: 'Заявка',

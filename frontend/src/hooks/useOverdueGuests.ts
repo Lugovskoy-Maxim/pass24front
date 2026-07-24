@@ -4,16 +4,20 @@ import { useEffect, useState, useCallback } from 'react';
 import { api, Pass } from '@/lib/api';
 import { AUTO_REFRESH_MS } from '@/hooks/useAutoRefresh';
 
-export function useOverdueGuests(enabled: boolean) {
+export function useOverdueGuests(
+  enabled: boolean,
+  options?: { allProperties?: boolean },
+) {
   const [passes, setPasses] = useState<Pass[]>([]);
   const [loading, setLoading] = useState(false);
   const [timeTick, setTimeTick] = useState(0);
+  const allProperties = !!options?.allProperties;
 
-  const refresh = useCallback((options?: { silent?: boolean }): Promise<Pass[]> => {
+  const refresh = useCallback((opts?: { silent?: boolean }): Promise<Pass[]> => {
     if (!enabled) return Promise.resolve([]);
-    const silent = options?.silent;
+    const silent = opts?.silent;
     if (!silent) setLoading(true);
-    return api.getOverdueActive()
+    return api.getOverdueActive({ allProperties })
       .then(({ passes: data }) => {
         setPasses(data);
         return data;
@@ -25,7 +29,7 @@ export function useOverdueGuests(enabled: boolean) {
       .finally(() => {
         if (!silent) setLoading(false);
       });
-  }, [enabled]);
+  }, [enabled, allProperties]);
 
   useEffect(() => {
     refresh();

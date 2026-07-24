@@ -1144,6 +1144,7 @@ export class AuthService {
     const role = user.role || 'tenant';
     const permissions = await this.accessConfigService.getPermissionsForRole(role);
     const { enabledPassTypes, roleLabels } = await this.accessConfigService.getConfig();
+    const propertyIds = (user.properties || []).map((p: { toString: () => string }) => p.toString());
     return {
       id: user._id.toString(),
       username: user.username,
@@ -1160,6 +1161,7 @@ export class AuthService {
       office: user.office,
       floor: user.floor,
       offices,
+      property_ids: propertyIds,
       permissions,
       enabledPassTypes,
       parent_tenant_id: user.parentTenantId?.toString(),

@@ -76,6 +76,8 @@ export interface User {
   office?: string;
   floor?: string;
   offices?: TenantOffice[];
+  /** БЦ, закреплённые за security / bc_admin */
+  property_ids?: string[];
   permissions?: string[];
   enabledPassTypes?: PassType[];
   parent_tenant_id?: string;
@@ -463,12 +465,18 @@ export const api = {
     await downloadFileResponse(res, `passes-${datePart}.csv`);
   },
 
-  getJournal: (date?: string, search?: string) => {
+  getJournal: (date?: string, search?: string, options?: { allProperties?: boolean }) => {
     const q = new URLSearchParams();
     if (date) q.set('date', date);
     if (search?.trim()) q.set('search', search.trim());
+    if (options?.allProperties) q.set('all', '1');
     const qs = q.toString();
-    return request<{ date: string; stats: { total: number; pending: number; active: number; completed: number; approved: number }; passes: Pass[] }>(
+    return request<{
+      date: string;
+      stats: { total: number; pending: number; active: number; completed: number; approved: number };
+      passes: Pass[];
+      scopedToProperties?: boolean;
+    }>(
       `/passes/journal${qs ? `?${qs}` : ''}`,
     );
   },
@@ -570,7 +578,14 @@ export const api = {
 
   getStats: () => request<PassStats>('/passes/stats'),
 
-  getOverdueActive: () => request<{ count: number; passes: Pass[] }>('/passes/overdue-active'),
+  getOverdueActive: (options?: { allProperties?: boolean }) => {
+    const q = new URLSearchParams();
+    if (options?.allProperties) q.set('all', '1');
+    const qs = q.toString();
+    return request<{ count: number; passes: Pass[]; scopedToProperties?: boolean }>(
+      `/passes/overdue-active${qs ? `?${qs}` : ''}`,
+    );
+  },
 
   lookupPass: (passNumber: string) =>
     request<{ pass: Pass }>(`/passes/lookup/${encodeURIComponent(passNumber)}`),

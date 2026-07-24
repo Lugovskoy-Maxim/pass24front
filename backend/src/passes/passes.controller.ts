@@ -27,8 +27,16 @@ export class PassesController {
 
   @Get('journal')
   @RequirePermissions('passes.reception', 'passes.view_all', 'admin.panel')
-  getJournal(@Query('date') date?: string, @Query('search') search?: string, @Req() req?: any) {
-    return this.passesService.getJournal(date, req?.user, search);
+  getJournal(
+    @Query('date') date?: string,
+    @Query('search') search?: string,
+    /** all=1 — журнал по всем БЦ; иначе только БЦ охранника/bc_admin */
+    @Query('all') all?: string,
+    @Req() req?: any,
+  ) {
+    return this.passesService.getJournal(date, req?.user, search, {
+      allProperties: all === '1' || all === 'true',
+    });
   }
 
   @Get('stats')
@@ -39,8 +47,10 @@ export class PassesController {
 
   @Get('overdue-active')
   @RequirePermissions('passes.reception', 'passes.view_all', 'admin.panel')
-  getOverdueActive(@Req() req: any) {
-    return this.passesService.getOverdueActive(req.user);
+  getOverdueActive(@Query('all') all?: string, @Req() req?: any) {
+    return this.passesService.getOverdueActive(req.user, {
+      allProperties: all === '1' || all === 'true',
+    });
   }
 
   @Get('history')

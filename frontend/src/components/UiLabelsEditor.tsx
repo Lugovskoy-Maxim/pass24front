@@ -181,6 +181,10 @@ const SECTIONS: Section[] = [
       { path: 'reception.journalLoading', label: 'Загрузка журнала' },
       { path: 'reception.journalEmpty', label: 'Журнал пуст' },
       { path: 'reception.selectedPass', label: 'Выбранный пропуск' },
+      { path: 'reception.showAllProperties', label: 'Кнопка: показать все БЦ' },
+      { path: 'reception.showMyProperties', label: 'Кнопка: только мой БЦ' },
+      { path: 'reception.scopedHint', label: 'Подсказка: фильтр по БЦ' },
+      { path: 'reception.allPropertiesHint', label: 'Подсказка: все БЦ' },
     ],
   },
   {

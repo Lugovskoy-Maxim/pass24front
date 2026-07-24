@@ -702,11 +702,32 @@ export class PassesService implements OnModuleInit {
     return { pass: this.mapToFrontend(withCheckout) };
   }
 
-  async getJournal(date?: string, user?: any, search?: string) {
+  /**
+   * Для security/bc_admin с назначенными БЦ по умолчанию ресепшн видит только «свои» БЦ.
+   * allProperties=true — журнал/просрочки по всем доступным пропускам.
+   */
+  private applyReceptionPropertyScope(
+    filter: Record<string, any>,
+    user?: any,
+    allProperties?: boolean,
+  ) {
+    if (allProperties) return;
+    const ids: string[] = (user?.propertyIds || []).filter(Boolean);
+    if (!ids.length) return;
+    filter.property = { $in: ids.map((id) => new Types.ObjectId(id)) };
+  }
+
+  async getJournal(
+    date?: string,
+    user?: any,
+    search?: string,
+    options?: { allProperties?: boolean },
+  ) {
     await this.expirePastPasses();
     const targetDate = date || this.getTodayDate();
     const accessFilter = await this.buildAccessFilter(user);
     const filter: any = { visitDate: targetDate, ...accessFilter };
+    this.applyReceptionPropertyScope(filter, user, options?.allProperties);
     this.appendSearchFilter(filter, search);
 
     const passes = await this.passModel
@@ -725,7 +746,12 @@ export class PassesService implements OnModuleInit {
       approved: mapped.filter((p) => p.status === 'approved' || p.status === 'pending').length,
     };
 
-    return { date: targetDate, stats, passes: mapped };
+    return {
+      date: targetDate,
+      stats,
+      passes: mapped,
+      scopedToProperties: !options?.allProperties && !!(user?.propertyIds?.length),
+    };
   }
 
   async getHistory(query: PassHistoryQueryDto, user?: any) {
@@ -858,11 +884,13 @@ export class PassesService implements OnModuleInit {
     return { ticket: { ...this.mapToPublicTicket(withCheckout), businessCenterName } };
   }
 
-  async getOverdueActive(user?: any) {
+  async getOverdueActive(user?: any, options?: { allProperties?: boolean }) {
     await this.expirePastPasses();
     const accessFilter = await this.buildAccessFilter(user);
+    const filter: any = { status: 'active', ...accessFilter };
+    this.applyReceptionPropertyScope(filter, user, options?.allProperties);
     const passes = await this.passModel
-      .find({ status: 'active', ...accessFilter })
+      .find(filter)
       .sort({ visitDate: 1, visitTimeTo: 1 })
       .lean();
 
@@ -872,6 +900,7 @@ export class PassesService implements OnModuleInit {
     return {
       count: enriched.length,
       passes: enriched.map((p) => this.mapToFrontend(p, user)),
+      scopedToProperties: !options?.allProperties && !!(user?.propertyIds?.length),
     };
   }
 
