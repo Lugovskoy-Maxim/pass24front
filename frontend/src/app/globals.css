@@ -887,6 +887,114 @@ input[type="checkbox"]:not(.checkbox) {
   width: 100%;
 }
 
+/* Detail panel (selected pass / side panel) */
+.pass-detail__list {
+  margin: 0;
+}
+
+.pass-detail__row {
+  display: grid;
+  grid-template-columns: minmax(5.5rem, 32%) minmax(0, 1fr);
+  gap: 0.375rem 0.75rem;
+  align-items: start;
+  padding: 0.625rem 0;
+  border-bottom: 1px solid color-mix(in srgb, var(--border) 70%, transparent);
+}
+
+.pass-detail__row:last-child {
+  border-bottom: none;
+}
+
+.pass-detail__row--block {
+  grid-template-columns: 1fr;
+  gap: 0.375rem;
+}
+
+.pass-detail__label {
+  display: inline-flex;
+  align-items: center;
+  gap: 0.3rem;
+  margin: 0;
+  font-size: 0.625rem;
+  font-weight: 600;
+  letter-spacing: 0.04em;
+  text-transform: uppercase;
+  color: var(--muted);
+  line-height: 1.35;
+  padding-top: 0.15rem;
+}
+
+.pass-detail__label--danger {
+  color: var(--status-rejected);
+}
+
+.pass-detail__value {
+  margin: 0;
+  display: flex;
+  align-items: flex-start;
+  justify-content: space-between;
+  gap: 0.5rem;
+  font-size: 0.875rem;
+  font-weight: 500;
+  color: var(--text);
+  line-height: 1.4;
+  min-width: 0;
+}
+
+.pass-detail__value--stack {
+  flex-direction: column;
+  align-items: flex-start;
+  gap: 0.25rem;
+}
+
+.pass-detail__note {
+  margin: 0;
+  font-size: 0.8125rem;
+  line-height: 1.45;
+  color: var(--text);
+  background: var(--surface-muted);
+  border: 1px solid color-mix(in srgb, var(--border) 70%, transparent);
+  border-radius: var(--radius-sm);
+  padding: 0.5rem 0.625rem;
+  overflow-wrap: anywhere;
+  word-break: break-word;
+}
+
+.pass-detail__note--danger {
+  color: var(--status-rejected);
+  background: var(--status-rejected-soft);
+  border-color: var(--status-rejected-border);
+}
+
+.pass-detail__chip {
+  display: inline-flex;
+  align-items: center;
+  gap: 0.3rem;
+  max-width: 100%;
+  min-width: 0;
+  font-size: 0.75rem;
+  line-height: 1.25;
+  padding: 0.3rem 0.55rem;
+  border-radius: 0.375rem;
+  border: 1px solid var(--border);
+  background: var(--surface-elevated);
+  color: var(--text);
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+  text-decoration: none;
+}
+
+a.pass-detail__chip:hover,
+.pass-detail__chip--action:hover {
+  background: var(--surface-muted);
+  border-color: var(--border-strong);
+}
+
+.pass-detail__office {
+  max-width: 5rem;
+}
+
 .pass-card--interactive:hover {
   border-color: var(--border-strong);
   box-shadow: 0 4px 14px rgba(0, 0, 0, 0.12);

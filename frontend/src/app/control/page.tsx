@@ -305,52 +305,6 @@ function ControlPageContent() {
     return null;
   };
 
-  const renderDetailActions = (pass: Pass) => {
-    if (isAwaitingEntry(pass.status)) {
-      return (
-        <>
-          <button
-            type="button"
-            className="btn btn-success w-full"
-            disabled={actionId === pass.id}
-            onClick={() => handleCheckIn(pass.id)}
-          >
-            <LogIn className="w-4 h-4" />
-            {labels.buttons.checkIn}
-          </button>
-          <input
-            className="input"
-            placeholder={labels.reception.rejectPlaceholder}
-            value={rejectReason[pass.id] || ''}
-            onChange={(e) => setRejectReason((prev) => ({ ...prev, [pass.id]: e.target.value }))}
-          />
-          <button
-            type="button"
-            className="btn btn-danger w-full"
-            disabled={actionId === pass.id || !rejectReason[pass.id]?.trim()}
-            onClick={() => handleReject(pass.id)}
-          >
-            {labels.buttons.reject}
-          </button>
-        </>
-      );
-    }
-    if (pass.status === 'active' && passRequiresCheckout(pass)) {
-      return (
-        <button
-          type="button"
-          className="btn btn-primary w-full"
-          disabled={actionId === pass.id}
-          onClick={() => handleCheckOut(pass.id)}
-        >
-          <LogOut className="w-4 h-4" />
-          {labels.buttons.checkOut}
-        </button>
-      );
-    }
-    return null;
-  };
-
   const passesByStatus = (status: Pass['status']) => {
     const filtered = status === 'approved'
       ? passes.filter((p) => isAwaitingEntry(p.status))
@@ -598,14 +552,14 @@ function ControlPageContent() {
         </div>
 
         {selected && (
-          <div className="lg:sticky lg:top-20 space-y-2 min-w-0 max-w-full">
-            <div className="flex items-center justify-between px-1">
+          <aside className="lg:sticky lg:top-20 space-y-2 min-w-0 max-w-full" aria-label={labels.reception.selectedPass}>
+            <div className="flex items-center justify-between gap-2 px-0.5">
               <h2 className="font-semibold text-[var(--muted)] uppercase tracking-wide text-[11px]">
                 {labels.reception.selectedPass}
               </h2>
               <button
                 type="button"
-                className="p-1.5 rounded-md text-[var(--muted)] hover:text-[var(--foreground)] hover:bg-[var(--m-block)] lg:hidden"
+                className="p-1.5 rounded-md text-[var(--muted)] hover:text-[var(--text)] hover:bg-[var(--surface-muted)] lg:hidden"
                 onClick={() => setSelected(null)}
                 aria-label={labels.passes.close}
               >
@@ -616,13 +570,12 @@ function ControlPageContent() {
               pass={selected}
               labels={labels}
               showCreator
-              actions={renderDetailActions(selected)}
               onPassUpdated={(updated) => {
                 setPasses((prev) => prev.map((p) => (p.id === updated.id ? updated : p)));
                 setSelected(updated);
               }}
             />
-          </div>
+          </aside>
         )}
       </div>
     </ProtectedLayout>

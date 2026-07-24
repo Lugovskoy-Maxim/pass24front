@@ -1,9 +1,14 @@
 'use client';
 
+import { useState } from 'react';
 import Link from 'next/link';
 import {
   Building2,
   Calendar,
+  Car,
+  Check,
+  Copy,
+  ExternalLink,
   History,
   IdCard,
   MapPin,
@@ -11,6 +16,7 @@ import {
   Phone,
   QrCode,
   User,
+  UserCircle,
 } from 'lucide-react';
 import { Pass, TYPE_LABELS, PassType } from '@/lib/api';
 import {
@@ -31,23 +37,13 @@ import { buildHistoryHref } from '@/lib/visit-history';
 import { passShowsVisitTimeline } from '@/lib/pass-checkout';
 import { PassVisitTimeline } from './PassVisitTimeline';
 import { PassVisitorDataForm } from './PassVisitorDataForm';
-import { OverdueBadge } from './StatusBadge';
-
-function DetailRow({ label, value, mono }: { label: string; value?: React.ReactNode; mono?: boolean }) {
-  if (value === undefined || value === null || value === '') return null;
-  return (
-    <div className="py-2 border-b border-[var(--border)] last:border-0">
-      <dt className="text-[10px] uppercase tracking-wide text-[var(--muted)] mb-0.5">{label}</dt>
-      <dd className={`text-sm font-medium break-words ${mono ? 'font-mono' : ''}`}>{value}</dd>
-    </div>
-  );
-}
+import { StatusBadge } from './StatusBadge';
 
 function HistoryLink({ href, label }: { href: string; label: string }) {
   return (
     <Link
       href={href}
-      className="inline-flex items-center gap-1 text-xs text-link hover:underline mt-0.5"
+      className="inline-flex items-center gap-1 text-[11px] text-link hover:underline"
     >
       <History className="w-3 h-3" />
       {label}
@@ -55,10 +51,64 @@ function HistoryLink({ href, label }: { href: string; label: string }) {
   );
 }
 
+function CopyButton({ value, title }: { value: string; title: string }) {
+  const [copied, setCopied] = useState(false);
+
+  const handleCopy = async () => {
+    try {
+      await navigator.clipboard.writeText(value);
+      setCopied(true);
+      setTimeout(() => setCopied(false), 2000);
+    } catch {
+      /* ignore */
+    }
+  };
+
+  return (
+    <button
+      type="button"
+      onClick={handleCopy}
+      className="p-1 rounded-md text-[var(--muted)] hover:text-[var(--link)] hover:bg-[var(--surface-muted)] transition-colors shrink-0"
+      title={title}
+      aria-label={title}
+    >
+      {copied ? <Check className="w-3.5 h-3.5 text-emerald-600" /> : <Copy className="w-3.5 h-3.5" />}
+    </button>
+  );
+}
+
 function formatPassport(pass: Pass) {
   if (!pass.visitorPassportSeries && !pass.visitorPassportNumber) return undefined;
   const base = [pass.visitorPassportSeries, pass.visitorPassportNumber].filter(Boolean).join(' ');
   return pass.visitorPassportIssuedBy ? `${base} · ${pass.visitorPassportIssuedBy}` : base;
+}
+
+function InfoRow({
+  icon: Icon,
+  label,
+  value,
+  mono,
+  trailing,
+}: {
+  icon?: typeof User;
+  label: string;
+  value?: React.ReactNode;
+  mono?: boolean;
+  trailing?: React.ReactNode;
+}) {
+  if (value === undefined || value === null || value === '') return null;
+  return (
+    <div className="pass-detail__row">
+      <dt className="pass-detail__label">
+        {Icon && <Icon className="w-3 h-3 shrink-0 opacity-70" aria-hidden />}
+        {label}
+      </dt>
+      <dd className={`pass-detail__value ${mono ? 'font-mono' : ''}`}>
+        <span className="min-w-0 break-words">{value}</span>
+        {trailing}
+      </dd>
+    </div>
+  );
 }
 
 interface PassDetailPanelProps {
@@ -87,6 +137,7 @@ export function PassDetailPanel({
   const visitWindow = pass.visitTimeFrom
     ? `${pass.visitTimeFrom}${pass.visitTimeTo ? ` – ${pass.visitTimeTo}` : ''}`
     : null;
+  const passport = formatPassport(pass);
 
   const canSeeHistory = canViewAllPasses(user) || canUseReception(user) || hasPermission(user, 'admin.panel');
   const canEditPassport = canUseReception(user) || hasPermission(user, 'passes.approve') || hasPermission(user, 'admin.panel');
@@ -99,72 +150,112 @@ export function PassDetailPanel({
     visitorPassportNumber: pass.visitorPassportNumber,
   });
 
+  const officeLabel = [
+    `${labels.card.office} ${pass.office}`,
+    pass.floor ? `${pass.floor} ${labels.card.floorSuffix}` : '',
+  ].filter(Boolean).join(' · ');
+
   return (
-    <div className={`${getPassCardShellClass({ overdue: stillInside })} min-w-0 max-w-full overflow-visible`}>
+    <div className={`${getPassCardShellClass({ overdue: stillInside })} pass-detail min-w-0 max-w-full overflow-visible`}>
       <div className="flex items-stretch min-w-0 w-full">
         <div className={getPassStatusStripeClass(pass.status, stillInside)} aria-hidden />
 
-        <div className="pass-card__body">
+        <div className="pass-card__body min-w-0">
           {overdueKind && (
-            <div className="px-4 py-2 theme-alert-subtle border-b text-xs pass-card__alert">
+            <div className="px-4 py-2.5 theme-alert-subtle border-b text-xs pass-card__alert">
               <span className="pass-card__alert-msg">{getOverdueCardMessage(overdueKind, pass, labels)}</span>
             </div>
           )}
 
-          <div className="px-4 py-4 bg-gradient-surface border-b border-[var(--border)]">
+          {/* Header */}
+          <div className="px-4 pt-4 pb-3 bg-gradient-surface border-b border-[var(--border)]">
             <div className="flex items-start gap-3 min-w-0">
-              <div className={`shrink-0 ${getPassIconTileClass(pass.status, stillInside)} w-10 h-10`}>
+              <div className={`shrink-0 ${getPassIconTileClass(pass.status, stillInside)} w-11 h-11`}>
                 <User className="w-5 h-5" />
               </div>
-              <div className="pass-card__main flex-1 min-w-0">
-                <h3 className="pass-card__title text-lg" title={pass.visitorName}>{pass.visitorName}</h3>
-                {canSeeHistory && (
-                  <HistoryLink href={visitorHistoryHref} label="История визитов" />
-                )}
-                <p className="pass-card__mono text-sm font-semibold mt-1" title={pass.passNumber}>{pass.passNumber}</p>
-                <div className="pass-card__badges mt-2">
-                  {overdueKind && <OverdueBadge kind={overdueKind} labels={labels} size="sm" />}
-                  <span className="text-xs px-2 py-0.5 rounded-full bg-[var(--surface-elevated)] border border-[var(--border)] text-[var(--muted)] max-w-full min-w-0 truncate">
+
+              <div className="flex-1 min-w-0">
+                <h3 className="pass-card__title text-lg leading-snug" title={pass.visitorName}>
+                  {pass.visitorName}
+                </h3>
+
+                <div className="pass-card__badges mt-1.5">
+                  <StatusBadge
+                    status={pass.status}
+                    labels={labels}
+                    size="sm"
+                    overdueKind={overdueKind}
+                  />
+                  <span className="text-[11px] px-2 py-0.5 rounded-full bg-[var(--surface-elevated)] border border-[var(--border)] text-[var(--muted)] max-w-full min-w-0 truncate">
                     {TYPE_LABELS[pass.passType as PassType] || pass.passType}
                   </span>
                 </div>
+
+                <div className="flex items-center gap-0.5 mt-2 min-w-0">
+                  <span className="pass-card__mono text-sm font-semibold text-[var(--text)]" title={pass.passNumber}>
+                    {pass.passNumber}
+                  </span>
+                  <CopyButton value={pass.passNumber} title={labels.buttons.copyNumber} />
+                </div>
+
+                {canSeeHistory && (
+                  <div className="mt-1.5">
+                    <HistoryLink href={visitorHistoryHref} label="История визитов" />
+                  </div>
+                )}
+              </div>
+
+              {/* Office highlight */}
+              <div className="pass-detail__office shrink-0 text-center pl-3 border-l border-[var(--border)] min-w-[3.25rem]">
+                <div className="text-[9px] uppercase tracking-wide text-[var(--muted)] leading-none mb-1">
+                  {labels.card.office}
+                </div>
+                <div className="text-2xl font-bold leading-none tabular-nums text-[var(--text)]" title={pass.office}>
+                  {pass.office}
+                </div>
+                {pass.floor && (
+                  <div className="text-[11px] text-[var(--muted)] mt-1 leading-none">
+                    {pass.floor} {labels.card.floorSuffix}
+                  </div>
+                )}
               </div>
             </div>
 
-            <div className="pass-card__chips mt-3">
+            {/* Quick links */}
+            <div className="flex flex-wrap gap-1.5 mt-3">
               {canSeeHistory && pass.officeId ? (
                 <Link
                   href={buildHistoryHref({ scope: 'office', officeId: pass.officeId, officeLabel: pass.office })}
-                  className="pass-card__chip text-xs bg-[var(--surface-elevated)] border border-[var(--border)] rounded-md px-2 py-1 hover:bg-[var(--surface-muted)]"
+                  className="pass-detail__chip"
                   title={`История офиса ${pass.office}`}
                 >
                   <MapPin className="w-3.5 h-3.5 text-[var(--muted)] shrink-0" />
-                  {labels.card.office} {pass.office}
-                  {pass.floor && ` · ${pass.floor} ${labels.card.floorSuffix}`}
+                  {officeLabel}
                 </Link>
               ) : (
-                <span className="pass-card__chip text-xs bg-[var(--surface-elevated)] border border-[var(--border)] rounded-md px-2 py-1" title={`${labels.card.office} ${pass.office}${pass.floor ? ` · ${pass.floor}` : ''}`}>
+                <span className="pass-detail__chip" title={officeLabel}>
                   <MapPin className="w-3.5 h-3.5 text-[var(--muted)] shrink-0" />
-                  {labels.card.office} {pass.office}
-                  {pass.floor && ` · ${pass.floor} ${labels.card.floorSuffix}`}
+                  {officeLabel}
                 </span>
               )}
-              <span className="pass-card__chip text-xs bg-[var(--surface-elevated)] border border-[var(--border)] rounded-md px-2 py-1" title={`${pass.visitDate}${visitWindow ? ` · ${visitWindow}` : ''}`}>
+              <span className="pass-detail__chip" title={`${pass.visitDate}${visitWindow ? ` · ${visitWindow}` : ''}`}>
                 <Calendar className="w-3.5 h-3.5 text-[var(--muted)] shrink-0" />
                 {pass.visitDate}
-                {visitWindow && ` · ${visitWindow}`}
+                {visitWindow && <span className="text-[var(--muted)]"> · {visitWindow}</span>}
               </span>
               <Link
                 href={`/ticket/${encodeURIComponent(pass.passNumber)}`}
                 target="_blank"
-                className="pass-card__chip text-xs bg-[var(--surface-elevated)] border border-[var(--border)] rounded-md px-2 py-1 text-[var(--text)] hover:bg-[var(--surface-muted)]"
+                className="pass-detail__chip pass-detail__chip--action"
               >
                 <QrCode className="w-3.5 h-3.5 shrink-0" />
                 {labels.buttons.qrPass}
+                <ExternalLink className="w-3 h-3 opacity-50 shrink-0" />
               </Link>
             </div>
           </div>
 
+          {/* Optional actions (e.g. share/print on /passes) — not reception check-in */}
           {actions && (
             <div
               className="pass-card__actions pass-card__actions--stack px-4 py-3 border-b border-[var(--border)] bg-[var(--surface-muted)]"
@@ -174,98 +265,141 @@ export function PassDetailPanel({
             </div>
           )}
 
+          {/* Timeline */}
           {passShowsVisitTimeline(pass) && (
-            <div className={`pass-card__timeline px-4 py-4 border-b border-[var(--border)] ${isTerminal ? 'bg-[var(--surface-muted)]' : 'bg-[var(--surface)]'}`}>
-              <p className="text-[10px] uppercase tracking-wide text-[var(--muted)] mb-3">{labels.passes.detailTimeline}</p>
+            <div className={`pass-card__timeline px-4 py-3.5 border-b border-[var(--border)] ${isTerminal ? 'bg-[var(--surface-muted)]' : 'bg-[var(--surface)]'}`}>
+              <p className="text-[10px] uppercase tracking-wide text-[var(--muted)] mb-2.5 font-medium">
+                {labels.passes.detailTimeline}
+              </p>
               <PassVisitTimeline pass={pass} labels={labels} overdue={stillInside} />
             </div>
           )}
 
-          <dl className="px-4 py-2 divide-y divide-[var(--border)]">
+          {/* Details */}
+          <dl className="pass-detail__list px-4 py-1">
             {pass.companyName && (
-              <div className="py-2 border-b border-[var(--border)]">
-                <dt className="text-[10px] uppercase tracking-wide text-[var(--muted)] mb-0.5">{labels.card.company}</dt>
-                <dd className="text-sm font-medium break-words">
-                  {canSeeHistory ? (
-                    <Link href={buildHistoryHref({ scope: 'company', companyName: pass.companyName })} className="text-link hover:underline">
+              <InfoRow
+                icon={Building2}
+                label={labels.card.company}
+                value={
+                  canSeeHistory ? (
+                    <Link
+                      href={buildHistoryHref({ scope: 'company', companyName: pass.companyName })}
+                      className="text-link hover:underline"
+                    >
                       {pass.companyName}
                     </Link>
-                  ) : pass.companyName}
-                </dd>
-              </div>
+                  ) : (
+                    pass.companyName
+                  )
+                }
+              />
             )}
+
             {pass.businessCenterName && (
-              <div className="py-2 border-b border-[var(--border)]">
-                <dt className="text-[10px] uppercase tracking-wide text-[var(--muted)] mb-0.5">{labels.card.businessCenter}</dt>
-                <dd className="text-sm font-medium break-words">
-                  {canSeeHistory && pass.propertyId ? (
-                    <Link href={buildHistoryHref({ scope: 'bc', propertyId: pass.propertyId, bcName: pass.businessCenterName })} className="text-link hover:underline inline-flex items-center gap-1">
-                      <Building2 className="w-3.5 h-3.5" />
+              <InfoRow
+                icon={Building2}
+                label={labels.card.businessCenter}
+                value={
+                  canSeeHistory && pass.propertyId ? (
+                    <Link
+                      href={buildHistoryHref({
+                        scope: 'bc',
+                        propertyId: pass.propertyId,
+                        bcName: pass.businessCenterName,
+                      })}
+                      className="text-link hover:underline"
+                    >
                       {pass.businessCenterName}
                     </Link>
-                  ) : pass.businessCenterName}
-                </dd>
-              </div>
+                  ) : (
+                    pass.businessCenterName
+                  )
+                }
+              />
             )}
-            <DetailRow label={labels.card.phone} value={pass.visitorPhone && (
-              <span className="flex flex-col">
-                <a href={`tel:${pass.visitorPhone}`} className="text-link hover:underline">{pass.visitorPhone}</a>
-                {canSeeHistory && (
-                  <HistoryLink
-                    href={buildHistoryHref({ scope: 'visitor', visitorPhone: pass.visitorPhone })}
-                    label="История по телефону"
-                  />
-                )}
-              </span>
-            )} />
-            <DetailRow label="Паспорт" value={formatPassport(pass) && (
-              <span className="flex items-start gap-1.5">
-                <IdCard className="w-3.5 h-3.5 text-[var(--muted)] shrink-0 mt-0.5" />
-                <span>{formatPassport(pass)}</span>
-              </span>
-            )} />
-            <DetailRow
-              label={labels.card.vehicle}
-              value={pass.vehiclePlate && `${pass.vehiclePlate}${pass.vehicleModel ? ` · ${pass.vehicleModel}` : ''}`}
-              mono
-            />
+
+            {pass.visitorPhone && (
+              <InfoRow
+                icon={Phone}
+                label={labels.card.phone}
+                value={
+                  <span className="inline-flex flex-wrap items-center gap-x-2 gap-y-0.5">
+                    <a href={`tel:${pass.visitorPhone}`} className="text-link hover:underline font-medium">
+                      {pass.visitorPhone}
+                    </a>
+                    {canSeeHistory && (
+                      <HistoryLink
+                        href={buildHistoryHref({ scope: 'visitor', visitorPhone: pass.visitorPhone })}
+                        label="история"
+                      />
+                    )}
+                  </span>
+                }
+              />
+            )}
+
+            {passport && (
+              <InfoRow
+                icon={IdCard}
+                label="Паспорт"
+                value={passport}
+              />
+            )}
+
+            {pass.vehiclePlate && (
+              <InfoRow
+                icon={Car}
+                label={labels.card.vehicle}
+                mono
+                value={`${pass.vehiclePlate}${pass.vehicleModel ? ` · ${pass.vehicleModel}` : ''}`}
+              />
+            )}
+
             {showCreator && (pass.creatorName || pass.creatorPhone || pass.creatorCompany) && (
-              <div className="py-2 border-b border-[var(--border)]">
-                <dt className="text-[10px] uppercase tracking-wide text-[var(--muted)] mb-1.5">{labels.card.orderedBy}</dt>
-                <dd className="text-sm space-y-1.5">
+              <div className="pass-detail__row pass-detail__row--block">
+                <dt className="pass-detail__label">
+                  <UserCircle className="w-3 h-3 shrink-0 opacity-70" aria-hidden />
+                  {labels.card.orderedBy}
+                </dt>
+                <dd className="pass-detail__value pass-detail__value--stack">
                   {pass.creatorName && (
-                    <div className="flex items-start gap-2 font-medium">
-                      <User className="w-4 h-4 text-[var(--muted)] shrink-0 mt-0.5" />
-                      <span className="break-words">{pass.creatorName}</span>
-                    </div>
+                    <span className="font-medium break-words">{pass.creatorName}</span>
                   )}
                   {pass.creatorPhone && (
-                    <div className="flex items-center gap-2">
-                      <Phone className="w-4 h-4 text-[var(--muted)] shrink-0" />
-                      <a href={`tel:${pass.creatorPhone}`} className="text-link hover:underline">
-                        {pass.creatorPhone}
-                      </a>
-                    </div>
+                    <a href={`tel:${pass.creatorPhone}`} className="inline-flex items-center gap-1.5 text-link hover:underline text-sm">
+                      <Phone className="w-3.5 h-3.5 shrink-0" />
+                      {pass.creatorPhone}
+                    </a>
                   )}
                   {pass.creatorCompany && (
-                    <div className="text-[var(--muted)] pl-6">{pass.creatorCompany}</div>
+                    <span className="text-[var(--muted)] text-xs break-words">{pass.creatorCompany}</span>
                   )}
                 </dd>
               </div>
             )}
+
             {pass.comment && (
-              <div className="py-2 border-b border-[var(--border)]">
-                <dt className="text-[10px] uppercase tracking-wide text-[var(--muted)] mb-1 flex items-center gap-1">
-                  <MessageSquare className="w-3 h-3" />
+              <div className="pass-detail__row pass-detail__row--block">
+                <dt className="pass-detail__label">
+                  <MessageSquare className="w-3 h-3 shrink-0 opacity-70" aria-hidden />
                   {labels.card.comment}
                 </dt>
-                <dd className="text-sm surface-muted rounded-md p-2">{pass.comment}</dd>
+                <dd className="pass-detail__note">
+                  {pass.comment}
+                </dd>
               </div>
             )}
+
             {pass.rejectionReason && (
-              <div className="py-2">
-                <dt className="text-[10px] uppercase tracking-wide text-[var(--status-rejected)] mb-1">{labels.card.rejectionReason}</dt>
-                <dd className="text-sm text-[var(--status-rejected)]">{pass.rejectionReason}</dd>
+              <div className="pass-detail__row pass-detail__row--block">
+                <dt className="pass-detail__label pass-detail__label--danger">
+                  <MessageSquare className="w-3 h-3 shrink-0" aria-hidden />
+                  {labels.card.rejectionReason}
+                </dt>
+                <dd className="pass-detail__note pass-detail__note--danger">
+                  {pass.rejectionReason}
+                </dd>
               </div>
             )}
           </dl>
