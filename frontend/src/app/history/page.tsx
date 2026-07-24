@@ -40,6 +40,7 @@ function HistoryPageContent() {
   const query = useMemo(() => parseHistoryQuery(searchParams), [searchParams]);
 
   const [passes, setPasses] = useState<Pass[]>([]);
+  const [total, setTotal] = useState(0);
   const [loading, setLoading] = useState(true);
   const [loadError, setLoadError] = useState('');
   const [loadErrorCause, setLoadErrorCause] = useState<unknown>(null);
@@ -52,7 +53,10 @@ function HistoryPageContent() {
       setLoadError('');
     }
     return api.getPassHistory(query)
-      .then(({ passes: data }) => setPasses(data))
+      .then(({ passes: data, total: count }) => {
+        setPasses(data);
+        setTotal(typeof count === 'number' ? count : data.length);
+      })
       .catch((err) => {
         if (!silent) {
           setLoadErrorCause(err);
@@ -114,7 +118,10 @@ function HistoryPageContent() {
         <div className="card p-8 text-center text-[var(--muted)]">Визиты не найдены</div>
       ) : (
         <div className="flex flex-col gap-1.5">
-          <p className="text-xs text-[var(--muted)] mb-1 px-1">Найдено: {passes.length}</p>
+          <p className="text-xs text-[var(--muted)] mb-1 px-1">
+            Найдено: {total}
+            {passes.length < total ? ` (показано ${passes.length})` : ''}
+          </p>
           {passes.map((pass) => (
             <PassListCard
               key={pass.id}

@@ -776,17 +776,20 @@ export class PassesService implements OnModuleInit {
       }
     }
 
-    const passes = await this.passModel
-      .find(filter)
-      .sort({ visitDate: -1, createdAt: -1 })
-      .limit(limit)
-      .lean();
+    const [total, passes] = await Promise.all([
+      this.passModel.countDocuments(filter),
+      this.passModel
+        .find(filter)
+        .sort({ visitDate: -1, createdAt: -1 })
+        .limit(limit)
+        .lean(),
+    ]);
 
     const withCheckout = await this.enrichPassCheckoutSettings(passes);
     const enriched = await this.enrichCreatorFields(withCheckout, user);
     return {
       scope: query.scope,
-      total: enriched.length,
+      total,
       passes: enriched.map((p) => this.mapToFrontend(p, user)),
     };
   }
