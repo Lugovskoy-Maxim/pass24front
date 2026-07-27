@@ -55,10 +55,6 @@ export function canViewAllPasses(user: User | null | undefined): boolean {
   return hasPermission(user, 'passes.view_all') || isAdminPanelUser(user);
 }
 
-export function canViewPassCharts(user: User | null | undefined): boolean {
-  return !isTenantCompanyUser(user);
-}
-
 /**
  * Можно ли заказывать пропуска.
  * Сотрудник/владелец компании — только если у компании есть закреплённые офисы;

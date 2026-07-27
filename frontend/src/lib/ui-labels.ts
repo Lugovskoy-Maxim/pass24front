@@ -256,11 +256,6 @@ export function getStatusLabel(status: PassStatus, labels: UiLabels): string {
   return labels.statuses[status] || DEFAULT_UI_LABELS.statuses[status];
 }
 
-/** @deprecated Use pass-card utilities from lib/pass-status.ts */
-export function getPassCardBorderClass(_status: PassStatus, _stillInside?: boolean): string {
-  return '';
-}
-
 export type PassCardData = {
   passNumber: string;
   visitorName: string;

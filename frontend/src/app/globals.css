@@ -776,6 +776,10 @@ input[type="checkbox"]:not(.checkbox) {
   max-width: 100%;
 }
 
+.pass-card__visit-date {
+  letter-spacing: -0.01em;
+}
+
 .pass-card__chips {
   display: flex;
   flex-wrap: wrap;

@@ -7,7 +7,7 @@ export class LoginDto {
   @MinLength(2)
   login?: string;
 
-  /** Совместимость со старыми клиентами */
+  // то же, что login (старые клиенты шлют email)
   @ValidateIf((o) => !o.login)
   @IsString()
   @IsNotEmpty()

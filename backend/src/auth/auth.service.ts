@@ -283,18 +283,54 @@ export class AuthService {
       },
     });
 
+    // письмо админам (ошибка SMTP не ломает регистрацию)
+    void this.notifyAdminsAboutRegistration(user).catch(() => undefined);
+
     return {
       pendingApproval: true,
       message: 'Заявка отправлена. Доступ будет открыт после подтверждения администратором.',
     };
   }
 
-  /**
-   * @deprecated LEGACY alias для старых клиентов.
-   * Эквивалент requestRegistrationCode; не добавляйте новую логику сюда.
-   */
-  async register(dto: RegisterDto) {
-    return this.requestRegistrationCode(dto);
+  /** Кому слать: manual emails + email выбранных staff. */
+  private async notifyAdminsAboutRegistration(user: {
+    fullName?: string;
+    company?: string;
+    email?: string;
+    phone?: string;
+  }) {
+    const settings = await this.siteSettingsService.get();
+    const emails = new Set<string>(
+      (settings.registrationNotifyEmails || []).map((e) => e.trim().toLowerCase()).filter(Boolean),
+    );
+
+    const staffIds = (settings.registrationNotifyUserIds || []).filter((id) => /^[a-fA-F0-9]{24}$/.test(id));
+    if (staffIds.length) {
+      const staff = await this.userModel
+        .find({
+          _id: { $in: staffIds },
+          role: { $in: ['admin', 'security', 'bc_admin'] },
+          isActive: { $ne: false },
+          email: { $exists: true, $nin: [null, ''] },
+        })
+        .select('email')
+        .lean();
+      for (const s of staff) {
+        if (s.email) emails.add(String(s.email).toLowerCase());
+      }
+    }
+
+    if (!emails.size) return;
+
+    const origin = this.mailService.getPublicAppOrigin();
+    await this.mailService.sendRegistrationAdminAlert({
+      to: [...emails],
+      fullName: user.fullName || '',
+      company: user.company || '',
+      email: user.email,
+      phone: user.phone,
+      adminUsersUrl: `${origin}/admin/users?category=tenants&highlight=registration`,
+    });
   }
 
   /** Сброс пароля по email. Если аккаунта нет — предлагаем contact admin (recoveryChannel). */
@@ -529,11 +565,7 @@ export class AuthService {
     };
   }
 
-  /**
-   * Вход по username | email | телефону.
-   * dto.email — LEGACY-поле для старых клиентов (дублирует login).
-   * createTestUser — только dev (DEV_TEST_ACCOUNTS), не production.
-   */
+  // login / email / телефон + password; createTestUser только в dev
   async login(dto: LoginDto) {
     const loginRaw = (dto.login || dto.email || '').trim();
     if (!loginRaw) {

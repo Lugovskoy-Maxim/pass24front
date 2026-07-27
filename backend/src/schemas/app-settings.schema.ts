@@ -78,6 +78,17 @@ export class AppSettings {
   @Prop({ type: [String], default: undefined })
   blockedEmailDomains?: string[];
 
+  /**
+   * Email для уведомлений о новых заявках на регистрацию арендаторов.
+   * Ручной список + emails staff (см. registrationNotifyUserIds).
+   */
+  @Prop({ type: [String], default: [] })
+  registrationNotifyEmails?: string[];
+
+  /** Staff (admin/security/bc_admin), которых тоже уведомляем по их email. */
+  @Prop({ type: [String], default: [] })
+  registrationNotifyUserIds?: string[];
+
   /** Вопросы и ответы для панели помощи */
   @Prop({
     type: [

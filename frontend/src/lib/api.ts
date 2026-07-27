@@ -21,9 +21,6 @@ const API_URL = process.env.NEXT_PUBLIC_API_URL || 'http://127.0.0.1:4000/api';
 export type SystemUserRole = 'tenant' | 'security' | 'bc_admin' | 'admin';
 export type UserRole = SystemUserRole | (string & {});
 
-/** LEGACY UI-цели визита; на бэке purpose часто выводится из passType (deriveVisitPurpose). */
-export const VISIT_PURPOSES = ['Гость', 'Встреча', 'Доставка', 'Рабочий', 'Сотрудник'] as const;
-
 export function getPassTicketUrl(passNumber: string) {
   if (typeof window === 'undefined') return `/ticket/${encodeURIComponent(passNumber)}`;
   return `${window.location.origin}/ticket/${encodeURIComponent(passNumber)}`;
@@ -686,7 +683,7 @@ export const api = {
       request<{ message: string; id: string }>(`/admin/users/${id}`, { method: 'DELETE' }),
 
     getRegistrationRequests: () =>
-      request<{ requests: AdminUser[] }>('/admin/registration-requests'),
+      request<{ requests: AdminUser[]; count?: number }>('/admin/registration-requests'),
 
     approveRegistration: (id: string) =>
       request<{ user: AdminUser }>(`/admin/users/${id}/registration/approve`, { method: 'POST' }),
@@ -835,6 +832,10 @@ export interface SiteSettings {
   smsRegistrationCodeText?: string;
   /** Запрещённые email-домены при регистрации (из админки). */
   blockedEmailDomains?: string[];
+  /** Email для уведомлений о новых заявках (ручной список). */
+  registrationNotifyEmails?: string[];
+  /** Staff user ids для уведомлений. */
+  registrationNotifyUserIds?: string[];
   faqItems?: FaqItem[];
   helpGuideSections?: HelpGuideSection[];
 }
@@ -1162,9 +1163,11 @@ export interface AdminDashboard {
     users: { total: number; byRole: Record<string, number> };
     passes: { total: number; today: number; week: number; byStatus: Record<string, number> };
     businessCenters: number;
+    registrationPending?: number;
   };
   recentActivity: AuditEntry[];
   businessCenterNames: string[];
+  officesCount?: number;
 }
 
 export const STATUS_LABELS: Record<PassStatus, string> = {

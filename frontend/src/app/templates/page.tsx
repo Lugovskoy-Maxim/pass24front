@@ -5,7 +5,7 @@ import { useRouter } from 'next/navigation';
 import { useAuth } from '@/lib/auth';
 import { AppVersion } from '@/components/AppVersion';
 
-/** LEGACY URL → заказ пропуска (или login). */
+// старый /templates → заказ пропуска
 export default function TemplatesPage() {
   const router = useRouter();
   const { user, loading } = useAuth();

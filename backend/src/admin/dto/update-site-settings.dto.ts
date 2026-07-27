@@ -157,6 +157,21 @@ export class UpdateSiteSettingsDto {
   @MaxLength(120, { each: true })
   blockedEmailDomains?: string[];
 
+  /** Email для уведомлений о новых регистрациях (ручной ввод). */
+  @IsOptional()
+  @IsArray()
+  @ArrayMaxSize(50)
+  @IsEmail({}, { each: true })
+  registrationNotifyEmails?: string[];
+
+  /** ID сотрудников (admin/security/bc_admin) — уведомление на их email. */
+  @IsOptional()
+  @IsArray()
+  @ArrayMaxSize(50)
+  @IsString({ each: true })
+  @MaxLength(32, { each: true })
+  registrationNotifyUserIds?: string[];
+
   @IsOptional()
   @IsArray()
   @ArrayMaxSize(50)

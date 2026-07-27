@@ -20,12 +20,7 @@ import { PageError } from '@/components/PageError';
 import { canOrderPasses, canViewAllPasses, canViewPasses, hasPermission } from '@/lib/permissions';
 import { isAwaitingEntry } from '@/lib/pass-entry';
 import { passRequiresCheckout } from '@/lib/pass-checkout';
-
-
-
 import { getStatusLabel, getUiLabels, UiLabels } from '@/lib/ui-labels';
-// Графики временно отключены
-// import { PassesStatsBar } from '@/components/PassesStatsBar';
 import { PassExportPanel } from '@/components/PassExportPanel';
 import { ListSkeleton } from '@/components/ui/Skeleton';
 import { EmptyState } from '@/components/ui/EmptyState';
@@ -288,10 +283,6 @@ function PassesPageContent() {
           search: debouncedSearch,
         }}
       />
-
-      {/* Графики временно отключены
-      {canViewPassCharts(user) && <PassesStatsBar />}
-      */}
 
       {loadError && (
         <PageError

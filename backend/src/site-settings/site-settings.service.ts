@@ -46,6 +46,10 @@ export interface SiteSettingsDto {
   smsRegistrationCodeText: string;
   /** Запрещённые домены email при регистрации (редактируется в админке). */
   blockedEmailDomains: string[];
+  /** Кому слать письмо о новой заявке на регистрацию (ручной список). */
+  registrationNotifyEmails: string[];
+  /** Staff user ids — тоже уведомляем на их email. */
+  registrationNotifyUserIds: string[];
   faqItems: NormalizedFaqItem[];
   helpGuideSections: NormalizedGuideSection[];
 }
@@ -113,6 +117,8 @@ export class SiteSettingsService implements OnModuleInit {
     smsRegistrationDisabledMessage?: string;
     smsRegistrationCodeText?: string;
     blockedEmailDomains?: string[];
+    registrationNotifyEmails?: string[];
+    registrationNotifyUserIds?: string[];
     /** Сырой список из DTO — id опционален, нормализуется внутри */
     faqItems?: Array<{ id?: string; question?: string; answer?: string }>;
     helpGuideSections?: Array<{
@@ -182,6 +188,18 @@ export class SiteSettingsService implements OnModuleInit {
       // Пустой массив допустим: только проверка зоны .ru, без списка free-mail
       update.blockedEmailDomains = normalizeBlockedEmailDomains(data.blockedEmailDomains);
     }
+    if (data.registrationNotifyEmails !== undefined) {
+      update.registrationNotifyEmails = this.normalizeEmailList(data.registrationNotifyEmails);
+    }
+    if (data.registrationNotifyUserIds !== undefined) {
+      update.registrationNotifyUserIds = [
+        ...new Set(
+          (data.registrationNotifyUserIds || [])
+            .map((id) => (id || '').trim())
+            .filter((id) => !!id && /^[a-fA-F0-9]{24}$/.test(id)),
+        ),
+      ].slice(0, 50);
+    }
     if (data.faqItems !== undefined) {
       update.faqItems = normalizeFaqItems(data.faqItems);
     }
@@ -228,6 +246,10 @@ export class SiteSettingsService implements OnModuleInit {
         // undefined field → defaults; explicit [] stays empty
         Array.isArray(doc?.blockedEmailDomains) ? doc!.blockedEmailDomains : undefined,
       ),
+      registrationNotifyEmails: this.normalizeEmailList(doc?.registrationNotifyEmails || []),
+      registrationNotifyUserIds: Array.isArray(doc?.registrationNotifyUserIds)
+        ? doc!.registrationNotifyUserIds.map(String).filter(Boolean).slice(0, 50)
+        : [],
       faqItems: normalizeFaqItems(doc?.faqItems?.length ? doc.faqItems : DEFAULT_FAQ_ITEMS),
       helpGuideSections: normalizeGuideSections(
         doc?.helpGuideSections?.length ? doc.helpGuideSections : DEFAULT_GUIDE_SECTIONS,
@@ -238,5 +260,18 @@ export class SiteSettingsService implements OnModuleInit {
   private normalizeHexColor(value: string | undefined, fallback: string): string {
     const trimmed = value?.trim() || '';
     return /^#[0-9A-Fa-f]{6}$/.test(trimmed) ? trimmed.toLowerCase() : fallback;
+  }
+
+  private normalizeEmailList(raw: string[]): string[] {
+    const out: string[] = [];
+    const seen = new Set<string>();
+    for (const item of raw || []) {
+      const e = (item || '').trim().toLowerCase();
+      if (!e || !e.includes('@') || seen.has(e)) continue;
+      seen.add(e);
+      out.push(e);
+      if (out.length >= 50) break;
+    }
+    return out;
   }
 }

@@ -1,12 +1,14 @@
 /** Локальная дата YYYY-MM-DD (не UTC). */
+
+const DATE_RE = /^\d{4}-\d{2}-\d{2}$/;
+const WEEKDAY_SHORT_RU = ['вс', 'пн', 'вт', 'ср', 'чт', 'пт', 'сб'];
+
 export function getLocalDateString(now = new Date()): string {
   const y = now.getFullYear();
   const m = String(now.getMonth() + 1).padStart(2, '0');
   const d = String(now.getDate()).padStart(2, '0');
   return `${y}-${m}-${d}`;
 }
-
-const DATE_RE = /^\d{4}-\d{2}-\d{2}$/;
 
 export function isValidVisitDateString(value: string): boolean {
   if (!DATE_RE.test(value)) return false;
@@ -29,6 +31,38 @@ export function addDays(dateStr: string, days: number): string {
 
 export function getMaxVisitDate(maxDaysAhead = 1, today = getLocalDateString()): string {
   return addDays(today, maxDaysAhead);
+}
+
+/**
+ * Дата для карточек: «сегодня, 27 июля», «завтра, 28 июля (вт)», «3 августа (пн)».
+ */
+export function formatVisitDateLabel(dateStr: string, today = getLocalDateString()): string {
+  if (!dateStr || !isValidVisitDateString(dateStr)) return dateStr || '';
+  const [y, m, d] = dateStr.split('-').map(Number);
+  const dt = new Date(y, m - 1, d);
+
+  const weekday = WEEKDAY_SHORT_RU[dt.getDay()];
+  const sameYear = y === new Date().getFullYear();
+  const dayMonth = dt.toLocaleDateString('ru-RU', {
+    day: 'numeric',
+    month: sameYear ? 'long' : 'short',
+    ...(sameYear ? {} : { year: 'numeric' }),
+  });
+
+  if (dateStr === today) return `сегодня, ${dayMonth}`;
+  if (dateStr === addDays(today, 1)) return `завтра, ${dayMonth} (${weekday})`;
+  if (dateStr === addDays(today, -1)) return `вчера, ${dayMonth} (${weekday})`;
+
+  return `${dayMonth} (${weekday})`;
+}
+
+/** «10:00–12:00» / «с 10:00» */
+export function formatVisitTimeWindow(from?: string, to?: string): string | null {
+  if (!from?.trim()) return null;
+  const f = from.trim();
+  const t = to?.trim();
+  if (t) return `${f}–${t}`;
+  return `с ${f}`;
 }
 
 export function validateVisitDate(

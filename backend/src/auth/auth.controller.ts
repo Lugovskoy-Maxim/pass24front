@@ -57,12 +57,6 @@ export class AuthController {
     return this.authService.confirmRegistration(dto);
   }
 
-  /** @deprecated LEGACY: используйте /register/request-code */
-  @Post('register')
-  async register(@Body() dto: RegisterDto) {
-    return this.authService.requestRegistrationCode(dto);
-  }
-
   @Post('password-reset/request')
   async requestPasswordReset(@Body() dto: RequestPasswordResetDto) {
     return this.authService.requestPasswordReset(dto);

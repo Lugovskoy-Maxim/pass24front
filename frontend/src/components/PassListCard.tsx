@@ -22,6 +22,7 @@ import {
   getPassStatusStripeClass,
 } from '@/lib/pass-status';
 import { useConfig } from '@/hooks/useConfig';
+import { formatVisitDateLabel, formatVisitTimeWindow } from '@/lib/local-date';
 import { StatusBadge } from './StatusBadge';
 
 const TYPE_ICONS: Record<PassType, typeof User> = {
@@ -56,12 +57,12 @@ export function PassListCard({
   const Icon = TYPE_ICONS[pass.passType as PassType] || User;
   const overdueKind = getGuestOverdueKind(pass);
   const stillInside = overdueKind !== null;
-  const visitWindow = pass.visitTimeFrom
-    ? `${pass.visitTimeFrom}${pass.visitTimeTo ? `–${pass.visitTimeTo}` : ''}`
-    : null;
-
-  const metaParts = [pass.visitDate, TYPE_LABELS[pass.passType as PassType]];
-  if (visitWindow) metaParts.push(visitWindow);
+  const visitDateLabel = formatVisitDateLabel(pass.visitDate);
+  const visitWindow = formatVisitTimeWindow(pass.visitTimeFrom, pass.visitTimeTo);
+  const visitMeta = [visitDateLabel, visitWindow].filter(Boolean).join(' · ');
+  const typeLabel = TYPE_LABELS[pass.passType as PassType];
+  const metaParts = [visitMeta, typeLabel].filter(Boolean);
+  const metaTitle = [pass.visitDate, typeLabel, visitWindow].filter(Boolean).join(' · ');
   const officeInline = [
     `${labels.card.office} ${pass.office}`,
     pass.floor ? `${pass.floor} ${labels.card.floorSuffix}` : '',
@@ -100,8 +101,11 @@ export function PassListCard({
             {pass.passNumber}
           </div>
 
-          <p className="pass-card__meta-line mt-0.5 text-[11px] text-[var(--muted)]" title={metaParts.join(' · ')}>
-            {metaParts.join(' · ')}
+          <p className="pass-card__meta-line mt-0.5 text-[11px] text-[var(--muted)]" title={metaTitle}>
+            <span className="pass-card__visit-date text-[var(--text)] font-medium">{metaParts[0]}</span>
+            {metaParts.length > 1 && (
+              <span className="text-[var(--muted)]"> · {metaParts.slice(1).join(' · ')}</span>
+            )}
             <span className="pass-card__office--inline ml-1">· {officeInline}</span>
           </p>
 

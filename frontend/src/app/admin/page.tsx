@@ -3,27 +3,14 @@
 import { useCallback, useEffect, useState } from 'react';
 import { useAutoRefresh } from '@/hooks/useAutoRefresh';
 import Link from 'next/link';
-import { Users, FileText, Building2, Sparkles, List, ScrollText } from 'lucide-react';
+import { Users, FileText, Building2, Sparkles, List, ScrollText, Clock, AlertCircle } from 'lucide-react';
 import { AdminLayout } from '@/components/AdminLayout';
 import { useToast } from '@/components/Toast';
 import { useConfig } from '@/hooks/useConfig';
 import { api, AdminDashboard, AUDIT_LABELS, formatAuditEntity, getErrorMessage } from '@/lib/api';
 import { PageError } from '@/components/PageError';
 import { getUiLabels } from '@/lib/ui-labels';
-// Графики временно отключены
-// import { StatusDonutChart } from '@/components/charts/StatusDonutChart';
-// import { HorizontalBarChart } from '@/components/charts/HorizontalBarChart';
-// import { ChartLegend } from '@/components/charts/ChartLegend';
-// import { CHART_ROLE_COLORS, statusChartColor } from '@/lib/chart-colors';
 import { CardSkeleton } from '@/components/ui/Skeleton';
-
-// Графики временно отключены
-// const ROLE_NAMES: Record<string, string> = {
-//   tenant: 'Арендаторы',
-//   security: 'Ресепшн',
-//   bc_admin: 'Админы БЦ',
-//   admin: 'Супер-админы',
-// };
 
 export default function AdminDashboardPage() {
   const config = useConfig();
@@ -66,32 +53,6 @@ export default function AdminDashboardPage() {
     }
   };
 
-  // Графики временно отключены
-  // const passChartData = useMemo(() => {
-  //   if (!data) return [];
-  //   return Object.entries(data.stats.passes.byStatus).map(([status, count]) => ({
-  //     key: status,
-  //     label: getStatusLabel(status as PassStatus, labels),
-  //     value: count,
-  //     colorKey: status,
-  //   }));
-  // }, [data, labels]);
-  //
-  // const roleChartData = useMemo(() => {
-  //   if (!data) return [];
-  //   return Object.entries(data.stats.users.byRole).map(([role, count], i) => ({
-  //     key: role,
-  //     label: ROLE_NAMES[role] || role,
-  //     value: count,
-  //     color: CHART_ROLE_COLORS[i % CHART_ROLE_COLORS.length],
-  //   }));
-  // }, [data]);
-  //
-  // const passLegend = passChartData.map((d) => ({
-  //   ...d,
-  //   color: statusChartColor(d.colorKey as PassStatus),
-  // }));
-
   if (error) {
     return (
       <AdminLayout title="Обзор БЦ">
@@ -107,12 +68,6 @@ export default function AdminDashboardPage() {
           <CardSkeleton lines={2} />
           <CardSkeleton lines={2} />
         </div>
-        {/* Графики временно отключены
-        <div className="grid lg:grid-cols-2 gap-6">
-          <CardSkeleton lines={5} />
-          <CardSkeleton lines={5} />
-        </div>
-        */}
       </AdminLayout>
     );
   }
@@ -144,6 +99,29 @@ export default function AdminDashboardPage() {
         </Link>
       </div>
 
+      {(stats.registrationPending ?? 0) > 0 && (
+        <Link
+          href="/admin/users?category=tenants&highlight=registration"
+          className="card p-4 mb-6 flex flex-col sm:flex-row sm:items-center gap-3 border-2 border-[var(--status-pending-border)] bg-[var(--status-pending-soft)] hover:brightness-[0.98] transition"
+        >
+          <div className="flex items-center gap-3 min-w-0 flex-1">
+            <AlertCircle className="w-8 h-8 text-[var(--status-pending)] shrink-0" />
+            <div className="min-w-0">
+              <div className="font-semibold text-[var(--text)]">
+                Новые заявки на регистрацию: {stats.registrationPending}
+              </div>
+              <p className="text-sm text-[var(--muted)] mt-0.5">
+                Подтвердите или отклоните арендаторов — доступ пока закрыт
+              </p>
+            </div>
+          </div>
+          <span className="btn btn-primary text-sm shrink-0 self-start sm:self-center">
+            <Clock className="w-4 h-4" />
+            Открыть заявки
+          </span>
+        </Link>
+      )}
+
       <div className="grid grid-cols-2 lg:grid-cols-3 gap-4 mb-8">
         <div className="card p-4 stat-card">
           <Users className="w-5 h-5 text-[var(--primary)] mb-2" />
@@ -161,25 +139,6 @@ export default function AdminDashboardPage() {
           <div className="text-sm text-[var(--muted)]">Бизнес-центров</div>
         </div>
       </div>
-
-      {/* Графики временно отключены
-      <div className="grid lg:grid-cols-2 gap-6 mb-6">
-        <div className="card p-5">
-          <h2 className="font-semibold mb-1">Пользователи по ролям</h2>
-          <p className="text-xs text-[var(--muted)] mb-4">Распределение учётных записей</p>
-          <HorizontalBarChart data={roleChartData} />
-        </div>
-
-        <div className="card p-5">
-          <h2 className="font-semibold mb-1">Пропуска по статусам</h2>
-          <p className="text-xs text-[var(--muted)] mb-2">
-            Сегодня {stats.passes.today} · за неделю {stats.passes.week}
-          </p>
-          <StatusDonutChart data={passChartData} height={180} innerRadius={48} />
-          <ChartLegend items={passLegend} />
-        </div>
-      </div>
-      */}
 
       <div className="card p-5">
         <div className="flex items-center justify-between mb-4">

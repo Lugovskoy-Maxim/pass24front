@@ -31,6 +31,7 @@ import {
   getPassStatusStripeClass,
 } from '@/lib/pass-status';
 import { passShowsVisitTimeline } from '@/lib/pass-checkout';
+import { formatVisitDateLabel, formatVisitTimeWindow } from '@/lib/local-date';
 import { PassVisitTimeline } from './PassVisitTimeline';
 import { OverdueBadge, StatusBadge } from './StatusBadge';
 
@@ -102,9 +103,8 @@ export function PassCardBase({
   const labels = labelsProp || mergeUiLabels();
   const isCompact = variant === 'compact';
   const Icon = TYPE_ICONS[pass.passType as PassType] || User;
-  const visitWindow = pass.visitTimeFrom
-    ? `${pass.visitTimeFrom}${pass.visitTimeTo ? ` – ${pass.visitTimeTo}` : ''}`
-    : null;
+  const visitDateLabel = formatVisitDateLabel(pass.visitDate);
+  const visitWindow = formatVisitTimeWindow(pass.visitTimeFrom, pass.visitTimeTo);
   const isTerminal = ['rejected', 'cancelled', 'expired', 'completed'].includes(pass.status);
   const overdueKind = getGuestOverdueKind(pass);
   const stillInside = overdueKind !== null;
@@ -250,10 +250,13 @@ export function PassCardBase({
 
       <div className={`border-t border-[var(--border)] bg-[var(--surface-muted)] ${isCompact ? 'px-3 py-2' : 'px-4 py-3'}`}>
         <div className={`pass-card__chips ${isCompact ? 'text-xs' : 'text-sm'}`}>
-          <span className="pass-card__chip text-[var(--text)]" title={`${pass.visitDate}${visitWindow ? ` · ${visitWindow}` : ''}`}>
+          <span
+            className="pass-card__chip text-[var(--text)]"
+            title={`${pass.visitDate}${visitWindow ? ` · ${visitWindow}` : ''}`}
+          >
             <Clock className="w-3.5 h-3.5 text-[var(--muted)] shrink-0" />
-            {pass.visitDate}
-            {visitWindow && <span className="text-[var(--muted)]">· {visitWindow}</span>}
+            <span className="pass-card__visit-date font-semibold">{visitDateLabel}</span>
+            {visitWindow && <span className="text-[var(--muted)] font-normal">· {visitWindow}</span>}
           </span>
 
           {pass.visitorPhone && (

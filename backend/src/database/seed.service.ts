@@ -5,7 +5,7 @@ import * as bcrypt from 'bcryptjs';
 import { Connection, Model } from 'mongoose';
 import { AUTH_CONNECTION } from './auth-database.constants';
 import { User, UserDocument } from '../schemas';
-import { UserRole } from '../schemas/enums';
+
 import { TestDataSeedService } from './test-data-seed.service';
 
 /**
@@ -55,7 +55,7 @@ export class SeedService implements OnModuleInit {
     const username = this.configService.get<string>('ADMIN_USERNAME', 'admin').toLowerCase();
     const password = this.configService.get<string>('ADMIN_PASSWORD', '01.03.1986');
     const fullName = this.configService.get<string>('ADMIN_FULL_NAME', 'Админ');
-    const role = this.configService.get<string>('ADMIN_ROLE', UserRole.ADMIN);
+    const role = this.configService.get<string>('ADMIN_ROLE', 'admin');
     const legacyEmail = this.configService.get<string>('ADMIN_EMAIL', '')?.trim().toLowerCase();
 
     const existing = await this.userModel.findOne({

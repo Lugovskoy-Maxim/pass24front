@@ -35,6 +35,7 @@ import { useAuth } from '@/lib/auth';
 import { canViewAllPasses, canUseReception, hasPermission } from '@/lib/permissions';
 import { buildHistoryHref, formatVisitCount } from '@/lib/visit-history';
 import { passShowsVisitTimeline } from '@/lib/pass-checkout';
+import { formatVisitDateLabel, formatVisitTimeWindow } from '@/lib/local-date';
 import { PassVisitTimeline } from './PassVisitTimeline';
 import { PassVisitorDataForm } from './PassVisitorDataForm';
 import { StatusBadge } from './StatusBadge';
@@ -152,9 +153,8 @@ export function PassDetailPanel({
   const overdueKind = getGuestOverdueKind(pass);
   const stillInside = overdueKind !== null;
   const isTerminal = ['rejected', 'cancelled', 'expired', 'completed'].includes(pass.status);
-  const visitWindow = pass.visitTimeFrom
-    ? `${pass.visitTimeFrom}${pass.visitTimeTo ? ` – ${pass.visitTimeTo}` : ''}`
-    : null;
+  const visitDateLabel = formatVisitDateLabel(pass.visitDate);
+  const visitWindow = formatVisitTimeWindow(pass.visitTimeFrom, pass.visitTimeTo);
   const passport = formatPassport(pass);
 
   const canSeeHistory = canViewAllPasses(user) || canUseReception(user) || hasPermission(user, 'admin.panel');
@@ -338,10 +338,13 @@ export function PassDetailPanel({
                   {officeLabel}
                 </span>
               )}
-              <span className="pass-detail__chip" title={`${pass.visitDate}${visitWindow ? ` · ${visitWindow}` : ''}`}>
+              <span
+                className="pass-detail__chip"
+                title={`${pass.visitDate}${visitWindow ? ` · ${visitWindow}` : ''}`}
+              >
                 <Calendar className="w-3.5 h-3.5 text-[var(--muted)] shrink-0" />
-                {pass.visitDate}
-                {visitWindow && <span className="text-[var(--muted)]"> · {visitWindow}</span>}
+                <span className="font-semibold">{visitDateLabel}</span>
+                {visitWindow && <span className="text-[var(--muted)] font-normal"> · {visitWindow}</span>}
               </span>
               <Link
                 href={`/ticket/${encodeURIComponent(pass.passNumber)}`}

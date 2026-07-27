@@ -1,6 +1,7 @@
 'use client';
 
-import { useEffect, useState, useCallback, FormEvent, Fragment } from 'react';
+import { Suspense, useEffect, useState, useCallback, FormEvent, Fragment } from 'react';
+import { useSearchParams } from 'next/navigation';
 import { Plus, Search, Pencil, Link2, X, Users, Building2, UserCog, Check, Clock, Trash2, ChevronDown, ChevronRight, User } from 'lucide-react';
 import { AdminLayout } from '@/components/AdminLayout';
 import { api, AdminUser, BusinessCenter, CreateUserData, Office, ProfileChangeRequest, ROLE_LABELS, UserCategory, UserFilters, UserRole, formatTenantOffices, getErrorMessage, getRoleLabel } from '@/lib/api';
@@ -29,10 +30,13 @@ const EMPTY_FILTERS: Omit<UserFilters, 'category'> = {
   role: '',
 };
 
-export default function AdminUsersPage() {
+function AdminUsersPageContent() {
   const { toast } = useToast();
+  const searchParams = useSearchParams();
   const ph = getUiLabels(useConfig()).placeholders;
-  const [category, setCategory] = useState<UserCategory>('tenants');
+  const [category, setCategory] = useState<UserCategory>(() =>
+    searchParams.get('category') === 'staff' ? 'staff' : 'tenants',
+  );
   const [profileRequests, setProfileRequests] = useState<Array<{ user: AdminUser; request: ProfileChangeRequest }>>([]);
   const [registrationRequests, setRegistrationRequests] = useState<AdminUser[]>([]);
   const [moderatingId, setModeratingId] = useState<string | null>(null);
@@ -133,6 +137,17 @@ export default function AdminUsersPage() {
       setRegistrationRequests([]);
     }
   }, [category]);
+
+  // из письма / меню: ?highlight=registration
+  useEffect(() => {
+    if (searchParams.get('highlight') !== 'registration') return;
+    setCategory('tenants');
+    if (!registrationRequests.length) return;
+    const t = window.setTimeout(() => {
+      document.getElementById('registration-requests')?.scrollIntoView({ behavior: 'smooth', block: 'start' });
+    }, 200);
+    return () => window.clearTimeout(t);
+  }, [searchParams, registrationRequests.length]);
 
   const handleApproveRegistration = async (id: string) => {
     setModeratingId(id);
@@ -546,12 +561,18 @@ export default function AdminUsersPage() {
       </div>
 
       {category === 'tenants' && registrationRequests.length > 0 && (
-        <div className="card p-5 mb-6 border theme-alert-subtle space-y-3">
-          <div className="flex items-center gap-2 font-semibold text-amber-900">
+        <div
+          id="registration-requests"
+          className="card p-5 mb-6 border-2 border-[var(--status-pending-border)] theme-alert-subtle space-y-3 scroll-mt-24 shadow-[0_0_0_3px_var(--status-pending-soft)]"
+        >
+          <div className="flex items-center gap-2 font-semibold text-amber-900 dark:text-amber-200">
             <Clock className="w-4 h-4" />
             Заявки на регистрацию ({registrationRequests.length})
+            <span className="text-[10px] uppercase tracking-wide font-bold px-1.5 py-0.5 rounded-[var(--radius-sm)] bg-[var(--status-pending)] text-[var(--status-badge-on)]">
+              нужно действие
+            </span>
           </div>
-          <p className="text-sm text-amber-900/80">
+          <p className="text-sm text-amber-900/80 dark:text-amber-100/80">
             После подтверждения назначьте офис арендатору в карточке пользователя.
           </p>
           {registrationRequests.map((u) => (
@@ -1044,5 +1065,18 @@ export default function AdminUsersPage() {
         </div>
       </div>
     </AdminLayout>
+  );
+}
+export default function AdminUsersPage() {
+  return (
+    <Suspense
+      fallback={(
+        <AdminLayout title="Пользователи">
+          <div className="animate-pulse text-[var(--muted)]">Загрузка...</div>
+        </AdminLayout>
+      )}
+    >
+      <AdminUsersPageContent />
+    </Suspense>
   );
 }

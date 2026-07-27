@@ -22,10 +22,6 @@ import { getGuestOverdueKind, getUiLabels } from '@/lib/ui-labels';
 import { isAwaitingEntry } from '@/lib/pass-entry';
 import { passRequiresCheckout } from '@/lib/pass-checkout';
 import { getAccentStatClass, getSectionHeadingClass } from '@/lib/pass-status';
-// Графики временно отключены
-// import { StatusDonutChart } from '@/components/charts/StatusDonutChart';
-// import { ChartLegend } from '@/components/charts/ChartLegend';
-// import { statusChartColor } from '@/lib/chart-colors';
 import { ListSkeleton } from '@/components/ui/Skeleton';
 import { EmptyState } from '@/components/ui/EmptyState';
 function ControlPageContent() {
@@ -349,18 +345,6 @@ function ControlPageContent() {
     ? passesByStatus('active').length
     : stats.active;
 
-  // Графики временно отключены
-  // const journalChartData = [
-  //   { key: 'pending', label: labels.reception.statPending, value: stats.pending, colorKey: 'pending' },
-  //   { key: 'approved', label: labels.reception.statApproved, value: stats.approved, colorKey: 'approved' },
-  //   { key: 'active', label: labels.reception.statActive, value: activeInBuildingCount, colorKey: 'active' },
-  //   { key: 'completed', label: labels.reception.statCompleted, value: stats.completed, colorKey: 'completed' },
-  // ];
-  // const journalLegend = journalChartData.map((d) => ({
-  //   ...d,
-  //   color: statusChartColor(d.colorKey as PassStatus),
-  // }));
-
   const statCards: {
     key: Pass['status'] | 'total' | 'overdue';
     label: string;
@@ -495,19 +479,6 @@ function ControlPageContent() {
           </div>
         )}
       </div>
-
-      {/* Графики временно отключены
-      {stats.total > 0 && (
-        <div className="card p-4 mb-6 grid sm:grid-cols-[minmax(0,1fr)_minmax(0,1.2fr)] gap-4 items-center">
-          <div>
-            <h2 className="text-sm font-semibold mb-1">Журнал на {new Date(date + 'T12:00:00').toLocaleDateString('ru-RU', { day: 'numeric', month: 'long' })}</h2>
-            <p className="text-xs text-[var(--muted)]">Распределение пропусков по статусам</p>
-            <ChartLegend items={journalLegend} />
-          </div>
-          <StatusDonutChart data={journalChartData} height={160} innerRadius={40} />
-        </div>
-      )}
-      */}
 
       {loadError && (
         <PageError

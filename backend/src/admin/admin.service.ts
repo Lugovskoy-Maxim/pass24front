@@ -83,6 +83,10 @@ export class AdminService {
 
     const recentActivity = await this.auditService.getRecent(10);
 
+    const registrationPending = users.filter(
+      (u) => u.role === 'tenant' && u.isActive === false && !u.parentTenantId && !u.invitePending,
+    ).length;
+
     return {
       stats: {
         users: {
@@ -96,6 +100,7 @@ export class AdminService {
           byStatus: this.countBy(passes, 'status'),
         },
         businessCenters: properties.length,
+        registrationPending,
       },
       recentActivity,
       businessCenterNames: properties.map((p) => p.name),
@@ -342,11 +347,17 @@ export class AdminService {
 
   async getRegistrationRequests() {
     const users = await this.userModel
-      .find({ role: 'tenant', isActive: false })
+      .find({
+        role: 'tenant',
+        isActive: false,
+        parentTenantId: { $exists: false },
+        invitePending: { $ne: true },
+      })
       .sort({ createdAt: -1 })
       .lean();
 
     return {
+      count: users.length,
       requests: users.map((user) => this.mapUser(user, 0, [], [])),
     };
   }

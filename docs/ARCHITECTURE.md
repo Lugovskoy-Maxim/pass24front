@@ -75,20 +75,24 @@
 
 Permissions задаются в `access.constants.ts` и могут переопределяться в админке («Права и типы пропусков»).
 
-### Арендатор и сотрудники
+### Арендатор, офисы и сотрудники
 
-- `parentTenantId` отсутствует → **владелец** компании.
-- `parentTenantId` = `_id` владельца → **сотрудник**.
-- Офисы привязаны к `tenantId` владельца.
-- Список пропусков компании: все `createdBy` в команде владельца (owner + employees).  
-  Реализация: `PassesService.getTenantTeamIds` + `buildAccessFilter`.
-- **Приглашение сотрудника (без пароля от owner):**
-  1. Owner POST `/auth/tenant/employees` (ФИО + email) → user `invitePending=true`, `isActive=false`
-  2. Email со ссылкой `/invite/{token}` (TTL **72 ч**, SHA-256 hash в `inviteTokenHash`)
-  3. Сотрудник POST `/auth/invite/accept` → пароль, `isActive=true`, invite сброшен
-  4. Resend: POST `/auth/tenant/employees/:id/resend-invite` (не чаще 1/5 мин)
-- Владелец: включает/отключает (после активации) / удаляет (`PATCH`/`DELETE`).
-- При удалении сотрудника его пропуска переназначаются владельцу.
+```
+properties (БЦ)
+  └── offices → tenantId = owner (users в pass24_auth)
+сотрудник: parentTenantId → owner
+охрана: properties[] = БЦ
+```
+
+- нет `parentTenantId` → владелец (`tenant`)
+- есть `parentTenantId` → сотрудник
+- офисы висят на владельце, не на сотрудниках
+- `users.office` / `floor` — копия из offices, просто чтобы показывать
+- пропуска компании = всё, что создала команда (owner + employees)
+- invite: owner создаёт → письмо 72ч → accept с паролем
+- удалили сотрудника → его пропуска переезжают на owner
+
+Поля для синка: `docs/SYNC_USERS_OFFICES.md`.
 
 ## Жизненный цикл пропуска
 
@@ -156,7 +160,7 @@ create → approved → (check-in) active / in building → checked out / comple
 | Новая роль сотрудника | Админка «Права» (не system role) |
 | Новый тип пропуска | `ALL_PASS_TYPES` + labels + forms frontend |
 | Новый канал уведомлений | Сервис рядом с `mail`/`sms`, вызов из auth/passes |
-| Интеграция Bitrix | Поля `bitrix24*` на User, auth DB уже отдельная |
+| Внешняя синхронизация | Identity в `pass24_auth`, офисы/БЦ в `pass24`; см. `docs/SYNC_USERS_OFFICES.md` |
 
 ## Диаграмма ролей (упрощённо)
 

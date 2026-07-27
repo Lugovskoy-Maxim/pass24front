@@ -291,6 +291,89 @@ export class MailService {
     }
   }
 
+  /**
+   * Уведомление админам: новая заявка арендатора.
+   * Не бросает наружу при ошибке SMTP — вызывающий логирует.
+   */
+  async sendRegistrationAdminAlert(params: {
+    to: string | string[];
+    fullName: string;
+    company: string;
+    email?: string;
+    phone?: string;
+    adminUsersUrl: string;
+  }) {
+    if (!this.transporter) {
+      this.logger.warn('SMTP not configured — registration admin alert skipped');
+      return { sent: false };
+    }
+
+    const recipients = (Array.isArray(params.to) ? params.to : [params.to])
+      .map((e) => e.trim().toLowerCase())
+      .filter(Boolean);
+    if (!recipients.length) return { sent: false };
+
+    const from = this.getPassFromAddress();
+    const who = params.fullName || '—';
+    const company = params.company || '—';
+    const contact = [params.email, params.phone].filter(Boolean).join(' · ') || '—';
+
+    const html = `
+      <div style="font-family:Inter,Arial,sans-serif;max-width:520px;margin:0 auto;color:#0f172a">
+        <div style="background:#b45309;color:#fff;padding:16px 20px;border-radius:12px 12px 0 0">
+          <div style="font-size:12px;opacity:.9;text-transform:uppercase;letter-spacing:.06em">Требуется действие</div>
+          <div style="font-size:18px;font-weight:700;margin-top:4px">Новая заявка на регистрацию</div>
+        </div>
+        <div style="border:1px solid #e2e8f0;border-top:0;padding:20px;border-radius:0 0 12px 12px;background:#fff">
+          <p style="margin:0 0 16px;line-height:1.5">
+            Арендатор подал заявку на доступ к системе пропусков. Подтвердите или отклоните в админке.
+          </p>
+          <table style="width:100%;font-size:14px;border-collapse:collapse;margin-bottom:20px">
+            <tr><td style="color:#64748b;padding:6px 0">Компания</td><td style="text-align:right;font-weight:600;padding:6px 0">${company}</td></tr>
+            <tr><td style="color:#64748b;padding:6px 0">ФИО</td><td style="text-align:right;padding:6px 0">${who}</td></tr>
+            <tr><td style="color:#64748b;padding:6px 0">Контакты</td><td style="text-align:right;padding:6px 0">${contact}</td></tr>
+          </table>
+          <div style="text-align:center">
+            <a href="${params.adminUsersUrl}"
+               style="display:inline-block;background:#eb711c;color:#fff;text-decoration:none;padding:12px 24px;border-radius:8px;font-weight:600">
+              Открыть заявки
+            </a>
+          </div>
+        </div>
+      </div>
+    `;
+
+    const text = [
+      'НОВАЯ ЗАЯВКА НА РЕГИСТРАЦИЮ',
+      '',
+      `Компания: ${company}`,
+      `ФИО: ${who}`,
+      `Контакты: ${contact}`,
+      '',
+      `Открыть: ${params.adminUsersUrl}`,
+    ].join('\n');
+
+    try {
+      await this.transporter.sendMail({
+        from,
+        to: recipients.join(', '),
+        subject: `⚠ Заявка на регистрацию: ${company}`,
+        text,
+        html,
+        headers: {
+          'X-Priority': '1',
+          Importance: 'high',
+        },
+      });
+      this.logger.log(`Registration admin alert sent to ${recipients.join(', ')}`);
+      return { sent: true, to: recipients };
+    } catch (err) {
+      const message = err instanceof Error ? err.message : 'SMTP error';
+      this.logger.error(`Registration admin alert failed: ${message}`);
+      return { sent: false };
+    }
+  }
+
   /** Origin фронта для ссылок в письмах (без trailing slash). */
   getPublicAppOrigin(): string {
     return (this.configService.get<string>('PUBLIC_APP_URL') || 'https://pass.mstyle.ru')

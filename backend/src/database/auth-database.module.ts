@@ -1,19 +1,11 @@
-/**
- * Подключение к identity-базе (`pass24_auth`).
- *
- * Здесь живут: User, RegistrationPending (и поля для будущей Bitrix-интеграции).
- * Не смешивайте с операционными моделями (Pass, Office) — они на default connection.
- *
- * Использование:
- *   @InjectModel(User.name, AUTH_CONNECTION)
- *   AuthDatabaseModule.forFeature([{ name: User.name, schema: UserSchema }])
- */
+// auth-база (pass24_auth): users, registration_pending
+// офисы/пропуска живут в pass24
 import { DynamicModule, Module } from '@nestjs/common';
 import { ConfigModule, ConfigService } from '@nestjs/config';
 import { MongooseModule } from '@nestjs/mongoose';
 import { AUTH_CONNECTION } from './auth-database.constants';
 
-/** Если MONGODB_AUTH_URI не задан — та же host, БД `pass24_auth`. */
+// если MONGODB_AUTH_URI нет — та же хост, БД pass24_auth
 function resolveAuthUri(configService: ConfigService): string {
   const explicit = configService.get<string>('MONGODB_AUTH_URI');
   if (explicit) return explicit;

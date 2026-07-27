@@ -8,10 +8,10 @@
  * FAQ/guide: шаги и абзацы в форме — multiline text → textToLines при submit.
  * registration* поля PATCH только role=admin (бэкенд вырезает для bc_admin).
  */
-import { ChangeEvent, FormEvent, useEffect, useState } from 'react';
+import { ChangeEvent, FormEvent, useEffect, useMemo, useState } from 'react';
 import {
-  ArrowDown, ArrowUp, BookOpen, CircleHelp, Globe, ImageIcon, Mail, MessageSquare, Palette, Phone,
-  Plus, RotateCcw, Trash2, Type, Upload,
+  ArrowDown, ArrowUp, Bell, BookOpen, CircleHelp, Globe, ImageIcon, Mail, MessageSquare, Palette, Phone,
+  Plus, RotateCcw, Trash2, Type, Upload, X,
 } from 'lucide-react';
 import { useAuth } from '@/lib/auth';
 import { AdminLayout } from '@/components/AdminLayout';
@@ -20,7 +20,7 @@ import { SiteBrand } from '@/components/SiteBrand';
 import { SelectWrap } from '@/components/FormField';
 import { UiLabelsEditor } from '@/components/UiLabelsEditor';
 import { useToast } from '@/components/Toast';
-import { api, FaqItem, HelpGuideSection, SiteSettings, getErrorMessage } from '@/lib/api';
+import { api, AdminUser, FaqItem, HelpGuideSection, SiteSettings, getErrorMessage, getRoleLabel } from '@/lib/api';
 import { PageError } from '@/components/PageError';
 import { invalidateConfigCache } from '@/hooks/useConfig';
 import { MSTYLE_BRAND_DEFAULTS, resolveBrand } from '@/lib/brand-defaults';
@@ -110,6 +110,12 @@ function normalizeSettings(s: SiteSettings): SiteSettings {
     blockedEmailDomains: resolveBlockedEmailDomains(
       Array.isArray(s.blockedEmailDomains) ? s.blockedEmailDomains : undefined,
     ),
+    registrationNotifyEmails: Array.isArray(s.registrationNotifyEmails)
+      ? s.registrationNotifyEmails.map(String)
+      : [],
+    registrationNotifyUserIds: Array.isArray(s.registrationNotifyUserIds)
+      ? s.registrationNotifyUserIds.map(String)
+      : [],
     faqItems: resolveFaqItems(s.faqItems).map((item) => ({ ...item })),
     helpGuideSections: resolveGuideSections(s.helpGuideSections).map((item) => ({
       ...item,
@@ -130,6 +136,8 @@ export default function AdminSiteSettingsPage() {
   const [labels, setLabels] = useState<UiLabels>(mergeUiLabels());
   const [saving, setSaving] = useState(false);
   const [tab, setTab] = useState<Tab>('brand');
+  const [staffUsers, setStaffUsers] = useState<AdminUser[]>([]);
+  const [manualEmailInput, setManualEmailInput] = useState('');
 
   const load = () => {
     setLoadError('');
@@ -150,6 +158,49 @@ export default function AdminSiteSettingsPage() {
   useEffect(() => {
     load();
   }, []);
+
+  useEffect(() => {
+    if (!isSuperAdmin || tab !== 'registration') return;
+    api.admin.getUsers({ category: 'staff' })
+      .then(({ users }) => setStaffUsers(users.filter((u) => !!u.email)))
+      .catch(() => setStaffUsers([]));
+  }, [isSuperAdmin, tab]);
+
+  const staffWithEmail = useMemo(
+    () => staffUsers.filter((u) => u.email && ['admin', 'security', 'bc_admin'].includes(u.role)),
+    [staffUsers],
+  );
+
+  const toggleNotifyUser = (id: string) => {
+    if (!settings) return;
+    const cur = settings.registrationNotifyUserIds || [];
+    const next = cur.includes(id) ? cur.filter((x) => x !== id) : [...cur, id];
+    setSettings({ ...settings, registrationNotifyUserIds: next });
+  };
+
+  const addManualEmail = () => {
+    if (!settings) return;
+    const email = manualEmailInput.trim().toLowerCase();
+    if (!email || !email.includes('@')) {
+      toast('Укажите корректный email', 'error');
+      return;
+    }
+    const cur = settings.registrationNotifyEmails || [];
+    if (cur.includes(email)) {
+      setManualEmailInput('');
+      return;
+    }
+    setSettings({ ...settings, registrationNotifyEmails: [...cur, email] });
+    setManualEmailInput('');
+  };
+
+  const removeManualEmail = (email: string) => {
+    if (!settings) return;
+    setSettings({
+      ...settings,
+      registrationNotifyEmails: (settings.registrationNotifyEmails || []).filter((e) => e !== email),
+    });
+  };
 
   const handleIconUpload = (field: 'siteIconLight' | 'siteIconDark') => (e: ChangeEvent<HTMLInputElement>) => {
     const file = e.target.files?.[0];
@@ -1047,6 +1098,101 @@ export default function AdminSiteSettingsPage() {
               >
                 Восстановить стандартный список
               </button>
+            </div>
+
+            <div className="border-t border-[var(--border)] pt-5 space-y-4">
+              <div>
+                <h2 className="text-base font-semibold mb-1 flex items-center gap-2">
+                  <Bell className="w-4 h-4 text-[var(--primary)]" />
+                  Уведомления о новых заявках
+                </h2>
+                <p className="text-sm text-[var(--muted)]">
+                  Кому слать письмо, когда арендатор завершил регистрацию и ждёт одобрения.
+                  Можно отметить сотрудников и добавить email вручную.
+                </p>
+              </div>
+
+              <div>
+                <div className="label mb-2">Сотрудники (с email)</div>
+                {staffWithEmail.length === 0 ? (
+                  <p className="text-sm text-[var(--muted)]">Нет сотрудников с email в категории staff.</p>
+                ) : (
+                  <div className="space-y-1.5 max-h-48 overflow-y-auto rounded-md border border-[var(--border)] p-2">
+                    {staffWithEmail.map((u) => {
+                      const checked = (settings.registrationNotifyUserIds || []).includes(u.id);
+                      return (
+                        <label
+                          key={u.id}
+                          className="flex items-start gap-2.5 px-2 py-1.5 rounded hover:bg-[var(--surface-muted)] cursor-pointer"
+                        >
+                          <input
+                            type="checkbox"
+                            className="checkbox mt-0.5"
+                            checked={checked}
+                            onChange={() => toggleNotifyUser(u.id)}
+                          />
+                          <span className="min-w-0 text-sm">
+                            <span className="font-medium block truncate">{u.fullName || u.email}</span>
+                            <span className="text-xs text-[var(--muted)]">
+                              {u.email} · {getRoleLabel(u.role)}
+                            </span>
+                          </span>
+                        </label>
+                      );
+                    })}
+                  </div>
+                )}
+              </div>
+
+              <div>
+                <label className="label" htmlFor="registrationNotifyEmail">
+                  Дополнительные email
+                </label>
+                <div className="flex flex-col sm:flex-row gap-2">
+                  <input
+                    id="registrationNotifyEmail"
+                    className="input flex-1"
+                    type="email"
+                    value={manualEmailInput}
+                    onChange={(e) => setManualEmailInput(e.target.value)}
+                    onKeyDown={(e) => {
+                      if (e.key === 'Enter') {
+                        e.preventDefault();
+                        addManualEmail();
+                      }
+                    }}
+                    placeholder="admin@company.ru"
+                  />
+                  <button type="button" className="btn btn-secondary shrink-0" onClick={addManualEmail}>
+                    <Plus className="w-4 h-4" />
+                    Добавить
+                  </button>
+                </div>
+                {(settings.registrationNotifyEmails || []).length > 0 && (
+                  <div className="flex flex-wrap gap-1.5 mt-2">
+                    {(settings.registrationNotifyEmails || []).map((email) => (
+                      <span
+                        key={email}
+                        className="inline-flex items-center gap-1 text-xs px-2 py-1 rounded-[var(--radius-sm)] border border-[var(--border)] bg-[var(--surface-elevated)]"
+                      >
+                        <Mail className="w-3 h-3 text-[var(--muted)]" />
+                        {email}
+                        <button
+                          type="button"
+                          className="p-0.5 rounded text-[var(--muted)] hover:text-[var(--danger)]"
+                          onClick={() => removeManualEmail(email)}
+                          aria-label={`Удалить ${email}`}
+                        >
+                          <X className="w-3 h-3" />
+                        </button>
+                      </span>
+                    ))}
+                  </div>
+                )}
+                <p className="text-xs text-[var(--muted)] mt-1.5">
+                  Если списки пусты — письма о заявках не отправляются (заявки всё равно появятся в «Пользователи»).
+                </p>
+              </div>
             </div>
           </div>
         )}
