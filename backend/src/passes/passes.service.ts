@@ -832,7 +832,7 @@ export class PassesService implements OnModuleInit {
       if (query.propertyId && Types.ObjectId.isValid(query.propertyId)) {
         filter.property = new Types.ObjectId(query.propertyId);
       }
-      if (query.officeId && Types.ObjectId.isValid(query.officeId) && query.scope !== 'office') {
+      if (query.officeId && Types.ObjectId.isValid(query.officeId)) {
         filter.officeId = new Types.ObjectId(query.officeId);
       }
     }
