@@ -397,12 +397,12 @@ export default function ProfilePage() {
         <div className="card p-6 space-y-4 mb-6">
           {tenantCompanyUser && (
             <div className="flex items-center gap-4 pb-4 border-b border-[var(--border)]">
-              <div className="w-16 h-16 rounded-xl border border-[var(--border)] bg-[var(--surface-muted)] overflow-hidden flex items-center justify-center shrink-0">
+              <div className={`w-20 h-20 overflow-hidden flex items-center justify-center shrink-0 ${user.company_logo ? '' : 'rounded-xl border border-dashed border-[var(--border)] bg-[var(--surface-muted)]'}`}>
                 {user.company_logo ? (
                   // eslint-disable-next-line @next/next/no-img-element
-                  <img src={user.company_logo} alt={user.company || 'Логотип'} className="w-full h-full object-contain p-1" />
+                  <img src={user.company_logo} alt={user.company || 'Логотип'} className="w-full h-full object-contain" />
                 ) : (
-                  <Building2 className="w-7 h-7 text-[var(--muted)]" />
+                  <Building2 className="w-8 h-8 text-[var(--muted)]" />
                 )}
               </div>
               <div className="min-w-0 flex-1">

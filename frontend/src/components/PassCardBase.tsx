@@ -149,18 +149,20 @@ export function PassCardBase({
 
       <div className={`border-b border-[var(--border)] bg-gradient-surface ${isCompact ? 'px-3 pt-3 pb-2' : 'px-4 pt-4 pb-3'}`}>
         <div className="flex items-start gap-3 min-w-0">
-          <div className={`${getPassIconTileClass(pass.status, stillInside)} shadow-sm shrink-0 overflow-hidden ${isCompact ? 'w-10 h-10' : 'w-12 h-12'}`}>
-            {pass.companyLogo ? (
-              // eslint-disable-next-line @next/next/no-img-element
+          {pass.companyLogo ? (
+            <div className={`shrink-0 overflow-hidden ${isCompact ? 'w-12 h-12' : 'w-14 h-14'}`}>
+              {/* eslint-disable-next-line @next/next/no-img-element */}
               <img
                 src={pass.companyLogo}
                 alt={pass.companyName || 'Логотип'}
-                className="w-full h-full object-contain p-0.5"
+                className="w-full h-full object-contain"
               />
-            ) : (
+            </div>
+          ) : (
+            <div className={`${getPassIconTileClass(pass.status, stillInside)} shadow-sm shrink-0 ${isCompact ? 'w-10 h-10' : 'w-12 h-12'}`}>
               <Icon className={isCompact ? 'w-5 h-5' : 'w-6 h-6'} />
-            )}
-          </div>
+            </div>
+          )}
 
           <div className="pass-card__header-grid flex-1 min-w-0">
             <div className="pass-card__main min-w-0">

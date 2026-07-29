@@ -1706,6 +1706,22 @@ a.pass-detail__chip:hover,
   justify-content: center;
 }
 
+/* Логотип компании на билете — без рамки и фона, крупнее */
+.pass-ticket__avatar--logo {
+  width: 3.5rem;
+  height: 3.5rem;
+  border: none;
+  background: transparent;
+  border-radius: 0;
+  box-shadow: none;
+  color: inherit;
+}
+
+.pass-ticket--compact .pass-ticket__avatar--logo {
+  width: 3rem;
+  height: 3rem;
+}
+
 .pass-ticket--compact .pass-ticket__avatar-icon {
   width: 1.125rem;
   height: 1.125rem;

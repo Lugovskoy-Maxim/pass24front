@@ -19,7 +19,11 @@ export function VisitDatePicker({ value, bookableDates, onChange, invalid }: Vis
   }
 
   return (
-    <div className="grid grid-cols-2 gap-3 max-w-sm" role="radiogroup" aria-label="Дата визита">
+    <div
+      className="grid grid-cols-3 gap-2 w-full max-w-md"
+      role="radiogroup"
+      aria-label="Дата визита"
+    >
       {bookableDates.map((date) => {
         const chip = formatVisitDateChip(date);
         const selected = value === date;
@@ -32,16 +36,22 @@ export function VisitDatePicker({ value, bookableDates, onChange, invalid }: Vis
             aria-checked={selected}
             onClick={() => onChange(date)}
             className={[
-              'rounded-xl border p-4 text-left transition-colors',
+              'min-w-0 rounded-xl border px-2 py-2.5 sm:px-3 sm:py-3 text-center transition-colors',
               selected
                 ? 'border-[var(--status-approved-border)] bg-[var(--status-approved-soft)]'
                 : 'border-[var(--border)] bg-[var(--surface)] hover:bg-[var(--surface-muted)]',
               invalid && !selected ? 'border-[var(--status-rejected-border)]' : '',
             ].filter(Boolean).join(' ')}
           >
-            <div className="text-[11px] uppercase tracking-wide text-[var(--muted)]">{chip.month}</div>
-            <div className="text-3xl font-semibold leading-none mt-1 tabular-nums">{chip.day}</div>
-            <div className="text-sm text-[var(--muted)] mt-2 uppercase">{chip.weekday}</div>
+            <div className="text-[10px] sm:text-[11px] uppercase tracking-wide text-[var(--muted)] truncate">
+              {chip.month}
+            </div>
+            <div className="text-2xl sm:text-3xl font-semibold leading-none mt-1 tabular-nums">
+              {chip.day}
+            </div>
+            <div className="text-xs sm:text-sm text-[var(--muted)] mt-1.5 uppercase truncate">
+              {chip.weekday}
+            </div>
           </button>
         );
       })}

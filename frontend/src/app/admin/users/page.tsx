@@ -732,10 +732,10 @@ function AdminUsersPageContent() {
                     <img
                       src={form.companyLogo}
                       alt="Логотип"
-                      className="w-12 h-12 rounded-lg border border-[var(--border)] object-contain bg-[var(--surface)] p-0.5"
+                      className="w-16 h-16 object-contain"
                     />
                   ) : (
-                    <div className="w-12 h-12 rounded-lg border border-dashed border-[var(--border)] bg-[var(--surface-muted)] flex items-center justify-center text-[10px] text-[var(--muted)]">
+                    <div className="w-16 h-16 rounded-lg border border-dashed border-[var(--border)] bg-[var(--surface-muted)] flex items-center justify-center text-[10px] text-[var(--muted)]">
                       нет
                     </div>
                   )}

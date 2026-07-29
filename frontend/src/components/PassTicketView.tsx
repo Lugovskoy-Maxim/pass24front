@@ -92,18 +92,20 @@ export function PassTicketView({
         </header>
 
         <section className="pass-ticket__guest text-center border-b border-[var(--border)]">
-          <div className={`pass-ticket__avatar mx-auto rounded-full overflow-hidden ${getPassIconTileClass(ticket.status)}`}>
-            {companyLogo ? (
-              // eslint-disable-next-line @next/next/no-img-element
+          {companyLogo ? (
+            <div className="pass-ticket__avatar pass-ticket__avatar--logo mx-auto overflow-hidden">
+              {/* eslint-disable-next-line @next/next/no-img-element */}
               <img
                 src={companyLogo}
                 alt={ticket.companyName || 'Логотип компании'}
-                className="w-full h-full object-contain p-1"
+                className="w-full h-full object-contain"
               />
-            ) : (
+            </div>
+          ) : (
+            <div className={`pass-ticket__avatar mx-auto rounded-full overflow-hidden ${getPassIconTileClass(ticket.status)}`}>
               <User className="pass-ticket__avatar-icon" />
-            )}
-          </div>
+            </div>
+          )}
           <h1 className="pass-ticket__name font-bold leading-snug break-words max-w-full" title={ticket.visitorName}>
             {ticket.visitorName}
           </h1>
