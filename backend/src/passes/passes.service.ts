@@ -880,8 +880,17 @@ export class PassesService implements OnModuleInit {
     const pass = await this.passModel.findOne({ passNumber }).lean();
     if (!pass) throw new NotFoundException('Пропуск не найден');
     const [withCheckout] = await this.enrichPassCheckoutSettings([pass]);
-    const businessCenterName = await this.resolveBusinessCenterName(pass);
-    return { ticket: { ...this.mapToPublicTicket(withCheckout), businessCenterName } };
+    const bc = await this.resolveBusinessCenterInfo(pass);
+    const companyLogo = await this.resolveCompanyLogo(pass);
+    return {
+      ticket: {
+        ...this.mapToPublicTicket(withCheckout),
+        businessCenterName: bc.name,
+        businessCenterAddress: bc.address,
+        routeMapsProvider: bc.routeMapsProvider,
+        companyLogo,
+      },
+    };
   }
 
   async getOverdueActive(user?: any, options?: { allProperties?: boolean }) {
@@ -1062,18 +1071,47 @@ export class PassesService implements OnModuleInit {
   }
 
   private async resolveBusinessCenterName(doc: any): Promise<string | undefined> {
-    if (doc.businessCenterName) return doc.businessCenterName;
+    const info = await this.resolveBusinessCenterInfo(doc);
+    return info.name;
+  }
+
+  private async resolveBusinessCenterInfo(doc: any): Promise<{
+    name?: string;
+    address?: string;
+    routeMapsProvider: 'yandex' | 'google';
+  }> {
+    const fromProperty = (property?: { name?: string; address?: string; settings?: Record<string, any> } | null) => {
+      if (!property) return null;
+      const maps = String(property.settings?.route_maps_provider || 'yandex').toLowerCase();
+      return {
+        name: property.name,
+        address: property.address || undefined,
+        routeMapsProvider: (maps === 'google' ? 'google' : 'yandex') as 'yandex' | 'google',
+      };
+    };
 
     if (doc.property) {
       const property = await this.propertyModel.findById(doc.property).lean();
-      if (property?.name) return property.name;
+      const info = fromProperty(property);
+      if (info?.name) {
+        return {
+          ...info,
+          name: doc.businessCenterName || info.name,
+        };
+      }
     }
 
     if (doc.officeId) {
       const office = await this.officeModel.findById(doc.officeId).lean();
       if (office?.property) {
         const property = await this.propertyModel.findById(office.property).lean();
-        if (property?.name) return property.name;
+        const info = fromProperty(property);
+        if (info?.name) {
+          return {
+            ...info,
+            name: doc.businessCenterName || info.name,
+          };
+        }
       }
     }
 
@@ -1081,12 +1119,46 @@ export class PassesService implements OnModuleInit {
       const office = await this.officeModel.findOne({ number: String(doc.office), isActive: true }).lean();
       if (office?.property) {
         const property = await this.propertyModel.findById(office.property).lean();
-        if (property?.name) return property.name;
+        const info = fromProperty(property);
+        if (info?.name) {
+          return {
+            ...info,
+            name: doc.businessCenterName || info.name,
+          };
+        }
       }
     }
 
+    if (doc.businessCenterName) {
+      const byName = await this.propertyModel
+        .findOne({ type: PropertyType.BUSINESS_CENTER, name: doc.businessCenterName, isActive: true })
+        .lean();
+      const info = fromProperty(byName);
+      if (info) return info;
+      return { name: doc.businessCenterName, routeMapsProvider: 'yandex' };
+    }
+
     const defaultProperty = await this.getDefaultBusinessCenter();
-    return defaultProperty?.name;
+    return fromProperty(defaultProperty) || { routeMapsProvider: 'yandex' };
+  }
+
+  /** Логотип компании, которая заказала пропуск (owner / creator). */
+  private async resolveCompanyLogo(doc: any): Promise<string | undefined> {
+    if (!doc.createdBy) return undefined;
+    const creator = await this.userModel
+      .findById(doc.createdBy)
+      .select('companyLogo parentTenantId')
+      .lean();
+    if (!creator) return undefined;
+    if (creator.companyLogo) return creator.companyLogo;
+    if (creator.parentTenantId) {
+      const owner = await this.userModel
+        .findById(creator.parentTenantId)
+        .select('companyLogo')
+        .lean();
+      return owner?.companyLogo || undefined;
+    }
+    return undefined;
   }
 
   /** Проверка доступа к одному pass (детали, смена статуса, email). */
@@ -1123,6 +1195,7 @@ export class PassesService implements OnModuleInit {
       passNumber: doc.passNumber,
       visitorName: doc.visitorName,
       companyName: doc.companyName,
+      companyLogo: doc.companyLogo,
       visitPurpose: doc.visitPurpose,
       passType: doc.passType,
       vehiclePlate: doc.vehiclePlate,
@@ -1130,6 +1203,8 @@ export class PassesService implements OnModuleInit {
       visitTimeFrom: doc.visitTimeFrom,
       visitTimeTo: doc.visitTimeTo,
       businessCenterName: doc.businessCenterName,
+      businessCenterAddress: doc.businessCenterAddress,
+      routeMapsProvider: doc.routeMapsProvider,
       office: doc.office,
       floor: doc.floor,
       status: doc.status,
@@ -1143,7 +1218,7 @@ export class PassesService implements OnModuleInit {
   }
 
   private async enrichCreatorFields(docs: any[], viewer?: any) {
-    if (!docs.length || isTenantCompanyUser(viewer)) return docs;
+    if (!docs.length) return docs;
 
     const creatorIds = [
       ...new Set(
@@ -1156,20 +1231,46 @@ export class PassesService implements OnModuleInit {
 
     const creators = await this.userModel
       .find({ _id: { $in: creatorIds.map((id) => new Types.ObjectId(id)) } })
-      .select('fullName phone company')
+      .select('fullName phone company companyLogo parentTenantId')
       .lean();
     const creatorMap = new Map(creators.map((u) => [u._id.toString(), u]));
 
-    return docs.map((doc) => {
+    const parentIds = [
+      ...new Set(
+        creators
+          .map((u) => u.parentTenantId?.toString())
+          .filter((id): id is string => !!id),
+      ),
+    ];
+    const parents = parentIds.length
+      ? await this.userModel
+          .find({ _id: { $in: parentIds.map((id) => new Types.ObjectId(id)) } })
+          .select('companyLogo company')
+          .lean()
+      : [];
+    const parentMap = new Map(parents.map((u) => [u._id.toString(), u]));
+
+    const withLogo = docs.map((doc) => {
       const creator = doc.createdBy ? creatorMap.get(doc.createdBy.toString()) : null;
       if (!creator) return doc;
-      return {
+      const parent = creator.parentTenantId
+        ? parentMap.get(creator.parentTenantId.toString())
+        : null;
+      const companyLogo = creator.companyLogo || parent?.companyLogo || undefined;
+      const base = {
         ...doc,
+        companyLogo: doc.companyLogo || companyLogo,
+      };
+      if (isTenantCompanyUser(viewer)) return base;
+      return {
+        ...base,
         creatorName: doc.creatorName || creator.fullName,
         creatorPhone: doc.creatorPhone || creator.phone,
-        creatorCompany: doc.creatorCompany || creator.company,
+        creatorCompany: doc.creatorCompany || creator.company || parent?.company,
       };
     });
+
+    return withLogo;
   }
 
   private mapToFrontend(doc: any, user?: any) {
@@ -1189,6 +1290,7 @@ export class PassesService implements OnModuleInit {
       visitorPassportNumber: doc.visitorPassportNumber,
       visitorPassportIssuedBy: doc.visitorPassportIssuedBy,
       companyName: doc.companyName,
+      companyLogo: doc.companyLogo,
       visitPurpose: doc.visitPurpose,
       passType: doc.passType,
       vehiclePlate: doc.vehiclePlate,

@@ -1,15 +1,17 @@
 'use client';
 
-import { useMemo } from 'react';
+import { useMemo, useState } from 'react';
 import QRCode from 'react-qr-code';
 import {
   Building2,
   Calendar,
   Clock,
   MapPin,
+  Navigation,
+  QrCode,
   User,
 } from 'lucide-react';
-import { PublicPassTicket, TYPE_LABELS, PassType } from '@/lib/api';
+import { buildMapsRouteUrl, PublicPassTicket, TYPE_LABELS, PassType } from '@/lib/api';
 import { useConfig } from '@/hooks/useConfig';
 import { getUiLabels } from '@/lib/ui-labels';
 import {
@@ -36,7 +38,16 @@ export function PassTicketView({
 }: PassTicketViewProps) {
   const config = useConfig();
   const labels = getUiLabels(config);
+  const [qrOpen, setQrOpen] = useState(false);
+
   const businessCenterName = ticket.businessCenterName || fallbackBusinessCenterName || labels.ticket.defaultBcName;
+  const businessCenterAddress = ticket.businessCenterAddress?.trim()
+    || config?.businessCenters?.find((bc) => bc.name === businessCenterName)?.address?.trim()
+    || '';
+
+  const routeProvider = ticket.routeMapsProvider
+    || config?.businessCenters?.find((bc) => bc.name === businessCenterName)?.routeMapsProvider
+    || 'yandex';
 
   const ticketUrl = useMemo(() => {
     if (typeof window === 'undefined') return '';
@@ -51,6 +62,10 @@ export function PassTicketView({
 
   const typeLabel = TYPE_LABELS[ticket.passType as PassType] || ticket.passType;
   const qrSize = compact ? 112 : 180;
+  const companyLogo = ticket.companyLogo?.trim();
+  const routeUrl = businessCenterAddress
+    ? buildMapsRouteUrl(businessCenterAddress, routeProvider)
+    : '';
 
   return (
     <div className={`pass-ticket ${compact ? 'pass-ticket--compact' : ''} max-w-md mx-auto min-w-0 w-full`}>
@@ -64,12 +79,30 @@ export function PassTicketView({
               {businessCenterName}
             </span>
           </div>
+          {businessCenterAddress ? (
+            <p
+              className="text-[11px] text-[var(--muted)] mt-1 leading-snug px-2 break-words"
+              title={businessCenterAddress}
+            >
+              <MapPin className="w-3 h-3 inline-block mr-0.5 -mt-0.5" />
+              {businessCenterAddress}
+            </p>
+          ) : null}
           <p className="text-[10px] text-[var(--muted)] mt-0.5">{labels.card.electronicPass}</p>
         </header>
 
         <section className="pass-ticket__guest text-center border-b border-[var(--border)]">
-          <div className={`pass-ticket__avatar mx-auto rounded-full ${getPassIconTileClass(ticket.status)}`}>
-            <User className="pass-ticket__avatar-icon" />
+          <div className={`pass-ticket__avatar mx-auto rounded-full overflow-hidden ${getPassIconTileClass(ticket.status)}`}>
+            {companyLogo ? (
+              // eslint-disable-next-line @next/next/no-img-element
+              <img
+                src={companyLogo}
+                alt={ticket.companyName || 'Логотип компании'}
+                className="w-full h-full object-contain p-1"
+              />
+            ) : (
+              <User className="pass-ticket__avatar-icon" />
+            )}
           </div>
           <h1 className="pass-ticket__name font-bold leading-snug break-words max-w-full" title={ticket.visitorName}>
             {ticket.visitorName}
@@ -124,24 +157,56 @@ export function PassTicketView({
           )}
         </section>
 
-        <section className="pass-ticket__qr border-b border-[var(--border)]">
-          {!compact && (
-            <p className="text-center text-sm text-[var(--muted)] leading-relaxed mb-3">
-              {labels.ticket.hint}
-            </p>
-          )}
-          {ticketUrl && (
-            <div className="flex justify-center">
-              <div className="pass-ticket__qr-frame bg-[var(--surface-elevated)] rounded-xl border border-[var(--border)] shadow-sm">
-                <QRCode value={ticketUrl} size={qrSize} level="M" />
+        <section className="pass-ticket__qr border-b border-[var(--border)] space-y-3">
+          <div className="flex flex-col gap-2">
+            <button
+              type="button"
+              className="btn btn-secondary w-full text-sm inline-flex items-center justify-center gap-2"
+              onClick={() => setQrOpen((v) => !v)}
+              aria-expanded={qrOpen}
+            >
+              <QrCode className="w-4 h-4 shrink-0" />
+              {qrOpen ? labels.buttons.hideQr : labels.buttons.showQr}
+            </button>
+
+            {qrOpen && ticketUrl && (
+              <div className="space-y-2 animate-in fade-in">
+                {!compact && (
+                  <p className="text-center text-sm text-[var(--muted)] leading-relaxed">
+                    {labels.ticket.hint}
+                  </p>
+                )}
+                <div className="flex justify-center">
+                  <div className="pass-ticket__qr-frame bg-[var(--surface-elevated)] rounded-xl border border-[var(--border)] shadow-sm p-3">
+                    <QRCode value={ticketUrl} size={qrSize} level="M" />
+                  </div>
+                </div>
+                {compact && (
+                  <p className="pass-ticket__hint text-center text-[var(--muted)] leading-snug">
+                    {labels.ticket.hint}
+                  </p>
+                )}
               </div>
-            </div>
-          )}
-          {compact && (
-            <p className="pass-ticket__hint text-center text-[var(--muted)] leading-snug">
-              {labels.ticket.hint}
-            </p>
-          )}
+            )}
+
+            {!qrOpen && (
+              <p className="text-center text-[10px] text-[var(--muted)] leading-snug">
+                {labels.ticket.showQrHint}
+              </p>
+            )}
+          </div>
+
+          {routeUrl ? (
+            <a
+              href={routeUrl}
+              target="_blank"
+              rel="noopener noreferrer"
+              className="btn btn-primary w-full text-sm inline-flex items-center justify-center gap-2"
+            >
+              <Navigation className="w-4 h-4 shrink-0" />
+              {labels.buttons.buildRoute}
+            </a>
+          ) : null}
         </section>
 
         {passShowsVisitTimeline(ticket) && (

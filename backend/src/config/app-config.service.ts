@@ -45,13 +45,16 @@ export class AppConfigService {
       businessCenterName: property?.name || site.siteName,
       businessCenters: properties.map((p) => {
         const ps = p.settings || {};
+        const maps = String(ps.route_maps_provider || 'yandex').toLowerCase();
         return {
           id: p._id.toString(),
           name: p.name,
+          address: p.address || '',
           workingHoursFrom: ps.working_hours_from || '08:00',
           workingHoursTo: ps.working_hours_to || '20:00',
           requireCheckout: ps.require_checkout !== 'false',
           closedWeekdays: parseClosedWeekdays(ps.closed_weekdays),
+          routeMapsProvider: maps === 'google' ? 'google' : 'yandex',
         };
       }),
       contactPhone: s.contact_phone || site.sitePhone,

@@ -98,7 +98,7 @@ function NewPassForm() {
   }, [selectedBcId, tenantOffices, config?.businessCenters]);
 
   const bookableDates = useMemo(
-    () => getBookableVisitDates(todayLocal, closedWeekdays, 2),
+    () => getBookableVisitDates(todayLocal, closedWeekdays),
     [todayLocal, closedWeekdays],
   );
 

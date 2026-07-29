@@ -1,5 +1,11 @@
 import { addDays, getLocalDateString, isValidVisitDateString } from './local-date';
 
+/** Сколько ближайших рабочих дней можно выбрать при заказе (включая сегодня). */
+export const BOOKABLE_VISIT_DAYS = 3;
+
+/** Максимум сотрудников компании (кроме владельца). */
+export const MAX_TENANT_EMPLOYEES = 3;
+
 export function parseClosedWeekdays(value?: string | number[] | null): number[] {
   if (Array.isArray(value)) {
     return [...new Set(value.filter((day) => day >= 0 && day <= 6))].sort((a, b) => a - b);
@@ -30,7 +36,7 @@ export function isClosedWeekday(dateStr: string, closedWeekdays: number[]): bool
 export function getBookableVisitDates(
   today = getLocalDateString(),
   closedWeekdays: number[] = [],
-  count = 2,
+  count = BOOKABLE_VISIT_DAYS,
 ): string[] {
   const dates: string[] = [];
   let cursor = today;

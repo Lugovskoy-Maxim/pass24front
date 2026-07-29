@@ -87,6 +87,9 @@ export const DEFAULT_UI_LABELS = {
     backToTemplates: 'К шаблонам',
     print: 'Печать',
     qrPass: 'QR-пропуск',
+    showQr: 'Показать QR-код',
+    hideQr: 'Скрыть QR-код',
+    buildRoute: 'Построить маршрут',
     copyNumber: 'Скопировать номер',
     orderShort: 'Заказать',
     checkInBuilding: 'Впустить в здание',
@@ -166,6 +169,7 @@ export const DEFAULT_UI_LABELS = {
     hint: 'Подойдите на стойку охраны и скажите своё ФИО или покажите QR-код',
     footer: 'Сохраните эту страницу — ссылка постоянная и действует на дату визита',
     defaultBcName: 'БЦ Добрынинский',
+    showQrHint: 'Нажмите, чтобы показать QR-код охране',
   },
   toasts: {
     approved: 'Пропуск одобрен',

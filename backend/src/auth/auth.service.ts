@@ -43,6 +43,7 @@ import { ConfirmEmailVerifyDto } from './dto/confirm-email-verify.dto';
 import { ConfirmPasswordResetDto } from './dto/confirm-password-reset.dto';
 import { ConfirmRegistrationDto } from './dto/confirm-registration.dto';
 import { CreateTenantEmployeeDto } from './dto/create-tenant-employee.dto';
+import { MAX_TENANT_EMPLOYEES } from '../common/tenant-limits';
 import { LoginDto } from './dto/login.dto';
 import { RegisterDto } from './dto/register.dto';
 import { RequestPasswordResetDto } from './dto/request-password-reset.dto';
@@ -694,6 +695,38 @@ export class AuthService {
     return { user: await this.toUserDto(user, offices) };
   }
 
+  /** Логотип компании — сразу, без апрува админа (только owner). */
+  async updateCompanyLogo(userId: string, companyLogo?: string) {
+    const user = await this.userModel.findById(userId);
+    if (!user) throw new UnauthorizedException();
+    if (user.parentTenantId || user.role !== 'tenant') {
+      throw new ForbiddenException('Логотип компании может менять только владелец-арендатор');
+    }
+
+    const value = companyLogo?.trim() || '';
+    if (value.length > 200_000) {
+      throw new BadRequestException('Файл логотипа слишком большой');
+    }
+    if (value && !(value.startsWith('data:image/') || value.startsWith('http://') || value.startsWith('https://') || value.startsWith('/'))) {
+      throw new BadRequestException('Логотип: укажите URL или загрузите изображение');
+    }
+
+    if (value) user.companyLogo = value;
+    else user.set('companyLogo', undefined);
+    await user.save();
+
+    await this.auditService.log({
+      action: 'tenant.company_logo_updated',
+      entityType: 'user',
+      entityId: user._id,
+      actor: { userId, email: user.email, role: user.role },
+      details: { hasLogo: !!value },
+    });
+
+    const offices = await this.getUserOffices(userId);
+    return { user: await this.toUserDto(user, offices) };
+  }
+
   async cancelProfileChange(userId: string) {
     const user = await this.userModel.findById(userId);
     if (!user) throw new UnauthorizedException();
@@ -736,6 +769,13 @@ export class AuthService {
     if (!owner) throw new UnauthorizedException();
     if (owner.role !== 'tenant' || owner.parentTenantId) {
       throw new ForbiddenException('Добавлять сотрудников может только владелец компании');
+    }
+
+    const employeesCount = await this.userModel.countDocuments({ parentTenantId: owner._id });
+    if (employeesCount >= MAX_TENANT_EMPLOYEES) {
+      throw new BadRequestException(
+        `В компании можно добавить не более ${MAX_TENANT_EMPLOYEES} сотрудников`,
+      );
     }
 
     const email = dto.email.toLowerCase().trim();
@@ -1177,6 +1217,20 @@ export class AuthService {
     const permissions = await this.accessConfigService.getPermissionsForRole(role);
     const { enabledPassTypes, roleLabels } = await this.accessConfigService.getConfig();
     const propertyIds = (user.properties || []).map((p: { toString: () => string }) => p.toString());
+
+    let companyLogo = user.companyLogo || undefined;
+    let company = user.company;
+    if (user.parentTenantId) {
+      const owner = await this.userModel
+        .findById(user.parentTenantId)
+        .select('company companyLogo')
+        .lean();
+      if (owner) {
+        companyLogo = companyLogo || owner.companyLogo || undefined;
+        company = company || owner.company;
+      }
+    }
+
     return {
       id: user._id.toString(),
       username: user.username,
@@ -1187,7 +1241,8 @@ export class AuthService {
       first_name: user.firstName,
       middle_name: user.middleName,
       phone: user.phone,
-      company: user.company,
+      company,
+      company_logo: companyLogo,
       role,
       role_label: roleLabels?.[role] || role,
       office: user.office,

@@ -78,6 +78,10 @@ export class User {
   @Prop({ trim: true })
   company?: string;
 
+  /** Логотип компании арендатора: URL или data:image (как site icons). */
+  @Prop({ trim: true })
+  companyLogo?: string;
+
   // сюда можно класть externalId и прочее для синка
   @Prop({ type: Object, default: {} })
   meta: Record<string, any>;

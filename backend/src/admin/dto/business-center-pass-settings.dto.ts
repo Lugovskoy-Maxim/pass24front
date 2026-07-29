@@ -32,4 +32,13 @@ export class BusinessCenterPassSettingsDto {
   @IsOptional()
   @IsString()
   closed_weekdays?: string;
+
+  /**
+   * Провайдер карт для кнопки «Построить маршрут» на странице пропуска.
+   * Адрес берётся из поля address карточки БЦ.
+   * yandex | google
+   */
+  @IsOptional()
+  @IsString()
+  route_maps_provider?: string;
 }

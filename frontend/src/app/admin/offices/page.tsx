@@ -594,10 +594,30 @@ export default function AdminOfficesPage() {
                     <div>
                       <label className="label">Адрес</label>
                       <input className="input" value={bcAddress} onChange={(e) => setBcAddress(e.target.value)} />
+                      <p className="text-xs text-[var(--muted)] mt-1">
+                        Показывается на странице пропуска и используется для кнопки «Построить маршрут»
+                      </p>
                     </div>
 
                     <div className="border-t border-[var(--border)] pt-4 space-y-3">
                       <h4 className="text-sm font-medium">Параметры пропускного режима</h4>
+                      <div>
+                        <label className="label">Карты для маршрута</label>
+                        <select
+                          className="input"
+                          value={bcPassSettings.route_maps_provider || 'yandex'}
+                          onChange={(e) => setBcPassSettings({
+                            ...bcPassSettings,
+                            route_maps_provider: e.target.value,
+                          })}
+                        >
+                          <option value="yandex">Яндекс.Карты</option>
+                          <option value="google">Google Maps</option>
+                        </select>
+                        <p className="text-xs text-[var(--muted)] mt-1">
+                          Адрес для маршрута берётся из поля «Адрес» карточки БЦ
+                        </p>
+                      </div>
                       <div>
                         <label className="label">Этаж ресепшн</label>
                         <input

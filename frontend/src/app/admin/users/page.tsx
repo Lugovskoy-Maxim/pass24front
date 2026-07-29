@@ -15,8 +15,10 @@ import { useConfig } from '@/hooks/useConfig';
 import { getUiLabels } from '@/lib/ui-labels';
 
 const EMPTY: CreateUserData = {
-  email: '', password: '', role: 'tenant', phone: '', company: '', office: '', floor: '', officeIds: [], propertyIds: [],
+  email: '', password: '', role: 'tenant', phone: '', company: '', companyLogo: '', office: '', floor: '', officeIds: [], propertyIds: [],
 };
+
+const MAX_COMPANY_LOGO_BYTES = 80 * 1024;
 
 const EMPTY_NAME: PersonNameParts = { lastName: '', firstName: '', middleName: '' };
 
@@ -257,6 +259,7 @@ function AdminUsersPageContent() {
       role: formRole,
       phone: u.phone || '',
       company: u.company || '',
+      companyLogo: u.companyLogo || '',
       office: u.office || '',
       floor: u.floor || '',
     });
@@ -395,6 +398,9 @@ function AdminUsersPageContent() {
         fullName: buildFullName(nameParts),
         phone: form.phone || undefined,
         company: form.company || undefined,
+        companyLogo: form.role === 'tenant' && !isCompanyEmployee
+          ? (form.companyLogo || '')
+          : undefined,
         office: !isCompanyEmployee && form.role !== 'tenant' && form.role !== 'security' ? form.office || undefined : undefined,
         floor: !isCompanyEmployee && form.role !== 'tenant' && form.role !== 'security' ? form.floor || undefined : undefined,
         officeIds: form.role === 'tenant' && !isCompanyEmployee ? officeIds : undefined,
@@ -717,6 +723,59 @@ function AdminUsersPageContent() {
             </div>
             <div><label className="label">Компания</label><input className="input" value={form.company} onChange={(e) => setForm({ ...form, company: e.target.value })} /></div>
             <div><label className="label">Телефон</label><input className="input" value={form.phone} onChange={(e) => setForm({ ...form, phone: e.target.value })} /></div>
+            {form.role === 'tenant' && !users.flatMap((x) => x.employees || []).some((e) => e.id === editId) && (
+              <div className="sm:col-span-2 space-y-2">
+                <label className="label">Логотип компании</label>
+                <div className="flex flex-wrap items-center gap-3">
+                  {form.companyLogo ? (
+                    // eslint-disable-next-line @next/next/no-img-element
+                    <img
+                      src={form.companyLogo}
+                      alt="Логотип"
+                      className="w-12 h-12 rounded-lg border border-[var(--border)] object-contain bg-[var(--surface)] p-0.5"
+                    />
+                  ) : (
+                    <div className="w-12 h-12 rounded-lg border border-dashed border-[var(--border)] bg-[var(--surface-muted)] flex items-center justify-center text-[10px] text-[var(--muted)]">
+                      нет
+                    </div>
+                  )}
+                  <label className="btn btn-secondary text-xs cursor-pointer">
+                    Загрузить
+                    <input
+                      type="file"
+                      accept="image/*"
+                      className="sr-only"
+                      onChange={(e) => {
+                        const file = e.target.files?.[0];
+                        if (!file) return;
+                        if (!file.type.startsWith('image/')) {
+                          toast('Загрузите изображение (PNG, JPG, SVG)', 'error');
+                          return;
+                        }
+                        if (file.size > MAX_COMPANY_LOGO_BYTES) {
+                          toast('Файл слишком большой. Максимум 80 КБ', 'error');
+                          return;
+                        }
+                        const reader = new FileReader();
+                        reader.onload = () => setForm((prev) => ({ ...prev, companyLogo: String(reader.result || '') }));
+                        reader.readAsDataURL(file);
+                        e.target.value = '';
+                      }}
+                    />
+                  </label>
+                  {form.companyLogo ? (
+                    <button
+                      type="button"
+                      className="btn btn-secondary text-xs"
+                      onClick={() => setForm((prev) => ({ ...prev, companyLogo: '' }))}
+                    >
+                      Убрать
+                    </button>
+                  ) : null}
+                </div>
+                <p className="text-xs text-[var(--muted)]">Показывается на карточке и странице пропуска вместо иконки типа</p>
+              </div>
+            )}
           </div>
 
           {editId && users.flatMap((x) => x.employees || []).some((e) => e.id === editId) && (

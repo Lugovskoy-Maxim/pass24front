@@ -1,5 +1,8 @@
 import { addDays, getLocalDateString, isValidVisitDateString } from './visit-date';
 
+/** Сколько ближайших рабочих дней можно выбрать при заказе пропуска (включая сегодня). */
+export const BOOKABLE_VISIT_DAYS = 3;
+
 export function parseClosedWeekdays(value?: string | null): number[] {
   if (!value?.trim()) return [];
   return [...new Set(
@@ -26,7 +29,7 @@ export function isClosedWeekday(dateStr: string, closedWeekdays: number[]): bool
 export function getBookableVisitDates(
   today = getLocalDateString(),
   closedWeekdays: number[] = [],
-  count = 2,
+  count = BOOKABLE_VISIT_DAYS,
 ): string[] {
   const dates: string[] = [];
   let cursor = today;
@@ -52,7 +55,7 @@ export function assertVisitDateBookable(
     throw new Error('INVALID_DATE');
   }
 
-  const bookable = getBookableVisitDates(today, closedWeekdays, 2);
+  const bookable = getBookableVisitDates(today, closedWeekdays, BOOKABLE_VISIT_DAYS);
   if (bookable.includes(visitDate)) return;
 
   if (visitDate < today) {

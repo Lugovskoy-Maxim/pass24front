@@ -5,7 +5,7 @@
  * управление сотрудниками (owner only): add / toggle isActive / hard delete.
  * Сотрудник всегда создаётся как tenant_employee — без выбора роли.
  */
-import { FormEvent, useCallback, useEffect, useState } from 'react';
+import { ChangeEvent, FormEvent, useCallback, useEffect, useState } from 'react';
 import { Building2, CheckCircle2, Clock, Mail, Phone, Shield, User as UserIcon, UserPlus, Users } from 'lucide-react';
 import { ProtectedLayout } from '@/components/ProtectedLayout';
 import { PersonNameFields } from '@/components/PersonNameFields';
@@ -19,6 +19,7 @@ import {
   getErrorMessage,
   TenantEmployee,
 } from '@/lib/api';
+import { MAX_TENANT_EMPLOYEES } from '@/lib/bookable-visit-dates';
 import {
   getUserRoleLabel,
   isTenantCompanyUser,
@@ -85,6 +86,7 @@ export default function ProfilePage() {
   const [emailVerifyLoading, setEmailVerifyLoading] = useState(false);
   const [emailVerifyResendIn, setEmailVerifyResendIn] = useState(0);
   const [resendingInviteId, setResendingInviteId] = useState<string | null>(null);
+  const [logoSaving, setLogoSaving] = useState(false);
 
   const tenantOwner = isTenantOwner(user);
   const tenantEmployee = isTenantEmployee(user);
@@ -182,8 +184,55 @@ export default function ProfilePage() {
     }
   };
 
+  const handleCompanyLogoUpload = (e: ChangeEvent<HTMLInputElement>) => {
+    const file = e.target.files?.[0];
+    if (!file) return;
+    if (!file.type.startsWith('image/')) {
+      toast('Загрузите изображение (PNG, JPG, SVG)', 'error');
+      return;
+    }
+    if (file.size > 80 * 1024) {
+      toast('Файл слишком большой. Максимум 80 КБ', 'error');
+      return;
+    }
+    const reader = new FileReader();
+    reader.onload = () => {
+      void (async () => {
+        setLogoSaving(true);
+        try {
+          await api.updateCompanyLogo(String(reader.result || ''));
+          await refreshUser();
+          toast('Логотип компании сохранён', 'success');
+        } catch (err) {
+          toast(getErrorMessage(err, 'Не удалось сохранить логотип'), 'error');
+        } finally {
+          setLogoSaving(false);
+        }
+      })();
+    };
+    reader.readAsDataURL(file);
+    e.target.value = '';
+  };
+
+  const handleRemoveCompanyLogo = async () => {
+    setLogoSaving(true);
+    try {
+      await api.updateCompanyLogo('');
+      await refreshUser();
+      toast('Логотип удалён', 'success');
+    } catch (err) {
+      toast(getErrorMessage(err, 'Не удалось удалить логотип'), 'error');
+    } finally {
+      setLogoSaving(false);
+    }
+  };
+
   const handleAddEmployee = async (e: FormEvent) => {
     e.preventDefault();
+    if (employees.length >= MAX_TENANT_EMPLOYEES) {
+      toast(`В компании можно добавить не более ${MAX_TENANT_EMPLOYEES} сотрудников`, 'error');
+      return;
+    }
     const errors = validateProfileForm(employeeNameParts);
     if (!employeeEmail.trim()) errors.email = 'Укажите email';
     setFieldErrors(errors);
@@ -346,6 +395,38 @@ export default function ProfilePage() {
         )}
 
         <div className="card p-6 space-y-4 mb-6">
+          {tenantCompanyUser && (
+            <div className="flex items-center gap-4 pb-4 border-b border-[var(--border)]">
+              <div className="w-16 h-16 rounded-xl border border-[var(--border)] bg-[var(--surface-muted)] overflow-hidden flex items-center justify-center shrink-0">
+                {user.company_logo ? (
+                  // eslint-disable-next-line @next/next/no-img-element
+                  <img src={user.company_logo} alt={user.company || 'Логотип'} className="w-full h-full object-contain p-1" />
+                ) : (
+                  <Building2 className="w-7 h-7 text-[var(--muted)]" />
+                )}
+              </div>
+              <div className="min-w-0 flex-1">
+                <div className="text-xs text-[var(--muted)]">Логотип компании</div>
+                <div className="font-medium truncate">{user.company || 'Без названия'}</div>
+                {tenantOwner && (
+                  <div className="flex flex-wrap gap-2 mt-2">
+                    <label className={`btn btn-secondary text-xs cursor-pointer ${logoSaving ? 'opacity-60 pointer-events-none' : ''}`}>
+                      {logoSaving ? 'Сохранение…' : user.company_logo ? 'Заменить' : 'Загрузить'}
+                      <input type="file" accept="image/*" className="sr-only" disabled={logoSaving} onChange={handleCompanyLogoUpload} />
+                    </label>
+                    {user.company_logo ? (
+                      <button type="button" className="btn btn-secondary text-xs" disabled={logoSaving} onClick={() => void handleRemoveCompanyLogo()}>
+                        Убрать
+                      </button>
+                    ) : null}
+                  </div>
+                )}
+                {tenantOwner && (
+                  <p className="text-[11px] text-[var(--muted)] mt-1">До 80 КБ. Показывается на пропусках вашей компании</p>
+                )}
+              </div>
+            </div>
+          )}
           <ProfileInfoRow icon={UserIcon} label="ФИО" value={buildFullName(currentName)} />
           {(user.email || user.username) && (
             <ProfileInfoRow icon={Mail} label={user.email ? 'Email' : 'Логин'} value={user.email || user.username || ''} />
@@ -495,6 +576,7 @@ export default function ProfilePage() {
                 <p className="text-sm text-[var(--muted)] mt-1">
                   Укажите email — сотруднику придёт ссылка (72 часа), он сам задаст пароль.
                   Сотрудники видят все пропуска {user.company || 'компании'}.
+                  Максимум {MAX_TENANT_EMPLOYEES} сотрудника ({employees.length}/{MAX_TENANT_EMPLOYEES}).
                 </p>
               </div>
             </div>
@@ -580,43 +662,50 @@ export default function ProfilePage() {
               <p className="text-sm text-[var(--muted)]">Пока нет добавленных сотрудников</p>
             )}
 
-            <form onSubmit={handleAddEmployee} className="border-t border-[var(--border)] pt-5 space-y-4" noValidate>
-              <div className="flex items-center gap-2 text-sm font-medium">
-                <UserPlus className="w-4 h-4" />
-                Пригласить сотрудника
+            {employees.length >= MAX_TENANT_EMPLOYEES ? (
+              <div className="border-t border-[var(--border)] pt-5 text-sm text-[var(--muted)]">
+                Достигнут лимит: не более {MAX_TENANT_EMPLOYEES} сотрудников в компании.
+                Чтобы добавить нового, удалите одного из текущих.
               </div>
-              <PersonNameFields
-                value={employeeNameParts}
-                labels={getUserNameLabels('tenant')}
-                onChange={setEmployeeNameParts}
-                errors={fieldErrors}
-                onClearError={clearFieldError}
-              />
-              <div className="form-grid-2">
-                <FormField id="employeeEmail" label="Email" required error={fieldErrors.email} hint="На этот адрес уйдёт ссылка">
-                  <FormInput
-                    id="employeeEmail"
-                    type="email"
-                    value={employeeEmail}
-                    onChange={(e) => { setEmployeeEmail(e.target.value); clearFieldError('email'); }}
-                    invalid={!!fieldErrors.email}
-                    placeholder={ph.employeeEmail}
-                  />
-                </FormField>
-                <FormField id="employeePhone" label="Телефон">
-                  <FormInput
-                    id="employeePhone"
-                    type="tel"
-                    value={employeePhone}
-                    onChange={(e) => setEmployeePhone(e.target.value)}
-                    placeholder={ph.phone}
-                  />
-                </FormField>
-              </div>
-              <button type="submit" className="btn btn-primary" disabled={employeeSaving}>
-                {employeeSaving ? 'Отправка…' : 'Отправить приглашение'}
-              </button>
-            </form>
+            ) : (
+              <form onSubmit={handleAddEmployee} className="border-t border-[var(--border)] pt-5 space-y-4" noValidate>
+                <div className="flex items-center gap-2 text-sm font-medium">
+                  <UserPlus className="w-4 h-4" />
+                  Пригласить сотрудника
+                </div>
+                <PersonNameFields
+                  value={employeeNameParts}
+                  labels={getUserNameLabels('tenant')}
+                  onChange={setEmployeeNameParts}
+                  errors={fieldErrors}
+                  onClearError={clearFieldError}
+                />
+                <div className="form-grid-2">
+                  <FormField id="employeeEmail" label="Email" required error={fieldErrors.email} hint="На этот адрес уйдёт ссылка">
+                    <FormInput
+                      id="employeeEmail"
+                      type="email"
+                      value={employeeEmail}
+                      onChange={(e) => { setEmployeeEmail(e.target.value); clearFieldError('email'); }}
+                      invalid={!!fieldErrors.email}
+                      placeholder={ph.employeeEmail}
+                    />
+                  </FormField>
+                  <FormField id="employeePhone" label="Телефон">
+                    <FormInput
+                      id="employeePhone"
+                      type="tel"
+                      value={employeePhone}
+                      onChange={(e) => setEmployeePhone(e.target.value)}
+                      placeholder={ph.phone}
+                    />
+                  </FormField>
+                </div>
+                <button type="submit" className="btn btn-primary" disabled={employeeSaving}>
+                  {employeeSaving ? 'Отправка…' : 'Отправить приглашение'}
+                </button>
+              </form>
+            )}
           </div>
         )}
       </div>

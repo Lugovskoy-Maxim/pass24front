@@ -32,6 +32,11 @@ export class CreateUserDto {
   @IsString()
   company?: string;
 
+  /** URL или data:image логотипа компании (арендатор). */
+  @IsOptional()
+  @IsString()
+  companyLogo?: string;
+
   @IsIn(['tenant', 'security', 'bc_admin', 'admin'])
   role: string;
 

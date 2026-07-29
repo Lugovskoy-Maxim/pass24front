@@ -41,10 +41,13 @@ export interface TenantOffice {
 export interface PublicBusinessCenter {
   id: string;
   name: string;
+  address?: string;
   workingHoursFrom: string;
   workingHoursTo: string;
   requireCheckout?: boolean;
   closedWeekdays?: number[];
+  /** yandex | google — кнопка «Построить маршрут» на билете */
+  routeMapsProvider?: 'yandex' | 'google';
 }
 
 export interface ProfileChangeRequest {
@@ -69,6 +72,8 @@ export interface User {
   profile_change_request?: ProfileChangeRequest | null;
   phone?: string;
   company?: string;
+  /** Логотип компании арендатора (URL или data:image) */
+  company_logo?: string;
   role: UserRole;
   office?: string;
   floor?: string;
@@ -140,6 +145,7 @@ export interface PublicPassTicket extends PassTimelineData {
   passNumber: string;
   visitorName: string;
   companyName?: string;
+  companyLogo?: string;
   visitPurpose?: string;
   passType: PassType;
   vehiclePlate?: string;
@@ -147,6 +153,8 @@ export interface PublicPassTicket extends PassTimelineData {
   visitTimeFrom?: string;
   visitTimeTo?: string;
   businessCenterName?: string;
+  businessCenterAddress?: string;
+  routeMapsProvider?: 'yandex' | 'google';
   office: string;
   floor?: string;
 }
@@ -165,6 +173,7 @@ export interface Pass {
   visitorPassportNumber?: string;
   visitorPassportIssuedBy?: string;
   companyName?: string;
+  companyLogo?: string;
   visitPurpose?: string;
   passType: PassType;
   vehiclePlate?: string;
@@ -366,6 +375,12 @@ export const api = {
     company?: string;
   }) =>
     request<{ user: User }>('/auth/profile', { method: 'PATCH', body: JSON.stringify(data) }),
+
+  updateCompanyLogo: (companyLogo: string) =>
+    request<{ user: User }>('/auth/company-logo', {
+      method: 'PATCH',
+      body: JSON.stringify({ companyLogo }),
+    }),
 
   cancelProfileRequest: () =>
     request<{ user: User }>('/auth/profile/request', { method: 'DELETE' }),
@@ -984,6 +999,7 @@ export interface AdminUser {
   middleName?: string;
   phone?: string;
   company?: string;
+  companyLogo?: string;
   role: UserRole;
   office?: string;
   floor?: string;
@@ -1016,6 +1032,7 @@ export interface CreateUserData {
   middleName?: string;
   phone?: string;
   company?: string;
+  companyLogo?: string;
   role: UserRole;
   office?: string;
   floor?: string;
@@ -1079,6 +1096,8 @@ export interface BcPassSettings {
   reception_floor: string;
   require_checkout: string;
   closed_weekdays: string;
+  /** yandex | google — кнопка маршрута на билете; адрес из поля address БЦ */
+  route_maps_provider: string;
 }
 
 export const DEFAULT_BC_PASS_SETTINGS: BcPassSettings = {
@@ -1090,7 +1109,20 @@ export const DEFAULT_BC_PASS_SETTINGS: BcPassSettings = {
   reception_floor: '1',
   require_checkout: 'true',
   closed_weekdays: '',
+  route_maps_provider: 'yandex',
 };
+
+/** Ссылка на карты по адресу БЦ. */
+export function buildMapsRouteUrl(
+  address: string,
+  provider: 'yandex' | 'google' | string = 'yandex',
+): string {
+  const q = encodeURIComponent(address.trim());
+  if (provider === 'google') {
+    return `https://www.google.com/maps/dir/?api=1&destination=${q}`;
+  }
+  return `https://yandex.ru/maps/?rtext=~${q}&rtt=auto`;
+}
 
 export interface BusinessCenter {
   id: string;

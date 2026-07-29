@@ -315,6 +315,7 @@ export class AdminService {
       middleName: personName.middleName,
       phone: dto.phone,
       company: dto.company,
+      companyLogo: dto.role === 'tenant' ? dto.companyLogo?.trim() || undefined : undefined,
       role: dto.role,
       office: dto.office,
       floor: dto.floor,
@@ -504,6 +505,11 @@ export class AdminService {
     }
     if (dto.phone !== undefined) user.phone = dto.phone;
     if (dto.company !== undefined) user.company = dto.company;
+    if (dto.companyLogo !== undefined && !user.parentTenantId) {
+      const logo = dto.companyLogo?.trim() || '';
+      if (logo) user.companyLogo = logo;
+      else user.set('companyLogo', undefined);
+    }
     // Сотрудник компании: роль и parentTenantId не меняем через admin update
     if (dto.role !== undefined && !user.parentTenantId) {
       user.role = dto.role;
@@ -1161,6 +1167,7 @@ export class AdminService {
       middleName: nameParts.middleName,
       phone: user.phone,
       company: extra?.company ?? user.company,
+      companyLogo: user.companyLogo || undefined,
       role: user.role || 'tenant',
       office: user.office,
       floor: user.floor,
@@ -1199,6 +1206,7 @@ export class AdminService {
 
   private mapBcPassSettings(property?: any) {
     const s = property?.settings || {};
+    const maps = String(s.route_maps_provider || 'yandex').toLowerCase();
     return {
       auto_approve_delivery: s.auto_approve_delivery || 'false',
       working_hours_from: s.working_hours_from || '08:00',
@@ -1208,6 +1216,7 @@ export class AdminService {
       reception_floor: s.reception_floor || '1',
       require_checkout: s.require_checkout !== 'false' ? 'true' : 'false',
       closed_weekdays: s.closed_weekdays || '',
+      route_maps_provider: maps === 'google' ? 'google' : 'yandex',
     };
   }
 
@@ -1224,6 +1233,10 @@ export class AdminService {
     if (dto.reception_floor !== undefined) settings.reception_floor = dto.reception_floor;
     if (dto.require_checkout !== undefined) settings.require_checkout = dto.require_checkout;
     if (dto.closed_weekdays !== undefined) settings.closed_weekdays = dto.closed_weekdays;
+    if (dto.route_maps_provider !== undefined) {
+      const maps = String(dto.route_maps_provider || 'yandex').toLowerCase();
+      settings.route_maps_provider = maps === 'google' ? 'google' : 'yandex';
+    }
     return settings;
   }
 

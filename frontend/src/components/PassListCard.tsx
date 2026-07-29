@@ -83,8 +83,17 @@ export function PassListCard({
       <div className={getPassStatusStripeClass(pass.status, stillInside)} aria-hidden />
 
       <div className="pass-card__body pass-card__body--row px-3 py-2.5 min-w-0">
-        <div className={`w-9 h-9 rounded-lg shrink-0 ${getPassIconTileClass(pass.status, stillInside)} self-center`}>
-          <Icon className="w-4 h-4" />
+        <div className={`w-9 h-9 rounded-lg shrink-0 overflow-hidden ${getPassIconTileClass(pass.status, stillInside)} self-center flex items-center justify-center`}>
+          {pass.companyLogo ? (
+            // eslint-disable-next-line @next/next/no-img-element
+            <img
+              src={pass.companyLogo}
+              alt={pass.companyName || 'Логотип'}
+              className="w-full h-full object-contain p-0.5"
+            />
+          ) : (
+            <Icon className="w-4 h-4" />
+          )}
         </div>
 
         <div className="pass-card__main flex-1 min-w-0 self-center">

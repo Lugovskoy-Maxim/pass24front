@@ -17,6 +17,7 @@ import { RegisterDto } from './dto/register.dto';
 import { RequestPasswordResetDto } from './dto/request-password-reset.dto';
 import { SetTenantEmployeeActiveDto } from './dto/set-tenant-employee-active.dto';
 import { UpdateProfileDto } from './dto/update-profile.dto';
+import { UpdateCompanyLogoDto } from './dto/update-company-logo.dto';
 
 @Controller('auth')
 export class AuthController {
@@ -95,6 +96,12 @@ export class AuthController {
   @Delete('profile/request')
   async cancelProfileChange(@Req() req: any) {
     return this.authService.cancelProfileChange(req.user.userId);
+  }
+
+  @UseGuards(AuthGuard('jwt'))
+  @Patch('company-logo')
+  async updateCompanyLogo(@Req() req: any, @Body() dto: UpdateCompanyLogoDto) {
+    return this.authService.updateCompanyLogo(req.user.userId, dto.companyLogo);
   }
 
   @UseGuards(AuthGuard('jwt'))
