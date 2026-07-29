@@ -769,6 +769,22 @@ input[type="checkbox"]:not(.checkbox) {
   min-width: 0;
 }
 
+/* Админка: ровная таблица пользователей */
+.admin-users-table {
+  border-collapse: collapse;
+  table-layout: auto;
+}
+
+.admin-users-table th,
+.admin-users-table td {
+  vertical-align: middle;
+  box-sizing: border-box;
+}
+
+.admin-users-table thead th {
+  border-bottom: 1px solid var(--border);
+}
+
 /* Номер пропуска Pass-YYYY-NNNN — читаемо, в одну строку, без «…» */
 .pass-number {
   display: inline-block;

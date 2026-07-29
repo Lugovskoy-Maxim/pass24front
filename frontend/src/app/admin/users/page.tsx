@@ -350,24 +350,21 @@ function AdminUsersPageContent() {
   };
 
   const statusBadge = (u: AdminUser) => {
+    const base = 'inline-flex items-center text-xs px-2 py-0.5 rounded-full leading-tight whitespace-nowrap';
     if (u.invitePending) {
-      return (
-        <span className="text-xs px-2 py-0.5 rounded-full bg-sky-50 text-sky-800">
-          Приглашение
-        </span>
-      );
+      return <span className={`${base} bg-sky-50 text-sky-800`}>Приглашение</span>;
     }
     if (u.isActive) {
-      return <span className="text-xs px-2 py-0.5 rounded-full bg-emerald-50 text-emerald-700">Активен</span>;
+      return <span className={`${base} bg-emerald-50 text-emerald-700`}>Активен</span>;
     }
     if (u.role === 'tenant' && !u.parentTenantId && !u.offices?.length) {
       return (
-        <span className="text-xs px-2 py-0.5 rounded-full bg-amber-50 text-amber-800">
-          Ожидает подтверждения
+        <span className={`${base} bg-amber-50 text-amber-800`} title="Ожидает подтверждения администратором">
+          Ожидает
         </span>
       );
     }
-    return <span className="text-xs px-2 py-0.5 rounded-full bg-red-50 text-red-600">Отключён</span>;
+    return <span className={`${base} bg-red-50 text-red-600`}>Отключён</span>;
   };
 
   // Авто-раскрытие компаний, если поиск совпал с сотрудником (пришли owners через employee search)
@@ -934,27 +931,28 @@ function AdminUsersPageContent() {
 
       <div className="card overflow-hidden">
         <div className="overflow-x-auto">
-          <table className="w-full text-sm min-w-[640px]">
+          <table className="admin-users-table w-full text-sm min-w-[760px]">
             <thead className="surface-muted text-[var(--muted)]">
               <tr>
-                <th className="text-left p-3 font-medium">ФИО</th>
-                <th className="text-left p-3 font-medium hidden lg:table-cell">Email</th>
-                {category === 'tenants' && (
-                  <th className="text-left p-3 font-medium hidden md:table-cell">Компания</th>
+                <th className="text-left p-3 font-medium align-middle min-w-[12rem] w-[28%]">ФИО</th>
+                <th className="text-left p-3 font-medium align-middle hidden lg:table-cell min-w-[10rem] w-[18%]">Email</th>
+                {category === 'tenants' ? (
+                  <th className="text-left p-3 font-medium align-middle hidden md:table-cell min-w-[8rem] w-[16%]">Компания</th>
+                ) : (
+                  <th className="text-left p-3 font-medium align-middle min-w-[7rem] w-[14%]">Роль</th>
                 )}
-                {category === 'staff' && (
-                  <th className="text-left p-3 font-medium">Роль</th>
-                )}
-                <th className="text-left p-3 font-medium hidden sm:table-cell">
-                  {category === 'tenants' ? 'Офисы / команда' : 'Бизнес-центры'}
+                <th className="text-left p-3 font-medium align-middle hidden sm:table-cell min-w-[9rem] w-[20%]">
+                  {category === 'tenants' ? 'Офисы' : 'Бизнес-центры'}
                 </th>
-                <th className="text-left p-3 font-medium">Статус</th>
-                <th className="p-3 w-20 text-right">Действия</th>
+                <th className="text-left p-3 font-medium align-middle whitespace-nowrap min-w-[7.5rem] w-[12%]">Статус</th>
+                <th className="p-3 text-right font-medium align-middle whitespace-nowrap w-[5.5rem]">Действия</th>
               </tr>
             </thead>
             <tbody>
               {loading ? (
-                <tr><td colSpan={6} className="p-8 text-center text-[var(--muted)]">Загрузка...</td></tr>
+                <tr>
+                  <td colSpan={6} className="p-8 text-center text-[var(--muted)]">Загрузка...</td>
+                </tr>
               ) : users.length === 0 ? (
                 <tr>
                   <td colSpan={6} className="p-8 text-center text-[var(--muted)]">
@@ -966,16 +964,19 @@ function AdminUsersPageContent() {
                 const empCount = u.employeesCount ?? employees.length;
                 const expanded = !!expandedOwners[u.id];
                 const canExpand = category === 'tenants' && empCount > 0;
+                const bindings = formatBindings(u);
 
                 return (
                   <Fragment key={u.id}>
                     <tr className="border-t border-[var(--border)] hover:bg-[var(--surface-muted)]">
-                      <td className="p-3">
-                        <div className="flex items-start gap-1.5">
+                      <td className="p-3 align-middle">
+                        <div className="flex items-center gap-2 min-w-0">
                           {category === 'tenants' ? (
                             <button
                               type="button"
-                              className={`mt-0.5 p-0.5 rounded shrink-0 ${canExpand ? 'hover:bg-[var(--surface)] text-[var(--text)]' : 'text-transparent pointer-events-none'}`}
+                              className={`p-0.5 rounded shrink-0 w-5 h-5 inline-flex items-center justify-center ${
+                                canExpand ? 'hover:bg-[var(--surface)] text-[var(--text)]' : 'invisible pointer-events-none'
+                              }`}
                               onClick={() => canExpand && toggleOwnerExpanded(u.id)}
                               aria-expanded={expanded}
                               aria-label={expanded ? 'Свернуть сотрудников' : 'Показать сотрудников'}
@@ -983,66 +984,75 @@ function AdminUsersPageContent() {
                             >
                               {expanded ? <ChevronDown className="w-4 h-4" /> : <ChevronRight className="w-4 h-4" />}
                             </button>
-                          ) : null}
-                          <div className="min-w-0">
-                            <div className="font-medium flex items-center gap-2 flex-wrap">
-                              {u.fullName}
+                          ) : (
+                            <span className="w-5 h-5 shrink-0" aria-hidden />
+                          )}
+                          <div className="min-w-0 flex-1">
+                            <div className="font-medium truncate leading-snug" title={u.fullName}>{u.fullName}</div>
+                            <div className="flex flex-wrap items-center gap-1 mt-0.5">
                               {category === 'tenants' && (
-                                <span className="text-[10px] px-1.5 py-0.5 rounded-full bg-[var(--surface-muted)] text-[var(--muted)] font-normal">
+                                <span className="text-[10px] px-1.5 py-0.5 rounded-full bg-[var(--surface-muted)] text-[var(--muted)] font-normal leading-none">
                                   Владелец
                                 </span>
                               )}
                               {u.profileChangeRequest && (
-                                <span className="text-[10px] px-1.5 py-0.5 rounded-full bg-amber-100 text-amber-800">
+                                <span className="text-[10px] px-1.5 py-0.5 rounded-full bg-amber-100 text-amber-800 leading-none">
                                   на модерации
                                 </span>
                               )}
+                              {canExpand && (
+                                <button
+                                  type="button"
+                                  className="text-xs text-[var(--primary)] hover:underline inline-flex items-center gap-0.5 leading-none"
+                                  onClick={() => toggleOwnerExpanded(u.id)}
+                                >
+                                  <Users className="w-3 h-3" />
+                                  {empCount}
+                                </button>
+                              )}
                             </div>
-                            <div className="text-xs text-[var(--muted)] lg:hidden">
+                            <div className="text-xs text-[var(--muted)] lg:hidden truncate mt-0.5" title={u.email || undefined}>
                               {u.email || '—'}
                             </div>
-                            {canExpand && (
-                              <button
-                                type="button"
-                                className="mt-1 text-xs text-[var(--primary)] hover:underline inline-flex items-center gap-1"
-                                onClick={() => toggleOwnerExpanded(u.id)}
-                              >
-                                <Users className="w-3 h-3" />
-                                {expanded ? 'Скрыть' : 'Сотрудники'} ({empCount})
-                              </button>
+                            {category === 'tenants' && (
+                              <div className="text-xs text-[var(--muted)] md:hidden truncate mt-0.5" title={u.company || undefined}>
+                                {u.company || '—'}
+                              </div>
                             )}
-                            {category === 'tenants' && empCount === 0 && (
-                              <div className="mt-1 text-[11px] text-[var(--muted)]">Нет сотрудников</div>
-                            )}
-                            <div className="text-xs text-[var(--muted)] sm:hidden mt-1">
-                              {formatBindings(u)}
+                            <div className="text-xs text-[var(--muted)] sm:hidden mt-0.5 line-clamp-2" title={bindings}>
+                              {bindings}
                             </div>
                           </div>
                         </div>
                       </td>
-                      <td className="p-3 hidden lg:table-cell text-[var(--muted)]">
-                        <div>{u.email || '—'}</div>
+                      <td className="p-3 align-middle hidden lg:table-cell text-[var(--muted)]">
+                        <div className="truncate" title={u.email || undefined}>{u.email || '—'}</div>
                         {u.email && (
-                          <div className={`text-[10px] mt-0.5 ${u.emailVerified ? 'text-emerald-700' : 'text-slate-500'}`}>
+                          <div className={`text-[10px] mt-0.5 leading-none ${u.emailVerified ? 'text-emerald-700' : 'text-slate-500'}`}>
                             {u.emailVerified ? 'подтверждён' : 'не подтверждён'}
                           </div>
                         )}
                       </td>
-                      {category === 'tenants' && (
-                        <td className="p-3 hidden md:table-cell text-[var(--muted)]">{u.company || '—'}</td>
+                      {category === 'tenants' ? (
+                        <td className="p-3 align-middle hidden md:table-cell text-[var(--muted)]">
+                          <div className="truncate" title={u.company || undefined}>{u.company || '—'}</div>
+                        </td>
+                      ) : (
+                        <td className="p-3 align-middle">
+                          <div className="truncate" title={getRoleLabel(u.role)}>{getRoleLabel(u.role)}</div>
+                        </td>
                       )}
-                      {category === 'staff' && (
-                        <td className="p-3">{getRoleLabel(u.role)}</td>
-                      )}
-                      <td className="p-3 hidden sm:table-cell text-[var(--muted)] max-w-xs text-xs">
-                        {formatBindings(u)}
+                      <td className="p-3 align-middle hidden sm:table-cell text-[var(--muted)] text-xs">
+                        <div className="line-clamp-2 break-words leading-snug" title={bindings}>{bindings}</div>
                       </td>
-                      <td className="p-3">{statusBadge(u)}</td>
-                      <td className="p-3">
-                        <div className="flex items-center justify-end gap-1">
+                      <td className="p-3 align-middle">
+                        <div className="inline-flex max-w-full">{statusBadge(u)}</div>
+                      </td>
+                      <td className="p-3 align-middle">
+                        <div className="flex items-center justify-end gap-1 min-w-[4.5rem]">
                           <button
                             type="button"
-                            className="p-1.5 rounded-md border border-[var(--border)] hover:bg-[var(--surface-muted)]"
+                            className="p-1.5 rounded-md border border-[var(--border)] hover:bg-[var(--surface-muted)] shrink-0"
                             onClick={() => openEdit(u)}
                             title="Редактировать"
                           >
@@ -1050,7 +1060,7 @@ function AdminUsersPageContent() {
                           </button>
                           <button
                             type="button"
-                            className="p-1.5 rounded-md border border-red-200 hover:bg-red-50 text-red-600"
+                            className="p-1.5 rounded-md border border-red-200 hover:bg-red-50 text-red-600 shrink-0"
                             onClick={() => handleDeleteUser(u)}
                             disabled={deletingUserId === u.id}
                             title="Удалить"
@@ -1061,61 +1071,75 @@ function AdminUsersPageContent() {
                       </td>
                     </tr>
 
-                    {expanded && employees.map((emp) => (
-                      <tr
-                        key={emp.id}
-                        className="border-t border-[var(--border)] bg-[var(--surface-muted)]/60"
-                      >
-                        <td className="p-3 pl-10 sm:pl-12">
-                          <div className="flex items-start gap-2">
-                            <User className="w-4 h-4 mt-0.5 text-[var(--muted)] shrink-0" />
-                            <div className="min-w-0">
-                              <div className="font-medium flex items-center gap-2 flex-wrap">
-                                {emp.fullName}
-                                <span className="text-[10px] px-1.5 py-0.5 rounded-full bg-violet-50 text-violet-800 font-normal">
-                                  Сотрудник
-                                </span>
+                    {expanded && employees.map((emp) => {
+                      const empBindings = `Как у владельца · ${getRoleLabel(emp.role)}`;
+                      return (
+                        <tr
+                          key={emp.id}
+                          className="border-t border-[var(--border)] bg-[var(--surface-muted)]/60"
+                        >
+                          <td className="p-3 align-middle">
+                            <div className="flex items-center gap-2 min-w-0">
+                              <span className="w-5 h-5 shrink-0 inline-flex items-center justify-center" aria-hidden>
+                                <User className="w-4 h-4 text-[var(--muted)]" />
+                              </span>
+                              <div className="min-w-0 flex-1">
+                                <div className="font-medium truncate leading-snug" title={emp.fullName}>{emp.fullName}</div>
+                                <div className="mt-0.5">
+                                  <span className="text-[10px] px-1.5 py-0.5 rounded-full bg-violet-50 text-violet-800 font-normal leading-none">
+                                    Сотрудник
+                                  </span>
+                                </div>
+                                <div className="text-xs text-[var(--muted)] lg:hidden truncate mt-0.5" title={emp.email || undefined}>
+                                  {emp.email || '—'}
+                                </div>
+                                <div className="text-xs text-[var(--muted)] md:hidden truncate mt-0.5">
+                                  {emp.company || u.company || '—'}
+                                </div>
+                                <div className="text-xs text-[var(--muted)] sm:hidden mt-0.5 line-clamp-2">
+                                  {empBindings}
+                                </div>
                               </div>
-                              <div className="text-xs text-[var(--muted)] lg:hidden">{emp.email || '—'}</div>
-                              {emp.phone && (
-                                <div className="text-[11px] text-[var(--muted)] mt-0.5">{emp.phone}</div>
-                              )}
                             </div>
-                          </div>
-                        </td>
-                        <td className="p-3 hidden lg:table-cell text-[var(--muted)]">
-                          <div>{emp.email || '—'}</div>
-                        </td>
-                        <td className="p-3 hidden md:table-cell text-[var(--muted)] text-xs">
-                          {emp.company || u.company || '—'}
-                        </td>
-                        <td className="p-3 hidden sm:table-cell text-[var(--muted)] text-xs">
-                          Как у владельца · {getRoleLabel(emp.role)}
-                        </td>
-                        <td className="p-3">{statusBadge(emp)}</td>
-                        <td className="p-3">
-                          <div className="flex items-center justify-end gap-1">
-                            <button
-                              type="button"
-                              className="p-1.5 rounded-md border border-[var(--border)] hover:bg-[var(--surface-muted)]"
-                              onClick={() => openEdit(emp)}
-                              title="Редактировать сотрудника"
-                            >
-                              <Pencil className="w-4 h-4" />
-                            </button>
-                            <button
-                              type="button"
-                              className="p-1.5 rounded-md border border-red-200 hover:bg-red-50 text-red-600"
-                              onClick={() => handleDeleteUser(emp)}
-                              disabled={deletingUserId === emp.id}
-                              title="Удалить сотрудника"
-                            >
-                              <Trash2 className="w-4 h-4" />
-                            </button>
-                          </div>
-                        </td>
-                      </tr>
-                    ))}
+                          </td>
+                          <td className="p-3 align-middle hidden lg:table-cell text-[var(--muted)]">
+                            <div className="truncate" title={emp.email || undefined}>{emp.email || '—'}</div>
+                          </td>
+                          <td className="p-3 align-middle hidden md:table-cell text-[var(--muted)] text-xs">
+                            <div className="truncate" title={emp.company || u.company || undefined}>
+                              {emp.company || u.company || '—'}
+                            </div>
+                          </td>
+                          <td className="p-3 align-middle hidden sm:table-cell text-[var(--muted)] text-xs">
+                            <div className="line-clamp-2 leading-snug" title={empBindings}>{empBindings}</div>
+                          </td>
+                          <td className="p-3 align-middle">
+                            <div className="inline-flex max-w-full">{statusBadge(emp)}</div>
+                          </td>
+                          <td className="p-3 align-middle">
+                            <div className="flex items-center justify-end gap-1 min-w-[4.5rem]">
+                              <button
+                                type="button"
+                                className="p-1.5 rounded-md border border-[var(--border)] hover:bg-[var(--surface-muted)] shrink-0"
+                                onClick={() => openEdit(emp)}
+                                title="Редактировать сотрудника"
+                              >
+                                <Pencil className="w-4 h-4" />
+                              </button>
+                              <button
+                                type="button"
+                                className="p-1.5 rounded-md border border-red-200 hover:bg-red-50 text-red-600 shrink-0"
+                                onClick={() => handleDeleteUser(emp)}
+                                disabled={deletingUserId === emp.id}
+                                title="Удалить сотрудника"
+                              >
+                                <Trash2 className="w-4 h-4" />
+                              </button>
+                            </div>
+                          </td>
+                        </tr>
+                      );
+                    })}
                   </Fragment>
                 );
               })}
