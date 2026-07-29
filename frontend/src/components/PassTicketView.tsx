@@ -9,19 +9,24 @@ import {
   MapPin,
   Navigation,
   QrCode,
-  User,
 } from 'lucide-react';
-import { buildMapsRouteUrl, PublicPassTicket, TYPE_LABELS, PassType } from '@/lib/api';
+import {
+  buildMapsRouteUrl,
+  openMapsRoute,
+  PublicPassTicket,
+  TYPE_LABELS,
+  PassType,
+} from '@/lib/api';
 import { useConfig } from '@/hooks/useConfig';
 import { getUiLabels } from '@/lib/ui-labels';
 import {
   getPassCardShellClass,
-  getPassIconTileClass,
   getPassStatusTopStripeClass,
 } from '@/lib/pass-status';
 import { SharePassActions } from './SharePassActions';
 import { passShowsVisitTimeline } from '@/lib/pass-checkout';
 import { PassVisitTimeline } from './PassVisitTimeline';
+import { PassNumber } from './PassNumber';
 
 interface PassTicketViewProps {
   ticket: PublicPassTicket;
@@ -63,6 +68,7 @@ export function PassTicketView({
   const typeLabel = TYPE_LABELS[ticket.passType as PassType] || ticket.passType;
   const qrSize = compact ? 112 : 180;
   const companyLogo = ticket.companyLogo?.trim();
+  const companyName = ticket.companyName?.trim();
   const routeUrl = businessCenterAddress
     ? buildMapsRouteUrl(businessCenterAddress, routeProvider)
     : '';
@@ -73,8 +79,10 @@ export function PassTicketView({
         <div className={getPassStatusTopStripeClass(ticket.status)} aria-hidden />
 
         <header className="pass-ticket__header text-center border-b border-[var(--border)] bg-gradient-surface">
-          <div className="inline-flex items-center justify-center gap-1.5 text-[var(--text)] max-w-full min-w-0">
-            <Building2 className="w-4 h-4 shrink-0" />
+          <div className="inline-flex items-baseline justify-center gap-1.5 text-[var(--text)] max-w-full min-w-0 px-1">
+            <span className="text-[11px] sm:text-xs font-semibold uppercase tracking-wide text-[var(--muted)] shrink-0">
+              {labels.card.businessCenterAbbr}
+            </span>
             <span className="font-bold leading-tight truncate pass-ticket__bc-name" title={businessCenterName}>
               {businessCenterName}
             </span>
@@ -92,26 +100,12 @@ export function PassTicketView({
         </header>
 
         <section className="pass-ticket__guest text-center border-b border-[var(--border)]">
-          {companyLogo ? (
-            <div className="pass-ticket__avatar pass-ticket__avatar--logo mx-auto overflow-hidden">
-              {/* eslint-disable-next-line @next/next/no-img-element */}
-              <img
-                src={companyLogo}
-                alt={ticket.companyName || 'Логотип компании'}
-                className="w-full h-full object-contain"
-              />
-            </div>
-          ) : (
-            <div className={`pass-ticket__avatar mx-auto rounded-full overflow-hidden ${getPassIconTileClass(ticket.status)}`}>
-              <User className="pass-ticket__avatar-icon" />
-            </div>
-          )}
           <h1 className="pass-ticket__name font-bold leading-snug break-words max-w-full" title={ticket.visitorName}>
             {ticket.visitorName}
           </h1>
-          <p className="pass-card__mono pass-ticket__number text-[var(--text)] font-semibold" title={ticket.passNumber}>
-            {ticket.passNumber}
-          </p>
+          <div className="pass-ticket__number mt-1 flex justify-center">
+            <PassNumber value={ticket.passNumber} size="lg" />
+          </div>
           <div className="flex flex-wrap items-center justify-center gap-1.5 pass-ticket__badges">
             <span className="text-[10px] px-2 py-0.5 rounded-[var(--radius-sm)] surface-muted border border-[var(--border)] text-[var(--muted)]">
               {typeLabel}
@@ -120,15 +114,24 @@ export function PassTicketView({
         </section>
 
         <section className="pass-ticket__meta grid grid-cols-2 gap-2 border-b border-[var(--border)] bg-[var(--surface-muted)]">
-          <div className="col-span-2 flex items-center justify-center text-xs min-w-0">
-            <span
-              className="inline-flex items-center gap-1 font-semibold text-[var(--text)] min-w-0 max-w-full pass-card__chip"
-              title={`${labels.card.office} ${ticket.office}${ticket.floor ? ` · ${ticket.floor} ${labels.card.floorSuffix}` : ''}`}
-            >
-              <MapPin className="w-3.5 h-3.5 shrink-0" />
-              {labels.card.office} {ticket.office}
-              {ticket.floor && ` · ${ticket.floor} ${labels.card.floorSuffix}`}
-            </span>
+          <div className="col-span-2 pass-ticket__office-block py-0.5">
+            <div className="text-[9px] uppercase tracking-wide text-[var(--muted)]">
+              {labels.card.office}
+            </div>
+            <div className="pass-ticket__office-number" title={ticket.office}>
+              {ticket.office || '—'}
+            </div>
+            {(ticket.floor || businessCenterName) && (
+              <div className="pass-ticket__office-meta">
+                {ticket.floor ? (
+                  <span>{ticket.floor} {labels.card.floorSuffix}</span>
+                ) : null}
+                {ticket.floor && businessCenterName ? <span> · </span> : null}
+                {businessCenterName ? (
+                  <span className="pass-ticket__office-bc">{businessCenterName}</span>
+                ) : null}
+              </div>
+            )}
           </div>
           <div className="flex items-start gap-1.5 text-xs min-w-0">
             <Calendar className="w-3.5 h-3.5 text-[var(--muted)] shrink-0 mt-0.5" />
@@ -146,14 +149,23 @@ export function PassTicketView({
               </div>
             </div>
           ) : (
-            ticket.companyName && <div className="col-span-1" />
+            companyName && <div className="col-span-1" />
           )}
-          {ticket.companyName && (
-            <div className={`flex items-start gap-1.5 text-xs ${visitWindow ? 'col-span-2' : 'col-span-2'}`}>
-              <Building2 className="w-3.5 h-3.5 text-[var(--muted)] shrink-0 mt-0.5" />
+          {companyName && (
+            <div className="flex items-start gap-2 text-xs col-span-2 min-w-0">
+              {companyLogo ? (
+                // eslint-disable-next-line @next/next/no-img-element
+                <img
+                  src={companyLogo}
+                  alt=""
+                  className="w-8 h-8 object-contain shrink-0 mt-0.5"
+                />
+              ) : (
+                <Building2 className="w-3.5 h-3.5 text-[var(--muted)] shrink-0 mt-0.5" />
+              )}
               <div className="min-w-0">
                 <div className="text-[9px] uppercase tracking-wide text-[var(--muted)]">{labels.card.company}</div>
-                <div className="font-medium truncate">{ticket.companyName}</div>
+                <div className="font-medium truncate" title={companyName}>{companyName}</div>
               </div>
             </div>
           )}
@@ -201,9 +213,11 @@ export function PassTicketView({
           {routeUrl ? (
             <a
               href={routeUrl}
-              target="_blank"
-              rel="noopener noreferrer"
               className="btn btn-primary w-full text-sm inline-flex items-center justify-center gap-2"
+              onClick={(e) => {
+                e.preventDefault();
+                openMapsRoute(routeUrl);
+              }}
             >
               <Navigation className="w-4 h-4 shrink-0" />
               {labels.buttons.buildRoute}

@@ -769,6 +769,72 @@ input[type="checkbox"]:not(.checkbox) {
   min-width: 0;
 }
 
+/* Номер пропуска Pass-YYYY-NNNN — читаемо, в одну строку, без «…» */
+.pass-number {
+  display: inline-block;
+  font-family: ui-monospace, SFMono-Regular, Menlo, Monaco, Consolas, monospace;
+  font-weight: 700;
+  font-variant-numeric: tabular-nums;
+  letter-spacing: 0.03em;
+  white-space: nowrap;
+  max-width: 100%;
+  line-height: 1.25;
+  color: var(--text);
+}
+
+.pass-number--sm {
+  font-size: 0.75rem;
+  letter-spacing: 0.02em;
+  font-weight: 600;
+}
+
+.pass-number--lg {
+  font-size: 1.05rem;
+  letter-spacing: 0.04em;
+}
+
+@media (min-width: 400px) {
+  .pass-number--lg {
+    font-size: 1.2rem;
+  }
+}
+
+/* Блок офиса на билете */
+.pass-ticket__office-block {
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  gap: 0.2rem;
+  width: 100%;
+  min-width: 0;
+  text-align: center;
+}
+
+.pass-ticket__office-number {
+  font-size: 1.75rem;
+  font-weight: 800;
+  line-height: 1;
+  letter-spacing: -0.02em;
+  font-variant-numeric: tabular-nums;
+  color: var(--text);
+}
+
+.pass-ticket__office-meta {
+  font-size: 0.75rem;
+  color: var(--muted);
+  line-height: 1.3;
+  max-width: 100%;
+  word-break: break-word;
+}
+
+.pass-ticket__office-bc {
+  font-size: 0.8125rem;
+  font-weight: 600;
+  color: var(--text);
+  max-width: 100%;
+  word-break: break-word;
+}
+
 .pass-card__meta-line {
   overflow: hidden;
   text-overflow: ellipsis;
@@ -826,8 +892,13 @@ input[type="checkbox"]:not(.checkbox) {
   color: var(--text);
 }
 
+/* На широких экранах офис уже справа — полную строку в chips прячем, чтобы не дублировать */
 @media (min-width: 480px) {
-  .pass-card__office--inline {
+  .pass-card__chips > .pass-card__office--inline {
+    display: none;
+  }
+
+  .pass-card__meta-line .pass-card__office--inline {
     display: none;
   }
 }
@@ -1732,8 +1803,21 @@ a.pass-detail__chip:hover,
 }
 
 .pass-ticket--compact .pass-ticket__number {
-  font-size: 0.75rem;
-  margin-top: 0.125rem;
+  margin-top: 0.25rem;
+}
+
+.pass-ticket--compact .pass-ticket__number .pass-number--lg {
+  font-size: 0.95rem;
+}
+
+@media (min-width: 400px) {
+  .pass-ticket--compact .pass-ticket__number .pass-number--lg {
+    font-size: 1.1rem;
+  }
+}
+
+.pass-ticket--compact .pass-ticket__office-number {
+  font-size: 1.5rem;
 }
 
 .pass-ticket--compact .pass-ticket__badges {

@@ -253,6 +253,7 @@ export class PassesService implements OnModuleInit {
       propertyId?: string;
       officeId?: string;
       tenantId?: string;
+      companyName?: string;
     },
     user?: any,
   ) {
@@ -299,6 +300,10 @@ export class PassesService implements OnModuleInit {
         throw new ForbiddenException('Нет доступа к фильтру по арендатору');
       }
       filter.createdBy = new Types.ObjectId(params.tenantId);
+    }
+
+    if (params.companyName?.trim()) {
+      filter.companyName = new RegExp(`^${this.escapeRegex(params.companyName.trim())}$`, 'i');
     }
 
     return filter;
@@ -758,6 +763,7 @@ export class PassesService implements OnModuleInit {
     await this.expirePastPasses();
     const accessFilter = await this.buildAccessFilter(user);
     const limit = Math.min(Math.max(parseInt(query.limit || '50', 10) || 50, 1), 200);
+    const offset = Math.max(parseInt(query.offset || '0', 10) || 0, 0);
     const filter: any = { ...accessFilter };
 
     switch (query.scope) {
@@ -802,11 +808,43 @@ export class PassesService implements OnModuleInit {
       }
     }
 
+    // Доп. фильтры (период, статус, тип, поиск) — как в отчёте/выгрузке
+    if (query.status) filter.status = query.status;
+    if (query.passType) filter.passType = query.passType;
+
+    if (query.dateFrom || query.dateTo) {
+      if (query.dateFrom && !isValidVisitDateString(query.dateFrom)) {
+        throw new BadRequestException('Некорректная дата «с»');
+      }
+      if (query.dateTo && !isValidVisitDateString(query.dateTo)) {
+        throw new BadRequestException('Некорректная дата «по»');
+      }
+      if (query.dateFrom && query.dateTo && query.dateFrom > query.dateTo) {
+        throw new BadRequestException('Дата «с» не может быть позже даты «по»');
+      }
+      filter.visitDate = {};
+      if (query.dateFrom) filter.visitDate.$gte = query.dateFrom;
+      if (query.dateTo) filter.visitDate.$lte = query.dateTo;
+    }
+
+    // Уточнение БЦ/офиса внутри scope (например история компании по одному БЦ)
+    if (query.scope === 'company' || query.scope === 'visitor') {
+      if (query.propertyId && Types.ObjectId.isValid(query.propertyId)) {
+        filter.property = new Types.ObjectId(query.propertyId);
+      }
+      if (query.officeId && Types.ObjectId.isValid(query.officeId) && query.scope !== 'office') {
+        filter.officeId = new Types.ObjectId(query.officeId);
+      }
+    }
+
+    this.appendSearchFilter(filter, query.search);
+
     const [total, passes] = await Promise.all([
       this.passModel.countDocuments(filter),
       this.passModel
         .find(filter)
         .sort({ visitDate: -1, createdAt: -1 })
+        .skip(offset)
         .limit(limit)
         .lean(),
     ]);
@@ -816,6 +854,9 @@ export class PassesService implements OnModuleInit {
     return {
       scope: query.scope,
       total,
+      offset,
+      limit,
+      hasMore: offset + passes.length < total,
       passes: enriched.map((p) => this.mapToFrontend(p, user)),
     };
   }

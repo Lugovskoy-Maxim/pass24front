@@ -39,6 +39,8 @@ import { formatVisitDateLabel, formatVisitTimeWindow } from '@/lib/local-date';
 import { PassVisitTimeline } from './PassVisitTimeline';
 import { PassVisitorDataForm } from './PassVisitorDataForm';
 import { StatusBadge } from './StatusBadge';
+import { PassNumber } from './PassNumber';
+import { formatOfficeDestination } from '@/lib/pass-display';
 
 function HistoryLink({
   href,
@@ -234,10 +236,13 @@ export function PassDetailPanel({
     pass.visitorPassportNumber,
   ]);
 
-  const officeLabel = [
-    `${labels.card.office} ${pass.office}`,
-    pass.floor ? `${pass.floor} ${labels.card.floorSuffix}` : '',
-  ].filter(Boolean).join(' · ');
+  const officeLabel = formatOfficeDestination({
+    office: pass.office,
+    floor: pass.floor,
+    businessCenterName: pass.businessCenterName,
+    officePrefix: labels.card.officePrefix,
+    floorSuffix: labels.card.floorSuffix,
+  });
 
   const returningVisitor = typeof visitorVisitCount === 'number' && visitorVisitCount > 1;
 
@@ -278,9 +283,7 @@ export function PassDetailPanel({
                 </div>
 
                 <div className="flex items-center gap-0.5 mt-2 min-w-0">
-                  <span className="pass-card__mono text-sm font-semibold text-[var(--text)]" title={pass.passNumber}>
-                    {pass.passNumber}
-                  </span>
+                  <PassNumber value={pass.passNumber} size="md" className="min-w-0" />
                   <CopyButton value={pass.passNumber} title={labels.buttons.copyNumber} />
                 </div>
 
@@ -306,16 +309,21 @@ export function PassDetailPanel({
               </div>
 
               {/* Office highlight */}
-              <div className="pass-detail__office shrink-0 text-center pl-3 border-l border-[var(--border)] min-w-[3.25rem]">
+              <div className="pass-detail__office shrink-0 text-center pl-3 border-l border-[var(--border)] min-w-[3.5rem] max-w-[6.5rem]">
                 <div className="text-[9px] uppercase tracking-wide text-[var(--muted)] leading-none mb-1">
                   {labels.card.office}
                 </div>
-                <div className="text-2xl font-bold leading-none tabular-nums text-[var(--text)]" title={pass.office}>
+                <div className="text-2xl font-bold leading-none tabular-nums text-[var(--text)]" title={officeLabel}>
                   {pass.office}
                 </div>
                 {pass.floor && (
                   <div className="text-[11px] text-[var(--muted)] mt-1 leading-none">
                     {pass.floor} {labels.card.floorSuffix}
+                  </div>
+                )}
+                {pass.businessCenterName && (
+                  <div className="text-[10px] text-[var(--muted)] mt-1 leading-tight line-clamp-2" title={pass.businessCenterName}>
+                    {pass.businessCenterName}
                   </div>
                 )}
               </div>

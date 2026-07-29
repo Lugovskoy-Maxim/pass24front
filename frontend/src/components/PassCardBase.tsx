@@ -34,6 +34,8 @@ import { passShowsVisitTimeline } from '@/lib/pass-checkout';
 import { formatVisitDateLabel, formatVisitTimeWindow } from '@/lib/local-date';
 import { PassVisitTimeline } from './PassVisitTimeline';
 import { OverdueBadge, StatusBadge } from './StatusBadge';
+import { PassNumber } from './PassNumber';
+import { formatOfficeDestination } from '@/lib/pass-display';
 
 const TYPE_ICONS: Record<PassType, typeof User> = {
   visitor: User,
@@ -188,12 +190,11 @@ export function PassCardBase({
               </div>
 
               <div className="flex items-center gap-1 mt-1.5 min-w-0">
-                <span
-                  className={`pass-card__mono font-bold text-[var(--text)] flex-1 min-w-0 ${isCompact ? 'text-sm' : 'text-lg'}`}
-                  title={pass.passNumber}
-                >
-                  {pass.passNumber}
-                </span>
+                <PassNumber
+                  value={pass.passNumber}
+                  size={isCompact ? 'sm' : 'md'}
+                  className="flex-1 min-w-0"
+                />
                 <CopyPassNumber passNumber={pass.passNumber} title={labels.buttons.copyNumber} />
                 {showQrLink && (
                   <Link
@@ -216,11 +217,17 @@ export function PassCardBase({
               )}
             </div>
 
-            <div className="pass-card__office pass-card__office--side min-w-[3rem] max-w-[5rem]">
+            <div className="pass-card__office pass-card__office--side min-w-[3.25rem] max-w-[6.5rem]">
               <div className="text-[10px] uppercase tracking-wide text-[var(--muted)] truncate">{labels.card.office}</div>
               <div
                 className={`font-bold leading-none text-[var(--text)] tabular-nums truncate ${isCompact ? 'text-2xl' : 'text-3xl'}`}
-                title={pass.office}
+                title={formatOfficeDestination({
+                  office: pass.office,
+                  floor: pass.floor,
+                  businessCenterName: pass.businessCenterName,
+                  officePrefix: labels.card.officePrefix,
+                  floorSuffix: labels.card.floorSuffix,
+                })}
               >
                 {pass.office}
               </div>
@@ -229,18 +236,36 @@ export function PassCardBase({
                   {pass.floor} {labels.card.floorSuffix}
                 </div>
               )}
+              {pass.businessCenterName && (
+                <div className="text-[10px] text-[var(--muted)] mt-0.5 leading-tight line-clamp-2" title={pass.businessCenterName}>
+                  {pass.businessCenterName}
+                </div>
+              )}
             </div>
           </div>
         </div>
 
-        {(pass.businessCenterName || pass.companyName) && (
+        {(pass.businessCenterName || pass.companyName || pass.office) && (
           <div className={`pass-card__chips mt-2 text-[var(--muted)] ${isCompact ? 'text-xs' : 'text-sm'}`}>
-            {pass.businessCenterName && (
-              <span className="pass-card__chip" title={pass.businessCenterName}>
-                <MapPin className="w-3.5 h-3.5 shrink-0" />
-                {pass.businessCenterName}
-              </span>
-            )}
+            <span
+              className="pass-card__chip pass-card__office--inline"
+              title={formatOfficeDestination({
+                office: pass.office,
+                floor: pass.floor,
+                businessCenterName: pass.businessCenterName,
+                officePrefix: labels.card.officePrefix,
+                floorSuffix: labels.card.floorSuffix,
+              })}
+            >
+              <MapPin className="w-3.5 h-3.5 shrink-0" />
+              {formatOfficeDestination({
+                office: pass.office,
+                floor: pass.floor,
+                businessCenterName: pass.businessCenterName,
+                officePrefix: labels.card.officePrefix,
+                floorSuffix: labels.card.floorSuffix,
+              })}
+            </span>
             {pass.companyName && (
               <span className="pass-card__chip" title={pass.companyName}>
                 <Building2 className="w-3.5 h-3.5 shrink-0" />

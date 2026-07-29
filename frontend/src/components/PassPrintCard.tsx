@@ -2,6 +2,8 @@
 
 import { useMemo } from 'react';
 import QRCode from 'react-qr-code';
+import { PassNumber } from './PassNumber';
+import { formatOfficeDestination } from '@/lib/pass-display';
 import { Pass, TYPE_LABELS, getPassTicketUrl } from '@/lib/api';
 import { useConfig } from '@/hooks/useConfig';
 import { getUiLabels } from '@/lib/ui-labels';
@@ -36,7 +38,13 @@ export function PassPrintCard({ pass, businessCenterName, hidePrintButton }: Pas
     ? `${pass.visitTimeFrom}${pass.visitTimeTo ? `–${pass.visitTimeTo}` : ''}`
     : undefined;
 
-  const officeLine = `№${pass.office}${pass.floor ? `, ${pass.floor} ${labels.card.floorSuffix}` : ''}`;
+  const officeLine = formatOfficeDestination({
+    office: pass.office,
+    floor: pass.floor,
+    businessCenterName: pass.businessCenterName || bcName,
+    officePrefix: labels.card.officePrefix,
+    floorSuffix: labels.card.floorSuffix,
+  });
 
   const vehicleLine = pass.vehiclePlate
     ? [pass.vehiclePlate, pass.vehicleModel].filter(Boolean).join(' · ')
@@ -58,7 +66,7 @@ export function PassPrintCard({ pass, businessCenterName, hidePrintButton }: Pas
         </div>
 
         <div className="text-center mb-4">
-          <div className="text-3xl font-mono font-bold tracking-wider text-[var(--text)]">{pass.passNumber}</div>
+          <PassNumber value={pass.passNumber} size="lg" className="text-2xl sm:text-3xl" />
           <div className="mt-2 flex justify-center">
             <StatusBadge status={pass.status} labels={labels} />
           </div>

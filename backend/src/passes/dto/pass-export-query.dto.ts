@@ -41,6 +41,11 @@ export class PassExportQueryDto {
   @IsString()
   tenantId?: string;
 
+  /** Точное имя компании (как на странице истории /history?scope=company) */
+  @IsOptional()
+  @IsString()
+  companyName?: string;
+
   @IsOptional()
   @Type(() => Number)
   @IsInt()

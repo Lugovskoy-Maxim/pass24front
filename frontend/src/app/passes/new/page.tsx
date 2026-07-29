@@ -52,12 +52,6 @@ function NewPassForm() {
   const tenantOffices = user?.offices || [];
   const tenantCompanyUser = isTenantCompanyUser(user);
   const canUseTemplates = hasPermission(user, 'passes.templates');
-  const bcOptions = [...new Map(
-    tenantOffices.map((o) => [o.propertyId, o.businessCenterName || 'Бизнес-центр']),
-  ).entries()].map(([id, name]) => ({ id, name }));
-  const officesInBc = propertyId
-    ? tenantOffices.filter((o) => o.propertyId === propertyId)
-    : tenantOffices;
 
   const bcHoursById = useMemo(() => {
     const configById = new Map(config?.businessCenters?.map((bc) => [bc.id, bc]) || []);
@@ -79,9 +73,21 @@ function NewPassForm() {
     return map;
   }, [tenantOffices, config?.businessCenters]);
 
+  const officeSelectOptions = useMemo(() => {
+    return tenantOffices.map((o) => {
+      const bcName = o.businessCenterName
+        || bcHoursById.get(o.propertyId)?.name
+        || 'Бизнес-центр';
+      return {
+        id: o.id,
+        label: `оф. ${o.number} — ${bcName}`,
+      };
+    });
+  }, [tenantOffices, bcHoursById]);
+
   const selectedBcId = propertyId
     || (officeId ? tenantOffices.find((o) => o.id === officeId)?.propertyId : undefined)
-    || (bcOptions.length === 1 ? bcOptions[0].id : config?.businessCenters?.[0]?.id);
+    || config?.businessCenters?.[0]?.id;
 
   const selectedOffice = officeId ? tenantOffices.find((o) => o.id === officeId) : undefined;
   const selectedOfficeHours = selectedOffice?.propertyId
@@ -110,9 +116,6 @@ function NewPassForm() {
 
   useEffect(() => {
     if (!user) return;
-    if (bcOptions.length === 1 && !propertyId) {
-      setPropertyId(bcOptions[0].id);
-    }
     if (tenantOffices.length === 1 && !officeId) {
       const o = tenantOffices[0];
       setPropertyId(o.propertyId);
@@ -120,7 +123,7 @@ function NewPassForm() {
       setOffice(o.number);
       setFloor(o.floor);
     }
-  }, [user, tenantOffices, officeId, bcOptions, propertyId]);
+  }, [user, tenantOffices, officeId]);
 
   useEffect(() => {
     if (!bookableDates.length) return;
@@ -128,6 +131,20 @@ function NewPassForm() {
       setVisitDate(bookableDates[0]);
     }
   }, [bookableDates, visitDate]);
+
+  const handleOfficeSelect = (id: string) => {
+    setOfficeId(id);
+    const selected = tenantOffices.find((o) => o.id === id);
+    if (selected) {
+      setPropertyId(selected.propertyId);
+      setOffice(selected.number);
+      setFloor(selected.floor);
+    } else {
+      setPropertyId('');
+      setOffice('');
+      setFloor('');
+    }
+  };
 
   const applyTemplate = (template: PassTemplate) => {
     setSelectedTemplateId(template.id);
@@ -138,11 +155,12 @@ function NewPassForm() {
     setVehicleModel(template.vehicleModel || '');
     setComment(template.comment || '');
     if (template.officeId) {
-      const matched = tenantOffices.find((o) => o.id === template.officeId);
-      if (matched) setPropertyId(matched.propertyId);
-      setOfficeId(template.officeId);
-      setOffice(template.office || '');
-      setFloor(template.floor || '');
+      handleOfficeSelect(template.officeId);
+      if (!tenantOffices.some((o) => o.id === template.officeId)) {
+        setOfficeId(template.officeId);
+        setOffice(template.office || '');
+        setFloor(template.floor || '');
+      }
     } else if (template.office) {
       setOffice(template.office);
       setFloor(template.floor || '');
@@ -155,25 +173,6 @@ function NewPassForm() {
       .then(({ template }) => applyTemplate(template))
       .catch((err) => toast(getErrorMessage(err, 'Шаблон не найден'), 'error'));
   }, [templateId, tenantOffices, enabledTypes]);
-
-  const handleBcSelect = (id: string) => {
-    setPropertyId(id);
-    setOfficeId('');
-    setOffice('');
-    setFloor('');
-    const inBc = tenantOffices.filter((o) => o.propertyId === id);
-    if (inBc.length === 1) handleOfficeSelect(inBc[0].id);
-  };
-
-  const handleOfficeSelect = (id: string) => {
-    setOfficeId(id);
-    const selected = tenantOffices.find((o) => o.id === id);
-    if (selected) {
-      setPropertyId(selected.propertyId);
-      setOffice(selected.number);
-      setFloor(selected.floor);
-    }
-  };
 
   const clearFieldError = (field: string) => {
     setFieldErrors((prev) => {
@@ -201,7 +200,7 @@ function NewPassForm() {
       recipientEmail,
       // Компания всегда выбирает офис из списка (только свои)
       tenantHasOffices: tenantCompanyUser || tenantOffices.length > 0,
-      tenantMultiBc: bcOptions.length > 1,
+      tenantMultiBc: false,
     });
     setFieldErrors(errors);
     if (hasFieldErrors(errors)) return;
@@ -343,45 +342,33 @@ function NewPassForm() {
         </FormField>
 
         {tenantCompanyUser || tenantOffices.length > 0 ? (
-          <div className="space-y-3">
-            {bcOptions.length > 1 && (
-              <FormField id="propertyId" label="Бизнес-центр" required error={fieldErrors.propertyId}>
-                <FormSelect
-                  id="propertyId"
-                  value={propertyId}
-                  onChange={(e) => { handleBcSelect(e.target.value); clearFieldError('propertyId'); }}
-                  invalid={!!fieldErrors.propertyId}
-                >
-                  <option value="">Выберите БЦ</option>
-                  {bcOptions.map((bc) => (
-                    <option key={bc.id} value={bc.id}>{bc.name}</option>
-                  ))}
-                </FormSelect>
-              </FormField>
+          <FormField
+            id="officeId"
+            label="Офис (куда)"
+            required
+            error={fieldErrors.officeId}
+            hint={officeSelectOptions.length > 1 ? 'Офис и бизнес-центр в одном списке' : undefined}
+          >
+            <FormSelect
+              id="officeId"
+              value={officeId}
+              onChange={(e) => {
+                handleOfficeSelect(e.target.value);
+                clearFieldError('officeId');
+              }}
+              invalid={!!fieldErrors.officeId}
+            >
+              <option value="">Выберите офис</option>
+              {officeSelectOptions.map((o) => (
+                <option key={o.id} value={o.id}>{o.label}</option>
+              ))}
+            </FormSelect>
+            {selectedOfficeHours && (
+              <p className="text-xs text-[var(--muted)] mt-2">
+                Рабочие часы {selectedOfficeHours.name}: {selectedOfficeHours.from}–{selectedOfficeHours.to}
+              </p>
             )}
-            <FormField id="officeId" label="Офис (куда)" required error={fieldErrors.officeId}>
-              <FormSelect
-                id="officeId"
-                value={officeId}
-                onChange={(e) => { handleOfficeSelect(e.target.value); clearFieldError('officeId'); }}
-                invalid={!!fieldErrors.officeId}
-                disabled={bcOptions.length > 1 && !propertyId}
-              >
-                <option value="">Выберите офис</option>
-                {officesInBc.map((o) => (
-                  <option key={o.id} value={o.id}>офис {o.number}</option>
-                ))}
-              </FormSelect>
-              {selectedOfficeHours && (
-                <p className="text-xs text-[var(--muted)] mt-2">
-                  Рабочие часы {selectedOfficeHours.name}: {selectedOfficeHours.from}–{selectedOfficeHours.to}
-                </p>
-              )}
-            </FormField>
-            {bcOptions.length === 1 && (
-              <p className="text-xs text-[var(--muted)]">БЦ: {bcOptions[0].name}</p>
-            )}
-          </div>
+          </FormField>
         ) : (
           <FormField id="office" label="Офис (куда)" required error={fieldErrors.office}>
             <FormInput

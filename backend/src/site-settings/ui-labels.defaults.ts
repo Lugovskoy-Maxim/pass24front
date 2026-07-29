@@ -157,6 +157,8 @@ export const DEFAULT_UI_LABELS = {
     vehicle: 'Авто',
     type: 'Тип',
     businessCenter: 'Бизнес-центр',
+    /** Подпись перед названием БЦ на билете (вместо иконки) */
+    businessCenterAbbr: 'БЦ',
     comment: 'Комментарий',
     rejectionReason: 'Причина отклонения',
     checkIn: 'Вход',

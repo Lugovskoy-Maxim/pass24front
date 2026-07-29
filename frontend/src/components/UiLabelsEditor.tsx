@@ -222,6 +222,7 @@ const SECTIONS: Section[] = [
       { path: 'card.vehicle', label: 'Авто' },
       { path: 'card.type', label: 'Тип' },
       { path: 'card.businessCenter', label: 'Бизнес-центр' },
+      { path: 'card.businessCenterAbbr', label: 'Подпись БЦ на билете (БЦ / Бизнес-центр)' },
       { path: 'card.comment', label: 'Комментарий' },
       { path: 'card.rejectionReason', label: 'Причина отклонения' },
       { path: 'card.checkIn', label: 'Вход (время)' },

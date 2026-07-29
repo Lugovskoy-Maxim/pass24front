@@ -379,13 +379,13 @@ export default function PassesReportPage() {
               ) : (
                 passes.map((pass) => (
                   <tr key={pass.id} className="border-b border-[var(--border)] last:border-0 hover:bg-[var(--surface-muted)]">
-                    <td className="p-3 font-mono text-xs whitespace-nowrap">{pass.passNumber}</td>
+                    <td className="p-3 font-mono text-xs whitespace-nowrap tracking-wide">{pass.passNumber}</td>
                     <td className="p-3 whitespace-nowrap">{formatVisitDate(pass.visitDate)}</td>
                     <td className="p-3">{pass.visitorName}</td>
                     <td className="p-3 text-[var(--muted)]">{pass.companyName || '—'}</td>
                     <td className="p-3">
-                      <div>{pass.businessCenterName || '—'}</div>
-                      <div className="text-xs text-[var(--muted)]">оф. {pass.office}{pass.floor ? `, ${pass.floor} эт.` : ''}</div>
+                      <div className="font-semibold tabular-nums">оф. {pass.office}{pass.floor ? ` · ${pass.floor} эт.` : ''}</div>
+                      <div className="text-xs text-[var(--muted)]">{pass.businessCenterName || '—'}</div>
                     </td>
                     <td className="p-3 whitespace-nowrap">{TYPE_LABELS[pass.passType]}</td>
                     <td className="p-3 whitespace-nowrap">{getStatusLabel(pass.status, labels)}</td>

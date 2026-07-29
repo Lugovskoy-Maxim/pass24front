@@ -611,7 +611,13 @@ export const api = {
     officeId?: string;
     companyName?: string;
     propertyId?: string;
+    dateFrom?: string;
+    dateTo?: string;
+    status?: string;
+    passType?: PassType | '';
+    search?: string;
     limit?: number;
+    offset?: number;
   }) => {
     const q = new URLSearchParams({ scope: params.scope });
     if (params.visitorName) q.set('visitorName', params.visitorName);
@@ -621,8 +627,21 @@ export const api = {
     if (params.officeId) q.set('officeId', params.officeId);
     if (params.companyName) q.set('companyName', params.companyName);
     if (params.propertyId) q.set('propertyId', params.propertyId);
+    if (params.dateFrom) q.set('dateFrom', params.dateFrom);
+    if (params.dateTo) q.set('dateTo', params.dateTo);
+    if (params.status) q.set('status', params.status);
+    if (params.passType) q.set('passType', params.passType);
+    if (params.search) q.set('search', params.search);
     if (params.limit) q.set('limit', String(params.limit));
-    return request<{ scope: string; total: number; passes: Pass[] }>(`/passes/history?${q.toString()}`);
+    if (params.offset !== undefined) q.set('offset', String(params.offset));
+    return request<{
+      scope: string;
+      total: number;
+      offset?: number;
+      limit?: number;
+      hasMore?: boolean;
+      passes: Pass[];
+    }>(`/passes/history?${q.toString()}`);
   },
 
   updatePassVisitorData: (id: string, data: {
@@ -894,6 +913,8 @@ export interface PassExportFiltersInput {
   propertyId?: string;
   officeId?: string;
   tenantId?: string;
+  /** Точное имя компании — для истории/выгрузки по компании */
+  companyName?: string;
   offset?: number;
   limit?: number;
 }
@@ -918,6 +939,7 @@ function buildPassExportQuery(filters: PassExportFiltersInput = {}) {
   if (filters.propertyId) q.set('propertyId', filters.propertyId);
   if (filters.officeId) q.set('officeId', filters.officeId);
   if (filters.tenantId) q.set('tenantId', filters.tenantId);
+  if (filters.companyName) q.set('companyName', filters.companyName);
   if (filters.offset !== undefined) q.set('offset', String(filters.offset));
   if (filters.limit !== undefined) q.set('limit', String(filters.limit));
   return q.toString();
@@ -1112,16 +1134,48 @@ export const DEFAULT_BC_PASS_SETTINGS: BcPassSettings = {
   route_maps_provider: 'yandex',
 };
 
-/** Ссылка на карты по адресу БЦ. */
+/**
+ * Ссылка на построение маршрута к адресу БЦ.
+ * Форматы подобраны так, чтобы открывались и на desktop, и в мобильных браузерах / PWA
+ * (в т.ч. через приложения карт, если установлены).
+ */
 export function buildMapsRouteUrl(
   address: string,
   provider: 'yandex' | 'google' | string = 'yandex',
 ): string {
-  const q = encodeURIComponent(address.trim());
+  const trimmed = address.trim();
+  if (!trimmed) return '';
+  const q = encodeURIComponent(trimmed);
+
   if (provider === 'google') {
-    return `https://www.google.com/maps/dir/?api=1&destination=${q}`;
+    // destination + travelmode — надёжно открывает маршрут на iOS/Android
+    return `https://www.google.com/maps/dir/?api=1&destination=${q}&travelmode=driving`;
   }
-  return `https://yandex.ru/maps/?rtext=~${q}&rtt=auto`;
+
+  // Яндекс.Карты: rtext=~адрес (пустое «откуда» = текущее местоположение).
+  // mode=routes + z — лучше отрабатывает в мобильном WebView, чем только rtext.
+  return `https://yandex.ru/maps/?mode=routes&rtext=~${q}&rtt=auto`;
+}
+
+/** Открыть маршрут: на мобильных target=_blank часто ломается в PWA/WebView. */
+export function openMapsRoute(url: string): void {
+  if (!url || typeof window === 'undefined') return;
+  const ua = navigator.userAgent || '';
+  const isMobile = /Android|iPhone|iPad|iPod|Mobile|webOS|BlackBerry|IEMobile|Opera Mini/i.test(ua)
+    || (navigator as Navigator & { standalone?: boolean }).standalone === true
+    || window.matchMedia('(display-mode: standalone)').matches
+    || window.matchMedia('(max-width: 768px)').matches;
+
+  if (isMobile) {
+    // same-tab navigation надёжнее открывает приложение карт
+    window.location.assign(url);
+    return;
+  }
+
+  const win = window.open(url, '_blank', 'noopener,noreferrer');
+  if (!win) {
+    window.location.assign(url);
+  }
 }
 
 export interface BusinessCenter {
