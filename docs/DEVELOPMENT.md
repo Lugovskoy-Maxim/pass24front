@@ -87,8 +87,9 @@ UI: `http://127.0.0.1:3000`
 | `ADMIN_USERNAME` / `ADMIN_PASSWORD` | Первый супер-админ |
 | `SMTP_*` | Почта (коды регистрации, сброс пароля, билеты) |
 | `PUBLIC_APP_URL` | Ссылки в письмах |
-| `SMSAERO_EMAIL` / `SMSAERO_API_KEY` / `SMSAERO_SIGN` | SMS Aero |
-| `SMS_ENABLED` | `true` — реальная отправка SMS |
+| `SMSAERO_EMAIL` / `SMSAERO_API_KEY` / `SMSAERO_SIGN` | SMS Aero Mobile ID (имя MA, не SMS sign) |
+| `SMS_ENABLED` | `true` — мобильная авторизация по телефону |
+| `SMSAERO_CALLBACK_URL` | callback Mobile ID (опц., default `{PUBLIC_APP_URL}/api/sms/mobile-id/callback`) |
 | `SEED_DEV_DATA` | Сиды тестовых учёток/БЦ |
 | `CORS_ORIGIN` | CORS (опционально) |
 

@@ -41,6 +41,7 @@ services:
       - SMSAERO_API_KEY=${SMSAERO_API_KEY:-}
       - SMSAERO_SIGN=${SMSAERO_SIGN:-SMS Aero}
       - SMS_ENABLED=${SMS_ENABLED:-false}
+      - SMSAERO_CALLBACK_URL=${SMSAERO_CALLBACK_URL:-}
 
   frontend:
     build:

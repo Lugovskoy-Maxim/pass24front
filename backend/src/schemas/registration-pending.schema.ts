@@ -14,13 +14,22 @@ export class RegistrationPending {
   @Prop({ required: true, enum: ['email', 'phone'] })
   verificationChannel: 'email' | 'phone';
 
-  @Prop({ required: true, select: false })
-  codeHash: string;
+  /** bcrypt-хэш OTP (только email-канал). Для phone — Mobile ID, codeHash не используется. */
+  @Prop({ select: false })
+  codeHash?: string;
+
+  /** id запроса SMS Aero mobile-id/send (phone-канал). */
+  @Prop()
+  mobileIdRequestId?: number;
+
+  /** authType из ответа send: SIM-PUSH / SMS и т.п. */
+  @Prop()
+  mobileIdAuthType?: string;
 
   @Prop({ required: true })
   expiresAt: Date;
 
-  /** Когда последний раз отправляли код (для rate limit SMS) */
+  /** Когда последний раз отправляли код (для rate limit SMS / Mobile ID) */
   @Prop()
   lastCodeSentAt?: Date;
 

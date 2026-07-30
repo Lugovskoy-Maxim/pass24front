@@ -56,6 +56,7 @@ services:
       - SMSAERO_API_KEY=${SMSAERO_API_KEY:-}
       - SMSAERO_SIGN=${SMSAERO_SIGN:-SMS Aero}
       - SMS_ENABLED=${SMS_ENABLED:-false}
+      - SMSAERO_CALLBACK_URL=${SMSAERO_CALLBACK_URL:-}
       - PUBLIC_APP_URL=http://127.0.0.1:3001
       - TZ=Europe/Moscow
     depends_on:

@@ -1055,8 +1055,10 @@ export default function AdminSiteSettingsPage() {
                 maxLength={300}
               />
               <p className="text-xs text-[var(--muted)] mt-1">
-                Используйте <code className="text-[var(--text)]">{'{code}'}</code> для подстановки 6-значного кода.
-                Текст должен содержать этот шаблон. Рекомендуемая длина — до 70 символов (одно SMS).
+                Регистрация по телефону идёт через <strong>мобильную авторизацию SMS Aero</strong>
+                (SIM-PUSH / SMS OTP). Текст SMS задаётся одобренным шаблоном в кабинете SMS Aero
+                для имени <code className="text-[var(--text)]">SMSAERO_SIGN</code> — поле ниже
+                справочное и на отправку не влияет.
               </p>
             </div>
 

@@ -114,7 +114,12 @@ export function validateRegistrationCode(code: string, channel: 'email' | 'phone
   const errors: FieldErrors = {};
   const trimmed = code.trim();
   if (!trimmed) errors.code = channel === 'phone' ? 'Введите код из SMS' : 'Введите код из письма';
-  else if (!/^\d{6}$/.test(trimmed)) errors.code = 'Код — 6 цифр без пробелов';
+  else if (channel === 'phone') {
+    // Mobile ID OTP: обычно 4–6 цифр (допускаем 4–8)
+    if (!/^\d{4,8}$/.test(trimmed)) errors.code = 'Код — от 4 до 8 цифр без пробелов';
+  } else if (!/^\d{6}$/.test(trimmed)) {
+    errors.code = 'Код — 6 цифр без пробелов';
+  }
   return errors;
 }
 

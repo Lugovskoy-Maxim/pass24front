@@ -638,7 +638,9 @@ function LoginPageInner() {
             {mode === 'register' && registerStep === 'verify' && (
               <div className="space-y-3">
                 <p className="text-sm text-[var(--text)]">
-                  Введите 6-значный код, отправленный на{' '}
+                  {verificationChannel === 'phone'
+                    ? 'Подтвердите запрос на телефоне (SIM-PUSH) или введите код из SMS, отправленный на '
+                    : 'Введите 6-значный код, отправленный на '}
                   <span className="font-medium">{verificationTarget}</span>
                 </p>
                 <FormField id="verificationCode" label="Код подтверждения" required error={fieldErrors.code}>
@@ -648,7 +650,8 @@ function LoginPageInner() {
                     autoComplete="one-time-code"
                     value={verificationCode}
                     onChange={(e) => {
-                      setVerificationCode(e.target.value.replace(/\D/g, '').slice(0, 6));
+                      const maxLen = verificationChannel === 'phone' ? 8 : 6;
+                      setVerificationCode(e.target.value.replace(/\D/g, '').slice(0, maxLen));
                       clearFieldError('code');
                     }}
                     invalid={!!fieldErrors.code}
@@ -660,7 +663,7 @@ function LoginPageInner() {
                   Код действует 15 минут.
                   {verificationChannel === 'email'
                     ? ' Проверьте папку «Спам», если письма нет.'
-                    : ' Повторная отправка SMS — не чаще 1 раза в 5 минут.'}
+                    : ' Мобильная авторизация: SIM-PUSH или SMS. Повтор — не чаще 1 раза в 5 минут.'}
                 </p>
               </div>
             )}

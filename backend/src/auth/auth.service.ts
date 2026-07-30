@@ -92,8 +92,9 @@ export class AuthService {
   ) {}
 
   /**
-   * Шаг 1 регистрации: сохраняет pending + шлёт OTP (email или SMS).
-   * passwordConfirm обязателен; SMS rate-limit по lastCodeSentAt pending.
+   * Шаг 1 регистрации: pending + OTP.
+   * phone → SMS Aero Mobile ID (SIM-PUSH / SMS); email → код на почту.
+   * passwordConfirm обязателен; rate-limit SMS/MA по lastCodeSentAt.
    */
   async requestRegistrationCode(dto: RegisterDto) {
     if (dto.password !== dto.passwordConfirm) {
@@ -156,15 +157,12 @@ export class AuthService {
       }
     }
 
-    const code = String(Math.floor(100000 + Math.random() * 900000));
-    const codeHash = await bcrypt.hash(code, 10);
     const passwordHash = await bcrypt.hash(dto.password, 10);
     const now = new Date();
     const expiresAt = new Date(now.getTime() + CODE_TTL_MS);
 
     const pendingData: Record<string, unknown> = {
       verificationChannel: channel,
-      codeHash,
       expiresAt,
       lastCodeSentAt: now,
       password: passwordHash,
@@ -177,23 +175,31 @@ export class AuthService {
     if (email) pendingData.email = email;
     if (phone) pendingData.phone = phone;
 
+    let unset: Record<string, 1>;
+    if (channel === 'phone') {
+      // Mobile ID: код генерирует SMS Aero (SIM-PUSH → SMS OTP)
+      const mid = await this.smsService.startMobileAuth(phone!);
+      pendingData.mobileIdRequestId = mid.requestId;
+      if (mid.authType) pendingData.mobileIdAuthType = mid.authType;
+      unset = { codeHash: 1 };
+    } else {
+      const code = String(Math.floor(100000 + Math.random() * 900000));
+      pendingData.codeHash = await bcrypt.hash(code, 10);
+      await this.mailService.sendRegistrationCode(email!, code);
+      unset = { mobileIdRequestId: 1, mobileIdAuthType: 1 };
+    }
+
     await this.pendingModel.findOneAndUpdate(
       pendingKey,
-      pendingData,
+      { $set: pendingData, $unset: unset },
       { upsert: true, new: true, setDefaultsOnInsert: true },
     );
-
-    if (channel === 'phone') {
-      await this.smsService.sendRegistrationCode(phone!, code, siteSettings.smsRegistrationCodeText);
-    } else {
-      await this.mailService.sendRegistrationCode(email!, code);
-    }
 
     return {
       verificationRequired: true,
       verificationChannel: channel,
       message: channel === 'phone'
-        ? `Код подтверждения отправлен на ${phone}`
+        ? `Код подтверждения отправлен на ${phone} (мобильная авторизация)`
         : `Код подтверждения отправлен на ${email}`,
       expiresInMinutes: 15,
       retryAfterSeconds: channel === 'phone' ? Math.floor(SMS_RESEND_INTERVAL_MS / 1000) : 0,
@@ -222,9 +228,23 @@ export class AuthService {
       throw new BadRequestException('Код истёк. Запросите новый код регистрации.');
     }
 
-    const codeOk = await bcrypt.compare(dto.code, pending.codeHash);
-    if (!codeOk) {
-      throw new BadRequestException('Неверный код подтверждения');
+    if (pending.verificationChannel === 'phone') {
+      const requestId = pending.mobileIdRequestId;
+      if (!requestId) {
+        throw new BadRequestException('Сессия мобильной авторизации не найдена. Запросите код снова.');
+      }
+      const codeOk = await this.smsService.verifyMobileAuth(requestId, dto.code);
+      if (!codeOk) {
+        throw new BadRequestException('Неверный код подтверждения');
+      }
+    } else {
+      if (!pending.codeHash) {
+        throw new BadRequestException('Код не найден. Запросите новый код регистрации.');
+      }
+      const codeOk = await bcrypt.compare(dto.code, pending.codeHash);
+      if (!codeOk) {
+        throw new BadRequestException('Неверный код подтверждения');
+      }
     }
 
     if (pending.email) {
