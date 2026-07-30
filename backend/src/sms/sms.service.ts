@@ -43,8 +43,10 @@ export class SmsService {
       );
     }
 
-    const sign = this.configService.get<string>('SMSAERO_SIGN') || 'SMS Aero';
-    const text = (template?.includes('{code}') ? template : 'Код подтверждения регистрации: {code}. Действует 15 минут.')
+    const sign = (this.configService.get<string>('SMSAERO_SIGN') || 'SMS Aero').trim();
+    // Текст обязан совпадать с одобренным шаблоном SMS Aero для этой подписи (sign).
+    const defaultTemplate = 'Ваш код для регистрации на pass.mstyle.ru - {code}';
+    const text = (template?.includes('{code}') ? template : defaultTemplate)
       .replace(/\{code\}/g, code);
 
     const response = await this.request('POST', 'sms/send', {
@@ -74,8 +76,8 @@ export class SmsService {
     if (lower.includes('incorrect') && lower.includes('sign')) {
       return 'Неверная подпись отправителя SMS. Проверьте SMSAERO_SIGN в настройках';
     }
-    if (lower.includes('validation error')) {
-      return 'SMS-сервис отклонил запрос. Проверьте номер телефона и настройки SMS Aero';
+    if (lower.includes('validation error') || lower.includes('moderation') || lower.includes('template')) {
+      return 'SMS Aero отклонил текст или подпись. Проверьте SMSAERO_SIGN и шаблон SMS в админке — он должен совпадать с одобренным в кабинете SMS Aero';
     }
     return 'Не удалось отправить SMS с кодом подтверждения';
   }

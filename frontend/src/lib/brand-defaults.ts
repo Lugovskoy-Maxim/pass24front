@@ -19,7 +19,8 @@ export const MSTYLE_BRAND_DEFAULTS = {
   themePrimaryHover: '#d55700',
   smsRegistrationEnabled: true,
   smsRegistrationDisabledMessage: 'Скоро функция будет работать',
-  smsRegistrationCodeText: 'Код подтверждения регистрации: {code}. Действует 15 минут.',
+  // Должен совпадать с одобренным шаблоном SMS Aero (подпись mts_mstyle)
+  smsRegistrationCodeText: 'Ваш код для регистрации на pass.mstyle.ru - {code}',
 };
 
 export type BrandFields = Pick<
