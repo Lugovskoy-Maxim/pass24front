@@ -27,6 +27,7 @@ import { SharePassActions } from './SharePassActions';
 import { passShowsVisitTimeline } from '@/lib/pass-checkout';
 import { PassVisitTimeline } from './PassVisitTimeline';
 import { PassNumber } from './PassNumber';
+import { isShortOfficeCode } from '@/lib/pass-display';
 
 interface PassTicketViewProps {
   ticket: PublicPassTicket;
@@ -118,7 +119,14 @@ export function PassTicketView({
             <div className="text-[9px] uppercase tracking-wide text-[var(--muted)]">
               {labels.card.office}
             </div>
-            <div className="pass-ticket__office-number" title={ticket.office}>
+            <div
+              className={
+                isShortOfficeCode(ticket.office)
+                  ? 'pass-ticket__office-number'
+                  : 'pass-ticket__office-number pass-ticket__office-number--name'
+              }
+              title={ticket.office || undefined}
+            >
               {ticket.office || '—'}
             </div>
             {(ticket.floor || businessCenterName) && (

@@ -36,6 +36,7 @@ import { PassVisitTimeline } from './PassVisitTimeline';
 import { OverdueBadge, StatusBadge } from './StatusBadge';
 import { PassNumber } from './PassNumber';
 import { formatOfficeDestination } from '@/lib/pass-display';
+import { PassOfficeHighlight } from './PassOfficeHighlight';
 
 const TYPE_ICONS: Record<PassType, typeof User> = {
   visitor: User,
@@ -217,31 +218,21 @@ export function PassCardBase({
               )}
             </div>
 
-            <div className="pass-card__office pass-card__office--side min-w-[3.25rem] max-w-[6.5rem]">
-              <div className="text-[10px] uppercase tracking-wide text-[var(--muted)] truncate">{labels.card.office}</div>
-              <div
-                className={`font-bold leading-none text-[var(--text)] tabular-nums truncate ${isCompact ? 'text-2xl' : 'text-3xl'}`}
-                title={formatOfficeDestination({
-                  office: pass.office,
-                  floor: pass.floor,
-                  businessCenterName: pass.businessCenterName,
-                  officePrefix: labels.card.officePrefix,
-                  floorSuffix: labels.card.floorSuffix,
-                })}
-              >
-                {pass.office}
-              </div>
-              {pass.floor && (
-                <div className="text-xs text-[var(--muted)] mt-0.5 truncate" title={`${pass.floor} ${labels.card.floorSuffix}`}>
-                  {pass.floor} {labels.card.floorSuffix}
-                </div>
-              )}
-              {pass.businessCenterName && (
-                <div className="text-[10px] text-[var(--muted)] mt-0.5 leading-tight line-clamp-2" title={pass.businessCenterName}>
-                  {pass.businessCenterName}
-                </div>
-              )}
-            </div>
+            <PassOfficeHighlight
+              office={pass.office}
+              floor={pass.floor}
+              businessCenterName={pass.businessCenterName}
+              label={labels.card.office}
+              floorSuffix={labels.card.floorSuffix}
+              size={isCompact ? 'sm' : 'lg'}
+              title={formatOfficeDestination({
+                office: pass.office,
+                floor: pass.floor,
+                businessCenterName: pass.businessCenterName,
+                officePrefix: labels.card.officePrefix,
+                floorSuffix: labels.card.floorSuffix,
+              })}
+            />
           </div>
         </div>
 

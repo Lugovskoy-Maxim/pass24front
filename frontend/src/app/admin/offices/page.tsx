@@ -1292,8 +1292,17 @@ export default function AdminOfficesPage() {
                       }`}
                     >
                       <div className="flex items-start justify-between gap-2 mb-3">
-                        <div>
-                          <div className="text-2xl font-bold font-mono leading-none">{office.number}</div>
+                        <div className="min-w-0 flex-1">
+                          <div
+                            className={
+                              office.number.trim().length > 6 || /\s/.test(office.number)
+                                ? 'text-base sm:text-lg font-bold leading-snug break-words'
+                                : 'text-2xl font-bold font-mono leading-none'
+                            }
+                            title={office.number}
+                          >
+                            {office.number}
+                          </div>
                           {office.floor && (
                             <div className="text-sm text-[var(--muted)] mt-1">{office.floor} этаж</div>
                           )}

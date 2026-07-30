@@ -44,3 +44,15 @@ export function formatOfficeDestination(parts: OfficeDisplayParts): string {
   const bc = (parts.businessCenterName || '').trim();
   return bc ? `${short} · ${bc}` : short;
 }
+
+/**
+ * Короткий «номер» офиса (401, 12А, 3/1) vs текстовое название («Спорт Экспрес»).
+ * Для названий нужен меньший шрифт и перенос строк в карточке.
+ */
+export function isShortOfficeCode(office?: string | null): boolean {
+  const o = (office || '').trim();
+  if (!o) return true;
+  // Пробелы / длинные строки — это название, не номер кабинета
+  if (/\s/.test(o) || o.length > 6) return false;
+  return true;
+}

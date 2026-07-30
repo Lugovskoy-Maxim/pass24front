@@ -833,6 +833,20 @@ input[type="checkbox"]:not(.checkbox) {
   letter-spacing: -0.02em;
   font-variant-numeric: tabular-nums;
   color: var(--text);
+  max-width: 100%;
+}
+
+/* Текстовое название офиса на билете (не «401», а «Спорт Экспрес») */
+.pass-ticket__office-number--name {
+  font-size: 1.05rem;
+  font-weight: 700;
+  line-height: 1.2;
+  letter-spacing: -0.01em;
+  font-variant-numeric: normal;
+  white-space: normal;
+  overflow-wrap: anywhere;
+  word-break: break-word;
+  max-width: 100%;
 }
 
 .pass-ticket__office-meta {
@@ -889,6 +903,32 @@ input[type="checkbox"]:not(.checkbox) {
   border-left: 1px solid color-mix(in srgb, var(--border) 60%, transparent);
 }
 
+/* Короткий номер офиса (401) — узкая колонка */
+.pass-card__office--code {
+  min-width: 3.25rem;
+  max-width: 6.5rem;
+}
+
+/* Текстовое название («Спорт Экспрес») — шире, с переносом */
+.pass-card__office--named {
+  min-width: 5.5rem;
+  max-width: 9.5rem;
+  flex: 0 1 auto;
+}
+
+.pass-card__office-value--name {
+  line-height: 1.15;
+  letter-spacing: -0.015em;
+  white-space: normal;
+  overflow-wrap: anywhere;
+  word-break: break-word;
+  display: -webkit-box;
+  -webkit-box-orient: vertical;
+  -webkit-line-clamp: 3;
+  overflow: hidden;
+  hyphens: auto;
+}
+
 .pass-card__body--row .pass-card__office--side {
   padding-top: 0.125rem;
   padding-bottom: 0.125rem;
@@ -897,6 +937,12 @@ input[type="checkbox"]:not(.checkbox) {
 @media (max-width: 479px) {
   .pass-card__office--side {
     display: none;
+  }
+}
+
+@media (min-width: 480px) and (max-width: 639px) {
+  .pass-card__office--named {
+    max-width: 7.5rem;
   }
 }
 
@@ -1834,6 +1880,11 @@ a.pass-detail__chip:hover,
 
 .pass-ticket--compact .pass-ticket__office-number {
   font-size: 1.5rem;
+}
+
+.pass-ticket--compact .pass-ticket__office-number--name {
+  font-size: 0.95rem;
+  line-height: 1.2;
 }
 
 .pass-ticket--compact .pass-ticket__badges {

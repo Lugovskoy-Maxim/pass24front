@@ -41,6 +41,7 @@ import { PassVisitorDataForm } from './PassVisitorDataForm';
 import { StatusBadge } from './StatusBadge';
 import { PassNumber } from './PassNumber';
 import { formatOfficeDestination } from '@/lib/pass-display';
+import { PassOfficeHighlight } from './PassOfficeHighlight';
 
 function HistoryLink({
   href,
@@ -309,24 +310,17 @@ export function PassDetailPanel({
               </div>
 
               {/* Office highlight */}
-              <div className="pass-detail__office shrink-0 text-center pl-3 border-l border-[var(--border)] min-w-[3.5rem] max-w-[6.5rem]">
-                <div className="text-[9px] uppercase tracking-wide text-[var(--muted)] leading-none mb-1">
-                  {labels.card.office}
-                </div>
-                <div className="text-2xl font-bold leading-none tabular-nums text-[var(--text)]" title={officeLabel}>
-                  {pass.office}
-                </div>
-                {pass.floor && (
-                  <div className="text-[11px] text-[var(--muted)] mt-1 leading-none">
-                    {pass.floor} {labels.card.floorSuffix}
-                  </div>
-                )}
-                {pass.businessCenterName && (
-                  <div className="text-[10px] text-[var(--muted)] mt-1 leading-tight line-clamp-2" title={pass.businessCenterName}>
-                    {pass.businessCenterName}
-                  </div>
-                )}
-              </div>
+              <PassOfficeHighlight
+                office={pass.office}
+                floor={pass.floor}
+                businessCenterName={pass.businessCenterName}
+                label={labels.card.office}
+                floorSuffix={labels.card.floorSuffix}
+                size="md"
+                align="center"
+                className="pass-detail__office shrink-0 pl-3"
+                title={officeLabel}
+              />
             </div>
 
             {/* Quick links */}

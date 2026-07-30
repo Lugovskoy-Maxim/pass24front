@@ -26,6 +26,7 @@ import { formatVisitDateLabel, formatVisitTimeWindow } from '@/lib/local-date';
 import { formatOfficeDestination } from '@/lib/pass-display';
 import { StatusBadge } from './StatusBadge';
 import { PassNumber } from './PassNumber';
+import { PassOfficeHighlight } from './PassOfficeHighlight';
 
 const TYPE_ICONS: Record<PassType, typeof User> = {
   visitor: User,
@@ -168,26 +169,16 @@ export function PassListCard({
           </div>
         )}
 
-        <div className="pass-card__office pass-card__office--side shrink-0 self-center min-w-[3rem] max-w-[5.5rem]">
-          <div className="text-center w-full min-w-0">
-            <div className="text-[9px] uppercase tracking-wide text-[var(--muted)] leading-none mb-0.5 truncate">
-              {labels.card.office}
-            </div>
-            <div className="text-2xl font-bold leading-none text-[var(--text)] tabular-nums truncate" title={officeInline}>
-              {pass.office}
-            </div>
-            {pass.floor && (
-              <div className="text-[10px] text-[var(--muted)] mt-0.5 truncate" title={`${pass.floor} ${labels.card.floorSuffix}`}>
-                {pass.floor} {labels.card.floorSuffix}
-              </div>
-            )}
-            {pass.businessCenterName && (
-              <div className="text-[9px] text-[var(--muted)] mt-0.5 leading-tight line-clamp-2" title={pass.businessCenterName}>
-                {pass.businessCenterName}
-              </div>
-            )}
-          </div>
-        </div>
+        <PassOfficeHighlight
+          office={pass.office}
+          floor={pass.floor}
+          businessCenterName={pass.businessCenterName}
+          label={labels.card.office}
+          floorSuffix={labels.card.floorSuffix}
+          size="sm"
+          className="shrink-0 self-center"
+          title={officeInline}
+        />
       </div>
     </div>
   );
