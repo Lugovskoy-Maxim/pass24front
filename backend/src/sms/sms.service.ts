@@ -97,7 +97,7 @@ export class SmsService {
   }
 
   /**
-   * Проверка: SIM-PUSH уже verified (status=2) или OTP через mobile-id/verify.
+   * Проверка: SIM-PUSH уже verified (status=3) или OTP через mobile-id/verify.
    */
   async verifyMobileAuth(requestId: number, code: string): Promise<boolean> {
     if (!this.isConfigured()) {
@@ -139,15 +139,20 @@ export class SmsService {
     return false;
   }
 
-  /** GET/POST mobile-id/status — status=2 считается подтверждённым (как в доке/клиенте). */
+  /** GET/POST mobile-id/status — успешная Mobile ID-проверка возвращает status=3. */
   async isMobileAuthVerified(requestId: number): Promise<boolean> {
     const response = await this.requestJson('mobile-id/status', { id: requestId });
     if (!response.success || !response.data || typeof response.data !== 'object') {
       return false;
     }
-    const status = Number((response.data as Record<string, unknown>).status);
-    // 2 = verified (см. примеры smsaero_python verify_mobile_id)
-    return status === 2;
+    const data = response.data as Record<string, unknown>;
+    const status = Number(data.status);
+    this.logger.debug(
+      `Mobile ID status: id=${requestId}, status=${status}, authType=${String(data.authType ?? '?')}`,
+    );
+    // Официальные клиенты SMS Aero используют status=3 для успешно
+    // завершённых SIM-PUSH и SMS OTP запросов Mobile ID.
+    return status === 3;
   }
 
   /** Callback от SMS Aero (статусы доставки) — достаточно 200 OK. */
