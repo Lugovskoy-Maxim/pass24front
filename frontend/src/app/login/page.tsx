@@ -88,6 +88,8 @@ function LoginPageInner() {
   const [loading, setLoading] = useState(false);
   const [devAccounts, setDevAccounts] = useState<DevQuickLoginAccount[]>([]);
   const [smsResendIn, setSmsResendIn] = useState(0);
+  const [registrationId, setRegistrationId] = useState('');
+  const [pushStatus, setPushStatus] = useState<'idle' | 'waiting' | 'confirmed' | 'expired'>('idle');
   const [resetResendIn, setResetResendIn] = useState(0);
   const [adminContact, setAdminContact] = useState<{ phone?: string; email?: string } | null>(null);
   const { login: authLogin, requestRegistrationCode, confirmRegistration } = useAuth();
@@ -123,6 +125,69 @@ function LoginPageInner() {
     const timer = window.setTimeout(() => setResetResendIn((prev) => prev - 1), 1000);
     return () => window.clearTimeout(timer);
   }, [resetResendIn]);
+
+  useEffect(() => {
+    if (
+      mode !== 'register'
+      || registerStep !== 'verify'
+      || verificationChannel !== 'phone'
+      || !registrationId
+    ) {
+      return;
+    }
+
+    let cancelled = false;
+    let timer: number | undefined;
+    setPushStatus('waiting');
+
+    const checkStatus = async () => {
+      try {
+        const result = await api.getRegistrationStatus(registrationId);
+        if (cancelled) return;
+        if (result.status === 'confirmed') {
+          setPushStatus('confirmed');
+          setSuccess(result.message || 'Заявка отправлена. Ожидайте подтверждения администратора.');
+          setInfoMessage('');
+          setRegisterStep('form');
+          setMode('login');
+          setPassword('');
+          setPasswordConfirm('');
+          setVerificationCode('');
+          setNameParts({ lastName: '', firstName: '', middleName: '' });
+          setCompany('');
+          setPhone('');
+          setVerifiedPhone('');
+          setEmail('');
+          setSmsResendIn(0);
+          setRegistrationId('');
+          setFieldErrors({});
+          return;
+        }
+        if (result.status === 'expired') {
+          setPushStatus('expired');
+          setFormError(result.message || 'Время подтверждения истекло. Запросите push снова.');
+          return;
+        }
+        timer = window.setTimeout(checkStatus, 2500);
+      } catch (err) {
+        if (cancelled) return;
+        const message = getErrorMessage(err, '');
+        if (/не найден|заверш/i.test(message)) {
+          setFormError(message);
+          setPushStatus('expired');
+          return;
+        }
+        // Кратковременный сетевой сбой не прерывает ожидание push.
+        timer = window.setTimeout(checkStatus, 4000);
+      }
+    };
+
+    timer = window.setTimeout(checkStatus, 1000);
+    return () => {
+      cancelled = true;
+      if (timer) window.clearTimeout(timer);
+    };
+  }, [mode, registerStep, verificationChannel, registrationId]);
 
   const clearFieldError = (field: string) => {
     setFieldErrors((prev) => {
@@ -292,9 +357,13 @@ function LoginPageInner() {
       setVerificationChannel(result.verificationChannel || payload.verificationChannel);
       if (result.verificationChannel === 'phone') {
         setVerifiedPhone(payload.phone || '');
-        setSmsResendIn(result.retryAfterSeconds || 300);
+        setSmsResendIn(result.retryAfterSeconds ?? 0);
+        setRegistrationId(result.registrationId || '');
+        setPushStatus('waiting');
       } else {
         setSmsResendIn(0);
+        setRegistrationId('');
+        setPushStatus('idle');
       }
       setRegisterStep('verify');
       setVerificationCode('');
@@ -382,7 +451,9 @@ function LoginPageInner() {
       setInfoMessage(result.message);
       setVerificationCode('');
       if (result.verificationChannel === 'phone') {
-        setSmsResendIn(result.retryAfterSeconds || 300);
+        setSmsResendIn(result.retryAfterSeconds ?? 0);
+        setRegistrationId(result.registrationId || '');
+        setPushStatus('waiting');
       }
     } catch (err) {
       setFormError(getErrorMessage(err, 'Не удалось отправить код'));
@@ -427,6 +498,8 @@ function LoginPageInner() {
     setRegisterStep('form');
     setForgotStep('request');
     setVerificationCode('');
+    setRegistrationId('');
+    setPushStatus('idle');
     setFormError('');
     setFieldErrors({});
     setSuccess('');
@@ -449,6 +522,8 @@ function LoginPageInner() {
     setFormError('');
     setFieldErrors({});
     setInfoMessage('');
+    setRegistrationId('');
+    setPushStatus('idle');
   };
 
   const verificationTarget = verificationChannel === 'phone'
@@ -639,11 +714,22 @@ function LoginPageInner() {
               <div className="space-y-3">
                 <p className="text-sm text-[var(--text)]">
                   {verificationChannel === 'phone'
-                    ? 'Подтвердите запрос на телефоне (SIM-PUSH) или введите код из SMS, отправленный на '
+                    ? 'Подтвердите запрос в SIM-PUSH на телефоне. После подтверждения регистрация продолжится автоматически для номера '
                     : 'Введите 6-значный код, отправленный на '}
                   <span className="font-medium">{verificationTarget}</span>
                 </p>
-                <FormField id="verificationCode" label="Код подтверждения" required error={fieldErrors.code}>
+                {verificationChannel === 'phone' && pushStatus === 'waiting' && (
+                  <div className="surface-muted rounded p-3 text-sm text-[var(--muted)]">
+                    <span className="inline-block h-2 w-2 rounded-full bg-[var(--primary)] animate-pulse mr-2" />
+                    Ожидаем подтверждение на телефоне…
+                  </div>
+                )}
+                <FormField
+                  id="verificationCode"
+                  label={verificationChannel === 'phone' ? 'Код из SMS (если пришёл вместо push)' : 'Код подтверждения'}
+                  required={verificationChannel === 'email'}
+                  error={fieldErrors.code}
+                >
                   <FormInput
                     id="verificationCode"
                     inputMode="numeric"
@@ -660,10 +746,10 @@ function LoginPageInner() {
                   />
                 </FormField>
                 <p className="text-xs text-[var(--muted)]">
-                  Код действует 15 минут.
+                  Запрос действует 15 минут.
                   {verificationChannel === 'email'
                     ? ' Проверьте папку «Спам», если письма нет.'
-                    : ' Мобильная авторизация: SIM-PUSH или SMS. Повтор — не чаще 1 раза в 5 минут.'}
+                    : ' Не закрывайте эту страницу. Если оператор заменит push на SMS, введите полученный код ниже.'}
                 </p>
               </div>
             )}
@@ -818,9 +904,14 @@ function LoginPageInner() {
 
             <FormErrorBanner message={formError} />
 
-            <button type="submit" className="btn btn-primary w-full" disabled={loading}>
-              {submitLabel}
-            </button>
+            {!(mode === 'register'
+              && registerStep === 'verify'
+              && verificationChannel === 'phone'
+              && !verificationCode) && (
+              <button type="submit" className="btn btn-primary w-full" disabled={loading}>
+                {submitLabel}
+              </button>
+            )}
 
             {mode === 'register' && registerStep === 'verify' && (
               <div className="flex flex-col sm:flex-row gap-2">

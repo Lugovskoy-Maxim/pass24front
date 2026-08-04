@@ -48,7 +48,7 @@ function PassesPageContent() {
   const [loadingMore, setLoadingMore] = useState(false);
   const visibleCountRef = useRef(0);
   const [search, setSearch] = useState('');
-  const debouncedSearch = useDebounce(search);
+  const debouncedSearch = useDebounce(search, 1000);
   const [statusFilter, setStatusFilter] = useState('');
   const [dateFilter, setDateFilter] = useState('');
   const [selected, setSelected] = useState<Pass | null>(null);

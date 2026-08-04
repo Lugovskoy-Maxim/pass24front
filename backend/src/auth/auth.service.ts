@@ -52,7 +52,7 @@ import { DEV_TEST_ACCOUNTS, DEV_TEST_ACCOUNT_EMAILS } from '../database/dev-test
 import { SiteSettingsService } from '../site-settings/site-settings.service';
 
 /** Антиспам: SMS OTP регистрации — не чаще 1 раза за интервал. */
-const SMS_RESEND_INTERVAL_MS = 5 * 60 * 1000;
+const SMS_RESEND_INTERVAL_MS = 2 * 60 * 1000;
 /** Антиспам для email OTP (сброс пароля, verify email, resend invite). */
 const EMAIL_CODE_RESEND_INTERVAL_MS = 5 * 60 * 1000;
 /** TTL одноразовых кодов (регистрация / reset / verify). */
@@ -145,17 +145,15 @@ export class AuthService {
     const pendingKey = channel === 'phone' ? { phone } : { email };
     const existingPending = await this.pendingModel.findOne(pendingKey).lean();
 
-    if (channel === 'phone' && existingPending?.lastCodeSentAt) {
-      const retryAfterSeconds = this.getRetryAfterSeconds(
+    let retryAfterSeconds = 0;
+    const reuseMobileSession = channel === 'phone'
+      && !!existingPending?.mobileIdRequestId
+      && existingPending.expiresAt.getTime() > Date.now()
+      && existingPending.lastCodeSentAt
+      && (retryAfterSeconds = this.getRetryAfterSeconds(
         existingPending.lastCodeSentAt,
         SMS_RESEND_INTERVAL_MS,
-      );
-      if (retryAfterSeconds > 0) {
-        throw new BadRequestException(
-          `Повторная отправка SMS возможна через ${this.formatRetryWait(retryAfterSeconds)}. Не чаще 1 раза в 5 минут.`,
-        );
-      }
-    }
+      )) > 0;
 
     const passwordHash = await bcrypt.hash(dto.password, 10);
     const now = new Date();
@@ -163,8 +161,8 @@ export class AuthService {
 
     const pendingData: Record<string, unknown> = {
       verificationChannel: channel,
-      expiresAt,
-      lastCodeSentAt: now,
+      expiresAt: reuseMobileSession ? existingPending!.expiresAt : expiresAt,
+      lastCodeSentAt: reuseMobileSession ? existingPending!.lastCodeSentAt : now,
       password: passwordHash,
       fullName: personName.fullName,
       lastName: personName.lastName,
@@ -177,10 +175,20 @@ export class AuthService {
 
     let unset: Record<string, 1>;
     if (channel === 'phone') {
-      // Mobile ID: код генерирует SMS Aero (SIM-PUSH → SMS OTP)
-      const mid = await this.smsService.startMobileAuth(phone!);
-      pendingData.mobileIdRequestId = mid.requestId;
-      if (mid.authType) pendingData.mobileIdAuthType = mid.authType;
+      if (reuseMobileSession) {
+        // Форма могла быть закрыта или сброшена. Возвращаем действующую серверную
+        // сессию, обновляя регистрационные данные, но не отправляя второй push.
+        pendingData.mobileIdRequestId = existingPending!.mobileIdRequestId;
+        if (existingPending!.mobileIdAuthType) {
+          pendingData.mobileIdAuthType = existingPending!.mobileIdAuthType;
+        }
+      } else {
+        // Mobile ID: код генерирует SMS Aero (SIM-PUSH → SMS OTP)
+        const mid = await this.smsService.startMobileAuth(phone!);
+        pendingData.mobileIdRequestId = mid.requestId;
+        if (mid.authType) pendingData.mobileIdAuthType = mid.authType;
+        retryAfterSeconds = Math.floor(SMS_RESEND_INTERVAL_MS / 1000);
+      }
       unset = { codeHash: 1 };
     } else {
       const code = String(Math.floor(100000 + Math.random() * 900000));
@@ -189,7 +197,7 @@ export class AuthService {
       unset = { mobileIdRequestId: 1, mobileIdAuthType: 1 };
     }
 
-    await this.pendingModel.findOneAndUpdate(
+    const pending = await this.pendingModel.findOneAndUpdate(
       pendingKey,
       { $set: pendingData, $unset: unset },
       { upsert: true, new: true, setDefaultsOnInsert: true },
@@ -199,11 +207,49 @@ export class AuthService {
       verificationRequired: true,
       verificationChannel: channel,
       message: channel === 'phone'
-        ? `Код подтверждения отправлен на ${phone} (мобильная авторизация)`
+        ? reuseMobileSession
+          ? `Продолжаем ранее начатое подтверждение номера ${phone}`
+          : `Запрос подтверждения отправлен на ${phone} (мобильная авторизация)`
         : `Код подтверждения отправлен на ${email}`,
       expiresInMinutes: 15,
-      retryAfterSeconds: channel === 'phone' ? Math.floor(SMS_RESEND_INTERVAL_MS / 1000) : 0,
+      retryAfterSeconds: channel === 'phone' ? retryAfterSeconds : 0,
+      registrationId: channel === 'phone' ? String(pending._id) : undefined,
     };
+  }
+
+  async getRegistrationStatus(registrationId: string) {
+    if (!Types.ObjectId.isValid(registrationId)) {
+      throw new BadRequestException('Некорректный идентификатор регистрации');
+    }
+
+    const pending = await this.pendingModel
+      .findById(registrationId)
+      .select('+password')
+      .lean();
+
+    if (!pending || pending.verificationChannel !== 'phone' || !pending.phone) {
+      throw new NotFoundException('Запрос регистрации не найден или уже завершён');
+    }
+    if (pending.expiresAt.getTime() < Date.now()) {
+      await this.pendingModel.deleteOne({ _id: pending._id });
+      return { status: 'expired' as const, message: 'Время подтверждения истекло' };
+    }
+    if (!pending.mobileIdRequestId) {
+      throw new BadRequestException('Сессия мобильной авторизации не найдена');
+    }
+
+    const verified = await this.smsService.isMobileAuthVerified(pending.mobileIdRequestId);
+    if (!verified) {
+      return { status: 'waiting' as const };
+    }
+
+    const result = await this.confirmRegistration({
+      phone: pending.phone,
+      // confirmRegistration сначала повторно проверяет статус Mobile ID;
+      // код при подтверждённом SIM-PUSH не используется.
+      code: '0000',
+    });
+    return { status: 'confirmed' as const, ...result };
   }
 
   async confirmRegistration(dto: ConfirmRegistrationDto) {

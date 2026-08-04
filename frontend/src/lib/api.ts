@@ -314,6 +314,7 @@ export const api = {
       message: string;
       expiresInMinutes: number;
       retryAfterSeconds?: number;
+      registrationId?: string;
     }>(
       '/auth/register/request-code',
       { method: 'POST', body: JSON.stringify(data) },
@@ -324,6 +325,13 @@ export const api = {
       method: 'POST',
       body: JSON.stringify(data),
     }),
+
+  getRegistrationStatus: (registrationId: string) =>
+    request<{
+      status: 'waiting' | 'confirmed' | 'expired';
+      pendingApproval?: true;
+      message?: string;
+    }>(`/auth/register/status/${encodeURIComponent(registrationId)}`),
 
   requestPasswordReset: (data: { email: string }) =>
     request<{

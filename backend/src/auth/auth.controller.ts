@@ -58,6 +58,11 @@ export class AuthController {
     return this.authService.confirmRegistration(dto);
   }
 
+  @Get('register/status/:registrationId')
+  async getRegistrationStatus(@Param('registrationId') registrationId: string) {
+    return this.authService.getRegistrationStatus(registrationId);
+  }
+
   @Post('password-reset/request')
   async requestPasswordReset(@Body() dto: RequestPasswordResetDto) {
     return this.authService.requestPasswordReset(dto);

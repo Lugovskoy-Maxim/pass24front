@@ -23,7 +23,12 @@ interface AuthContextType {
     firstName?: string;
     middleName?: string;
     company: string;
-  }) => Promise<{ message: string; verificationChannel: 'email' | 'phone'; retryAfterSeconds?: number }>;
+  }) => Promise<{
+    message: string;
+    verificationChannel: 'email' | 'phone';
+    retryAfterSeconds?: number;
+    registrationId?: string;
+  }>;
   confirmRegistration: (data: {
     email?: string;
     phone?: string;
@@ -72,6 +77,7 @@ export function AuthProvider({ children }: { children: ReactNode }) {
       message: result.message,
       verificationChannel: result.verificationChannel,
       retryAfterSeconds: result.retryAfterSeconds,
+      registrationId: result.registrationId,
     };
   };
 
