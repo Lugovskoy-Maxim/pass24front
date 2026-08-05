@@ -402,13 +402,76 @@ export class AuthService {
 
   /** Сброс пароля по email. Если аккаунта нет — предлагаем contact admin (recoveryChannel). */
   async requestPasswordReset(dto: RequestPasswordResetDto) {
-    const email = dto.email.toLowerCase().trim();
     const siteSettings = await this.siteSettingsService.get();
     const adminContact = {
       phone: siteSettings.sitePhone || undefined,
       email: siteSettings.siteEmail || undefined,
     };
 
+    if (dto.phone) {
+      const phone = normalizeRuMobilePhone(dto.phone);
+      if (!phone) {
+        throw new BadRequestException('Некорректный номер телефона. Формат: +7 9XX XXX-XX-XX');
+      }
+
+      const resetToken = `${Date.now().toString(36)}.${crypto.randomBytes(32).toString('hex')}`;
+      const tokenHash = crypto.createHash('sha256').update(resetToken).digest('hex');
+      const user = await this.userModel.findOne({ phone }).exec();
+
+      // Ответ не раскрывает, существует ли номер в системе.
+      if (!user) {
+        return {
+          recoveryChannel: 'phone' as const,
+          resetToken,
+          message: 'Если номер привязан к аккаунту, на телефон отправлен запрос подтверждения.',
+          expiresInMinutes: 15,
+          retryAfterSeconds: Math.floor(SMS_RESEND_INTERVAL_MS / 1000),
+          contact: adminContact,
+        };
+      }
+
+      const now = new Date();
+      let requestId = user.passwordResetMobileIdRequestId;
+      let retryAfterSeconds = user.passwordResetLastSentAt
+        ? this.getRetryAfterSeconds(user.passwordResetLastSentAt, SMS_RESEND_INTERVAL_MS)
+        : 0;
+
+      if (!requestId || !user.passwordResetExpiresAt || user.passwordResetExpiresAt <= now || retryAfterSeconds <= 0) {
+        const mobileAuth = await this.smsService.startMobileAuth(phone);
+        requestId = mobileAuth.requestId;
+        retryAfterSeconds = Math.floor(SMS_RESEND_INTERVAL_MS / 1000);
+      }
+
+      await this.userModel.updateOne(
+        { _id: user._id },
+        {
+          $set: {
+            passwordResetTokenHash: tokenHash,
+            passwordResetMobileIdRequestId: requestId,
+            passwordResetExpiresAt: new Date(now.getTime() + CODE_TTL_MS),
+            passwordResetLastSentAt: now,
+          },
+          $unset: {
+            passwordResetVerifiedAt: 1,
+            passwordResetCodeHash: 1,
+          },
+        },
+      );
+
+      return {
+        recoveryChannel: 'phone' as const,
+        resetToken,
+        message: 'Подтвердите SIM-PUSH на телефоне. Ожидаем ответ от сервера.',
+        expiresInMinutes: 15,
+        retryAfterSeconds,
+        contact: adminContact,
+      };
+    }
+
+    if (!dto.email) {
+      throw new BadRequestException('Укажите номер телефона или email');
+    }
+    const email = dto.email.toLowerCase().trim();
     const user = await this.userModel
       .findOne({ email })
       .select('+passwordResetCodeHash')
@@ -463,9 +526,54 @@ export class AuthService {
     };
   }
 
+  async getPasswordResetStatus(resetToken: string) {
+    const tokenHash = crypto.createHash('sha256').update(resetToken).digest('hex');
+    const user = await this.userModel
+      .findOne({ passwordResetTokenHash: tokenHash })
+      .select('+passwordResetTokenHash')
+      .exec();
+
+    // Не раскрываем, был ли номер найден при создании запроса; фиктивный токен
+    // живёт столько же, сколько реальная сессия.
+    if (!user) {
+      const issuedAt = Number.parseInt(resetToken.split('.', 1)[0], 36);
+      if (Number.isFinite(issuedAt) && Date.now() - issuedAt >= CODE_TTL_MS) {
+        return { status: 'expired' as const, message: 'Время подтверждения истекло' };
+      }
+      return { status: 'waiting' as const };
+    }
+
+    if (!user.passwordResetExpiresAt || user.passwordResetExpiresAt.getTime() < Date.now()) {
+      await this.clearMobilePasswordReset(user._id);
+      return { status: 'expired' as const, message: 'Время подтверждения истекло' };
+    }
+    if (user.passwordResetVerifiedAt) {
+      return { status: 'confirmed' as const };
+    }
+    if (!user.passwordResetMobileIdRequestId) {
+      return { status: 'waiting' as const };
+    }
+
+    const verified = await this.smsService.isMobileAuthVerified(
+      user.passwordResetMobileIdRequestId,
+    );
+    if (!verified) return { status: 'waiting' as const };
+
+    user.passwordResetVerifiedAt = new Date();
+    await user.save();
+    return { status: 'confirmed' as const };
+  }
+
   async confirmPasswordReset(dto: ConfirmPasswordResetDto) {
     if (dto.password !== dto.passwordConfirm) {
       throw new BadRequestException('Пароли не совпадают');
+    }
+
+    if (dto.resetToken) {
+      return this.confirmMobilePasswordReset(dto);
+    }
+    if (!dto.email || !dto.code) {
+      throw new BadRequestException('Запрос восстановления не найден');
     }
 
     const email = dto.email.toLowerCase().trim();
@@ -517,6 +625,68 @@ export class AuthService {
     return {
       message: 'Пароль успешно изменён. Войдите с новым паролем.',
     };
+  }
+
+  private async confirmMobilePasswordReset(dto: ConfirmPasswordResetDto) {
+    const tokenHash = crypto.createHash('sha256').update(dto.resetToken!).digest('hex');
+    const user = await this.userModel
+      .findOne({ passwordResetTokenHash: tokenHash })
+      .select('+password +passwordResetTokenHash')
+      .exec();
+
+    if (
+      !user
+      || !user.passwordResetVerifiedAt
+      || !user.passwordResetExpiresAt
+      || user.passwordResetExpiresAt.getTime() < Date.now()
+    ) {
+      throw new BadRequestException(
+        'Подтверждение не найдено или истекло. Запросите восстановление заново.',
+      );
+    }
+
+    const passwordHash = await bcrypt.hash(dto.password, 10);
+    const updated = await this.userModel.updateOne(
+      { _id: user._id, passwordResetTokenHash: tokenHash },
+      {
+        $set: { password: passwordHash },
+        $unset: {
+          passwordResetTokenHash: 1,
+          passwordResetMobileIdRequestId: 1,
+          passwordResetVerifiedAt: 1,
+          passwordResetExpiresAt: 1,
+          passwordResetLastSentAt: 1,
+          passwordResetCodeHash: 1,
+        },
+      },
+    );
+    if (updated.modifiedCount !== 1) {
+      throw new BadRequestException('Сессия восстановления уже использована');
+    }
+
+    await this.auditService.log({
+      action: 'user.password_reset',
+      entityType: 'user',
+      entityId: user._id,
+      details: { phone: user.phone, method: 'mobile_id' },
+    });
+
+    return { message: 'Пароль успешно изменён. Войдите с новым паролем.' };
+  }
+
+  private async clearMobilePasswordReset(userId: Types.ObjectId) {
+    await this.userModel.updateOne(
+      { _id: userId },
+      {
+        $unset: {
+          passwordResetTokenHash: 1,
+          passwordResetMobileIdRequestId: 1,
+          passwordResetVerifiedAt: 1,
+          passwordResetExpiresAt: 1,
+          passwordResetLastSentAt: 1,
+        },
+      },
+    );
   }
 
   /** JWT-пользователь: код на свой email, если emailVerified=false. */

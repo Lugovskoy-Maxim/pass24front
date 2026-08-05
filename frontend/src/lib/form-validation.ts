@@ -87,22 +87,27 @@ export function validateLoginRegister(data: {
   return errors;
 }
 
-export function validatePasswordResetRequest(email: string): FieldErrors {
+export function validatePasswordResetRequest(phone: string): FieldErrors {
   const errors: FieldErrors = {};
-  if (isBlank(email)) errors.email = 'Укажите email, указанный при регистрации';
-  else if (!isValidEmail(email)) errors.email = 'Проверьте формат email';
+  if (isBlank(phone)) errors.phone = 'Укажите номер телефона, привязанный к аккаунту';
+  else if (!isValidRuMobilePhone(phone)) {
+    errors.phone = 'Некорректный телефон. Формат: +7 9XX XXX-XX-XX';
+  }
   return errors;
 }
 
 export function validatePasswordResetConfirm(data: {
-  code: string;
+  code?: string;
+  requireCode?: boolean;
   password: string;
   passwordConfirm: string;
 }): FieldErrors {
   const errors: FieldErrors = {};
-  const trimmed = data.code.trim();
-  if (!trimmed) errors.code = 'Введите код из письма';
-  else if (!/^\d{6}$/.test(trimmed)) errors.code = 'Код — 6 цифр без пробелов';
+  if (data.requireCode) {
+    const trimmed = data.code?.trim() || '';
+    if (!trimmed) errors.code = 'Введите код из письма';
+    else if (!/^\d{6}$/.test(trimmed)) errors.code = 'Код — 6 цифр без пробелов';
+  }
   if (isBlank(data.password)) errors.password = 'Укажите новый пароль';
   else if (data.password.length < 6) errors.password = 'Пароль не короче 6 символов';
   if (isBlank(data.passwordConfirm)) errors.passwordConfirm = 'Повторите новый пароль';

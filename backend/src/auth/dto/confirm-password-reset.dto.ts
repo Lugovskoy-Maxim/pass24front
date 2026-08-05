@@ -1,17 +1,32 @@
-import { IsEmail, IsNotEmpty, IsString, Length, Matches, MinLength } from 'class-validator';
+import {
+  IsEmail,
+  IsNotEmpty,
+  IsOptional,
+  IsString,
+  Length,
+  Matches,
+  MinLength,
+  ValidateIf,
+} from 'class-validator';
 import { EmptyToUndefined } from '../../common/dto-transforms';
 
 export class ConfirmPasswordResetDto {
   @EmptyToUndefined()
-  @IsNotEmpty({ message: 'Укажите email' })
+  @ValidateIf((o) => !o.resetToken)
   @IsEmail({}, { message: 'Некорректный email' })
-  email: string;
+  email?: string;
 
+  @ValidateIf((o) => !o.resetToken)
   @IsString()
   @IsNotEmpty()
   @Length(6, 6)
   @Matches(/^\d{6}$/, { message: 'Код состоит из 6 цифр' })
-  code: string;
+  code?: string;
+
+  @IsOptional()
+  @IsString()
+  @IsNotEmpty()
+  resetToken?: string;
 
   @IsNotEmpty()
   @MinLength(6, { message: 'Пароль не менее 6 символов' })

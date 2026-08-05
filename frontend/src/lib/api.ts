@@ -333,9 +333,10 @@ export const api = {
       message?: string;
     }>(`/auth/register/status/${encodeURIComponent(registrationId)}`),
 
-  requestPasswordReset: (data: { email: string }) =>
+  requestPasswordReset: (data: { phone?: string; email?: string }) =>
     request<{
-      recoveryChannel: 'email' | 'admin';
+      recoveryChannel: 'phone' | 'email' | 'admin';
+      resetToken?: string;
       message: string;
       expiresInMinutes?: number;
       retryAfterSeconds?: number;
@@ -345,9 +346,16 @@ export const api = {
       body: JSON.stringify(data),
     }),
 
+  getPasswordResetStatus: (resetToken: string) =>
+    request<{
+      status: 'waiting' | 'confirmed' | 'expired';
+      message?: string;
+    }>(`/auth/password-reset/status/${encodeURIComponent(resetToken)}`),
+
   confirmPasswordReset: (data: {
-    email: string;
-    code: string;
+    resetToken?: string;
+    email?: string;
+    code?: string;
     password: string;
     passwordConfirm: string;
   }) =>

@@ -73,6 +73,11 @@ export class AuthController {
     return this.authService.confirmPasswordReset(dto);
   }
 
+  @Get('password-reset/status/:resetToken')
+  async getPasswordResetStatus(@Param('resetToken') resetToken: string) {
+    return this.authService.getPasswordResetStatus(resetToken);
+  }
+
   @UseGuards(AuthGuard('jwt'))
   @Get('me')
   async me(@Req() req: any) {

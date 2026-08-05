@@ -52,6 +52,15 @@ export class User {
   passwordResetLastSentAt?: Date;
 
   @Prop({ select: false })
+  passwordResetTokenHash?: string;
+
+  @Prop()
+  passwordResetMobileIdRequestId?: number;
+
+  @Prop()
+  passwordResetVerifiedAt?: Date;
+
+  @Prop({ select: false })
   emailVerifyCodeHash?: string;
 
   @Prop()

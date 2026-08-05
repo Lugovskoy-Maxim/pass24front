@@ -41,7 +41,7 @@ interface DevQuickLoginAccount {
 }
 
 type PageMode = 'login' | 'register' | 'forgot';
-type ForgotStep = 'request' | 'confirm';
+type ForgotStep = 'request' | 'waiting' | 'confirm';
 
 function formatCountdown(seconds: number): string {
   const m = Math.floor(seconds / 60);
@@ -80,7 +80,8 @@ function LoginPageInner() {
   const [company, setCompany] = useState('');
   const [phone, setPhone] = useState('');
   const [verifiedPhone, setVerifiedPhone] = useState('');
-  const [resetEmail, setResetEmail] = useState('');
+  const [resetPhone, setResetPhone] = useState('');
+  const [resetToken, setResetToken] = useState('');
   const [formError, setFormError] = useState('');
   const [fieldErrors, setFieldErrors] = useState<FieldErrors>({});
   const [success, setSuccess] = useState('');
@@ -192,6 +193,40 @@ function LoginPageInner() {
       if (timer) window.clearTimeout(timer);
     };
   }, [mode, registerStep, verificationChannel, registrationId, finishPhoneRegistration]);
+
+  useEffect(() => {
+    if (mode !== 'forgot' || forgotStep !== 'waiting' || !resetToken) return;
+
+    let cancelled = false;
+    let timer: number | undefined;
+    const checkStatus = async () => {
+      try {
+        const result = await api.getPasswordResetStatus(resetToken);
+        if (cancelled) return;
+        if (result.status === 'confirmed') {
+          setForgotStep('confirm');
+          setInfoMessage('Телефон подтверждён. Установите новый пароль.');
+          setFormError('');
+          return;
+        }
+        if (result.status === 'expired') {
+          setForgotStep('request');
+          setResetToken('');
+          setFormError(result.message || 'Время подтверждения истекло. Запросите push снова.');
+          return;
+        }
+        timer = window.setTimeout(checkStatus, 2500);
+      } catch {
+        if (!cancelled) timer = window.setTimeout(checkStatus, 4000);
+      }
+    };
+
+    timer = window.setTimeout(checkStatus, 1000);
+    return () => {
+      cancelled = true;
+      if (timer) window.clearTimeout(timer);
+    };
+  }, [mode, forgotStep, resetToken]);
 
   const clearFieldError = (field: string) => {
     setFieldErrors((prev) => {
@@ -381,7 +416,7 @@ function LoginPageInner() {
 
   const handleForgotSubmit = async () => {
     if (forgotStep === 'request') {
-      const errors = validatePasswordResetRequest(resetEmail);
+      const errors = validatePasswordResetRequest(resetPhone);
       setFieldErrors(errors);
       if (hasFieldErrors(errors)) return;
 
@@ -389,15 +424,17 @@ function LoginPageInner() {
       setInfoMessage('');
       setLoading(true);
       try {
-        const result = await api.requestPasswordReset({ email: resetEmail.trim().toLowerCase() });
+        const normalizedPhone = normalizeRuMobilePhone(resetPhone)!;
+        const result = await api.requestPasswordReset({ phone: normalizedPhone });
         setAdminContact(result.contact || {
           phone: config?.sitePhone,
           email: config?.siteEmail,
         });
         setInfoMessage(result.message);
-        if (result.recoveryChannel === 'email') {
-          setForgotStep('confirm');
-          setResetResendIn(result.retryAfterSeconds || 300);
+        if (result.recoveryChannel === 'phone' && result.resetToken) {
+          setResetToken(result.resetToken);
+          setForgotStep('waiting');
+          setResetResendIn(result.retryAfterSeconds || 120);
           setVerificationCode('');
           setPassword('');
           setPasswordConfirm('');
@@ -412,7 +449,6 @@ function LoginPageInner() {
     }
 
     const errors = validatePasswordResetConfirm({
-      code: verificationCode,
       password,
       passwordConfirm,
     });
@@ -423,8 +459,7 @@ function LoginPageInner() {
     setLoading(true);
     try {
       const result = await api.confirmPasswordReset({
-        email: resetEmail.trim().toLowerCase(),
-        code: verificationCode.trim(),
+        resetToken,
         password,
         passwordConfirm,
       });
@@ -435,7 +470,8 @@ function LoginPageInner() {
       setPassword('');
       setPasswordConfirm('');
       setVerificationCode('');
-      setResetEmail('');
+      setResetPhone('');
+      setResetToken('');
       setResetResendIn(0);
       setFieldErrors({});
     } catch (err) {
@@ -472,11 +508,15 @@ function LoginPageInner() {
     setFieldErrors({});
     setLoading(true);
     try {
-      const result = await api.requestPasswordReset({ email: resetEmail.trim().toLowerCase() });
+      const normalizedPhone = normalizeRuMobilePhone(resetPhone);
+      if (!normalizedPhone) return;
+      const result = await api.requestPasswordReset({ phone: normalizedPhone });
       setInfoMessage(result.message);
       setAdminContact(result.contact || adminContact);
-      if (result.recoveryChannel === 'email') {
-        setResetResendIn(result.retryAfterSeconds || 300);
+      if (result.recoveryChannel === 'phone' && result.resetToken) {
+        setResetToken(result.resetToken);
+        setForgotStep('waiting');
+        setResetResendIn(result.retryAfterSeconds || 120);
       }
       setVerificationCode('');
     } catch (err) {
@@ -512,7 +552,9 @@ function LoginPageInner() {
     setSmsResendIn(0);
     setResetResendIn(0);
     if (next === 'forgot') {
-      setResetEmail(login.includes('@') ? login : email);
+      const loginPhone = normalizeRuMobilePhone(login);
+      setResetPhone(loginPhone ? formatRuMobilePhone(loginPhone) : '');
+      setResetToken('');
       setAdminContact({
         phone: config?.sitePhone,
         email: config?.siteEmail,
@@ -541,7 +583,7 @@ function LoginPageInner() {
     if (loading) return 'Загрузка...';
     if (mode === 'login') return 'Войти';
     if (mode === 'forgot') {
-      return forgotStep === 'confirm' ? 'Сохранить новый пароль' : 'Отправить код';
+      return forgotStep === 'confirm' ? 'Сохранить новый пароль' : 'Получить push';
     }
     if (registerStep === 'verify') return 'Подтвердить регистрацию';
     return 'Получить код';
@@ -599,7 +641,7 @@ function LoginPageInner() {
             <div className="mb-6">
               <h2 className="text-lg font-semibold text-[var(--text)]">Восстановление пароля</h2>
               <p className="text-sm text-[var(--muted)] mt-1">
-                Код придёт на email, привязанный к аккаунту. Если почты нет — обратитесь к администратору.
+                Подтвердите восстановление через SIM-PUSH на номере, привязанном к аккаунту.
               </p>
             </div>
           )}
@@ -822,39 +864,37 @@ function LoginPageInner() {
             )}
 
             {mode === 'forgot' && forgotStep === 'request' && (
-              <FormField id="resetEmail" label="Email аккаунта" required error={fieldErrors.email}>
+              <FormField id="resetPhone" label="Телефон аккаунта" required error={fieldErrors.phone}>
                 <FormInput
-                  id="resetEmail"
-                  type="email"
-                  value={resetEmail}
-                  onChange={(e) => { setResetEmail(e.target.value); clearFieldError('email'); }}
-                  invalid={!!fieldErrors.email}
-                  autoComplete="email"
-                  placeholder={ph.email}
+                  id="resetPhone"
+                  type="tel"
+                  value={resetPhone}
+                  onChange={(e) => { setResetPhone(e.target.value); clearFieldError('phone'); }}
+                  onBlur={() => {
+                    const normalized = normalizeRuMobilePhone(resetPhone);
+                    if (normalized) setResetPhone(formatRuMobilePhone(normalized));
+                  }}
+                  invalid={!!fieldErrors.phone}
+                  autoComplete="tel"
+                  placeholder={ph.phone}
                 />
               </FormField>
+            )}
+
+            {mode === 'forgot' && forgotStep === 'waiting' && (
+              <div className="surface-muted rounded p-3">
+                <div className="text-sm text-[var(--muted)]">
+                  <span className="inline-block h-2 w-2 rounded-full bg-[var(--primary)] animate-pulse mr-2" />
+                  Вы получили push. Ожидаем ответ от сервера…
+                </div>
+              </div>
             )}
 
             {mode === 'forgot' && forgotStep === 'confirm' && (
               <>
                 <p className="text-sm text-[var(--text)]">
-                  Введите код из письма на <span className="font-medium">{resetEmail}</span> и новый пароль.
+                  Номер <span className="font-medium">{resetPhone}</span> подтверждён. Установите новый пароль.
                 </p>
-                <FormField id="resetCode" label="Код из письма" required error={fieldErrors.code}>
-                  <FormInput
-                    id="resetCode"
-                    inputMode="numeric"
-                    autoComplete="one-time-code"
-                    value={verificationCode}
-                    onChange={(e) => {
-                      setVerificationCode(e.target.value.replace(/\D/g, '').slice(0, 6));
-                      clearFieldError('code');
-                    }}
-                    invalid={!!fieldErrors.code}
-                    placeholder={ph.verificationCode}
-                    className="tracking-[0.3em] text-center text-lg font-mono"
-                  />
-                </FormField>
                 <FormField id="newPassword" label="Новый пароль" required error={fieldErrors.password} hint="Минимум 6 символов">
                   <PasswordInput
                     id="newPassword"
@@ -910,14 +950,14 @@ function LoginPageInner() {
 
             <FormErrorBanner message={formError} />
 
-            {!(mode === 'register'
+            {mode !== 'forgot' || forgotStep !== 'waiting' ? !(mode === 'register'
               && registerStep === 'verify'
               && verificationChannel === 'phone'
               && !verificationCode) && (
-              <button type="submit" className="btn btn-primary w-full" disabled={loading}>
-                {submitLabel}
-              </button>
-            )}
+               <button type="submit" className="btn btn-primary w-full" disabled={loading}>
+                 {submitLabel}
+               </button>
+              ) : null}
 
             {mode === 'register' && registerStep === 'verify' && (
               <div className="flex flex-col sm:flex-row gap-2">
@@ -937,7 +977,7 @@ function LoginPageInner() {
               </div>
             )}
 
-            {mode === 'forgot' && forgotStep === 'confirm' && (
+            {mode === 'forgot' && forgotStep === 'waiting' && (
               <button
                 type="button"
                 className="btn btn-secondary w-full"
@@ -945,8 +985,8 @@ function LoginPageInner() {
                 onClick={() => void handleResendResetCode()}
               >
                 {resetResendIn > 0
-                  ? `Повторная отправка через ${formatCountdown(resetResendIn)}`
-                  : 'Отправить код снова'}
+                  ? `Повторный push через ${formatCountdown(resetResendIn)}`
+                  : 'Отправить push снова'}
               </button>
             )}
 
