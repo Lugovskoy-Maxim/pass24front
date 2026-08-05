@@ -230,7 +230,7 @@ function LoginPageInner() {
           setInfoMessage(`Проверяем подтверждение… попытка ${attempt + 1} из ${attempts}`);
         }
       }
-      setInfoMessage('Подтверждение пока не получено. Нажмите «Я подтвердил» ещё раз.');
+      setInfoMessage('Подтверждение пока не получено. Нажмите «Я подтвердил(а)» ещё раз.');
     } catch (err) {
       setFormError(getErrorMessage(err, 'Не удалось проверить подтверждение push'));
     } finally {
@@ -770,7 +770,7 @@ function LoginPageInner() {
                       disabled={pushChecking}
                       onClick={() => void checkPushConfirmation()}
                     >
-                      {pushChecking ? 'Проверяем…' : 'Я подтвердил'}
+                      {pushChecking ? 'Проверяем…' : 'Я подтвердил(а)'}
                     </button>
                   </div>
                 )}
