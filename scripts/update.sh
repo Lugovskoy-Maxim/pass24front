@@ -45,13 +45,13 @@ if [[ ! -f .env ]]; then
   exit 1
 fi
 
-echo "==> Сборка и запуск контейнеров"
+echo "==> Сборка и принудительный перезапуск контейнеров"
 if [[ "$NO_CACHE" == "1" ]]; then
   echo "    Режим: без Docker cache (NO_CACHE=1)"
   $COMPOSE build --no-cache
-  $COMPOSE up -d --wait --wait-timeout 180
+  $COMPOSE up -d --force-recreate --remove-orphans --wait --wait-timeout 180
 else
-  $COMPOSE up -d --build --wait --wait-timeout 180
+  $COMPOSE up -d --build --force-recreate --remove-orphans --wait --wait-timeout 180
 fi
 
 echo "==> Очистка старых образов"
