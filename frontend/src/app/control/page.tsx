@@ -141,7 +141,7 @@ function ControlPageContent() {
       setStats(data.stats);
 
       if (data.passes.length > 0) {
-        setSelected(data.passes[0]);
+        setSelected(null);
         toast(`Найдено: ${data.passes.length}`, 'success');
         return;
       }
@@ -150,7 +150,8 @@ function ControlPageContent() {
       if (isPassNumber) {
         try {
           const { pass } = await api.lookupPass(trimmed);
-          setSelected(pass);
+          setSelected(null);
+          setPasses([pass]);
           const overdueKind = getGuestOverdueKind(pass);
           if (overdueKind === 'past_end_time') {
             toast(labels.toasts.guestPastEndTime.replace('{time}', pass.visitTimeTo || ''), 'warning');
