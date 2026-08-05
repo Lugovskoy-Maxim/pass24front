@@ -90,7 +90,6 @@ function LoginPageInner() {
   const [smsResendIn, setSmsResendIn] = useState(0);
   const [registrationId, setRegistrationId] = useState('');
   const [pushStatus, setPushStatus] = useState<'idle' | 'waiting' | 'confirmed' | 'expired'>('idle');
-  const [pushChecking, setPushChecking] = useState(false);
   const [resetResendIn, setResetResendIn] = useState(0);
   const [adminContact, setAdminContact] = useState<{ phone?: string; email?: string } | null>(null);
   const { login: authLogin, requestRegistrationCode, confirmRegistration } = useAuth();
@@ -152,7 +151,6 @@ function LoginPageInner() {
       || registerStep !== 'verify'
       || verificationChannel !== 'phone'
       || !registrationId
-      || pushChecking
     ) {
       return;
     }
@@ -193,7 +191,7 @@ function LoginPageInner() {
       cancelled = true;
       if (timer) window.clearTimeout(timer);
     };
-  }, [mode, registerStep, verificationChannel, registrationId, pushChecking, finishPhoneRegistration]);
+  }, [mode, registerStep, verificationChannel, registrationId, finishPhoneRegistration]);
 
   const clearFieldError = (field: string) => {
     setFieldErrors((prev) => {
@@ -202,40 +200,6 @@ function LoginPageInner() {
       delete next[field];
       return next;
     });
-  };
-
-  const checkPushConfirmation = async () => {
-    if (!registrationId || pushChecking) return;
-    const currentRegistrationId = registrationId;
-    setPushChecking(true);
-    setFormError('');
-    setInfoMessage('Отправили запрос на проверку подтверждения. Ожидаем ответ SMS Aero…');
-    try {
-      const attempts = 5;
-      for (let attempt = 1; attempt <= attempts; attempt += 1) {
-        if (attempt > 1) {
-          await new Promise<void>((resolve) => window.setTimeout(resolve, 3000));
-        }
-        const result = await api.getRegistrationStatus(currentRegistrationId);
-        if (result.status === 'confirmed') {
-          finishPhoneRegistration(result.message);
-          return;
-        }
-        if (result.status === 'expired') {
-          setPushStatus('expired');
-          setFormError(result.message || 'Время подтверждения истекло. Запросите push снова.');
-          return;
-        }
-        if (attempt < attempts) {
-          setInfoMessage(`Проверяем подтверждение… попытка ${attempt + 1} из ${attempts}`);
-        }
-      }
-      setInfoMessage('Подтверждение пока не получено. Нажмите «Я подтвердил(а)» ещё раз.');
-    } catch (err) {
-      setFormError(getErrorMessage(err, 'Не удалось проверить подтверждение push'));
-    } finally {
-      setPushChecking(false);
-    }
   };
 
   if (authLoading || user) {
@@ -759,19 +723,11 @@ function LoginPageInner() {
                   <span className="font-medium">{verificationTarget}</span>
                 </p>
                 {verificationChannel === 'phone' && pushStatus === 'waiting' && (
-                  <div className="surface-muted rounded p-3 space-y-3">
+                  <div className="surface-muted rounded p-3">
                     <div className="text-sm text-[var(--muted)]">
                       <span className="inline-block h-2 w-2 rounded-full bg-[var(--primary)] animate-pulse mr-2" />
-                      Ожидаем подтверждение на телефоне…
+                      Вы получили push. Ожидаем ответ от сервера…
                     </div>
-                    <button
-                      type="button"
-                      className="btn btn-primary w-full"
-                      disabled={pushChecking}
-                      onClick={() => void checkPushConfirmation()}
-                    >
-                      {pushChecking ? 'Проверяем…' : 'Я подтвердил(а)'}
-                    </button>
                   </div>
                 )}
                 <FormField
