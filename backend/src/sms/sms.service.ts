@@ -63,7 +63,7 @@ export class SmsService {
     );
 
     // number — digits as integer, как в официальном smsaero_python
-    const response = await this.requestJson('mobile-id/send', {
+    const response = await this.requestForm('mobile-id/send', {
       number: Number(number),
       sign,
       callbackUrl,
@@ -117,7 +117,7 @@ export class SmsService {
       return false;
     }
 
-    const response = await this.requestJson('mobile-id/verify', {
+    const response = await this.requestForm('mobile-id/verify', {
       id: requestId,
       code: trimmed,
       sign,
@@ -141,13 +141,16 @@ export class SmsService {
 
   /** GET/POST mobile-id/status — успешная Mobile ID-проверка возвращает status=3. */
   async isMobileAuthVerified(requestId: number): Promise<boolean> {
-    const response = await this.requestJson('mobile-id/status', { id: requestId });
+    const response = await this.requestForm('mobile-id/status', { id: requestId });
     if (!response.success || !response.data || typeof response.data !== 'object') {
+      this.logger.warn(
+        `Mobile ID status failed: id=${requestId}, response=${JSON.stringify(response)}`,
+      );
       return false;
     }
     const data = response.data as Record<string, unknown>;
     const status = Number(data.status);
-    this.logger.debug(
+    this.logger.log(
       `Mobile ID status: id=${requestId}, status=${status}, authType=${String(data.authType ?? '?')}`,
     );
     // Официальные клиенты SMS Aero используют status=3 для успешно
@@ -220,8 +223,8 @@ export class SmsService {
     return 'Не удалось запустить мобильную авторизацию (SMS Aero)';
   }
 
-  /** JSON POST — как в официальном smsaero_python (session.post json=...). */
-  private async requestJson(
+  /** POST в формате формы — так параметры Mobile ID передают официальные SDK SMS Aero. */
+  private async requestForm(
     path: string,
     body: Record<string, string | number>,
   ): Promise<SmsAeroResponse> {
@@ -232,6 +235,10 @@ export class SmsService {
     }
     const auth = Buffer.from(`${email}:${apiKey}`).toString('base64');
     const url = `${this.apiBase}${path}`;
+    const form = new URLSearchParams();
+    for (const [key, value] of Object.entries(body)) {
+      form.set(key, String(value));
+    }
 
     try {
       const res = await fetch(url, {
@@ -239,9 +246,9 @@ export class SmsService {
         headers: {
           Authorization: `Basic ${auth}`,
           Accept: 'application/json',
-          'Content-Type': 'application/json; charset=UTF-8',
+          'Content-Type': 'application/x-www-form-urlencoded; charset=UTF-8',
         },
-        body: JSON.stringify(body),
+        body: form.toString(),
       });
       const data = (await res.json()) as SmsAeroResponse;
       if (!res.ok) {
