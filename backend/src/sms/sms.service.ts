@@ -139,7 +139,7 @@ export class SmsService {
     return false;
   }
 
-  /** GET/POST mobile-id/status — успешная Mobile ID-проверка возвращает status=3. */
+  /** Успешная Mobile ID-проверка возвращает status=1 (в некоторых версиях API — 3). */
   async isMobileAuthVerified(requestId: number): Promise<boolean> {
     const response = await this.requestForm('mobile-id/status', { id: requestId });
     if (!response.success || !response.data || typeof response.data !== 'object') {
@@ -153,9 +153,9 @@ export class SmsService {
     this.logger.log(
       `Mobile ID status: id=${requestId}, status=${status}, authType=${String(data.authType ?? '?')}`,
     );
-    // Официальные клиенты SMS Aero используют status=3 для успешно
-    // завершённых SIM-PUSH и SMS OTP запросов Mobile ID.
-    return status === 3;
+    // Текущий API SMS Aero возвращает status=1 для подтверждённого SIM-PUSH.
+    // Status=3 оставляем для совместимости с ответами, описанными в старых SDK.
+    return status === 1 || status === 3;
   }
 
   /** Callback от SMS Aero (статусы доставки) — достаточно 200 OK. */
