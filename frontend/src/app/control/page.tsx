@@ -1,6 +1,6 @@
 'use client';
 
-import { Suspense, useEffect, useState, useCallback, useRef, FormEvent } from 'react';
+import { Suspense, useEffect, useState, useCallback, useRef } from 'react';
 import { useSearchParams } from 'next/navigation';
 import { BarChart3, Building2, LogIn, LogOut, Users, CheckCircle, Clock, AlertCircle, Search, X } from 'lucide-react';
 import { ProtectedLayout } from '@/components/ProtectedLayout';
@@ -24,6 +24,7 @@ import { passRequiresCheckout } from '@/lib/pass-checkout';
 import { getAccentStatClass, getSectionHeadingClass } from '@/lib/pass-status';
 import { ListSkeleton } from '@/components/ui/Skeleton';
 import { EmptyState } from '@/components/ui/EmptyState';
+import { useDebounce } from '@/hooks/useDebounce';
 function ControlPageContent() {
   const { user } = useAuth();
   const { toast } = useToast();
@@ -53,6 +54,8 @@ function ControlPageContent() {
   const [rejectReason, setRejectReason] = useState<Record<string, string>>({});
   const [rejectOpenId, setRejectOpenId] = useState<string | null>(null);
   const [lookupQuery, setLookupQuery] = useState('');
+  const debouncedLookupQuery = useDebounce(lookupQuery, 1000);
+  const lookupDebounceReady = useRef(false);
   const [lookupLoading, setLookupLoading] = useState(false);
   const [selected, setSelected] = useState<Pass | null>(null);
   const [isMobile, setIsMobile] = useState(false);
@@ -175,15 +178,23 @@ function ControlPageContent() {
     }
   }, [toast, labels, date, load, allProperties]);
 
+  const runLookupRef = useRef(runLookup);
+  useEffect(() => {
+    runLookupRef.current = runLookup;
+  }, [runLookup]);
+
+  useEffect(() => {
+    if (!lookupDebounceReady.current) {
+      lookupDebounceReady.current = true;
+      return;
+    }
+    void runLookupRef.current(debouncedLookupQuery);
+  }, [debouncedLookupQuery]);
+
   useEffect(() => {
     const passFromUrl = searchParams.get('pass');
     if (passFromUrl) runLookup(passFromUrl);
   }, [searchParams, runLookup]);
-
-  const handleLookup = async (e: FormEvent) => {
-    e.preventDefault();
-    await runLookup(lookupQuery);
-  };
 
   const refreshAfterAction = async (id: string) => {
     const data = await load();
@@ -401,7 +412,7 @@ function ControlPageContent() {
         </div>
       </div>
 
-      <form onSubmit={handleLookup} className="card p-3 sm:p-4 mb-5 flex flex-col sm:flex-row gap-2.5 sm:gap-3 sm:items-center">
+      <div className="card p-3 sm:p-4 mb-5 flex flex-col sm:flex-row gap-2.5 sm:gap-3 sm:items-center">
         <div className="relative flex-1 min-w-0">
           <Search className="absolute left-3 top-1/2 -translate-y-1/2 w-4 h-4 text-[var(--muted)] pointer-events-none" />
           <input
@@ -421,18 +432,15 @@ function ControlPageContent() {
                 journalSearchRef.current = '';
                 setJournalSearch('');
                 setSelected(null);
-                load();
               }}
               aria-label="Очистить поиск"
             >
               <X className="w-4 h-4" />
             </button>
           )}
-          <button type="submit" className="btn btn-primary flex-1 sm:flex-none" disabled={lookupLoading || !lookupQuery.trim()}>
-            {lookupLoading ? '...' : labels.buttons.lookup}
-          </button>
+          {lookupLoading && <span className="text-sm text-[var(--muted)] px-2">...</span>}
         </div>
-      </form>
+      </div>
 
       {showOverdueAlerts && overdueCount > 0 && !overdueSectionInView && (
         <OverdueGuestsAlert
