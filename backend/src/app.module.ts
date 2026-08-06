@@ -22,6 +22,7 @@ import { AuditModule } from './audit/audit.module';
 import { MailModule } from './mail/mail.module';
 import { SmsModule } from './sms/sms.module';
 import { SiteSettingsModule } from './site-settings/site-settings.module';
+import { NotificationsModule } from './notifications/notifications.module';
 
 @Module({
   imports: [
@@ -44,6 +45,7 @@ import { SiteSettingsModule } from './site-settings/site-settings.module';
     MailModule, // @Global — OTP, билеты, сброс пароля
     SmsModule, // @Global — SMS Aero (регистрация по телефону)
     SiteSettingsModule, // бренд, FAQ, инструкции, SMS-флаги
+    NotificationsModule,
     AuthModule,
     PassesModule,
     AppConfigModule, // публичный GET /config

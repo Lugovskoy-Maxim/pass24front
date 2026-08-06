@@ -21,6 +21,7 @@ import { PassHistoryQueryDto } from './dto/pass-history-query.dto';
 import { UpdatePassVisitorDto } from './dto/update-pass-visitor.dto';
 import { UpdateStatusDto } from './dto/update-status.dto';
 import { PassTemplatesService } from './pass-templates.service';
+import { NotificationsService } from '../notifications/notifications.service';
 
 const PASS_EXPORT_LIMIT = 10_000;
 const PASS_REPORT_PAGE_SIZE = 50;
@@ -49,6 +50,7 @@ export class PassesService implements OnModuleInit {
     private auditService: AuditService,
     private mailService: MailService,
     private configService: ConfigService,
+    private notificationsService: NotificationsService,
   ) {}
 
   private generatePassNumber() {
@@ -681,6 +683,15 @@ export class PassesService implements OnModuleInit {
       entityId: pass._id,
       actor,
       details: { passNumber: pass.passNumber, visitorName: pass.visitorName },
+    });
+
+    await this.notificationsService.notifyGuestArrival({
+      id: pass._id.toString(),
+      createdBy: pass.createdBy,
+      visitorName: pass.visitorName,
+      office: pass.office,
+      businessCenterName: pass.businessCenterName,
+      passNumber: pass.passNumber,
     });
 
     const [withCheckout] = await this.enrichPassCheckoutSettings([pass.toObject()]);

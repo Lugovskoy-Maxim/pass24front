@@ -290,6 +290,21 @@ async function request<T>(path: string, options: RequestInit = {}): Promise<T> {
 }
 
 export const api = {
+  getPushConfig: () =>
+    request<{ enabled: boolean; publicKey: string | null }>('/notifications/push/config'),
+
+  savePushSubscription: (subscription: PushSubscriptionJSON) =>
+    request<{ subscribed: true }>('/notifications/push/subscriptions', {
+      method: 'POST',
+      body: JSON.stringify(subscription),
+    }),
+
+  removePushSubscription: (endpoint: string) =>
+    request<{ subscribed: false }>('/notifications/push/subscriptions', {
+      method: 'DELETE',
+      body: JSON.stringify({ endpoint }),
+    }),
+
   login: (login: string, password: string) =>
     request<{ user: User; token: string }>('/auth/login', {
       method: 'POST',

@@ -1,5 +1,6 @@
 export * from './enums';
 export * from './property.schema';
+export * from './push-subscription.schema';
 export * from './office.schema';
 export * from './user.schema';
 export * from './pass.schema';

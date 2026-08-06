@@ -10,6 +10,7 @@ import { ThemeColorsApplier } from '@/components/ThemeColorsApplier';
 import { ToastProvider } from '@/components/Toast';
 import { PwaRegistrar } from '@/components/PwaRegistrar';
 import { PwaInstallPrompt } from '@/components/PwaInstallPrompt';
+import { PushNotificationPrompt } from '@/components/PushNotificationPrompt';
 import { HelpFaq } from '@/components/HelpFaq';
 import './globals.css';
 
@@ -70,6 +71,7 @@ export default function RootLayout({ children }: { children: React.ReactNode }) 
               {children}
               <PwaRegistrar />
               <PwaInstallPrompt />
+              <PushNotificationPrompt />
               <HelpFaq />
             </ToastProvider>
           </AuthProvider>
