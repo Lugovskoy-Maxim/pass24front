@@ -353,9 +353,13 @@ export class AuthService {
     // письмо админам (ошибка SMTP не ломает регистрацию)
     void this.notifyAdminsAboutRegistration(user).catch(() => undefined);
 
+    const offices = await this.getUserOffices(user._id.toString());
+    const token = this.generateToken(user);
     return {
       pendingApproval: true,
-      message: 'Заявка отправлена. Доступ будет открыт после подтверждения администратором.',
+      message: 'Профиль успешно подтверждён. Вы вошли в аккаунт.',
+      user: await this.toUserDto(user, offices),
+      token,
     };
   }
 

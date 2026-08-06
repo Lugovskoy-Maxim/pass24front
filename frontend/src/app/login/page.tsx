@@ -11,7 +11,7 @@ import { useRouter, useSearchParams } from 'next/navigation';
 import { Mail, Phone } from 'lucide-react';
 import { useAuth } from '@/lib/auth';
 import { getHomePath } from '@/lib/permissions';
-import { api, getErrorMessage, UserRole } from '@/lib/api';
+import { api, getErrorMessage, User, UserRole } from '@/lib/api';
 import { useConfig } from '@/hooks/useConfig';
 import { getUiLabels } from '@/lib/ui-labels';
 import { SiteBrand } from '@/components/SiteBrand';
@@ -93,7 +93,12 @@ function LoginPageInner() {
   const [pushStatus, setPushStatus] = useState<'idle' | 'waiting' | 'confirmed' | 'expired'>('idle');
   const [resetResendIn, setResetResendIn] = useState(0);
   const [adminContact, setAdminContact] = useState<{ phone?: string; email?: string } | null>(null);
-  const { login: authLogin, requestRegistrationCode, confirmRegistration } = useAuth();
+  const {
+    login: authLogin,
+    requestRegistrationCode,
+    confirmRegistration,
+    completeSession,
+  } = useAuth();
   const config = useConfig();
   const labels = getUiLabels(config);
   const ph = labels.placeholders;
@@ -103,24 +108,21 @@ function LoginPageInner() {
   const smsDisabledMessage = config?.smsRegistrationDisabledMessage?.trim()
     || 'Скоро функция будет работать';
 
-  const finishPhoneRegistration = useCallback((message?: string) => {
+  const finishPhoneRegistration = useCallback((result: {
+    message?: string;
+    user: User;
+    token: string;
+  }) => {
+    const message = result.message || 'Профиль успешно подтверждён. Вы вошли в аккаунт.';
     setPushStatus('confirmed');
-    setSuccess(message || 'Заявка отправлена. Ожидайте подтверждения администратора.');
+    setSuccess(message);
+    toast(message, 'success');
     setInfoMessage('');
-    setRegisterStep('form');
-    setMode('login');
-    setPassword('');
-    setPasswordConfirm('');
-    setVerificationCode('');
-    setNameParts({ lastName: '', firstName: '', middleName: '' });
-    setCompany('');
-    setPhone('');
-    setVerifiedPhone('');
-    setEmail('');
     setSmsResendIn(0);
     setRegistrationId('');
     setFieldErrors({});
-  }, []);
+    completeSession(result.user, result.token);
+  }, [completeSession, toast]);
 
   useEffect(() => {
     api.getDevAccounts()
@@ -165,7 +167,16 @@ function LoginPageInner() {
         const result = await api.getRegistrationStatus(registrationId);
         if (cancelled) return;
         if (result.status === 'confirmed') {
-          finishPhoneRegistration(result.message);
+          if (!result.user || !result.token) {
+            setFormError('Профиль подтверждён, но не удалось войти автоматически. Войдите вручную.');
+            setPushStatus('confirmed');
+            return;
+          }
+          finishPhoneRegistration({
+            message: result.message,
+            user: result.user,
+            token: result.token,
+          });
           return;
         }
         if (result.status === 'expired') {
@@ -362,19 +373,10 @@ function LoginPageInner() {
         const confirmPayload = verificationChannel === 'phone'
           ? { phone: verifiedPhone, code: verificationCode.trim() }
           : { email: email.trim().toLowerCase(), code: verificationCode.trim() };
-        const message = await confirmRegistration(confirmPayload);
-        setSuccess(message);
+        const result = await confirmRegistration(confirmPayload);
+        setSuccess(result.message);
+        toast(result.message, 'success');
         setInfoMessage('');
-        setRegisterStep('form');
-        setMode('login');
-        setPassword('');
-        setPasswordConfirm('');
-        setVerificationCode('');
-        setNameParts({ lastName: '', firstName: '', middleName: '' });
-        setCompany('');
-        setPhone('');
-        setVerifiedPhone('');
-        setEmail('');
         setSmsResendIn(0);
         setFieldErrors({});
       } catch (err) {

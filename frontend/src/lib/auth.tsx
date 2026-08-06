@@ -33,7 +33,8 @@ interface AuthContextType {
     email?: string;
     phone?: string;
     code: string;
-  }) => Promise<string>;
+  }) => Promise<{ message: string; user: User }>;
+  completeSession: (user: User, token: string) => void;
   logout: () => void;
   refreshUser: () => Promise<void>;
 }
@@ -87,7 +88,13 @@ export function AuthProvider({ children }: { children: ReactNode }) {
     code: string;
   }) => {
     const result = await api.registerConfirm(data);
-    return result.message;
+    completeSession(result.user, result.token);
+    return { message: result.message, user: result.user };
+  };
+
+  const completeSession = (sessionUser: User, token: string) => {
+    localStorage.setItem('pass24_token', token);
+    setUser(sessionUser);
   };
 
   const logout = () => {
@@ -101,7 +108,16 @@ export function AuthProvider({ children }: { children: ReactNode }) {
   };
 
   return (
-    <AuthContext.Provider value={{ user, loading, login, requestRegistrationCode, confirmRegistration, logout, refreshUser }}>
+    <AuthContext.Provider value={{
+      user,
+      loading,
+      login,
+      requestRegistrationCode,
+      confirmRegistration,
+      completeSession,
+      logout,
+      refreshUser,
+    }}>
       {children}
     </AuthContext.Provider>
   );

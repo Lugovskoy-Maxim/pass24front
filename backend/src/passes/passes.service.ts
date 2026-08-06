@@ -685,7 +685,7 @@ export class PassesService implements OnModuleInit {
       details: { passNumber: pass.passNumber, visitorName: pass.visitorName },
     });
 
-    await this.notificationsService.notifyGuestArrival({
+    void this.notificationsService.notifyGuestArrival({
       id: pass._id.toString(),
       createdBy: pass.createdBy,
       visitorName: pass.visitorName,

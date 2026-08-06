@@ -293,7 +293,10 @@ export const api = {
   getPushConfig: () =>
     request<{ enabled: boolean; publicKey: string | null }>('/notifications/push/config'),
 
-  savePushSubscription: (subscription: PushSubscriptionJSON) =>
+  savePushSubscription: (subscription: {
+    endpoint: string;
+    keys: { p256dh: string; auth: string };
+  }) =>
     request<{ subscribed: true }>('/notifications/push/subscriptions', {
       method: 'POST',
       body: JSON.stringify(subscription),
@@ -336,7 +339,7 @@ export const api = {
     ),
 
   registerConfirm: (data: { email?: string; phone?: string; code: string }) =>
-    request<{ pendingApproval: true; message: string }>('/auth/register/confirm', {
+    request<{ pendingApproval: true; message: string; user: User; token: string }>('/auth/register/confirm', {
       method: 'POST',
       body: JSON.stringify(data),
     }),
@@ -346,6 +349,8 @@ export const api = {
       status: 'waiting' | 'confirmed' | 'expired';
       pendingApproval?: true;
       message?: string;
+      user?: User;
+      token?: string;
     }>(`/auth/register/status/${encodeURIComponent(registrationId)}`),
 
   requestPasswordReset: (data: { phone?: string; email?: string }) =>

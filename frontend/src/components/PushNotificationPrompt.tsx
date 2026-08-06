@@ -16,24 +16,49 @@ function base64UrlToUint8Array(value: string): Uint8Array<ArrayBuffer> {
   return Uint8Array.from(raw, (char) => char.charCodeAt(0));
 }
 
+function serializeSubscription(subscription: PushSubscription) {
+  const json = subscription.toJSON();
+  const p256dh = json.keys?.p256dh;
+  const auth = json.keys?.auth;
+  if (!subscription.endpoint || !p256dh || !auth) {
+    throw new Error('Браузер не вернул ключи push-подписки');
+  }
+  return {
+    endpoint: subscription.endpoint,
+    keys: { p256dh, auth },
+  };
+}
+
 export function PushNotificationPrompt() {
   const { user } = useAuth();
   const [publicKey, setPublicKey] = useState<string | null>(null);
   const [visible, setVisible] = useState(false);
   const [busy, setBusy] = useState(false);
+  const [error, setError] = useState('');
+  const [permission, setPermission] = useState<NotificationPermission>('default');
 
   useEffect(() => {
     if (!isTenantCompanyUser(user)) return;
     if (!('serviceWorker' in navigator) || !('PushManager' in window) || !('Notification' in window)) return;
-    if (Notification.permission === 'denied') return;
+    setPermission(Notification.permission);
 
     api.getPushConfig().then(async (config) => {
       if (!config.enabled || !config.publicKey) return;
       setPublicKey(config.publicKey);
+      if (Notification.permission === 'denied') {
+        setError('Уведомления заблокированы в браузере. Разрешите их в настройках сайта и обновите страницу.');
+        setVisible(true);
+        return;
+      }
       const registration = await navigator.serviceWorker.ready;
       const existing = await registration.pushManager.getSubscription();
       if (existing) {
-        await api.savePushSubscription(existing.toJSON());
+        try {
+          await api.savePushSubscription(serializeSubscription(existing));
+        } catch {
+          setError('Не удалось подключить уведомления. Попробуйте ещё раз.');
+          setVisible(true);
+        }
         return;
       }
       const dismissed = Number(localStorage.getItem(DISMISSED_KEY) || 0);
@@ -48,22 +73,29 @@ export function PushNotificationPrompt() {
 
   const subscribe = async () => {
     if (!publicKey) return;
+    if (Notification.permission === 'denied') {
+      setError('Уведомления заблокированы в браузере. Разрешите их в настройках сайта и обновите страницу.');
+      return;
+    }
     setBusy(true);
+    setError('');
     try {
       const permission = await Notification.requestPermission();
+      setPermission(permission);
       if (permission !== 'granted') {
         dismiss();
         return;
       }
       const registration = await navigator.serviceWorker.ready;
-      const subscription = await registration.pushManager.subscribe({
-        userVisibleOnly: true,
-        applicationServerKey: base64UrlToUint8Array(publicKey),
-      });
-      await api.savePushSubscription(subscription.toJSON());
+      const existing = await registration.pushManager.getSubscription();
+      const subscription = existing || await registration.pushManager.subscribe({
+          userVisibleOnly: true,
+          applicationServerKey: base64UrlToUint8Array(publicKey),
+        });
+      await api.savePushSubscription(serializeSubscription(subscription));
       setVisible(false);
     } catch {
-      dismiss();
+      setError('Не удалось включить уведомления. Проверьте разрешение браузера и повторите попытку.');
     } finally {
       setBusy(false);
     }
@@ -80,10 +112,16 @@ export function PushNotificationPrompt() {
         <div className="pwa-install__body">
           <p className="pwa-install__title">Узнавайте о приходе гостей</p>
           <p className="pwa-install__text">Включите push-уведомления — сообщим, когда гость войдёт в бизнес-центр.</p>
+          {error && <p className="pwa-install__text text-[var(--danger)]">{error}</p>}
         </div>
-        <button type="button" className="btn btn-primary pwa-install__btn" onClick={subscribe} disabled={busy}>
+        <button
+          type="button"
+          className="btn btn-primary pwa-install__btn"
+          onClick={subscribe}
+          disabled={busy || permission === 'denied'}
+        >
           <Bell className="w-4 h-4" />
-          {busy ? 'Подключаем…' : 'Включить'}
+          {busy ? 'Подключаем…' : permission === 'denied' ? 'Заблокировано браузером' : 'Включить'}
         </button>
       </div>
     </div>

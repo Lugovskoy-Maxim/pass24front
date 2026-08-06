@@ -1,7 +1,14 @@
 import { Global, Module } from '@nestjs/common';
 import { ConfigModule } from '@nestjs/config';
 import { AuthDatabaseModule } from '../database/auth-database.module';
-import { PushSubscription, PushSubscriptionSchema, User, UserSchema } from '../schemas';
+import {
+  PushSubscription,
+  PushSubscriptionSchema,
+  User,
+  UserSchema,
+  VapidConfig,
+  VapidConfigSchema,
+} from '../schemas';
 import { NotificationsController } from './notifications.controller';
 import { NotificationsService } from './notifications.service';
 
@@ -12,6 +19,7 @@ import { NotificationsService } from './notifications.service';
     AuthDatabaseModule.forFeature([
       { name: PushSubscription.name, schema: PushSubscriptionSchema },
       { name: User.name, schema: UserSchema },
+      { name: VapidConfig.name, schema: VapidConfigSchema },
     ]),
   ],
   controllers: [NotificationsController],

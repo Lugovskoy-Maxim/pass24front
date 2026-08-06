@@ -1,10 +1,17 @@
-import { Injectable, Logger } from '@nestjs/common';
+import { Injectable, Logger, OnModuleInit } from '@nestjs/common';
 import { ConfigService } from '@nestjs/config';
 import { InjectModel } from '@nestjs/mongoose';
 import { Model, Types } from 'mongoose';
 import * as webPush from 'web-push';
 import { AUTH_CONNECTION } from '../database/auth-database.constants';
-import { PushSubscription, PushSubscriptionDocument, User, UserDocument } from '../schemas';
+import {
+  PushSubscription,
+  PushSubscriptionDocument,
+  User,
+  UserDocument,
+  VapidConfig,
+  VapidConfigDocument,
+} from '../schemas';
 import { SavePushSubscriptionDto } from './dto/save-push-subscription.dto';
 
 type GuestArrival = {
@@ -17,35 +24,69 @@ type GuestArrival = {
 };
 
 @Injectable()
-export class NotificationsService {
+export class NotificationsService implements OnModuleInit {
   private readonly logger = new Logger(NotificationsService.name);
-  private readonly enabled: boolean;
+  private enabled = false;
+  private publicKey: string | null = null;
 
   constructor(
     @InjectModel(PushSubscription.name, AUTH_CONNECTION)
     private readonly subscriptionModel: Model<PushSubscriptionDocument>,
     @InjectModel(User.name, AUTH_CONNECTION)
     private readonly userModel: Model<UserDocument>,
+    @InjectModel(VapidConfig.name, AUTH_CONNECTION)
+    private readonly vapidConfigModel: Model<VapidConfigDocument>,
     private readonly config: ConfigService,
-  ) {
-    const publicKey = this.config.get<string>('VAPID_PUBLIC_KEY')?.trim();
-    const privateKey = this.config.get<string>('VAPID_PRIVATE_KEY')?.trim();
-    this.enabled = !!publicKey && !!privateKey;
-    if (this.enabled) {
-      webPush.setVapidDetails(
-        this.config.get<string>('VAPID_SUBJECT') || 'mailto:admin@pass24.local',
-        publicKey!,
-        privateKey!,
-      );
-    } else {
-      this.logger.warn('Web Push disabled: VAPID keys are not configured');
+  ) {}
+
+  async onModuleInit() {
+    try {
+      const envPublicKey = this.config.get<string>('VAPID_PUBLIC_KEY')?.trim();
+      const envPrivateKey = this.config.get<string>('VAPID_PRIVATE_KEY')?.trim();
+      const subject = this.config.get<string>('VAPID_SUBJECT')?.trim() || 'mailto:admin@pass24.local';
+
+      let publicKey = envPublicKey;
+      let privateKey = envPrivateKey;
+      if (!publicKey || !privateKey) {
+        let stored = await this.vapidConfigModel
+          .findOne({ key: 'default' })
+          .select('+privateKey')
+          .lean();
+        if (!stored) {
+          const generated = webPush.generateVAPIDKeys();
+          stored = await this.vapidConfigModel
+            .findOneAndUpdate(
+              { key: 'default' },
+              {
+                $setOnInsert: {
+                  key: 'default',
+                  publicKey: generated.publicKey,
+                  privateKey: generated.privateKey,
+                  subject,
+                },
+              },
+              { upsert: true, new: true },
+            )
+            .select('+privateKey')
+            .lean();
+          this.logger.log('Generated persistent VAPID keys in the auth database');
+        }
+        publicKey = stored.publicKey;
+        privateKey = stored.privateKey;
+      }
+
+      webPush.setVapidDetails(subject, publicKey, privateKey);
+      this.publicKey = publicKey;
+      this.enabled = true;
+    } catch (error: any) {
+      this.logger.error(`Web Push initialization failed: ${error?.message || error}`);
     }
   }
 
   getPublicConfig() {
     return {
       enabled: this.enabled,
-      publicKey: this.enabled ? this.config.get<string>('VAPID_PUBLIC_KEY') : null,
+      publicKey: this.enabled ? this.publicKey : null,
     };
   }
 
