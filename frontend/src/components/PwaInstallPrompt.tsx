@@ -21,7 +21,8 @@ function isStandalone(): boolean {
 
 function isIos(): boolean {
   if (typeof navigator === 'undefined') return false;
-  return /iphone|ipad|ipod/i.test(navigator.userAgent);
+  return /iphone|ipad|ipod/i.test(navigator.userAgent)
+    || (navigator.platform === 'MacIntel' && navigator.maxTouchPoints > 1);
 }
 
 function wasDismissedRecently(): boolean {
@@ -39,6 +40,12 @@ export function PwaInstallPrompt() {
   const [deferred, setDeferred] = useState<BeforeInstallPromptEvent | null>(null);
   const [visible, setVisible] = useState(false);
   const [iosMode, setIosMode] = useState(false);
+
+  useEffect(() => {
+    window.dispatchEvent(new CustomEvent('pass24:pwa-install-visibility', {
+      detail: { visible },
+    }));
+  }, [visible]);
 
   const dismiss = useCallback(() => {
     try {

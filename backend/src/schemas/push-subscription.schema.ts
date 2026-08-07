@@ -17,6 +17,9 @@ export class PushSubscription {
   @Prop({ required: true, select: false })
   auth: string;
 
+  @Prop({ required: true, select: false, index: true })
+  renewalTokenHash: string;
+
   @Prop()
   userAgent?: string;
 }

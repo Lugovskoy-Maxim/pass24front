@@ -26,6 +26,10 @@ export function getPassTicketUrl(passNumber: string) {
   return `${window.location.origin}/ticket/${encodeURIComponent(passNumber)}`;
 }
 
+export function getPushRenewalUrl() {
+  return `${API_URL}/notifications/push/subscriptions/renew`;
+}
+
 export interface TenantOffice {
   id: string;
   propertyId: string;
@@ -297,7 +301,7 @@ export const api = {
     endpoint: string;
     keys: { p256dh: string; auth: string };
   }) =>
-    request<{ subscribed: true }>('/notifications/push/subscriptions', {
+    request<{ subscribed: true; renewalToken: string }>('/notifications/push/subscriptions', {
       method: 'POST',
       body: JSON.stringify(subscription),
     }),

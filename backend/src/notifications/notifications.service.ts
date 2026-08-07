@@ -2,6 +2,7 @@ import { Injectable, Logger, OnModuleInit } from '@nestjs/common';
 import { ConfigService } from '@nestjs/config';
 import { InjectModel } from '@nestjs/mongoose';
 import { Model, Types } from 'mongoose';
+import { createHash, randomBytes } from 'crypto';
 import * as webPush from 'web-push';
 import { AUTH_CONNECTION } from '../database/auth-database.constants';
 import {
@@ -13,6 +14,7 @@ import {
   VapidConfigDocument,
 } from '../schemas';
 import { SavePushSubscriptionDto } from './dto/save-push-subscription.dto';
+import { RenewPushSubscriptionDto } from './dto/renew-push-subscription.dto';
 
 type GuestArrival = {
   id: string;
@@ -91,6 +93,7 @@ export class NotificationsService implements OnModuleInit {
   }
 
   async saveSubscription(userId: string, dto: SavePushSubscriptionDto, userAgent?: string) {
+    const renewalToken = randomBytes(32).toString('base64url');
     await this.subscriptionModel.findOneAndUpdate(
       { endpoint: dto.endpoint },
       {
@@ -99,17 +102,35 @@ export class NotificationsService implements OnModuleInit {
           endpoint: dto.endpoint,
           p256dh: dto.keys.p256dh,
           auth: dto.keys.auth,
+          renewalTokenHash: this.hashRenewalToken(renewalToken),
           userAgent: userAgent?.slice(0, 500),
         },
       },
       { upsert: true, new: true },
     );
+    return { subscribed: true, renewalToken };
+  }
+
+  async renewSubscription(dto: RenewPushSubscriptionDto) {
+    const subscription = await this.subscriptionModel
+      .findOne({ renewalTokenHash: this.hashRenewalToken(dto.renewalToken) })
+      .select('+renewalTokenHash');
+    if (!subscription) return { subscribed: false };
+
+    subscription.endpoint = dto.endpoint;
+    subscription.p256dh = dto.keys.p256dh;
+    subscription.auth = dto.keys.auth;
+    await subscription.save();
     return { subscribed: true };
   }
 
   async removeSubscription(userId: string, endpoint: string) {
     await this.subscriptionModel.deleteOne({ userId: new Types.ObjectId(userId), endpoint });
     return { subscribed: false };
+  }
+
+  private hashRenewalToken(token: string) {
+    return createHash('sha256').update(token).digest('hex');
   }
 
   async notifyGuestArrival(pass: GuestArrival): Promise<void> {
@@ -145,21 +166,37 @@ export class NotificationsService implements OnModuleInit {
 
       await Promise.allSettled(
         subscriptions.map(async (subscription) => {
-          try {
-            await webPush.sendNotification(
-              {
-                endpoint: subscription.endpoint,
-                keys: { p256dh: subscription.p256dh, auth: subscription.auth },
-              },
-              payload,
-              { TTL: 3600, urgency: 'high', timeout: 5000 },
-            );
-          } catch (error: any) {
-            if (error?.statusCode === 404 || error?.statusCode === 410) {
-              await this.subscriptionModel.deleteOne({ _id: subscription._id });
+          for (let attempt = 0; attempt < 2; attempt += 1) {
+            try {
+              await webPush.sendNotification(
+                {
+                  endpoint: subscription.endpoint,
+                  keys: { p256dh: subscription.p256dh, auth: subscription.auth },
+                },
+                payload,
+                {
+                  TTL: 3600,
+                  urgency: 'high',
+                  timeout: 5000,
+                  topic: pass.id.slice(-32),
+                },
+              );
+              return;
+            } catch (error: any) {
+              if ([404, 410].includes(error?.statusCode)) {
+                await this.subscriptionModel.deleteOne({ _id: subscription._id });
+                return;
+              }
+              const transient = error?.statusCode === 408
+                || error?.statusCode === 429
+                || error?.statusCode >= 500;
+              if (attempt === 0 && transient) {
+                await new Promise((resolve) => setTimeout(resolve, 1000));
+                continue;
+              }
+              this.logger.warn(`Web Push delivery failed: ${error?.statusCode || error?.message || error}`);
               return;
             }
-            this.logger.warn(`Web Push delivery failed: ${error?.statusCode || error?.message || error}`);
           }
         }),
       );
