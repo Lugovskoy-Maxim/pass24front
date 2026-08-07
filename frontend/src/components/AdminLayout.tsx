@@ -71,18 +71,21 @@ export function AdminLayout({ children, title }: { children: React.ReactNode; ti
 
   return (
     <ProtectedLayout permissions={['admin.panel']} wide>
-      <div className={`flex flex-col lg:flex-row ${compactNav ? 'gap-3' : 'gap-6'}`}>
-        <aside className={`${compactNav ? 'lg:w-16' : 'lg:w-56'} shrink-0 transition-[width] duration-200`}>
-          <div className={`card sticky top-20 ${compactNav ? 'p-2 lg:py-3' : 'p-4'}`}>
-            <div className={`flex items-center gap-2 mb-4 pb-3 border-b border-[var(--border)] ${
-              compactNav ? 'lg:justify-center' : ''
+      <div className={`flex flex-col lg:flex-row ${compactNav ? 'gap-4' : 'gap-6'}`}>
+        <aside
+          className={`${compactNav ? 'lg:w-[4.5rem]' : 'lg:w-60'} w-full shrink-0 transition-[width] duration-200`}
+          aria-label="Навигация администратора"
+        >
+          <div className={`card lg:sticky lg:top-20 ${compactNav ? 'p-2 lg:py-3' : 'p-3 lg:p-4'}`}>
+            <div className={`hidden lg:flex items-center gap-2 mb-3 pb-3 border-b border-[var(--border)] ${
+              compactNav ? 'justify-center' : ''
             }`}>
               <Shield className="w-5 h-5 text-[var(--primary)]" />
               <span className={`font-semibold text-sm ${compactNav ? 'lg:sr-only' : ''}`}>
                 Администрирование
               </span>
             </div>
-            <nav className="space-y-1">
+            <nav className="flex gap-1.5 overflow-x-auto [scrollbar-width:none] [&::-webkit-scrollbar]:hidden lg:block lg:space-y-1 lg:overflow-visible">
               {links.map(({ href, label, icon: Icon, exact }) => {
                 const active = exact ? pathname === href : pathname.startsWith(href);
                 const showBadge = href === '/admin/users' && registrationPending > 0;
@@ -90,15 +93,15 @@ export function AdminLayout({ children, title }: { children: React.ReactNode; ti
                   <Link
                     key={href}
                     href={showBadge ? '/admin/users?category=tenants&highlight=registration' : href}
-                    title={compactNav ? label : undefined}
-                    className={`relative flex items-center gap-2 px-3 py-2 rounded text-sm ${
-                      compactNav ? 'lg:justify-center lg:px-2' : ''
+                    aria-current={active ? 'page' : undefined}
+                    className={`group relative flex shrink-0 items-center gap-2 rounded px-3 py-2.5 text-sm ${
+                      compactNav ? 'lg:justify-center lg:px-2.5' : ''
                     } ${
                       active ? 'nav-link-light-active' : 'nav-link-light'
                     }`}
                   >
                     <Icon className="w-4 h-4 shrink-0" />
-                    <span className={`flex-1 min-w-0 ${compactNav ? 'lg:sr-only' : ''}`}>{label}</span>
+                    <span className={`whitespace-nowrap ${compactNav ? 'lg:sr-only' : 'lg:flex-1'}`}>{label}</span>
                     {showBadge && (
                       <span
                         className={`inline-flex items-center justify-center min-w-[1.25rem] h-5 px-1.5 rounded-[var(--radius-sm)] text-[10px] font-bold text-[var(--on-accent)] bg-[var(--danger)] ${
@@ -109,31 +112,52 @@ export function AdminLayout({ children, title }: { children: React.ReactNode; ti
                         {registrationPending > 99 ? '99+' : registrationPending}
                       </span>
                     )}
+                    {compactNav && (
+                      <span
+                        role="tooltip"
+                        className="pointer-events-none absolute left-[calc(100%+0.6rem)] top-1/2 z-30 hidden -translate-y-1/2 whitespace-nowrap rounded-md border border-[var(--border)] bg-[var(--surface)] px-2.5 py-1.5 text-xs font-medium text-[var(--foreground)] opacity-0 shadow-lg transition-opacity group-hover:opacity-100 group-focus-visible:opacity-100 lg:block"
+                      >
+                        {label}
+                      </span>
+                    )}
                   </Link>
                 );
               })}
             </nav>
-            <Link
-              href={getHomePath(user)}
-              title={compactNav ? 'К приложению' : undefined}
-              className={`flex items-center gap-2 px-3 py-2 mt-4 text-sm text-[var(--muted)] hover:text-[var(--accent)] ${
-                compactNav ? 'lg:justify-center lg:px-2' : ''
-              }`}
-            >
-              <ArrowLeft className="w-4 h-4" />
-              <span className={compactNav ? 'lg:sr-only' : ''}>К приложению</span>
-            </Link>
-            <button
-              type="button"
-              onClick={toggleCompactNav}
-              className="hidden lg:flex items-center justify-center w-full mt-2 p-2 rounded text-[var(--muted)] hover:text-[var(--accent)] hover:bg-[var(--surface-muted)]"
-              title={compactNav ? 'Развернуть меню' : 'Свернуть меню'}
-              aria-label={compactNav ? 'Развернуть меню' : 'Свернуть меню'}
-            >
-              {compactNav
-                ? <PanelLeftOpen className="w-4 h-4" />
-                : <PanelLeftClose className="w-4 h-4" />}
-            </button>
+            <div className="hidden lg:block mt-3 pt-3 border-t border-[var(--border)]">
+              <Link
+                href={getHomePath(user)}
+                className={`group relative flex items-center gap-2 rounded px-3 py-2.5 text-sm text-[var(--muted)] hover:bg-[var(--surface-muted)] hover:text-[var(--accent)] ${
+                  compactNav ? 'justify-center px-2.5' : ''
+                }`}
+              >
+                <ArrowLeft className="w-4 h-4 shrink-0" />
+                <span className={compactNav ? 'sr-only' : ''}>К приложению</span>
+                {compactNav && (
+                  <span
+                    role="tooltip"
+                    className="pointer-events-none absolute left-[calc(100%+0.6rem)] top-1/2 z-30 -translate-y-1/2 whitespace-nowrap rounded-md border border-[var(--border)] bg-[var(--surface)] px-2.5 py-1.5 text-xs font-medium text-[var(--foreground)] opacity-0 shadow-lg transition-opacity group-hover:opacity-100 group-focus-visible:opacity-100"
+                  >
+                    К приложению
+                  </span>
+                )}
+              </Link>
+              <button
+                type="button"
+                onClick={toggleCompactNav}
+                className={`mt-1 flex w-full items-center gap-2 rounded px-3 py-2.5 text-sm text-[var(--muted)] hover:bg-[var(--surface-muted)] hover:text-[var(--accent)] ${
+                  compactNav ? 'justify-center px-2.5' : ''
+                }`}
+                title={compactNav ? 'Развернуть меню' : undefined}
+                aria-label={compactNav ? 'Развернуть меню' : 'Свернуть меню'}
+                aria-expanded={!compactNav}
+              >
+                {compactNav
+                  ? <PanelLeftOpen className="w-4 h-4" />
+                  : <PanelLeftClose className="w-4 h-4" />}
+                {!compactNav && <span>Свернуть меню</span>}
+              </button>
+            </div>
           </div>
         </aside>
         <div className="flex-1 min-w-0">
