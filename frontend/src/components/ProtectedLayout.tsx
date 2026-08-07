@@ -22,6 +22,7 @@ interface ProtectedLayoutProps {
   roles?: UserRole[];
   permissions?: string[];
   anyPermissions?: string[];
+  wide?: boolean;
 }
 
 function loginRedirectUrl(pathname: string | null, search = ''): string {
@@ -33,7 +34,7 @@ function loginRedirectUrl(pathname: string | null, search = ''): string {
   return `/login?${qs.toString()}`;
 }
 
-export function ProtectedLayout({ children, roles, permissions, anyPermissions }: ProtectedLayoutProps) {
+export function ProtectedLayout({ children, roles, permissions, anyPermissions, wide = false }: ProtectedLayoutProps) {
   const { user, loading } = useAuth();
   const router = useRouter();
   const pathname = usePathname();
@@ -88,7 +89,7 @@ export function ProtectedLayout({ children, roles, permissions, anyPermissions }
   return (
     <>
       <Header />
-      <main className="app-main max-w-6xl mx-auto px-4 py-6">
+      <main className={`app-main w-full mx-auto px-4 py-6 ${wide ? 'max-w-[1600px]' : 'max-w-6xl'}`}>
         <PendingApprovalBanner user={user} />
         {children}
         <AppVersion className="mt-10 mb-2 pb-[env(safe-area-inset-bottom,0px)]" />

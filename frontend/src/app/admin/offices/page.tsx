@@ -1152,7 +1152,7 @@ export default function AdminOfficesPage() {
         </div>
       ) : officeView === 'table' ? (
         <div className="card overflow-x-auto">
-          <table className="w-full text-sm min-w-[760px]">
+          <table className="w-full text-sm min-w-[920px]">
             <thead className="surface-muted text-[var(--muted)]">
               <tr>
                 {showBcColumn && <th className="text-left p-3 font-medium">Бизнес-центр</th>}
