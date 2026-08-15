@@ -22,11 +22,11 @@ export const MSTYLE_BRAND_DEFAULTS = {
 } as const;
 
 export const LEGACY_BRAND_DEFAULTS = {
-  siteName: 'PASS24',
+  siteName: 'PASS',
   siteIcon: '',
   siteTagline: 'Пропуска для арендаторов бизнес-центра',
   sitePhone: '+7 (495) 123-45-67',
-  siteEmail: 'info@pass24.local',
+  siteEmail: 'service@pass.local',
 } as const;
 
 export function isLegacyBrandSettings(
