@@ -44,8 +44,12 @@ export class NotificationsService implements OnModuleInit {
   async onModuleInit() {
     try {
       const envPublicKey = this.config.get<string>('VAPID_PUBLIC_KEY')?.trim();
-      const envPrivateKey = this.config.get<string>('VAPID_PRIVATE_KEY')?.trim();
-      const subject = this.config.get<string>('VAPID_SUBJECT')?.trim() || 'mailto:admin@pass24.local';
+      const envPrivateKey = this.config
+        .get<string>('VAPID_PRIVATE_KEY')
+        ?.trim();
+      const subject =
+        this.config.get<string>('VAPID_SUBJECT')?.trim() ||
+        'mailto:admin@pass24.local';
 
       let publicKey = envPublicKey;
       let privateKey = envPrivateKey;
@@ -71,7 +75,9 @@ export class NotificationsService implements OnModuleInit {
             )
             .select('+privateKey')
             .lean();
-          this.logger.log('Generated persistent VAPID keys in the auth database');
+          this.logger.log(
+            'Generated persistent VAPID keys in the auth database',
+          );
         }
         publicKey = stored.publicKey;
         privateKey = stored.privateKey;
@@ -81,7 +87,9 @@ export class NotificationsService implements OnModuleInit {
       this.publicKey = publicKey;
       this.enabled = true;
     } catch (error: any) {
-      this.logger.error(`Web Push initialization failed: ${error?.message || error}`);
+      this.logger.error(
+        `Web Push initialization failed: ${error?.message || error}`,
+      );
     }
   }
 
@@ -92,7 +100,11 @@ export class NotificationsService implements OnModuleInit {
     };
   }
 
-  async saveSubscription(userId: string, dto: SavePushSubscriptionDto, userAgent?: string) {
+  async saveSubscription(
+    userId: string,
+    dto: SavePushSubscriptionDto,
+    userAgent?: string,
+  ) {
     const renewalToken = randomBytes(32).toString('base64url');
     await this.subscriptionModel.findOneAndUpdate(
       { endpoint: dto.endpoint },
@@ -125,7 +137,10 @@ export class NotificationsService implements OnModuleInit {
   }
 
   async removeSubscription(userId: string, endpoint: string) {
-    await this.subscriptionModel.deleteOne({ userId: new Types.ObjectId(userId), endpoint });
+    await this.subscriptionModel.deleteOne({
+      userId: new Types.ObjectId(userId),
+      endpoint,
+    });
     return { subscribed: false };
   }
 
@@ -137,8 +152,12 @@ export class NotificationsService implements OnModuleInit {
     if (!this.enabled || !pass.createdBy) return;
 
     try {
-      const creator = await this.userModel.findById(pass.createdBy).select('role parentTenantId').lean();
-      if (!creator || (creator.role !== 'tenant' && !creator.parentTenantId)) return;
+      const creator = await this.userModel
+        .findById(pass.createdBy)
+        .select('role parentTenantId')
+        .lean();
+      if (!creator || (creator.role !== 'tenant' && !creator.parentTenantId))
+        return;
 
       const ownerId = creator.parentTenantId || creator._id;
       const recipients = await this.userModel
@@ -171,7 +190,10 @@ export class NotificationsService implements OnModuleInit {
               await webPush.sendNotification(
                 {
                   endpoint: subscription.endpoint,
-                  keys: { p256dh: subscription.p256dh, auth: subscription.auth },
+                  keys: {
+                    p256dh: subscription.p256dh,
+                    auth: subscription.auth,
+                  },
                 },
                 payload,
                 {
@@ -184,24 +206,31 @@ export class NotificationsService implements OnModuleInit {
               return;
             } catch (error: any) {
               if ([404, 410].includes(error?.statusCode)) {
-                await this.subscriptionModel.deleteOne({ _id: subscription._id });
+                await this.subscriptionModel.deleteOne({
+                  _id: subscription._id,
+                });
                 return;
               }
-              const transient = error?.statusCode === 408
-                || error?.statusCode === 429
-                || error?.statusCode >= 500;
+              const transient =
+                error?.statusCode === 408 ||
+                error?.statusCode === 429 ||
+                error?.statusCode >= 500;
               if (attempt === 0 && transient) {
                 await new Promise((resolve) => setTimeout(resolve, 1000));
                 continue;
               }
-              this.logger.warn(`Web Push delivery failed: ${error?.statusCode || error?.message || error}`);
+              this.logger.warn(
+                `Web Push delivery failed: ${error?.statusCode || error?.message || error}`,
+              );
               return;
             }
           }
         }),
       );
     } catch (error: any) {
-      this.logger.error(`Guest arrival notification failed for ${pass.id}: ${error?.message || error}`);
+      this.logger.error(
+        `Guest arrival notification failed for ${pass.id}: ${error?.message || error}`,
+      );
     }
   }
 }

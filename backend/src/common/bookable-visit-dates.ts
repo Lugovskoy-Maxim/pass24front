@@ -1,20 +1,28 @@
-import { addDays, getLocalDateString, isValidVisitDateString } from './visit-date';
+import {
+  addDays,
+  getLocalDateString,
+  isValidVisitDateString,
+} from './visit-date';
 
 /** Сколько ближайших рабочих дней можно выбрать при заказе пропуска (включая сегодня). */
 export const BOOKABLE_VISIT_DAYS = 3;
 
 export function parseClosedWeekdays(value?: string | null): number[] {
   if (!value?.trim()) return [];
-  return [...new Set(
-    value
-      .split(',')
-      .map((part) => parseInt(part.trim(), 10))
-      .filter((day) => day >= 0 && day <= 6),
-  )].sort((a, b) => a - b);
+  return [
+    ...new Set(
+      value
+        .split(',')
+        .map((part) => parseInt(part.trim(), 10))
+        .filter((day) => day >= 0 && day <= 6),
+    ),
+  ].sort((a, b) => a - b);
 }
 
 export function serializeClosedWeekdays(days: number[]): string {
-  return [...new Set(days.filter((day) => day >= 0 && day <= 6))].sort((a, b) => a - b).join(',');
+  return [...new Set(days.filter((day) => day >= 0 && day <= 6))]
+    .sort((a, b) => a - b)
+    .join(',');
 }
 
 export function getWeekday(dateStr: string): number {
@@ -22,7 +30,10 @@ export function getWeekday(dateStr: string): number {
   return new Date(y, m - 1, d).getDay();
 }
 
-export function isClosedWeekday(dateStr: string, closedWeekdays: number[]): boolean {
+export function isClosedWeekday(
+  dateStr: string,
+  closedWeekdays: number[],
+): boolean {
   return closedWeekdays.includes(getWeekday(dateStr));
 }
 
@@ -55,7 +66,11 @@ export function assertVisitDateBookable(
     throw new Error('INVALID_DATE');
   }
 
-  const bookable = getBookableVisitDates(today, closedWeekdays, BOOKABLE_VISIT_DAYS);
+  const bookable = getBookableVisitDates(
+    today,
+    closedWeekdays,
+    BOOKABLE_VISIT_DAYS,
+  );
   if (bookable.includes(visitDate)) return;
 
   if (visitDate < today) {

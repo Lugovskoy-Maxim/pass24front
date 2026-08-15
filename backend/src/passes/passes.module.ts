@@ -15,7 +15,11 @@ import { PassesService } from './passes.service';
     AuthDatabaseModule.forFeature([{ name: User.name, schema: UserSchema }]),
     AuthModule,
   ],
-  controllers: [PassesController, PassesPublicController, PassTemplatesController],
+  controllers: [
+    PassesController,
+    PassesPublicController,
+    PassTemplatesController,
+  ],
   providers: [PassesService, PassTemplatesService],
   exports: [PassesService, PassTemplatesService],
 })

@@ -2,24 +2,39 @@ import { PassStatus } from './api';
 
 export type PassStatusVisualKey = PassStatus | 'overdue';
 
-export function getPassStatusVisualKey(status: PassStatus, overdue = false): PassStatusVisualKey {
+export function getPassStatusVisualKey(
+  status: PassStatus,
+  overdue = false,
+): PassStatusVisualKey {
   if (overdue && status === 'active') return 'overdue';
   return status;
 }
 
-export function getPassStatusStripeClass(status: PassStatus, overdue = false): string {
+export function getPassStatusStripeClass(
+  status: PassStatus,
+  overdue = false,
+): string {
   return `pass-stripe pass-stripe--${getPassStatusVisualKey(status, overdue)}`;
 }
 
-export function getPassStatusBadgeClass(status: PassStatus, overdue = false): string {
+export function getPassStatusBadgeClass(
+  status: PassStatus,
+  overdue = false,
+): string {
   return `pass-badge pass-badge--${getPassStatusVisualKey(status, overdue)}`;
 }
 
-export function getPassIconTileClass(status: PassStatus, overdue = false): string {
+export function getPassIconTileClass(
+  status: PassStatus,
+  overdue = false,
+): string {
   return `pass-icon-tile pass-icon-tile--${getPassStatusVisualKey(status, overdue)}`;
 }
 
-export function getPassStatusRingVar(status: PassStatus, overdue = false): string {
+export function getPassStatusRingVar(
+  status: PassStatus,
+  overdue = false,
+): string {
   const key = getPassStatusVisualKey(status, overdue);
   return `var(--status-${key}-ring)`;
 }
@@ -28,7 +43,9 @@ export function getPassStatusColorVar(status: PassStatus | 'overdue'): string {
   return `var(--status-${status})`;
 }
 
-export function getReceptionSectionStyle(key: PassStatus | 'overdue' | 'total'): {
+export function getReceptionSectionStyle(
+  key: PassStatus | 'overdue' | 'total',
+): {
   iconColor: string;
   stripColor: string;
 } {
@@ -42,7 +59,9 @@ export function getReceptionSectionStyle(key: PassStatus | 'overdue' | 'total'):
   };
 }
 
-export function getAccentStatClass(key: PassStatus | 'overdue' | 'total'): string {
+export function getAccentStatClass(
+  key: PassStatus | 'overdue' | 'total',
+): string {
   return `accent-stat accent-stat--${key}`;
 }
 
@@ -50,11 +69,17 @@ export function getSectionHeadingClass(key: PassStatus | 'overdue'): string {
   return `section-heading section-heading--${key === 'overdue' ? 'overdue' : key}`;
 }
 
-export function getPassStatusTopStripeClass(status: PassStatus, overdue = false): string {
+export function getPassStatusTopStripeClass(
+  status: PassStatus,
+  overdue = false,
+): string {
   return `pass-stripe-top pass-stripe-top--${getPassStatusVisualKey(status, overdue)}`;
 }
 
-export function getPassTimelineCurrentClasses(status: PassStatus, overdue = false): {
+export function getPassTimelineCurrentClasses(
+  status: PassStatus,
+  overdue = false,
+): {
   node: string;
   label: string;
   sublabel: string;
@@ -80,7 +105,9 @@ export function getPassCardShellClass(options?: {
   if (options?.interactive) parts.push('pass-card--interactive');
   if (options?.selected && options.status) {
     parts.push('pass-card--selected');
-    parts.push(`pass-card--selected-${getPassStatusVisualKey(options.status, options.overdue)}`);
+    parts.push(
+      `pass-card--selected-${getPassStatusVisualKey(options.status, options.overdue)}`,
+    );
   }
   if (options?.overdue) parts.push('pass-card--overdue');
   if (options?.dimmed) parts.push('opacity-85');

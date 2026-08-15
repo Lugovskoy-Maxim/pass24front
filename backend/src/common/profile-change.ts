@@ -22,8 +22,20 @@ export function mapProfileChangeRequest(req?: ProfileChangeRequestData | null) {
 }
 
 export function profileFieldsEqual(
-  current: { lastName?: string; firstName?: string; middleName?: string; phone?: string; company?: string },
-  next: { lastName?: string; firstName?: string; middleName?: string; phone?: string; company?: string },
+  current: {
+    lastName?: string;
+    firstName?: string;
+    middleName?: string;
+    phone?: string;
+    company?: string;
+  },
+  next: {
+    lastName?: string;
+    firstName?: string;
+    middleName?: string;
+    phone?: string;
+    company?: string;
+  },
 ) {
   return (
     (current.lastName || '') === (next.lastName || '') &&

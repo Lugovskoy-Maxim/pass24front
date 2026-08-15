@@ -13,7 +13,12 @@ interface PassNumberProps {
 /**
  * Номер пропуска Pass-2026-5326 — всегда в одну строку, mono, без обрезки «…».
  */
-export function PassNumber({ value, className = '', size = 'md', title }: PassNumberProps) {
+export function PassNumber({
+  value,
+  className = '',
+  size = 'md',
+  title,
+}: PassNumberProps) {
   const display = formatPassNumber(value);
   const sizeClass =
     size === 'lg'

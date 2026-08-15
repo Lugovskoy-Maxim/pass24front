@@ -11,15 +11,26 @@ interface IconPickerFieldProps {
   hint?: string;
 }
 
-export function IconPickerField({ label, value, onChange, hint }: IconPickerFieldProps) {
+export function IconPickerField({
+  label,
+  value,
+  onChange,
+  hint,
+}: IconPickerFieldProps) {
   return (
     <div>
       <label className="label">{label}</label>
       <div className="flex items-center gap-3">
         <SelectWrap className="flex-1">
-          <select className="input" value={value} onChange={(e) => onChange(e.target.value)}>
+          <select
+            className="input"
+            value={value}
+            onChange={(e) => onChange(e.target.value)}
+          >
             {UI_ICON_OPTIONS.map((opt) => (
-              <option key={opt.id} value={opt.id}>{opt.label}</option>
+              <option key={opt.id} value={opt.id}>
+                {opt.label}
+              </option>
             ))}
           </select>
         </SelectWrap>

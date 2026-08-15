@@ -1,4 +1,9 @@
-import { CanActivate, ExecutionContext, ForbiddenException, Injectable } from '@nestjs/common';
+import {
+  CanActivate,
+  ExecutionContext,
+  ForbiddenException,
+  Injectable,
+} from '@nestjs/common';
 import { Reflector } from '@nestjs/core';
 import { AccessConfigService } from '../access/access-config.service';
 import { PERMISSIONS_ALL_KEY, PERMISSIONS_KEY } from './permissions.decorator';
@@ -23,11 +28,17 @@ export class PermissionsGuard implements CanActivate {
       ? user.permissions
       : await this.accessConfigService.getPermissionsForRole(user.role);
 
-    if (allRequired.length && !allRequired.every((p) => permissions.includes(p))) {
+    if (
+      allRequired.length &&
+      !allRequired.every((p) => permissions.includes(p))
+    ) {
       throw new ForbiddenException('Недостаточно прав');
     }
 
-    if (anyRequired.length && !anyRequired.some((p) => permissions.includes(p))) {
+    if (
+      anyRequired.length &&
+      !anyRequired.some((p) => permissions.includes(p))
+    ) {
       throw new ForbiddenException('Недостаточно прав');
     }
 
@@ -35,7 +46,8 @@ export class PermissionsGuard implements CanActivate {
   }
 
   private mergePermissions(context: ExecutionContext, key: string): string[] {
-    const handler = this.reflector.get<string[]>(key, context.getHandler()) || [];
+    const handler =
+      this.reflector.get<string[]>(key, context.getHandler()) || [];
     const cls = this.reflector.get<string[]>(key, context.getClass()) || [];
     return [...new Set([...cls, ...handler])];
   }

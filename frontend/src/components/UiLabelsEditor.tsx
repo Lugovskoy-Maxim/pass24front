@@ -13,7 +13,8 @@ const SECTIONS: Section[] = [
   {
     id: 'placeholders',
     title: 'Плейсхолдеры полей',
-    description: 'Подсказки внутри полей ввода (серый текст, пока поле пустое). Меняйте под ваш БЦ и компанию.',
+    description:
+      'Подсказки внутри полей ввода (серый текст, пока поле пустое). Меняйте под ваш БЦ и компанию.',
     fields: [
       { path: 'placeholders.company', label: 'Компания' },
       { path: 'placeholders.email', label: 'Email' },
@@ -174,8 +175,14 @@ const SECTIONS: Section[] = [
       { path: 'reception.overdueInsideBanner', label: 'Баннер: гость в БЦ' },
       { path: 'reception.overdueInsideBadge', label: 'Бейдж просрочки' },
       { path: 'reception.overdueInsideCard', label: 'Текст на карточке' },
-      { path: 'reception.overdueEndTimeBanner', label: 'Баннер: просрочен выход' },
-      { path: 'reception.overdueEndTimeBadge', label: 'Бейдж: просрочен выход' },
+      {
+        path: 'reception.overdueEndTimeBanner',
+        label: 'Баннер: просрочен выход',
+      },
+      {
+        path: 'reception.overdueEndTimeBadge',
+        label: 'Бейдж: просрочен выход',
+      },
       { path: 'reception.overdueEndTimeCard', label: 'Карточка: после {time}' },
       { path: 'reception.overdueMixedBanner', label: 'Баннер: смешанный' },
       { path: 'reception.journalLoading', label: 'Загрузка журнала' },
@@ -222,7 +229,10 @@ const SECTIONS: Section[] = [
       { path: 'card.vehicle', label: 'Авто' },
       { path: 'card.type', label: 'Тип' },
       { path: 'card.businessCenter', label: 'Бизнес-центр' },
-      { path: 'card.businessCenterAbbr', label: 'Подпись БЦ на билете (БЦ / Бизнес-центр)' },
+      {
+        path: 'card.businessCenterAbbr',
+        label: 'Подпись БЦ на билете (БЦ / Бизнес-центр)',
+      },
       { path: 'card.comment', label: 'Комментарий' },
       { path: 'card.rejectionReason', label: 'Причина отклонения' },
       { path: 'card.checkIn', label: 'Вход (время)' },
@@ -304,14 +314,22 @@ export function UiLabelsEditor({ labels, onChange }: UiLabelsEditorProps) {
   return (
     <div className="space-y-4">
       {SECTIONS.map((section) => (
-        <details key={section.id} className="card overflow-hidden group" open={section.id === 'placeholders'}>
+        <details
+          key={section.id}
+          className="card overflow-hidden group"
+          open={section.id === 'placeholders'}
+        >
           <summary className="px-4 py-3 cursor-pointer font-semibold text-sm surface-muted border-b border-[var(--border)] hover:bg-[var(--surface-elevated)] transition-colors list-none flex items-center justify-between">
             <span>{section.title}</span>
-            <span className="text-xs text-[var(--muted)] font-normal">{section.fields.length} полей</span>
+            <span className="text-xs text-[var(--muted)] font-normal">
+              {section.fields.length} полей
+            </span>
           </summary>
           <div className="p-4 space-y-3">
             {section.description && (
-              <p className="text-xs text-[var(--muted)] -mt-1 mb-2">{section.description}</p>
+              <p className="text-xs text-[var(--muted)] -mt-1 mb-2">
+                {section.description}
+              </p>
             )}
             <div className="grid sm:grid-cols-2 gap-3">
               {section.fields.map((field) => (
@@ -321,7 +339,9 @@ export function UiLabelsEditor({ labels, onChange }: UiLabelsEditorProps) {
                     className="input text-sm"
                     value={getNested(labels, field.path)}
                     placeholder={field.placeholder}
-                    onChange={(e) => onChange(setNested(labels, field.path, e.target.value))}
+                    onChange={(e) =>
+                      onChange(setNested(labels, field.path, e.target.value))
+                    }
                   />
                 </div>
               ))}

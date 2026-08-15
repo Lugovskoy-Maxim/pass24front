@@ -2,7 +2,18 @@
 
 import { Suspense, useEffect, useState, useCallback, useRef } from 'react';
 import { useSearchParams } from 'next/navigation';
-import { BarChart3, Building2, LogIn, LogOut, Users, CheckCircle, Clock, AlertCircle, Search, X } from 'lucide-react';
+import {
+  BarChart3,
+  Building2,
+  LogIn,
+  LogOut,
+  Users,
+  CheckCircle,
+  Clock,
+  AlertCircle,
+  Search,
+  X,
+} from 'lucide-react';
 import { ProtectedLayout } from '@/components/ProtectedLayout';
 import { PassListCard } from '@/components/PassListCard';
 import { PassDetailModal } from '@/components/PassDetailModal';
@@ -46,7 +57,13 @@ function ControlPageContent() {
   const [journalSearch, setJournalSearch] = useState('');
   const journalSearchRef = useRef('');
   const [passes, setPasses] = useState<Pass[]>([]);
-  const [stats, setStats] = useState({ total: 0, pending: 0, active: 0, completed: 0, approved: 0 });
+  const [stats, setStats] = useState({
+    total: 0,
+    pending: 0,
+    active: 0,
+    completed: 0,
+    approved: 0,
+  });
   const [loading, setLoading] = useState(true);
   const [loadError, setLoadError] = useState('');
   const [loadErrorCause, setLoadErrorCause] = useState<unknown>(null);
@@ -59,7 +76,9 @@ function ControlPageContent() {
   const [lookupLoading, setLookupLoading] = useState(false);
   const [selected, setSelected] = useState<Pass | null>(null);
   const [isMobile, setIsMobile] = useState(false);
-  const [overdueSectionEl, setOverdueSectionEl] = useState<HTMLElement | null>(null);
+  const [overdueSectionEl, setOverdueSectionEl] = useState<HTMLElement | null>(
+    null,
+  );
   const [statsOpen, setStatsOpen] = useState(false);
   const overdueSectionInView = useElementInView(overdueSectionEl);
 
@@ -71,39 +90,51 @@ function ControlPageContent() {
     return () => mq.removeEventListener('change', update);
   }, []);
 
-  const load = useCallback((options?: { silent?: boolean }) => {
-    const silent = options?.silent;
-    if (!silent) {
-      setLoading(true);
-      setLoadError('');
-    }
-    return api.getJournal(date, journalSearchRef.current || undefined, { allProperties })
-      .then((data) => {
-        setPasses(data.passes);
-        setStats(data.stats);
-        return data.passes;
-      })
-      .catch((err) => {
-        if (!silent) {
-          setLoadErrorCause(err);
-          setLoadError(getErrorMessage(err, 'Ошибка загрузки'));
-        }
-        return [] as Pass[];
-      })
-      .finally(() => {
-        if (!silent) setLoading(false);
-      });
-  }, [date, allProperties]);
+  const load = useCallback(
+    (options?: { silent?: boolean }) => {
+      const silent = options?.silent;
+      if (!silent) {
+        setLoading(true);
+        setLoadError('');
+      }
+      return api
+        .getJournal(date, journalSearchRef.current || undefined, {
+          allProperties,
+        })
+        .then((data) => {
+          setPasses(data.passes);
+          setStats(data.stats);
+          return data.passes;
+        })
+        .catch((err) => {
+          if (!silent) {
+            setLoadErrorCause(err);
+            setLoadError(getErrorMessage(err, 'Ошибка загрузки'));
+          }
+          return [] as Pass[];
+        })
+        .finally(() => {
+          if (!silent) setLoading(false);
+        });
+    },
+    [date, allProperties],
+  );
 
-  useEffect(() => { load(); }, [load]);
+  useEffect(() => {
+    load();
+  }, [load]);
 
-  useAutoRefresh(() => load({ silent: true }), { enabled: !actionId && !lookupLoading });
+  useAutoRefresh(() => load({ silent: true }), {
+    enabled: !actionId && !lookupLoading,
+  });
 
   useEffect(() => {
     if (typeof window === 'undefined') return;
     if (window.location.hash !== '#reception-section-overdue') return;
     const timer = window.setTimeout(() => {
-      document.getElementById('reception-section-overdue')?.scrollIntoView({ behavior: 'smooth', block: 'start' });
+      document
+        .getElementById('reception-section-overdue')
+        ?.scrollIntoView({ behavior: 'smooth', block: 'start' });
     }, 150);
     return () => window.clearTimeout(timer);
   }, [loading, overduePasses.length]);
@@ -112,72 +143,90 @@ function ControlPageContent() {
     if (loading) return;
     setSelected((prev) => {
       if (prev) {
-        return passes.find((p) => p.id === prev.id)
-          || overduePasses.find((p) => p.id === prev.id)
-          || null;
+        return (
+          passes.find((p) => p.id === prev.id) ||
+          overduePasses.find((p) => p.id === prev.id) ||
+          null
+        );
       }
       // On mobile, don't auto-open the detail modal
-      if (typeof window !== 'undefined' && window.matchMedia('(max-width: 1023px)').matches) {
+      if (
+        typeof window !== 'undefined' &&
+        window.matchMedia('(max-width: 1023px)').matches
+      ) {
         return null;
       }
       return overduePasses[0] || passes[0] || null;
     });
   }, [passes, overduePasses, loading]);
 
-  const runLookup = useCallback(async (q: string) => {
-    const trimmed = q.trim();
-    setJournalSearch(trimmed);
-    journalSearchRef.current = trimmed;
-    if (!trimmed) {
-      setSelected(null);
-      await load();
-      return;
-    }
-
-    setLookupLoading(true);
-    try {
-      const data = await api.getJournal(date, trimmed, { allProperties });
-      setPasses(data.passes);
-      setStats(data.stats);
-
-      if (data.passes.length > 0) {
+  const runLookup = useCallback(
+    async (q: string) => {
+      const trimmed = q.trim();
+      setJournalSearch(trimmed);
+      journalSearchRef.current = trimmed;
+      if (!trimmed) {
         setSelected(null);
-        toast(`Найдено: ${data.passes.length}`, 'success');
+        await load();
         return;
       }
 
-      const isPassNumber = /^(Pass-|PS-)/i.test(trimmed);
-      if (isPassNumber) {
-        try {
-          const { pass } = await api.lookupPass(trimmed);
-          setSelected(null);
-          setPasses([pass]);
-          const overdueKind = getGuestOverdueKind(pass);
-          if (overdueKind === 'past_end_time') {
-            toast(labels.toasts.guestPastEndTime.replace('{time}', pass.visitTimeTo || ''), 'warning');
-          } else if (overdueKind === 'past_date') {
-            toast(labels.toasts.guestStillInside, 'warning');
-          } else {
-            toast(`${labels.toasts.passFound}: ${pass.passNumber}`, 'success');
-          }
-          const isOverdueGuest = pass.status === 'active' && getGuestOverdueKind(pass) !== null;
-          if (!isOverdueGuest && pass.visitDate !== date) {
-            setDate(pass.visitDate);
-          }
-          return;
-        } catch {
-          // fall through to not-found toast
-        }
-      }
+      setLookupLoading(true);
+      try {
+        const data = await api.getJournal(date, trimmed, { allProperties });
+        setPasses(data.passes);
+        setStats(data.stats);
 
-      toast('По запросу ничего не найдено', 'warning');
-      setSelected(null);
-    } catch (err) {
-      toast(getErrorMessage(err, 'Ошибка поиска'), 'error');
-    } finally {
-      setLookupLoading(false);
-    }
-  }, [toast, labels, date, load, allProperties]);
+        if (data.passes.length > 0) {
+          setSelected(null);
+          toast(`Найдено: ${data.passes.length}`, 'success');
+          return;
+        }
+
+        const isPassNumber = /^(Pass-|PS-)/i.test(trimmed);
+        if (isPassNumber) {
+          try {
+            const { pass } = await api.lookupPass(trimmed);
+            setSelected(null);
+            setPasses([pass]);
+            const overdueKind = getGuestOverdueKind(pass);
+            if (overdueKind === 'past_end_time') {
+              toast(
+                labels.toasts.guestPastEndTime.replace(
+                  '{time}',
+                  pass.visitTimeTo || '',
+                ),
+                'warning',
+              );
+            } else if (overdueKind === 'past_date') {
+              toast(labels.toasts.guestStillInside, 'warning');
+            } else {
+              toast(
+                `${labels.toasts.passFound}: ${pass.passNumber}`,
+                'success',
+              );
+            }
+            const isOverdueGuest =
+              pass.status === 'active' && getGuestOverdueKind(pass) !== null;
+            if (!isOverdueGuest && pass.visitDate !== date) {
+              setDate(pass.visitDate);
+            }
+            return;
+          } catch {
+            // fall through to not-found toast
+          }
+        }
+
+        toast('По запросу ничего не найдено', 'warning');
+        setSelected(null);
+      } catch (err) {
+        toast(getErrorMessage(err, 'Ошибка поиска'), 'error');
+      } finally {
+        setLookupLoading(false);
+      }
+    },
+    [toast, labels, date, load, allProperties],
+  );
 
   const runLookupRef = useRef(runLookup);
   useEffect(() => {
@@ -199,8 +248,11 @@ function ControlPageContent() {
 
   const refreshAfterAction = async (id: string) => {
     const data = await load();
-    const freshOverdue = showOverdueAlerts ? await refreshOverdue() : overduePasses;
-    const updated = data.find((p) => p.id === id) || freshOverdue.find((p) => p.id === id);
+    const freshOverdue = showOverdueAlerts
+      ? await refreshOverdue()
+      : overduePasses;
+    const updated =
+      data.find((p) => p.id === id) || freshOverdue.find((p) => p.id === id);
     if (updated) setSelected(updated);
     else setSelected(freshOverdue.find((p) => p.id !== id) || data[0] || null);
   };
@@ -270,7 +322,12 @@ function ControlPageContent() {
                 className="input"
                 placeholder="Причина отказа"
                 value={rejectReason[pass.id] || ''}
-                onChange={(e) => setRejectReason((prev) => ({ ...prev, [pass.id]: e.target.value }))}
+                onChange={(e) =>
+                  setRejectReason((prev) => ({
+                    ...prev,
+                    [pass.id]: e.target.value,
+                  }))
+                }
                 onKeyDown={(e) => {
                   if (e.key === 'Enter' && rejectReason[pass.id]?.trim()) {
                     e.preventDefault();
@@ -284,7 +341,9 @@ function ControlPageContent() {
                 <button
                   type="button"
                   className="btn btn-danger btn-sm flex-1"
-                  disabled={actionId === pass.id || !rejectReason[pass.id]?.trim()}
+                  disabled={
+                    actionId === pass.id || !rejectReason[pass.id]?.trim()
+                  }
                   onClick={() => handleReject(pass.id)}
                 >
                   {labels.buttons.reject}
@@ -332,16 +391,20 @@ function ControlPageContent() {
   };
 
   const passesByStatus = (status: Pass['status']) => {
-    const filtered = status === 'approved'
-      ? passes.filter((p) => isAwaitingEntry(p.status))
-      : passes.filter((p) => p.status === status);
+    const filtered =
+      status === 'approved'
+        ? passes.filter((p) => isAwaitingEntry(p.status))
+        : passes.filter((p) => p.status === status);
     if (status === 'active' && showOverdueAlerts) {
       return filtered.filter((p) => !overdueIds.has(p.id));
     }
     return filtered;
   };
 
-  const scrollToSection = (sectionId: string, selectFirst?: () => Pass | undefined) => {
+  const scrollToSection = (
+    sectionId: string,
+    selectFirst?: () => Pass | undefined,
+  ) => {
     const el = document.getElementById(sectionId);
     if (el) el.scrollIntoView({ behavior: 'smooth', block: 'start' });
     const first = selectFirst?.();
@@ -364,30 +427,73 @@ function ControlPageContent() {
     icon: typeof Users;
     onClick?: () => void;
   }[] = [
-    { key: 'total', label: labels.reception.statTotal, value: stats.total, icon: Users },
+    {
+      key: 'total',
+      label: labels.reception.statTotal,
+      value: stats.total,
+      icon: Users,
+    },
     ...(showOverdueAlerts && overdueCount > 0
-      ? [{
-          key: 'overdue' as const,
-          label: labels.reception.statOverdue,
-          value: overdueCount,
-          icon: AlertCircle,
-          onClick: scrollToOverdueSection,
-        }]
+      ? [
+          {
+            key: 'overdue' as const,
+            label: labels.reception.statOverdue,
+            value: overdueCount,
+            icon: AlertCircle,
+            onClick: scrollToOverdueSection,
+          },
+        ]
       : []),
-    { key: 'approved', label: labels.reception.statApproved, value: stats.approved, icon: Clock, onClick: () => scrollToSection('reception-section-approved', () => passesByStatus('approved')[0]) },
-    { key: 'active', label: labels.reception.statActive, value: activeInBuildingCount, icon: LogIn, onClick: () => scrollToSection('reception-section-active', () => passesByStatus('active')[0]) },
-    { key: 'completed', label: labels.reception.statCompleted, value: stats.completed, icon: CheckCircle, onClick: () => scrollToSection('reception-section-completed', () => passesByStatus('completed')[0]) },
+    {
+      key: 'approved',
+      label: labels.reception.statApproved,
+      value: stats.approved,
+      icon: Clock,
+      onClick: () =>
+        scrollToSection(
+          'reception-section-approved',
+          () => passesByStatus('approved')[0],
+        ),
+    },
+    {
+      key: 'active',
+      label: labels.reception.statActive,
+      value: activeInBuildingCount,
+      icon: LogIn,
+      onClick: () =>
+        scrollToSection(
+          'reception-section-active',
+          () => passesByStatus('active')[0],
+        ),
+    },
+    {
+      key: 'completed',
+      label: labels.reception.statCompleted,
+      value: stats.completed,
+      icon: CheckCircle,
+      onClick: () =>
+        scrollToSection(
+          'reception-section-completed',
+          () => passesByStatus('completed')[0],
+        ),
+    },
   ];
 
   return (
-    <ProtectedLayout anyPermissions={['passes.reception', 'passes.lookup', 'admin.panel']}>
+    <ProtectedLayout
+      anyPermissions={['passes.reception', 'passes.lookup', 'admin.panel']}
+    >
       <div className="flex flex-col sm:flex-row sm:items-start justify-between gap-3 mb-5">
         <div className="min-w-0">
           <h1 className="page-title">{labels.pages.receptionTitle}</h1>
-          <p className="text-[var(--muted)] text-sm mt-0.5">{labels.pages.receptionSubtitle}</p>
+          <p className="text-[var(--muted)] text-sm mt-0.5">
+            {labels.pages.receptionSubtitle}
+          </p>
           {canScopeByProperty && (
             <p className="text-xs text-[var(--muted)] mt-1.5">
-              {showAllProperties ? labels.reception.allPropertiesHint : labels.reception.scopedHint}
+              {showAllProperties
+                ? labels.reception.allPropertiesHint
+                : labels.reception.scopedHint}
             </p>
           )}
         </div>
@@ -397,10 +503,16 @@ function ControlPageContent() {
               type="button"
               className={`btn btn-sm ${showAllProperties ? 'btn-primary' : 'btn-secondary'}`}
               onClick={() => setShowAllProperties((v) => !v)}
-              title={showAllProperties ? labels.reception.showMyProperties : labels.reception.showAllProperties}
+              title={
+                showAllProperties
+                  ? labels.reception.showMyProperties
+                  : labels.reception.showAllProperties
+              }
             >
               <Building2 className="w-3.5 h-3.5" />
-              {showAllProperties ? labels.reception.showMyProperties : labels.reception.showAllProperties}
+              {showAllProperties
+                ? labels.reception.showMyProperties
+                : labels.reception.showAllProperties}
             </button>
           )}
           <input
@@ -439,7 +551,9 @@ function ControlPageContent() {
               <X className="w-4 h-4" />
             </button>
           )}
-          {lookupLoading && <span className="text-sm text-[var(--muted)] px-2">...</span>}
+          {lookupLoading && (
+            <span className="text-sm text-[var(--muted)] px-2">...</span>
+          )}
         </div>
       </div>
 
@@ -476,12 +590,24 @@ function ControlPageContent() {
                   className={[
                     'card p-2.5 text-center transition-transform',
                     getAccentStatClass(key),
-                    clickable ? 'cursor-pointer accent-stat--interactive hover:-translate-y-0.5' : '',
-                  ].filter(Boolean).join(' ')}
+                    clickable
+                      ? 'cursor-pointer accent-stat--interactive hover:-translate-y-0.5'
+                      : '',
+                  ]
+                    .filter(Boolean)
+                    .join(' ')}
                 >
-                  <Icon className={`w-4 h-4 mx-auto mb-1 accent-stat__icon--${key}`} />
-                  <div className={`text-lg font-bold leading-none accent-stat__value--${key}`}>{value}</div>
-                  <div className="text-[11px] text-[var(--muted)] mt-0.5">{label}</div>
+                  <Icon
+                    className={`w-4 h-4 mx-auto mb-1 accent-stat__icon--${key}`}
+                  />
+                  <div
+                    className={`text-lg font-bold leading-none accent-stat__value--${key}`}
+                  >
+                    {value}
+                  </div>
+                  <div className="text-[11px] text-[var(--muted)] mt-0.5">
+                    {label}
+                  </div>
                 </Tag>
               );
             })}
@@ -514,11 +640,19 @@ function ControlPageContent() {
           ) : (
             <div className="space-y-4">
               {showOverdueAlerts && overduePasses.length > 0 && (
-                <section id="reception-section-overdue" ref={setOverdueSectionEl} className="scroll-mt-4">
-                  <h2 className={`text-xs font-semibold mb-2 flex items-center gap-2 uppercase tracking-wide ${getSectionHeadingClass('overdue')}`}>
+                <section
+                  id="reception-section-overdue"
+                  ref={setOverdueSectionEl}
+                  className="scroll-mt-4"
+                >
+                  <h2
+                    className={`text-xs font-semibold mb-2 flex items-center gap-2 uppercase tracking-wide ${getSectionHeadingClass('overdue')}`}
+                  >
                     <AlertCircle className="w-3.5 h-3.5" />
                     {labels.reception.sectionOverdue}
-                    <span className="font-normal normal-case opacity-80">({overduePasses.length})</span>
+                    <span className="font-normal normal-case opacity-80">
+                      ({overduePasses.length})
+                    </span>
                   </h2>
                   <div className="flex flex-col gap-2 rounded-lg border theme-alert-subtle p-2">
                     {overduePasses.map((pass) => (
@@ -540,13 +674,19 @@ function ControlPageContent() {
                 if (sectionPasses.length === 0) return null;
 
                 return (
-                  <section key={key} id={`reception-section-${key}`} className="scroll-mt-4">
+                  <section
+                    key={key}
+                    id={`reception-section-${key}`}
+                    className="scroll-mt-4"
+                  >
                     <h2
                       className={`text-xs font-semibold mb-2 flex items-center gap-2 uppercase tracking-wide ${getSectionHeadingClass(key)}`}
                     >
                       <Icon className="w-3.5 h-3.5 shrink-0" />
                       {title}
-                      <span className="font-normal normal-case opacity-70">({sectionPasses.length})</span>
+                      <span className="font-normal normal-case opacity-70">
+                        ({sectionPasses.length})
+                      </span>
                     </h2>
                     <div className="flex flex-col gap-2">
                       {sectionPasses.map((pass) => (
@@ -569,7 +709,10 @@ function ControlPageContent() {
 
         {/* Desktop: sticky side panel */}
         {selected && !isMobile && (
-          <aside className="sticky top-20 space-y-2 min-w-0 max-w-full" aria-label={labels.reception.selectedPass}>
+          <aside
+            className="sticky top-20 space-y-2 min-w-0 max-w-full"
+            aria-label={labels.reception.selectedPass}
+          >
             <h2 className="font-semibold text-[var(--muted)] uppercase tracking-wide text-[11px] px-0.5">
               {labels.reception.selectedPass}
             </h2>
@@ -578,7 +721,9 @@ function ControlPageContent() {
               labels={labels}
               showCreator
               onPassUpdated={(updated) => {
-                setPasses((prev) => prev.map((p) => (p.id === updated.id ? updated : p)));
+                setPasses((prev) =>
+                  prev.map((p) => (p.id === updated.id ? updated : p)),
+                );
                 setSelected(updated);
               }}
             />
@@ -599,7 +744,9 @@ function ControlPageContent() {
             labels={labels}
             showCreator
             onPassUpdated={(updated) => {
-              setPasses((prev) => prev.map((p) => (p.id === updated.id ? updated : p)));
+              setPasses((prev) =>
+                prev.map((p) => (p.id === updated.id ? updated : p)),
+              );
               setSelected(updated);
             }}
           />
@@ -611,7 +758,15 @@ function ControlPageContent() {
 
 export default function ControlPage() {
   return (
-    <Suspense fallback={<ProtectedLayout anyPermissions={['passes.reception', 'passes.lookup', 'admin.panel']}><div className="animate-pulse text-[var(--muted)]">Загрузка...</div></ProtectedLayout>}>
+    <Suspense
+      fallback={
+        <ProtectedLayout
+          anyPermissions={['passes.reception', 'passes.lookup', 'admin.panel']}
+        >
+          <div className="animate-pulse text-[var(--muted)]">Загрузка...</div>
+        </ProtectedLayout>
+      }
+    >
       <ControlPageContent />
     </Suspense>
   );

@@ -4,7 +4,15 @@ import { useCallback, useEffect, useState } from 'react';
 import { Download, Search, X } from 'lucide-react';
 import { AdminLayout } from '@/components/AdminLayout';
 import { useToast } from '@/components/Toast';
-import { api, AuditEntry, AuditFilters, AUDIT_ENTITY_LABELS, AUDIT_LABELS, formatAuditEntity, getErrorMessage } from '@/lib/api';
+import {
+  api,
+  AuditEntry,
+  AuditFilters,
+  AUDIT_ENTITY_LABELS,
+  AUDIT_LABELS,
+  formatAuditEntity,
+  getErrorMessage,
+} from '@/lib/api';
 import { PageError } from '@/components/PageError';
 import { useAutoRefresh } from '@/hooks/useAutoRefresh';
 import { useConfig } from '@/hooks/useConfig';
@@ -31,44 +39,48 @@ export default function AdminAuditPage() {
   const [loadErrorCause, setLoadErrorCause] = useState<unknown>(null);
   const [exporting, setExporting] = useState(false);
   const [filters, setFilters] = useState<AuditFilters>(EMPTY_FILTERS);
-  const [appliedFilters, setAppliedFilters] = useState<AuditFilters>(EMPTY_FILTERS);
+  const [appliedFilters, setAppliedFilters] =
+    useState<AuditFilters>(EMPTY_FILTERS);
 
-  const fetchAudit = useCallback((
-    off: number,
-    nextFilters: AuditFilters,
-    options?: { silent?: boolean },
-  ) => {
-    const silent = options?.silent;
-    if (!silent) {
-      setLoading(true);
-      setLoadError('');
-      setLoadErrorCause(null);
-    }
-    return api.admin.getAudit({ ...nextFilters, offset: off })
-      .then((data) => {
-        setEntries(data.entries);
-        setTotal(data.total);
-        setOffset(off);
-      })
-      .catch((err) => {
-        if (!silent) {
-          setLoadErrorCause(err);
-          setLoadError(getErrorMessage(err, 'Ошибка загрузки'));
-        }
-      })
-      .finally(() => {
-        if (!silent) setLoading(false);
-      });
-  }, []);
+  const fetchAudit = useCallback(
+    (
+      off: number,
+      nextFilters: AuditFilters,
+      options?: { silent?: boolean },
+    ) => {
+      const silent = options?.silent;
+      if (!silent) {
+        setLoading(true);
+        setLoadError('');
+        setLoadErrorCause(null);
+      }
+      return api.admin
+        .getAudit({ ...nextFilters, offset: off })
+        .then((data) => {
+          setEntries(data.entries);
+          setTotal(data.total);
+          setOffset(off);
+        })
+        .catch((err) => {
+          if (!silent) {
+            setLoadErrorCause(err);
+            setLoadError(getErrorMessage(err, 'Ошибка загрузки'));
+          }
+        })
+        .finally(() => {
+          if (!silent) setLoading(false);
+        });
+    },
+    [],
+  );
 
   useEffect(() => {
     fetchAudit(0, appliedFilters);
   }, [appliedFilters, fetchAudit]);
 
-  useAutoRefresh(
-    () => fetchAudit(offset, appliedFilters, { silent: true }),
-    { enabled: !exporting },
-  );
+  useAutoRefresh(() => fetchAudit(offset, appliedFilters, { silent: true }), {
+    enabled: !exporting,
+  });
 
   const applyFilters = () => {
     setAppliedFilters({ ...filters });
@@ -103,7 +115,9 @@ export default function AdminAuditPage() {
 
   return (
     <AdminLayout title="Журнал действий">
-      <p className="text-[var(--muted)] -mt-4 mb-6">Официальный аудит всех операций в системе</p>
+      <p className="text-[var(--muted)] -mt-4 mb-6">
+        Официальный аудит всех операций в системе
+      </p>
 
       {loadError && (
         <PageError
@@ -124,7 +138,9 @@ export default function AdminAuditPage() {
                 className="input"
                 type="date"
                 value={filters.dateFrom || ''}
-                onChange={(e) => setFilters((prev) => ({ ...prev, dateFrom: e.target.value }))}
+                onChange={(e) =>
+                  setFilters((prev) => ({ ...prev, dateFrom: e.target.value }))
+                }
               />
             </div>
             <div>
@@ -133,7 +149,9 @@ export default function AdminAuditPage() {
                 className="input"
                 type="date"
                 value={filters.dateTo || ''}
-                onChange={(e) => setFilters((prev) => ({ ...prev, dateTo: e.target.value }))}
+                onChange={(e) =>
+                  setFilters((prev) => ({ ...prev, dateTo: e.target.value }))
+                }
               />
             </div>
             <div>
@@ -142,11 +160,15 @@ export default function AdminAuditPage() {
                 <select
                   className="input"
                   value={filters.action || ''}
-                  onChange={(e) => setFilters((prev) => ({ ...prev, action: e.target.value }))}
+                  onChange={(e) =>
+                    setFilters((prev) => ({ ...prev, action: e.target.value }))
+                  }
                 >
                   <option value="">Все действия</option>
                   {Object.entries(AUDIT_LABELS).map(([key, label]) => (
-                    <option key={key} value={key}>{label}</option>
+                    <option key={key} value={key}>
+                      {label}
+                    </option>
                   ))}
                 </select>
               </div>
@@ -157,11 +179,18 @@ export default function AdminAuditPage() {
                 <select
                   className="input"
                   value={filters.entityType || ''}
-                  onChange={(e) => setFilters((prev) => ({ ...prev, entityType: e.target.value }))}
+                  onChange={(e) =>
+                    setFilters((prev) => ({
+                      ...prev,
+                      entityType: e.target.value,
+                    }))
+                  }
                 >
                   <option value="">Все объекты</option>
                   {Object.entries(AUDIT_ENTITY_LABELS).map(([key, label]) => (
-                    <option key={key} value={key}>{label}</option>
+                    <option key={key} value={key}>
+                      {label}
+                    </option>
                   ))}
                 </select>
               </div>
@@ -176,19 +205,38 @@ export default function AdminAuditPage() {
               className="input input--icon-left"
               placeholder={ph.auditSearch}
               value={filters.search || ''}
-              onChange={(e) => setFilters((prev) => ({ ...prev, search: e.target.value }))}
-              onKeyDown={(e) => { if (e.key === 'Enter') applyFilters(); }}
+              onChange={(e) =>
+                setFilters((prev) => ({ ...prev, search: e.target.value }))
+              }
+              onKeyDown={(e) => {
+                if (e.key === 'Enter') applyFilters();
+              }}
             />
           </div>
           <div className="flex flex-wrap gap-2">
-            <button type="button" className="btn btn-primary text-sm" onClick={applyFilters}>Применить</button>
+            <button
+              type="button"
+              className="btn btn-primary text-sm"
+              onClick={applyFilters}
+            >
+              Применить
+            </button>
             {hasActiveFilters && (
-              <button type="button" className="btn btn-secondary text-sm" onClick={resetFilters}>
+              <button
+                type="button"
+                className="btn btn-secondary text-sm"
+                onClick={resetFilters}
+              >
                 <X className="w-4 h-4" />
                 Сбросить
               </button>
             )}
-            <button type="button" className="btn btn-secondary text-sm" disabled={exporting} onClick={handleExport}>
+            <button
+              type="button"
+              className="btn btn-secondary text-sm"
+              disabled={exporting}
+              onClick={handleExport}
+            >
               <Download className="w-4 h-4" />
               {exporting ? 'Выгрузка...' : 'Скачать CSV'}
             </button>
@@ -208,27 +256,45 @@ export default function AdminAuditPage() {
             <tr>
               <th className="text-left p-3 font-medium">Время</th>
               <th className="text-left p-3 font-medium">Действие</th>
-              <th className="text-left p-3 font-medium hidden md:table-cell">Пользователь</th>
-              <th className="text-left p-3 font-medium hidden sm:table-cell">Объект</th>
+              <th className="text-left p-3 font-medium hidden md:table-cell">
+                Пользователь
+              </th>
+              <th className="text-left p-3 font-medium hidden sm:table-cell">
+                Объект
+              </th>
             </tr>
           </thead>
           <tbody>
             {loading ? (
-              <tr><td colSpan={4} className="p-8 text-center text-[var(--muted)]">Загрузка...</td></tr>
-            ) : entries.length === 0 ? (
-              <tr><td colSpan={4} className="p-8 text-center text-[var(--muted)]">Записей нет</td></tr>
-            ) : entries.map((e) => (
-              <tr key={e.id} className="border-t border-[var(--border)]">
-                <td className="p-3 text-[var(--muted)] whitespace-nowrap">
-                  {new Date(e.createdAt).toLocaleString('ru-RU')}
-                </td>
-                <td className="p-3 font-medium">{AUDIT_LABELS[e.action] || e.action}</td>
-                <td className="p-3 hidden md:table-cell">{e.userName || e.userEmail || '—'}</td>
-                <td className="p-3 hidden sm:table-cell text-[var(--muted)]">
-                  {formatAuditEntity(e)}
+              <tr>
+                <td colSpan={4} className="p-8 text-center text-[var(--muted)]">
+                  Загрузка...
                 </td>
               </tr>
-            ))}
+            ) : entries.length === 0 ? (
+              <tr>
+                <td colSpan={4} className="p-8 text-center text-[var(--muted)]">
+                  Записей нет
+                </td>
+              </tr>
+            ) : (
+              entries.map((e) => (
+                <tr key={e.id} className="border-t border-[var(--border)]">
+                  <td className="p-3 text-[var(--muted)] whitespace-nowrap">
+                    {new Date(e.createdAt).toLocaleString('ru-RU')}
+                  </td>
+                  <td className="p-3 font-medium">
+                    {AUDIT_LABELS[e.action] || e.action}
+                  </td>
+                  <td className="p-3 hidden md:table-cell">
+                    {e.userName || e.userEmail || '—'}
+                  </td>
+                  <td className="p-3 hidden sm:table-cell text-[var(--muted)]">
+                    {formatAuditEntity(e)}
+                  </td>
+                </tr>
+              ))
+            )}
           </tbody>
         </table>
       </div>
@@ -238,7 +304,9 @@ export default function AdminAuditPage() {
           <button
             className="btn btn-secondary text-sm"
             disabled={offset === 0 || loading}
-            onClick={() => fetchAudit(Math.max(0, offset - PAGE_SIZE), appliedFilters)}
+            onClick={() =>
+              fetchAudit(Math.max(0, offset - PAGE_SIZE), appliedFilters)
+            }
           >
             Назад
           </button>

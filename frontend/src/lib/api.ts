@@ -13,7 +13,12 @@ import {
   throwForResponse,
 } from './api-errors';
 
-export { ApiError, getErrorMessage, getErrorStatus, isNetworkError } from './api-errors';
+export {
+  ApiError,
+  getErrorMessage,
+  getErrorStatus,
+  isNetworkError,
+} from './api-errors';
 
 const API_URL = process.env.NEXT_PUBLIC_API_URL || 'http://127.0.0.1:4000/api';
 
@@ -22,7 +27,8 @@ export type SystemUserRole = 'tenant' | 'security' | 'bc_admin' | 'admin';
 export type UserRole = SystemUserRole | (string & {});
 
 export function getPassTicketUrl(passNumber: string) {
-  if (typeof window === 'undefined') return `/ticket/${encodeURIComponent(passNumber)}`;
+  if (typeof window === 'undefined')
+    return `/ticket/${encodeURIComponent(passNumber)}`;
   return `${window.location.origin}/ticket/${encodeURIComponent(passNumber)}`;
 }
 
@@ -132,7 +138,14 @@ export interface AccessConfig {
   builtinEmployeeRoles?: string[];
 }
 
-export type PassStatus = 'pending' | 'approved' | 'rejected' | 'active' | 'completed' | 'expired' | 'cancelled';
+export type PassStatus =
+  | 'pending'
+  | 'approved'
+  | 'rejected'
+  | 'active'
+  | 'completed'
+  | 'expired'
+  | 'cancelled';
 export type PassType = 'visitor' | 'parking' | 'delivery' | 'contractor';
 
 export interface PassTimelineData {
@@ -212,7 +225,10 @@ function getToken(): string | null {
   return localStorage.getItem('pass24_token');
 }
 
-function parseContentDispositionFilename(header: string | null, fallback: string) {
+function parseContentDispositionFilename(
+  header: string | null,
+  fallback: string,
+) {
   if (!header) return fallback;
   const utf8Match = header.match(/filename\*=UTF-8''([^;]+)/i);
   if (utf8Match?.[1]) {
@@ -267,7 +283,10 @@ async function request<T>(path: string, options: RequestInit = {}): Promise<T> {
     res = await fetch(`${API_URL}${path}`, { ...options, headers });
   } catch (error) {
     throw new ApiError(
-      getErrorMessage(error, 'Нет связи с сервером. Проверьте интернет и попробуйте снова.'),
+      getErrorMessage(
+        error,
+        'Нет связи с сервером. Проверьте интернет и попробуйте снова.',
+      ),
       { isNetworkError: true },
     );
   }
@@ -278,7 +297,10 @@ async function request<T>(path: string, options: RequestInit = {}): Promise<T> {
       localStorage.removeItem('pass24_token');
       const path = window.location.pathname;
       if (!path.startsWith('/login') && !path.startsWith('/invite')) {
-        const next = path && path !== '/' ? `?next=${encodeURIComponent(path + window.location.search)}` : '';
+        const next =
+          path && path !== '/'
+            ? `?next=${encodeURIComponent(path + window.location.search)}`
+            : '';
         window.location.href = `/login${next}`;
       }
     }
@@ -295,16 +317,21 @@ async function request<T>(path: string, options: RequestInit = {}): Promise<T> {
 
 export const api = {
   getPushConfig: () =>
-    request<{ enabled: boolean; publicKey: string | null }>('/notifications/push/config'),
+    request<{ enabled: boolean; publicKey: string | null }>(
+      '/notifications/push/config',
+    ),
 
   savePushSubscription: (subscription: {
     endpoint: string;
     keys: { p256dh: string; auth: string };
   }) =>
-    request<{ subscribed: true; renewalToken: string }>('/notifications/push/subscriptions', {
-      method: 'POST',
-      body: JSON.stringify(subscription),
-    }),
+    request<{ subscribed: true; renewalToken: string }>(
+      '/notifications/push/subscriptions',
+      {
+        method: 'POST',
+        body: JSON.stringify(subscription),
+      },
+    ),
 
   removePushSubscription: (endpoint: string) =>
     request<{ subscribed: false }>('/notifications/push/subscriptions', {
@@ -337,13 +364,18 @@ export const api = {
       expiresInMinutes: number;
       retryAfterSeconds?: number;
       registrationId?: string;
-    }>(
-      '/auth/register/request-code',
-      { method: 'POST', body: JSON.stringify(data) },
-    ),
+    }>('/auth/register/request-code', {
+      method: 'POST',
+      body: JSON.stringify(data),
+    }),
 
   registerConfirm: (data: { email?: string; phone?: string; code: string }) =>
-    request<{ pendingApproval: true; message: string; user: User; token: string }>('/auth/register/confirm', {
+    request<{
+      pendingApproval: true;
+      message: string;
+      user: User;
+      token: string;
+    }>('/auth/register/confirm', {
       method: 'POST',
       body: JSON.stringify(data),
     }),
@@ -391,15 +423,24 @@ export const api = {
   me: () => request<{ user: User }>('/auth/me'),
 
   getDevAccounts: () =>
-    request<{ accounts: Array<{ label: string; email: string; password: string; role: UserRole }> }>(
-      '/auth/dev-accounts',
-    ),
+    request<{
+      accounts: Array<{
+        label: string;
+        email: string;
+        password: string;
+        role: UserRole;
+      }>;
+    }>('/auth/dev-accounts'),
 
   requestEmailVerification: () =>
-    request<{ message: string; expiresInMinutes: number; retryAfterSeconds?: number }>(
-      '/auth/email/verify/request',
-      { method: 'POST', body: JSON.stringify({}) },
-    ),
+    request<{
+      message: string;
+      expiresInMinutes: number;
+      retryAfterSeconds?: number;
+    }>('/auth/email/verify/request', {
+      method: 'POST',
+      body: JSON.stringify({}),
+    }),
 
   confirmEmailVerification: (data: { code: string }) =>
     request<{ message: string; user: User }>('/auth/email/verify/confirm', {
@@ -414,7 +455,10 @@ export const api = {
     phone?: string;
     company?: string;
   }) =>
-    request<{ user: User }>('/auth/profile', { method: 'PATCH', body: JSON.stringify(data) }),
+    request<{ user: User }>('/auth/profile', {
+      method: 'PATCH',
+      body: JSON.stringify(data),
+    }),
 
   updateCompanyLogo: (companyLogo: string) =>
     request<{ user: User }>('/auth/company-logo', {
@@ -435,16 +479,23 @@ export const api = {
     middleName?: string;
     phone?: string;
   }) =>
-    request<{ message: string; employee: TenantEmployee }>('/auth/tenant/employees', {
-      method: 'POST',
-      body: JSON.stringify(data),
-    }),
+    request<{ message: string; employee: TenantEmployee }>(
+      '/auth/tenant/employees',
+      {
+        method: 'POST',
+        body: JSON.stringify(data),
+      },
+    ),
 
   resendTenantEmployeeInvite: (id: string) =>
-    request<{ message: string; employee: TenantEmployee; retryAfterSeconds?: number }>(
-      `/auth/tenant/employees/${id}/resend-invite`,
-      { method: 'POST', body: JSON.stringify({}) },
-    ),
+    request<{
+      message: string;
+      employee: TenantEmployee;
+      retryAfterSeconds?: number;
+    }>(`/auth/tenant/employees/${id}/resend-invite`, {
+      method: 'POST',
+      body: JSON.stringify({}),
+    }),
 
   getInviteInfo: (token: string) =>
     request<{
@@ -455,25 +506,40 @@ export const api = {
       expires_at?: string;
     }>(`/auth/invite/${encodeURIComponent(token)}`),
 
-  acceptInvite: (data: { token: string; password: string; passwordConfirm: string }) =>
+  acceptInvite: (data: {
+    token: string;
+    password: string;
+    passwordConfirm: string;
+  }) =>
     request<{ message: string; email?: string }>('/auth/invite/accept', {
       method: 'POST',
       body: JSON.stringify(data),
     }),
 
   setTenantEmployeeActive: (id: string, isActive: boolean) =>
-    request<{ message: string; employee: TenantEmployee }>(`/auth/tenant/employees/${id}`, {
-      method: 'PATCH',
-      body: JSON.stringify({ isActive }),
-    }),
+    request<{ message: string; employee: TenantEmployee }>(
+      `/auth/tenant/employees/${id}`,
+      {
+        method: 'PATCH',
+        body: JSON.stringify({ isActive }),
+      },
+    ),
 
   removeTenantEmployee: (id: string) =>
-    request<{ message: string }>(`/auth/tenant/employees/${id}`, { method: 'DELETE' }),
+    request<{ message: string }>(`/auth/tenant/employees/${id}`, {
+      method: 'DELETE',
+    }),
 
   getTenantEmployeeRoles: () =>
     request<{ roles: EmployeeRole[] }>('/auth/tenant/employee-roles'),
 
-  getPasses: (params?: { status?: string; date?: string; search?: string; limit?: number; offset?: number }) => {
+  getPasses: (params?: {
+    status?: string;
+    date?: string;
+    search?: string;
+    limit?: number;
+    offset?: number;
+  }) => {
     const q = new URLSearchParams();
     if (params?.status) q.set('status', params.status);
     if (params?.date) q.set('date', params.date);
@@ -481,9 +547,13 @@ export const api = {
     if (params?.limit !== undefined) q.set('limit', String(params.limit));
     if (params?.offset !== undefined) q.set('offset', String(params.offset));
     const qs = q.toString();
-    return request<{ passes: Pass[]; total: number; offset: number; limit: number; hasMore: boolean }>(
-      `/passes${qs ? `?${qs}` : ''}`,
-    );
+    return request<{
+      passes: Pass[];
+      total: number;
+      offset: number;
+      limit: number;
+      hasMore: boolean;
+    }>(`/passes${qs ? `?${qs}` : ''}`);
   },
 
   getPassExportFilters: () =>
@@ -497,9 +567,10 @@ export const api = {
   exportPasses: async (filters: PassExportFiltersInput = {}) => {
     const qs = buildPassExportQuery(filters);
     const token = getToken();
-    const datePart = filters.dateFrom && filters.dateTo
-      ? `${filters.dateFrom}_${filters.dateTo}`
-      : filters.date || new Date().toISOString().slice(0, 10);
+    const datePart =
+      filters.dateFrom && filters.dateTo
+        ? `${filters.dateFrom}_${filters.dateTo}`
+        : filters.date || new Date().toISOString().slice(0, 10);
     let res: Response;
     try {
       res = await fetch(`${API_URL}/passes/export${qs ? `?${qs}` : ''}`, {
@@ -510,14 +581,21 @@ export const api = {
       });
     } catch (error) {
       throw new ApiError(
-        getErrorMessage(error, 'Нет связи с сервером. Проверьте интернет и попробуйте снова.'),
+        getErrorMessage(
+          error,
+          'Нет связи с сервером. Проверьте интернет и попробуйте снова.',
+        ),
         { isNetworkError: true },
       );
     }
     await downloadFileResponse(res, `passes-${datePart}.csv`);
   },
 
-  getJournal: (date?: string, search?: string, options?: { allProperties?: boolean }) => {
+  getJournal: (
+    date?: string,
+    search?: string,
+    options?: { allProperties?: boolean },
+  ) => {
     const q = new URLSearchParams();
     if (date) q.set('date', date);
     if (search?.trim()) q.set('search', search.trim());
@@ -525,12 +603,16 @@ export const api = {
     const qs = q.toString();
     return request<{
       date: string;
-      stats: { total: number; pending: number; active: number; completed: number; approved: number };
+      stats: {
+        total: number;
+        pending: number;
+        active: number;
+        completed: number;
+        approved: number;
+      };
       passes: Pass[];
       scopedToProperties?: boolean;
-    }>(
-      `/passes/journal${qs ? `?${qs}` : ''}`,
-    );
+    }>(`/passes/journal${qs ? `?${qs}` : ''}`);
   },
 
   getPass: (id: string) => request<{ pass: Pass }>(`/passes/${id}`),
@@ -553,17 +635,25 @@ export const api = {
     sendEmail?: boolean;
     recipientEmail?: string;
   }) =>
-    request<{ pass: Pass; emailSent?: boolean }>('/passes', { method: 'POST', body: JSON.stringify(data) }),
+    request<{ pass: Pass; emailSent?: boolean }>('/passes', {
+      method: 'POST',
+      body: JSON.stringify(data),
+    }),
 
   sendPassEmail: (passIdOrNumber: string, email: string) =>
-    request<{ sent: boolean; email: string }>(`/passes/${encodeURIComponent(passIdOrNumber)}/send-email`, {
-      method: 'POST',
-      body: JSON.stringify({ email }),
-    }),
+    request<{ sent: boolean; email: string }>(
+      `/passes/${encodeURIComponent(passIdOrNumber)}/send-email`,
+      {
+        method: 'POST',
+        body: JSON.stringify({ email }),
+      },
+    ),
 
   sendPassEmailWithStatus: async (passIdOrNumber: string, email: string) => {
     const token = getToken();
-    const headers: Record<string, string> = { 'Content-Type': 'application/json' };
+    const headers: Record<string, string> = {
+      'Content-Type': 'application/json',
+    };
     if (token) headers.Authorization = `Bearer ${token}`;
 
     try {
@@ -588,7 +678,10 @@ export const api = {
         localStorage.removeItem('pass24_token');
         const path = window.location.pathname;
         if (!path.startsWith('/login') && !path.startsWith('/invite')) {
-          const next = path && path !== '/' ? `?next=${encodeURIComponent(path + window.location.search)}` : '';
+          const next =
+            path && path !== '/'
+              ? `?next=${encodeURIComponent(path + window.location.search)}`
+              : '';
           window.location.href = `/login${next}`;
         }
       }
@@ -596,7 +689,10 @@ export const api = {
       return {
         ok: false as const,
         status: res.status,
-        message: messageForStatus(res.status, data as { message?: unknown; error?: unknown }),
+        message: messageForStatus(
+          res.status,
+          data as { message?: unknown; error?: unknown },
+        ),
       };
     } catch (error) {
       return {
@@ -621,12 +717,13 @@ export const api = {
 
   getConfig: () => request<BcConfig>('/config'),
 
-  getAccessConfig: () => request<{
-    enabledPassTypes: PassType[];
-    passTypeLabels: Record<PassType, string>;
-    permissions: string[];
-    rolePermissions: Record<string, string[]>;
-  }>('/config/access'),
+  getAccessConfig: () =>
+    request<{
+      enabledPassTypes: PassType[];
+      passTypeLabels: Record<PassType, string>;
+      permissions: string[];
+      rolePermissions: Record<string, string[]>;
+    }>('/config/access'),
 
   getStats: () => request<PassStats>('/passes/stats'),
 
@@ -634,9 +731,11 @@ export const api = {
     const q = new URLSearchParams();
     if (options?.allProperties) q.set('all', '1');
     const qs = q.toString();
-    return request<{ count: number; passes: Pass[]; scopedToProperties?: boolean }>(
-      `/passes/overdue-active${qs ? `?${qs}` : ''}`,
-    );
+    return request<{
+      count: number;
+      passes: Pass[];
+      scopedToProperties?: boolean;
+    }>(`/passes/overdue-active${qs ? `?${qs}` : ''}`);
   },
 
   lookupPass: (passNumber: string) =>
@@ -662,8 +761,10 @@ export const api = {
     const q = new URLSearchParams({ scope: params.scope });
     if (params.visitorName) q.set('visitorName', params.visitorName);
     if (params.visitorPhone) q.set('visitorPhone', params.visitorPhone);
-    if (params.visitorPassportSeries) q.set('visitorPassportSeries', params.visitorPassportSeries);
-    if (params.visitorPassportNumber) q.set('visitorPassportNumber', params.visitorPassportNumber);
+    if (params.visitorPassportSeries)
+      q.set('visitorPassportSeries', params.visitorPassportSeries);
+    if (params.visitorPassportNumber)
+      q.set('visitorPassportNumber', params.visitorPassportNumber);
     if (params.officeId) q.set('officeId', params.officeId);
     if (params.companyName) q.set('companyName', params.companyName);
     if (params.propertyId) q.set('propertyId', params.propertyId);
@@ -684,29 +785,41 @@ export const api = {
     }>(`/passes/history?${q.toString()}`);
   },
 
-  updatePassVisitorData: (id: string, data: {
-    visitorPassportSeries?: string;
-    visitorPassportNumber?: string;
-    visitorPassportIssuedBy?: string;
-  }) =>
-    request<{ pass: Pass }>(`/passes/${id}/visitor-data`, { method: 'PATCH', body: JSON.stringify(data) }),
+  updatePassVisitorData: (
+    id: string,
+    data: {
+      visitorPassportSeries?: string;
+      visitorPassportNumber?: string;
+      visitorPassportIssuedBy?: string;
+    },
+  ) =>
+    request<{ pass: Pass }>(`/passes/${id}/visitor-data`, {
+      method: 'PATCH',
+      body: JSON.stringify(data),
+    }),
 
   getPublicTicket: async (passNumber: string) => {
     let res: Response;
     try {
-      res = await fetch(`${API_URL}/passes/public/${encodeURIComponent(passNumber)}`);
+      res = await fetch(
+        `${API_URL}/passes/public/${encodeURIComponent(passNumber)}`,
+      );
     } catch (error) {
       throw new ApiError(
-        getErrorMessage(error, 'Нет связи с сервером. Проверьте интернет и попробуйте снова.'),
+        getErrorMessage(
+          error,
+          'Нет связи с сервером. Проверьте интернет и попробуйте снова.',
+        ),
         { isNetworkError: true },
       );
     }
 
     if (!res.ok) {
       const data = await parseErrorBody(res);
-      const message = res.status === 404
-        ? (data.message || data.error || 'Пропуск не найден')
-        : messageForStatus(res.status, data);
+      const message =
+        res.status === 404
+          ? data.message || data.error || 'Пропуск не найден'
+          : messageForStatus(res.status, data);
       throw new ApiError(message, { status: res.status });
     }
 
@@ -714,21 +827,32 @@ export const api = {
     return data as { ticket: PublicPassTicket };
   },
 
-  getPassTemplates: () => request<{ templates: PassTemplate[] }>('/pass-templates'),
+  getPassTemplates: () =>
+    request<{ templates: PassTemplate[] }>('/pass-templates'),
 
-  getPassTemplate: (id: string) => request<{ template: PassTemplate }>(`/pass-templates/${id}`),
+  getPassTemplate: (id: string) =>
+    request<{ template: PassTemplate }>(`/pass-templates/${id}`),
 
   createPassTemplate: (data: CreatePassTemplateData) =>
-    request<{ template: PassTemplate }>('/pass-templates', { method: 'POST', body: JSON.stringify(data) }),
+    request<{ template: PassTemplate }>('/pass-templates', {
+      method: 'POST',
+      body: JSON.stringify(data),
+    }),
 
   updatePassTemplate: (id: string, data: Partial<CreatePassTemplateData>) =>
-    request<{ template: PassTemplate }>(`/pass-templates/${id}`, { method: 'PATCH', body: JSON.stringify(data) }),
+    request<{ template: PassTemplate }>(`/pass-templates/${id}`, {
+      method: 'PATCH',
+      body: JSON.stringify(data),
+    }),
 
   deletePassTemplate: (id: string) =>
     request<{ ok: boolean }>(`/pass-templates/${id}`, { method: 'DELETE' }),
 
   syncPassTemplates: () =>
-    request<{ templates: PassTemplate[]; imported: number }>('/pass-templates/sync-from-passes', { method: 'POST' }),
+    request<{ templates: PassTemplate[]; imported: number }>(
+      '/pass-templates/sync-from-passes',
+      { method: 'POST' },
+    ),
 
   admin: {
     dashboard: () => request<AdminDashboard>('/admin/dashboard'),
@@ -742,94 +866,168 @@ export const api = {
       if (params.propertyId) q.set('propertyId', params.propertyId);
       if (params.officeId) q.set('officeId', params.officeId);
       const qs = q.toString();
-      return request<{ users: AdminUser[]; total: number; counts: { tenants: number; staff: number } }>(
-        `/admin/users${qs ? `?${qs}` : ''}`,
-      );
+      return request<{
+        users: AdminUser[];
+        total: number;
+        counts: { tenants: number; staff: number };
+      }>(`/admin/users${qs ? `?${qs}` : ''}`);
     },
 
     createUser: (data: CreateUserData) =>
-      request<{ user: AdminUser }>('/admin/users', { method: 'POST', body: JSON.stringify(data) }),
+      request<{ user: AdminUser }>('/admin/users', {
+        method: 'POST',
+        body: JSON.stringify(data),
+      }),
 
-    updateUser: (id: string, data: Partial<CreateUserData & { isActive: boolean }>) =>
-      request<{ user: AdminUser }>(`/admin/users/${id}`, { method: 'PATCH', body: JSON.stringify(data) }),
+    updateUser: (
+      id: string,
+      data: Partial<CreateUserData & { isActive: boolean }>,
+    ) =>
+      request<{ user: AdminUser }>(`/admin/users/${id}`, {
+        method: 'PATCH',
+        body: JSON.stringify(data),
+      }),
 
     deleteUser: (id: string) =>
-      request<{ message: string; id: string }>(`/admin/users/${id}`, { method: 'DELETE' }),
+      request<{ message: string; id: string }>(`/admin/users/${id}`, {
+        method: 'DELETE',
+      }),
 
     getRegistrationRequests: () =>
-      request<{ requests: AdminUser[]; count?: number }>('/admin/registration-requests'),
+      request<{ requests: AdminUser[]; count?: number }>(
+        '/admin/registration-requests',
+      ),
 
     approveRegistration: (id: string) =>
-      request<{ user: AdminUser }>(`/admin/users/${id}/registration/approve`, { method: 'POST' }),
+      request<{ user: AdminUser }>(`/admin/users/${id}/registration/approve`, {
+        method: 'POST',
+      }),
 
     rejectRegistration: (id: string) =>
-      request<{ message: string }>(`/admin/users/${id}/registration/reject`, { method: 'POST' }),
+      request<{ message: string }>(`/admin/users/${id}/registration/reject`, {
+        method: 'POST',
+      }),
 
     getProfileChangeRequests: () =>
-      request<{ requests: Array<{ user: AdminUser; request: ProfileChangeRequest }> }>('/admin/profile-change-requests'),
+      request<{
+        requests: Array<{ user: AdminUser; request: ProfileChangeRequest }>;
+      }>('/admin/profile-change-requests'),
 
     approveProfileChange: (id: string) =>
-      request<{ user: AdminUser }>(`/admin/users/${id}/profile-change/approve`, { method: 'POST' }),
-
-    rejectProfileChange: (id: string) =>
-      request<{ user: AdminUser }>(`/admin/users/${id}/profile-change/reject`, { method: 'POST' }),
-
-    getBusinessCenters: () => request<{ businessCenters: BusinessCenter[] }>('/admin/business-centers'),
-
-    createBusinessCenter: (data: { name: string; address: string; code?: string }) =>
-      request<{ businessCenter: BusinessCenter }>('/admin/business-centers', { method: 'POST', body: JSON.stringify(data) }),
-
-    updateBusinessCenter: (id: string, data: { name?: string; address?: string; passSettings?: Partial<BcPassSettings> }) =>
-      request<{ businessCenter: BusinessCenter }>(`/admin/business-centers/${id}`, { method: 'PATCH', body: JSON.stringify(data) }),
-
-    deleteBusinessCenter: (id: string) =>
-      request<{ message: string; id: string }>(`/admin/business-centers/${id}`, { method: 'DELETE' }),
-
-    seedTestData: () =>
-      request<{ message: string; businessCenters: number; offices: number; tenants: number; skipped: boolean }>(
-        '/admin/seed-test-data',
+      request<{ user: AdminUser }>(
+        `/admin/users/${id}/profile-change/approve`,
         { method: 'POST' },
       ),
 
+    rejectProfileChange: (id: string) =>
+      request<{ user: AdminUser }>(`/admin/users/${id}/profile-change/reject`, {
+        method: 'POST',
+      }),
+
+    getBusinessCenters: () =>
+      request<{ businessCenters: BusinessCenter[] }>('/admin/business-centers'),
+
+    createBusinessCenter: (data: {
+      name: string;
+      address: string;
+      code?: string;
+    }) =>
+      request<{ businessCenter: BusinessCenter }>('/admin/business-centers', {
+        method: 'POST',
+        body: JSON.stringify(data),
+      }),
+
+    updateBusinessCenter: (
+      id: string,
+      data: {
+        name?: string;
+        address?: string;
+        passSettings?: Partial<BcPassSettings>;
+      },
+    ) =>
+      request<{ businessCenter: BusinessCenter }>(
+        `/admin/business-centers/${id}`,
+        { method: 'PATCH', body: JSON.stringify(data) },
+      ),
+
+    deleteBusinessCenter: (id: string) =>
+      request<{ message: string; id: string }>(
+        `/admin/business-centers/${id}`,
+        { method: 'DELETE' },
+      ),
+
+    seedTestData: () =>
+      request<{
+        message: string;
+        businessCenters: number;
+        offices: number;
+        tenants: number;
+        skipped: boolean;
+      }>('/admin/seed-test-data', { method: 'POST' }),
+
     getAccessConfig: () => request<AccessConfig>('/admin/access-config'),
 
-    updateAccessConfig: (data: Partial<Pick<AccessConfig, 'enabledPassTypes' | 'rolePermissions' | 'roleLabels'>>) =>
-      request<{ config: AccessConfig }>('/admin/access-config', { method: 'PATCH', body: JSON.stringify(data) }),
+    updateAccessConfig: (
+      data: Partial<
+        Pick<
+          AccessConfig,
+          'enabledPassTypes' | 'rolePermissions' | 'roleLabels'
+        >
+      >,
+    ) =>
+      request<{ config: AccessConfig }>('/admin/access-config', {
+        method: 'PATCH',
+        body: JSON.stringify(data),
+      }),
 
     getAudit: (filters: AuditFilters = {}) => {
       const qs = buildAuditQuery(filters);
-      return request<{ entries: AuditEntry[]; total: number; offset: number; limit: number }>(
-        `/admin/audit${qs ? `?${qs}` : ''}`,
-      );
+      return request<{
+        entries: AuditEntry[];
+        total: number;
+        offset: number;
+        limit: number;
+      }>(`/admin/audit${qs ? `?${qs}` : ''}`);
     },
 
     exportAudit: async (filters: AuditFilters = {}) => {
       const qs = buildAuditQuery({ ...filters, offset: undefined });
       const token = getToken();
-      const datePart = filters.dateFrom && filters.dateTo
-        ? `${filters.dateFrom}_${filters.dateTo}`
-        : new Date().toISOString().slice(0, 10);
+      const datePart =
+        filters.dateFrom && filters.dateTo
+          ? `${filters.dateFrom}_${filters.dateTo}`
+          : new Date().toISOString().slice(0, 10);
       let res: Response;
       try {
-        res = await fetch(`${API_URL}/admin/audit/export${qs ? `?${qs}` : ''}`, {
-          headers: {
-            Accept: 'text/csv',
-            ...(token ? { Authorization: `Bearer ${token}` } : {}),
+        res = await fetch(
+          `${API_URL}/admin/audit/export${qs ? `?${qs}` : ''}`,
+          {
+            headers: {
+              Accept: 'text/csv',
+              ...(token ? { Authorization: `Bearer ${token}` } : {}),
+            },
           },
-        });
+        );
       } catch (error) {
         throw new ApiError(
-          getErrorMessage(error, 'Нет связи с сервером. Проверьте интернет и попробуйте снова.'),
+          getErrorMessage(
+            error,
+            'Нет связи с сервером. Проверьте интернет и попробуйте снова.',
+          ),
           { isNetworkError: true },
         );
       }
       await downloadFileResponse(res, `audit-${datePart}.csv`);
     },
 
-    getSiteSettings: () => request<{ settings: SiteSettings }>('/admin/site-settings'),
+    getSiteSettings: () =>
+      request<{ settings: SiteSettings }>('/admin/site-settings'),
 
     updateSiteSettings: (data: Partial<SiteSettings>) =>
-      request<{ settings: SiteSettings }>('/admin/site-settings', { method: 'PATCH', body: JSON.stringify(data) }),
+      request<{ settings: SiteSettings }>('/admin/site-settings', {
+        method: 'PATCH',
+        body: JSON.stringify(data),
+      }),
 
     getOffices: () => request<{ offices: Office[] }>('/admin/offices'),
 
@@ -843,7 +1041,10 @@ export const api = {
         });
       } catch (error) {
         throw new ApiError(
-          getErrorMessage(error, 'Нет связи с сервером. Проверьте интернет и попробуйте снова.'),
+          getErrorMessage(
+            error,
+            'Нет связи с сервером. Проверьте интернет и попробуйте снова.',
+          ),
           { isNetworkError: true },
         );
       }
@@ -851,22 +1052,38 @@ export const api = {
     },
 
     importOffices: (csv: string) =>
-      request<{ created: number; skipped: number; errors: string[] }>('/admin/offices/import', {
-        method: 'POST',
-        body: JSON.stringify({ csv }),
-      }),
+      request<{ created: number; skipped: number; errors: string[] }>(
+        '/admin/offices/import',
+        {
+          method: 'POST',
+          body: JSON.stringify({ csv }),
+        },
+      ),
 
     createOffice: (data: CreateOfficeData) =>
-      request<{ office: Office }>('/admin/offices', { method: 'POST', body: JSON.stringify(data) }),
+      request<{ office: Office }>('/admin/offices', {
+        method: 'POST',
+        body: JSON.stringify(data),
+      }),
 
-    updateOffice: (id: string, data: Partial<CreateOfficeData & { isActive: boolean }>) =>
-      request<{ office: Office }>(`/admin/offices/${id}`, { method: 'PATCH', body: JSON.stringify(data) }),
+    updateOffice: (
+      id: string,
+      data: Partial<CreateOfficeData & { isActive: boolean }>,
+    ) =>
+      request<{ office: Office }>(`/admin/offices/${id}`, {
+        method: 'PATCH',
+        body: JSON.stringify(data),
+      }),
 
     deleteOffice: (id: string) =>
-      request<{ message: string; id: string }>(`/admin/offices/${id}`, { method: 'DELETE' }),
+      request<{ message: string; id: string }>(`/admin/offices/${id}`, {
+        method: 'DELETE',
+      }),
 
     getDailyReport: (date?: string) =>
-      request<DailyReport>(`/admin/reports/daily${date ? `?date=${date}` : ''}`),
+      request<DailyReport>(
+        `/admin/reports/daily${date ? `?date=${date}` : ''}`,
+      ),
   },
 };
 
@@ -1016,8 +1233,6 @@ export interface CreateOfficeData {
   tenantId?: string;
 }
 
-
-
 export interface DailyReport {
   date: string;
   summary: Array<{
@@ -1105,7 +1320,10 @@ export interface CreateUserData {
 export function formatTenantOffices(offices?: TenantOffice[]): string {
   if (!offices?.length) return '';
   return offices
-    .map((o) => `${o.businessCenterName ? `${o.businessCenterName}: ` : ''}оф. ${o.number}${o.floor ? ` (${o.floor} эт.)` : ''}`)
+    .map(
+      (o) =>
+        `${o.businessCenterName ? `${o.businessCenterName}: ` : ''}оф. ${o.number}${o.floor ? ` (${o.floor} эт.)` : ''}`,
+    )
     .join(' · ');
 }
 
@@ -1201,10 +1419,13 @@ export function buildMapsRouteUrl(
 export function openMapsRoute(url: string): void {
   if (!url || typeof window === 'undefined') return;
   const ua = navigator.userAgent || '';
-  const isMobile = /Android|iPhone|iPad|iPod|Mobile|webOS|BlackBerry|IEMobile|Opera Mini/i.test(ua)
-    || (navigator as Navigator & { standalone?: boolean }).standalone === true
-    || window.matchMedia('(display-mode: standalone)').matches
-    || window.matchMedia('(max-width: 768px)').matches;
+  const isMobile =
+    /Android|iPhone|iPad|iPod|Mobile|webOS|BlackBerry|IEMobile|Opera Mini/i.test(
+      ua,
+    ) ||
+    (navigator as Navigator & { standalone?: boolean }).standalone === true ||
+    window.matchMedia('(display-mode: standalone)').matches ||
+    window.matchMedia('(max-width: 768px)').matches;
 
   if (isMobile) {
     // same-tab navigation надёжнее открывает приложение карт
@@ -1251,7 +1472,8 @@ export function formatAuditEntity(entry: AuditEntry): string {
   if (entry.entityType === 'pass') {
     const passNumber = d.passNumber as string | undefined;
     const visitorName = d.visitorName as string | undefined;
-    if (passNumber && visitorName) return `${type} ${passNumber} · ${visitorName}`;
+    if (passNumber && visitorName)
+      return `${type} ${passNumber} · ${visitorName}`;
     if (passNumber) return `${type} ${passNumber}`;
   }
   if (entry.entityType === 'user') {
@@ -1287,7 +1509,12 @@ function buildAuditQuery(filters: AuditFilters = {}) {
 export interface AdminDashboard {
   stats: {
     users: { total: number; byRole: Record<string, number> };
-    passes: { total: number; today: number; week: number; byStatus: Record<string, number> };
+    passes: {
+      total: number;
+      today: number;
+      week: number;
+      byStatus: Record<string, number>;
+    };
     businessCenters: number;
     registrationPending?: number;
   };

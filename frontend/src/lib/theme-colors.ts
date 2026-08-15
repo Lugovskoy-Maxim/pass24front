@@ -28,8 +28,14 @@ export function applyThemeColors(primary?: string, primaryHover?: string) {
 
   const rgb = hexToRgb(main);
   if (rgb) {
-    root.style.setProperty('--accent-soft', `rgba(${rgb.r}, ${rgb.g}, ${rgb.b}, 0.16)`);
-    root.style.setProperty('--accent-border', `rgba(${rgb.r}, ${rgb.g}, ${rgb.b}, 0.32)`);
+    root.style.setProperty(
+      '--accent-soft',
+      `rgba(${rgb.r}, ${rgb.g}, ${rgb.b}, 0.16)`,
+    );
+    root.style.setProperty(
+      '--accent-border',
+      `rgba(${rgb.r}, ${rgb.g}, ${rgb.b}, 0.32)`,
+    );
   }
 }
 

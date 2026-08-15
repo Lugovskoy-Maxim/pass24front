@@ -1,4 +1,9 @@
-import { BadRequestException, Injectable, InternalServerErrorException, Logger } from '@nestjs/common';
+import {
+  BadRequestException,
+  Injectable,
+  InternalServerErrorException,
+  Logger,
+} from '@nestjs/common';
 import { ConfigService } from '@nestjs/config';
 import * as nodemailer from 'nodemailer';
 import { Transporter } from 'nodemailer';
@@ -114,11 +119,16 @@ export class MailService {
       );
       return { sent: true, to: data.to, messageId: info.messageId };
     } catch (err) {
-      const message = err instanceof Error ? err.message : 'Неизвестная ошибка SMTP';
+      const message =
+        err instanceof Error ? err.message : 'Неизвестная ошибка SMTP';
       const response = (err as { response?: string }).response;
-      this.logger.error(`SMTP send failed to ${data.to}: ${message}${response ? ` | ${response}` : ''}`);
+      this.logger.error(
+        `SMTP send failed to ${data.to}: ${message}${response ? ` | ${response}` : ''}`,
+      );
       throw new InternalServerErrorException(
-        response ? `Почтовый сервер отклонил отправку: ${response}` : `Не удалось отправить письмо: ${message}`,
+        response
+          ? `Почтовый сервер отклонил отправку: ${response}`
+          : `Не удалось отправить письмо: ${message}`,
       );
     }
   }
@@ -136,7 +146,8 @@ export class MailService {
       title: 'Подтверждение регистрации',
       intro: `Введите этот код на странице регистрации ${appHost}:`,
       code,
-      footer: 'Код действует 15 минут. Если вы не запрашивали регистрацию, просто проигнорируйте письмо.',
+      footer:
+        'Код действует 15 минут. Если вы не запрашивали регистрацию, просто проигнорируйте письмо.',
     });
 
     try {
@@ -150,9 +161,12 @@ export class MailService {
       this.logger.log(`Registration code emailed to ${to}`);
       return { sent: true };
     } catch (err) {
-      const message = err instanceof Error ? err.message : 'Неизвестная ошибка SMTP';
+      const message =
+        err instanceof Error ? err.message : 'Неизвестная ошибка SMTP';
       this.logger.error(`Registration code email failed to ${to}: ${message}`);
-      throw new InternalServerErrorException('Не удалось отправить код подтверждения на почту');
+      throw new InternalServerErrorException(
+        'Не удалось отправить код подтверждения на почту',
+      );
     }
   }
 
@@ -169,7 +183,8 @@ export class MailService {
       title: 'Восстановление пароля',
       intro: `Введите этот код на странице входа ${appHost}, чтобы задать новый пароль:`,
       code,
-      footer: 'Код действует 15 минут. Если вы не запрашивали сброс пароля, просто проигнорируйте письмо.',
+      footer:
+        'Код действует 15 минут. Если вы не запрашивали сброс пароля, просто проигнорируйте письмо.',
     });
 
     try {
@@ -183,9 +198,12 @@ export class MailService {
       this.logger.log(`Password reset code emailed to ${to}`);
       return { sent: true };
     } catch (err) {
-      const message = err instanceof Error ? err.message : 'Неизвестная ошибка SMTP';
+      const message =
+        err instanceof Error ? err.message : 'Неизвестная ошибка SMTP';
       this.logger.error(`Password reset email failed to ${to}: ${message}`);
-      throw new InternalServerErrorException('Не удалось отправить код восстановления на почту');
+      throw new InternalServerErrorException(
+        'Не удалось отправить код восстановления на почту',
+      );
     }
   }
 
@@ -202,7 +220,8 @@ export class MailService {
       title: 'Подтверждение email',
       intro: `Введите этот код в профиле на ${appHost}, чтобы подтвердить адрес почты:`,
       code,
-      footer: 'Код действует 15 минут. Если вы не запрашивали подтверждение, просто проигнорируйте письмо.',
+      footer:
+        'Код действует 15 минут. Если вы не запрашивали подтверждение, просто проигнорируйте письмо.',
     });
 
     try {
@@ -216,9 +235,12 @@ export class MailService {
       this.logger.log(`Email verification code emailed to ${to}`);
       return { sent: true };
     } catch (err) {
-      const message = err instanceof Error ? err.message : 'Неизвестная ошибка SMTP';
+      const message =
+        err instanceof Error ? err.message : 'Неизвестная ошибка SMTP';
       this.logger.error(`Email verification email failed to ${to}: ${message}`);
-      throw new InternalServerErrorException('Не удалось отправить код подтверждения на почту');
+      throw new InternalServerErrorException(
+        'Не удалось отправить код подтверждения на почту',
+      );
     }
   }
 
@@ -285,9 +307,14 @@ export class MailService {
       this.logger.log(`Employee invite emailed to ${params.to}`);
       return { sent: true };
     } catch (err) {
-      const message = err instanceof Error ? err.message : 'Неизвестная ошибка SMTP';
-      this.logger.error(`Employee invite email failed to ${params.to}: ${message}`);
-      throw new InternalServerErrorException('Не удалось отправить приглашение на почту');
+      const message =
+        err instanceof Error ? err.message : 'Неизвестная ошибка SMTP';
+      this.logger.error(
+        `Employee invite email failed to ${params.to}: ${message}`,
+      );
+      throw new InternalServerErrorException(
+        'Не удалось отправить приглашение на почту',
+      );
     }
   }
 
@@ -304,7 +331,9 @@ export class MailService {
     adminUsersUrl: string;
   }) {
     if (!this.transporter) {
-      this.logger.warn('SMTP not configured — registration admin alert skipped');
+      this.logger.warn(
+        'SMTP not configured — registration admin alert skipped',
+      );
       return { sent: false };
     }
 
@@ -316,7 +345,8 @@ export class MailService {
     const from = this.getPassFromAddress();
     const who = params.fullName || '—';
     const company = params.company || '—';
-    const contact = [params.email, params.phone].filter(Boolean).join(' · ') || '—';
+    const contact =
+      [params.email, params.phone].filter(Boolean).join(' · ') || '—';
 
     const html = `
       <div style="font-family:Inter,Arial,sans-serif;max-width:520px;margin:0 auto;color:#0f172a">
@@ -365,7 +395,9 @@ export class MailService {
           Importance: 'high',
         },
       });
-      this.logger.log(`Registration admin alert sent to ${recipients.join(', ')}`);
+      this.logger.log(
+        `Registration admin alert sent to ${recipients.join(', ')}`,
+      );
       return { sent: true, to: recipients };
     } catch (err) {
       const message = err instanceof Error ? err.message : 'SMTP error';
@@ -376,8 +408,10 @@ export class MailService {
 
   /** Origin фронта для ссылок в письмах (без trailing slash). */
   getPublicAppOrigin(): string {
-    return (this.configService.get<string>('PUBLIC_APP_URL') || 'https://pass.mstyle.ru')
-      .replace(/\/$/, '');
+    return (
+      this.configService.get<string>('PUBLIC_APP_URL') ||
+      'https://pass.mstyle.ru'
+    ).replace(/\/$/, '');
   }
 
   private getAppHost(): string {
@@ -414,7 +448,8 @@ export class MailService {
     const configured = this.configService.get<string>('SMTP_FROM');
     const user = this.configService.get<string>('SMTP_USER');
     const emailFromConfigured = configured?.match(/<([^>]+)>/)?.[1];
-    const bareEmail = configured && !configured.includes('<') ? configured.trim() : undefined;
+    const bareEmail =
+      configured && !configured.includes('<') ? configured.trim() : undefined;
     const email = emailFromConfigured || bareEmail || user || 'pass@mstyle.ru';
     return `${PASS_FROM_DISPLAY_NAME} <${email}>`;
   }
@@ -442,6 +477,8 @@ export class MailService {
       tls: { minVersion: 'TLSv1.2' },
     });
 
-    this.logger.log(`SMTP configured: ${host}:${port} (auth: ${user ? 'yes' : 'no'}, secure: ${secure})`);
+    this.logger.log(
+      `SMTP configured: ${host}:${port} (auth: ${user ? 'yes' : 'no'}, secure: ${secure})`,
+    );
   }
 }

@@ -59,7 +59,11 @@ export function OverdueGuestsAlert({
         <span className="opacity-80 ml-1">({count})</span>
       </div>
       {onActionClick ? (
-        <button type="button" onClick={onActionClick} className="btn btn-secondary text-xs shrink-0">
+        <button
+          type="button"
+          onClick={onActionClick}
+          className="btn btn-secondary text-xs shrink-0"
+        >
           {actionLabel}
         </button>
       ) : (

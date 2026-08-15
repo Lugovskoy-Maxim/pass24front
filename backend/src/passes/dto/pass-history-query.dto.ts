@@ -1,7 +1,15 @@
 import { IsIn, IsMongoId, IsOptional, IsString } from 'class-validator';
 
 const PASS_TYPES = ['visitor', 'parking', 'delivery', 'contractor'] as const;
-const PASS_STATUSES = ['pending', 'approved', 'rejected', 'active', 'completed', 'expired', 'cancelled'] as const;
+const PASS_STATUSES = [
+  'pending',
+  'approved',
+  'rejected',
+  'active',
+  'completed',
+  'expired',
+  'cancelled',
+] as const;
 
 export class PassHistoryQueryDto {
   @IsIn(['visitor', 'office', 'company', 'bc'])

@@ -60,7 +60,8 @@ function emptyFilters(): HistoryFilters {
 
 function parseHistoryQuery(params: URLSearchParams): HistoryQuery | null {
   const scope = params.get('scope') as HistoryQuery['scope'] | null;
-  if (!scope || !['visitor', 'office', 'company', 'bc'].includes(scope)) return null;
+  if (!scope || !['visitor', 'office', 'company', 'bc'].includes(scope))
+    return null;
   return {
     scope,
     visitorName: params.get('visitorName') || undefined,
@@ -99,7 +100,8 @@ function HistoryPageContent() {
   const [filtersOpen, setFiltersOpen] = useState(true);
 
   useEffect(() => {
-    api.getPassExportFilters()
+    api
+      .getPassExportFilters()
       .then(setOptions)
       .catch(() => setOptions(null));
   }, []);
@@ -110,7 +112,8 @@ function HistoryPageContent() {
     return options.offices.filter((o) => o.propertyId === filters.propertyId);
   }, [options, filters.propertyId]);
 
-  const canRefineBcOffice = query?.scope === 'company' || query?.scope === 'visitor';
+  const canRefineBcOffice =
+    query?.scope === 'company' || query?.scope === 'visitor';
 
   const buildRequest = useCallback(
     (f: HistoryFilters, nextOffset: number) => {
@@ -122,9 +125,15 @@ function HistoryPageContent() {
         visitorPassportSeries: query.visitorPassportSeries,
         visitorPassportNumber: query.visitorPassportNumber,
         // scope-закреплённые ключи + уточнение из фильтров
-        officeId: query.scope === 'office' ? query.officeId : (f.officeId || query.officeId),
+        officeId:
+          query.scope === 'office'
+            ? query.officeId
+            : f.officeId || query.officeId,
         companyName: query.companyName,
-        propertyId: query.scope === 'bc' ? query.propertyId : (f.propertyId || query.propertyId),
+        propertyId:
+          query.scope === 'bc'
+            ? query.propertyId
+            : f.propertyId || query.propertyId,
         dateFrom: f.dateFrom || undefined,
         dateTo: f.dateTo || undefined,
         status: f.status || undefined,
@@ -137,50 +146,58 @@ function HistoryPageContent() {
     [query],
   );
 
-  const load = useCallback((
-    f: HistoryFilters,
-    nextOffset: number,
-    mode: 'replace' | 'append' = 'replace',
-    options?: { silent?: boolean },
-  ) => {
-    const req = buildRequest(f, nextOffset);
-    if (!req) return Promise.resolve();
+  const load = useCallback(
+    (
+      f: HistoryFilters,
+      nextOffset: number,
+      mode: 'replace' | 'append' = 'replace',
+      options?: { silent?: boolean },
+    ) => {
+      const req = buildRequest(f, nextOffset);
+      if (!req) return Promise.resolve();
 
-    const silent = options?.silent;
-    if (!silent) {
-      if (mode === 'append') setLoadingMore(true);
-      else {
-        setLoading(true);
-        setLoadError('');
-        setLoadErrorCause(null);
+      const silent = options?.silent;
+      if (!silent) {
+        if (mode === 'append') setLoadingMore(true);
+        else {
+          setLoading(true);
+          setLoadError('');
+          setLoadErrorCause(null);
+        }
       }
-    }
 
-    return api.getPassHistory(req)
-      .then((data) => {
-        setTotal(typeof data.total === 'number' ? data.total : data.passes.length);
-        setOffset(data.offset ?? nextOffset);
-        setHasMore(!!data.hasMore);
-        setApplied(f);
-        setPasses((prev) => (mode === 'append' ? [...prev, ...data.passes] : data.passes));
-      })
-      .catch((err) => {
-        if (!silent) {
-          setLoadErrorCause(err);
-          setLoadError(getErrorMessage(err, 'Ошибка загрузки'));
-          if (mode === 'replace') {
-            setPasses([]);
-            setTotal(0);
+      return api
+        .getPassHistory(req)
+        .then((data) => {
+          setTotal(
+            typeof data.total === 'number' ? data.total : data.passes.length,
+          );
+          setOffset(data.offset ?? nextOffset);
+          setHasMore(!!data.hasMore);
+          setApplied(f);
+          setPasses((prev) =>
+            mode === 'append' ? [...prev, ...data.passes] : data.passes,
+          );
+        })
+        .catch((err) => {
+          if (!silent) {
+            setLoadErrorCause(err);
+            setLoadError(getErrorMessage(err, 'Ошибка загрузки'));
+            if (mode === 'replace') {
+              setPasses([]);
+              setTotal(0);
+            }
           }
-        }
-      })
-      .finally(() => {
-        if (!silent) {
-          setLoading(false);
-          setLoadingMore(false);
-        }
-      });
-  }, [buildRequest]);
+        })
+        .finally(() => {
+          if (!silent) {
+            setLoading(false);
+            setLoadingMore(false);
+          }
+        });
+    },
+    [buildRequest],
+  );
 
   useEffect(() => {
     if (!query) return;
@@ -189,13 +206,16 @@ function HistoryPageContent() {
     void load(emptyFilters(), 0, 'replace');
   }, [query]); // eslint-disable-line react-hooks/exhaustive-deps -- reload when URL scope changes
 
-  useAutoRefresh(
-    () => load(applied, 0, 'replace', { silent: true }),
-    { enabled: !!query && !exporting && !loadingMore },
-  );
+  useAutoRefresh(() => load(applied, 0, 'replace', { silent: true }), {
+    enabled: !!query && !exporting && !loadingMore,
+  });
 
   const applyFilters = () => {
-    if (filters.dateFrom && filters.dateTo && filters.dateFrom > filters.dateTo) {
+    if (
+      filters.dateFrom &&
+      filters.dateTo &&
+      filters.dateFrom > filters.dateTo
+    ) {
       toast('Дата «с» не может быть позже даты «по»', 'error');
       return;
     }
@@ -225,11 +245,11 @@ function HistoryPageContent() {
         propertyId:
           query.scope === 'bc'
             ? query.propertyId
-            : (applied.propertyId || query.propertyId || undefined),
+            : applied.propertyId || query.propertyId || undefined,
         officeId:
           query.scope === 'office'
             ? query.officeId
-            : (applied.officeId || query.officeId || undefined),
+            : applied.officeId || query.officeId || undefined,
         companyName: query.scope === 'company' ? query.companyName : undefined,
         // visitor scope: export via search if only name known (best-effort)
         ...(query.scope === 'visitor' && !applied.search && query.visitorName
@@ -257,7 +277,9 @@ function HistoryPageContent() {
 
   if (!query) {
     return (
-      <ProtectedLayout anyPermissions={['passes.view_all', 'passes.reception', 'admin.panel']}>
+      <ProtectedLayout
+        anyPermissions={['passes.view_all', 'passes.reception', 'admin.panel']}
+      >
         <div className="card p-8 text-center text-[var(--muted)]">
           Укажите параметры истории: посетитель, офис, компания или бизнес-центр
         </div>
@@ -266,18 +288,24 @@ function HistoryPageContent() {
   }
 
   const title = historyTitle(query);
-  const subtitle = query.scope === 'visitor'
-    ? 'Все визиты по совпадению ФИО, телефона или паспорта'
-    : query.scope === 'office'
-      ? 'Все пропуска в этот офис'
-      : query.scope === 'company'
-        ? 'Все пропуска для компании — фильтры и выгрузка CSV'
-        : 'Все пропуска в бизнес-центре';
+  const subtitle =
+    query.scope === 'visitor'
+      ? 'Все визиты по совпадению ФИО, телефона или паспорта'
+      : query.scope === 'office'
+        ? 'Все пропуска в этот офис'
+        : query.scope === 'company'
+          ? 'Все пропуска для компании — фильтры и выгрузка CSV'
+          : 'Все пропуска в бизнес-центре';
 
   return (
-    <ProtectedLayout anyPermissions={['passes.view_all', 'passes.reception', 'admin.panel']}>
+    <ProtectedLayout
+      anyPermissions={['passes.view_all', 'passes.reception', 'admin.panel']}
+    >
       <div className="mb-4">
-        <Link href={getHomePath(user)} className="inline-flex items-center gap-1.5 text-sm text-[var(--muted)] hover:text-[var(--accent)] mb-3">
+        <Link
+          href={getHomePath(user)}
+          className="inline-flex items-center gap-1.5 text-sm text-[var(--muted)] hover:text-[var(--accent)] mb-3"
+        >
           <ArrowLeft className="w-4 h-4" />
           Назад
         </Link>
@@ -299,7 +327,9 @@ function HistoryPageContent() {
               <Filter className="w-4 h-4" />
               Фильтры
               {activeFilterCount > 0 ? (
-                <span className="ml-1 text-xs tabular-nums opacity-80">({activeFilterCount})</span>
+                <span className="ml-1 text-xs tabular-nums opacity-80">
+                  ({activeFilterCount})
+                </span>
               ) : null}
             </button>
             <button
@@ -319,7 +349,11 @@ function HistoryPageContent() {
         <div className="card p-4 mb-4 space-y-4">
           <div className="flex items-center justify-between gap-2">
             <h2 className="font-semibold text-sm">Фильтры</h2>
-            <button type="button" className="text-xs text-[var(--muted)] hover:text-[var(--accent)] inline-flex items-center gap-1" onClick={resetFilters}>
+            <button
+              type="button"
+              className="text-xs text-[var(--muted)] hover:text-[var(--accent)] inline-flex items-center gap-1"
+              onClick={resetFilters}
+            >
               <X className="w-3.5 h-3.5" />
               Сбросить
             </button>
@@ -332,7 +366,9 @@ function HistoryPageContent() {
                 type="date"
                 className="input w-full"
                 value={filters.dateFrom}
-                onChange={(e) => setFilters((prev) => ({ ...prev, dateFrom: e.target.value }))}
+                onChange={(e) =>
+                  setFilters((prev) => ({ ...prev, dateFrom: e.target.value }))
+                }
               />
             </div>
             <div>
@@ -341,7 +377,9 @@ function HistoryPageContent() {
                 type="date"
                 className="input w-full"
                 value={filters.dateTo}
-                onChange={(e) => setFilters((prev) => ({ ...prev, dateTo: e.target.value }))}
+                onChange={(e) =>
+                  setFilters((prev) => ({ ...prev, dateTo: e.target.value }))
+                }
               />
             </div>
             <div>
@@ -350,11 +388,15 @@ function HistoryPageContent() {
                 <select
                   className="input w-full"
                   value={filters.status}
-                  onChange={(e) => setFilters((prev) => ({ ...prev, status: e.target.value }))}
+                  onChange={(e) =>
+                    setFilters((prev) => ({ ...prev, status: e.target.value }))
+                  }
                 >
                   <option value="">Все статусы</option>
                   {ALL_STATUSES.map((s) => (
-                    <option key={s} value={s}>{getStatusLabel(s, labels)}</option>
+                    <option key={s} value={s}>
+                      {getStatusLabel(s, labels)}
+                    </option>
                   ))}
                 </select>
               </div>
@@ -365,12 +407,21 @@ function HistoryPageContent() {
                 <select
                   className="input w-full"
                   value={filters.passType}
-                  onChange={(e) => setFilters((prev) => ({ ...prev, passType: e.target.value as PassType | '' }))}
+                  onChange={(e) =>
+                    setFilters((prev) => ({
+                      ...prev,
+                      passType: e.target.value as PassType | '',
+                    }))
+                  }
                 >
                   <option value="">Все типы</option>
-                  {(Object.entries(TYPE_LABELS) as [PassType, string][]).map(([key, label]) => (
-                    <option key={key} value={key}>{label}</option>
-                  ))}
+                  {(Object.entries(TYPE_LABELS) as [PassType, string][]).map(
+                    ([key, label]) => (
+                      <option key={key} value={key}>
+                        {label}
+                      </option>
+                    ),
+                  )}
                 </select>
               </div>
             </div>
@@ -382,7 +433,9 @@ function HistoryPageContent() {
                   className="input input--icon-left w-full"
                   placeholder="ФИО, телефон, номер пропуска…"
                   value={filters.search}
-                  onChange={(e) => setFilters((prev) => ({ ...prev, search: e.target.value }))}
+                  onChange={(e) =>
+                    setFilters((prev) => ({ ...prev, search: e.target.value }))
+                  }
                   onKeyDown={(e) => {
                     if (e.key === 'Enter') applyFilters();
                   }}
@@ -391,56 +444,81 @@ function HistoryPageContent() {
             </div>
           </div>
 
-          {canRefineBcOffice && options && (options.businessCenters.length > 0 || options.offices.length > 0) && (
-            <div className="grid sm:grid-cols-2 gap-3 pt-1 border-t border-[var(--border)]">
-              {(options.businessCenters.length ?? 0) > 0 && (
-                <div>
-                  <label className="label">Бизнес-центр</label>
-                  <div className="select-wrap w-full">
-                    <select
-                      className="input w-full"
-                      value={filters.propertyId}
-                      onChange={(e) => setFilters((prev) => ({
-                        ...prev,
-                        propertyId: e.target.value,
-                        officeId: '',
-                      }))}
-                    >
-                      <option value="">Все БЦ</option>
-                      {options.businessCenters.map((bc) => (
-                        <option key={bc.id} value={bc.id}>{bc.name}</option>
-                      ))}
-                    </select>
+          {canRefineBcOffice &&
+            options &&
+            (options.businessCenters.length > 0 ||
+              options.offices.length > 0) && (
+              <div className="grid sm:grid-cols-2 gap-3 pt-1 border-t border-[var(--border)]">
+                {(options.businessCenters.length ?? 0) > 0 && (
+                  <div>
+                    <label className="label">Бизнес-центр</label>
+                    <div className="select-wrap w-full">
+                      <select
+                        className="input w-full"
+                        value={filters.propertyId}
+                        onChange={(e) =>
+                          setFilters((prev) => ({
+                            ...prev,
+                            propertyId: e.target.value,
+                            officeId: '',
+                          }))
+                        }
+                      >
+                        <option value="">Все БЦ</option>
+                        {options.businessCenters.map((bc) => (
+                          <option key={bc.id} value={bc.id}>
+                            {bc.name}
+                          </option>
+                        ))}
+                      </select>
+                    </div>
                   </div>
-                </div>
-              )}
-              {options.offices.length > 0 && (
-                <div>
-                  <label className="label">Офис</label>
-                  <div className="select-wrap w-full">
-                    <select
-                      className="input w-full"
-                      value={filters.officeId}
-                      onChange={(e) => setFilters((prev) => ({ ...prev, officeId: e.target.value }))}
-                    >
-                      <option value="">Все офисы</option>
-                      {officesInBc.map((o) => (
-                        <option key={o.id} value={o.id}>
-                          {o.businessCenterName ? `${o.businessCenterName}: ` : ''}оф. {o.number}
-                        </option>
-                      ))}
-                    </select>
+                )}
+                {options.offices.length > 0 && (
+                  <div>
+                    <label className="label">Офис</label>
+                    <div className="select-wrap w-full">
+                      <select
+                        className="input w-full"
+                        value={filters.officeId}
+                        onChange={(e) =>
+                          setFilters((prev) => ({
+                            ...prev,
+                            officeId: e.target.value,
+                          }))
+                        }
+                      >
+                        <option value="">Все офисы</option>
+                        {officesInBc.map((o) => (
+                          <option key={o.id} value={o.id}>
+                            {o.businessCenterName
+                              ? `${o.businessCenterName}: `
+                              : ''}
+                            оф. {o.number}
+                          </option>
+                        ))}
+                      </select>
+                    </div>
                   </div>
-                </div>
-              )}
-            </div>
-          )}
+                )}
+              </div>
+            )}
 
           <div className="flex flex-wrap gap-2">
-            <button type="button" className="btn btn-primary text-sm" onClick={applyFilters} disabled={loading}>
+            <button
+              type="button"
+              className="btn btn-primary text-sm"
+              onClick={applyFilters}
+              disabled={loading}
+            >
               Применить
             </button>
-            <button type="button" className="btn btn-secondary text-sm" onClick={resetFilters} disabled={loading}>
+            <button
+              type="button"
+              className="btn btn-secondary text-sm"
+              onClick={resetFilters}
+              disabled={loading}
+            >
               Сбросить
             </button>
             <button
@@ -460,7 +538,10 @@ function HistoryPageContent() {
           </div>
           <p className="text-xs text-[var(--muted)]">
             Выгрузка CSV использует <strong>применённые</strong> фильтры
-            {query.scope === 'company' ? ' и фиксированную компанию из ссылки' : ''}.
+            {query.scope === 'company'
+              ? ' и фиксированную компанию из ссылки'
+              : ''}
+            .
           </p>
         </div>
       )}
@@ -476,7 +557,9 @@ function HistoryPageContent() {
       )}
 
       {loading ? (
-        <div className="card p-8 text-center text-[var(--muted)]">{labels.passes.loading}</div>
+        <div className="card p-8 text-center text-[var(--muted)]">
+          {labels.passes.loading}
+        </div>
       ) : passes.length === 0 ? (
         <div className="card p-8 text-center text-[var(--muted)]">
           Визиты не найдены
@@ -515,7 +598,21 @@ function HistoryPageContent() {
 
 export default function HistoryPage() {
   return (
-    <Suspense fallback={<ProtectedLayout anyPermissions={['passes.view_all', 'passes.reception', 'admin.panel']}><div className="animate-pulse text-[var(--muted)] p-8">Загрузка...</div></ProtectedLayout>}>
+    <Suspense
+      fallback={
+        <ProtectedLayout
+          anyPermissions={[
+            'passes.view_all',
+            'passes.reception',
+            'admin.panel',
+          ]}
+        >
+          <div className="animate-pulse text-[var(--muted)] p-8">
+            Загрузка...
+          </div>
+        </ProtectedLayout>
+      }
+    >
       <HistoryPageContent />
     </Suspense>
   );

@@ -1,4 +1,14 @@
-import { Body, Controller, Delete, Get, Param, Patch, Post, Req, UseGuards } from '@nestjs/common';
+import {
+  Body,
+  Controller,
+  Delete,
+  Get,
+  Param,
+  Patch,
+  Post,
+  Req,
+  UseGuards,
+} from '@nestjs/common';
 import { AuthGuard } from '@nestjs/passport';
 import { RequirePermissions } from '../auth/permissions.decorator';
 import { PermissionsGuard } from '../auth/permissions.guard';
@@ -30,7 +40,11 @@ export class PassTemplatesController {
 
   @Post('from-pass/:passId')
   @RequirePermissions('passes.templates')
-  createFromPass(@Param('passId') passId: string, @Req() req: any, @Body() body?: { name?: string }) {
+  createFromPass(
+    @Param('passId') passId: string,
+    @Req() req: any,
+    @Body() body?: { name?: string },
+  ) {
     return this.templatesService.createFromPass(passId, req.user, body?.name);
   }
 
@@ -42,7 +56,11 @@ export class PassTemplatesController {
 
   @Patch(':id')
   @RequirePermissions('passes.templates')
-  update(@Param('id') id: string, @Body() dto: Partial<CreatePassTemplateDto>, @Req() req: any) {
+  update(
+    @Param('id') id: string,
+    @Body() dto: Partial<CreatePassTemplateDto>,
+    @Req() req: any,
+  ) {
     return this.templatesService.update(id, dto, req.user);
   }
 

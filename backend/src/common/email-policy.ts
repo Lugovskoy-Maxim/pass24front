@@ -38,8 +38,14 @@ export function normalizeBlockedEmailDomains(raw?: string[] | null): string[] {
     if (d.startsWith('@')) d = d.slice(1);
     d = d.replace(/^https?:\/\//, '').split('/')[0];
     // только домен-подобная строка
-    if (!/^[a-z0-9]([a-z0-9-]*[a-z0-9])?(\.[a-z0-9]([a-z0-9-]*[a-z0-9])?)+$/i.test(d)
-      && !/^[а-яё0-9]([а-яё0-9-]*[а-яё0-9])?(\.[а-яё0-9]([а-яё0-9-]*[а-яё0-9])?)+$/i.test(d)) {
+    if (
+      !/^[a-z0-9]([a-z0-9-]*[a-z0-9])?(\.[a-z0-9]([a-z0-9-]*[a-z0-9])?)+$/i.test(
+        d,
+      ) &&
+      !/^[а-яё0-9]([а-яё0-9-]*[а-яё0-9])?(\.[а-яё0-9]([а-яё0-9-]*[а-яё0-9])?)+$/i.test(
+        d,
+      )
+    ) {
       // допуск простых лат/кир доменов; иначе пропуск мусора
       if (!d.includes('.') || d.includes(' ')) continue;
     }
@@ -70,7 +76,12 @@ export function isAllowedRegistrationEmail(
   if (!/^[^\s@]+@[^\s@]+\.[^\s@]+$/.test(normalized)) return false;
 
   const domain = normalized.split('@')[1] || '';
-  if (!domain || domain.includes('..') || domain.startsWith('.') || domain.endsWith('.')) {
+  if (
+    !domain ||
+    domain.includes('..') ||
+    domain.startsWith('.') ||
+    domain.endsWith('.')
+  ) {
     return false;
   }
 
@@ -79,7 +90,9 @@ export function isAllowedRegistrationEmail(
 
   const requireRu = options?.requireRuZone !== false;
   if (requireRu) {
-    return domain.endsWith('.ru') || domain.endsWith('.рф') || domain.endsWith('.su');
+    return (
+      domain.endsWith('.ru') || domain.endsWith('.рф') || domain.endsWith('.su')
+    );
   }
   return true;
 }

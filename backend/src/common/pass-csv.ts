@@ -76,11 +76,17 @@ function formatDateTime(value?: string | Date): string {
   return date.toLocaleString('ru-RU');
 }
 
-export function buildPassCsv(rows: PassCsvRow[], options?: { includeCreator?: boolean }): string {
+export function buildPassCsv(
+  rows: PassCsvRow[],
+  options?: { includeCreator?: boolean },
+): string {
   const includeCreator = options?.includeCreator !== false;
   const headers = includeCreator
     ? [...PASS_CSV_HEADERS]
-    : PASS_CSV_HEADERS.filter((h) => !['Заказчик', 'Компания заказчика', 'Телефон заказчика'].includes(h));
+    : PASS_CSV_HEADERS.filter(
+        (h) =>
+          !['Заказчик', 'Компания заказчика', 'Телефон заказчика'].includes(h),
+      );
 
   const body = rows.map((row) => {
     const cells = [

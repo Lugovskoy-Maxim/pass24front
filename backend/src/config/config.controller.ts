@@ -19,7 +19,9 @@ export class ConfigController {
   @Get('access')
   async getAccessConfig(@Req() req: any) {
     const config = await this.accessConfigService.getConfig();
-    const permissions = await this.accessConfigService.getPermissionsForRole(req.user.role);
+    const permissions = await this.accessConfigService.getPermissionsForRole(
+      req.user.role,
+    );
     return {
       enabledPassTypes: config.enabledPassTypes,
       passTypeLabels: config.passTypeLabels,

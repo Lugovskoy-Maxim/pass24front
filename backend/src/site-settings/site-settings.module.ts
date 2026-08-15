@@ -6,7 +6,9 @@ import { SiteSettingsService } from './site-settings.service';
 @Global()
 @Module({
   imports: [
-    MongooseModule.forFeature([{ name: AppSettings.name, schema: AppSettingsSchema }]),
+    MongooseModule.forFeature([
+      { name: AppSettings.name, schema: AppSettingsSchema },
+    ]),
   ],
   providers: [SiteSettingsService],
   exports: [SiteSettingsService],

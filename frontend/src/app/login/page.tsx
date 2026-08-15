@@ -16,9 +16,18 @@ import { useConfig } from '@/hooks/useConfig';
 import { getUiLabels } from '@/lib/ui-labels';
 import { SiteBrand } from '@/components/SiteBrand';
 import { PersonNameFields } from '@/components/PersonNameFields';
-import { FormErrorBanner, FormField, FormInput, PasswordInput } from '@/components/FormField';
+import {
+  FormErrorBanner,
+  FormField,
+  FormInput,
+  PasswordInput,
+} from '@/components/FormField';
 import { AppVersion } from '@/components/AppVersion';
-import { buildFullName, getUserNameLabels, PersonNameParts } from '@/lib/person-name';
+import {
+  buildFullName,
+  getUserNameLabels,
+  PersonNameParts,
+} from '@/lib/person-name';
 import {
   FieldErrors,
   hasFieldErrors,
@@ -70,13 +79,19 @@ function LoginPageInner() {
   const [mode, setMode] = useState<PageMode>('login');
   const [registerStep, setRegisterStep] = useState<'form' | 'verify'>('form');
   const [forgotStep, setForgotStep] = useState<ForgotStep>('request');
-  const [verificationChannel, setVerificationChannel] = useState<'email' | 'phone'>('email');
+  const [verificationChannel, setVerificationChannel] = useState<
+    'email' | 'phone'
+  >('email');
   const [login, setLogin] = useState('');
   const [email, setEmail] = useState('');
   const [password, setPassword] = useState('');
   const [passwordConfirm, setPasswordConfirm] = useState('');
   const [verificationCode, setVerificationCode] = useState('');
-  const [nameParts, setNameParts] = useState<PersonNameParts>({ lastName: '', firstName: '', middleName: '' });
+  const [nameParts, setNameParts] = useState<PersonNameParts>({
+    lastName: '',
+    firstName: '',
+    middleName: '',
+  });
   const [company, setCompany] = useState('');
   const [phone, setPhone] = useState('');
   const [verifiedPhone, setVerifiedPhone] = useState('');
@@ -90,9 +105,14 @@ function LoginPageInner() {
   const [devAccounts, setDevAccounts] = useState<DevQuickLoginAccount[]>([]);
   const [smsResendIn, setSmsResendIn] = useState(0);
   const [registrationId, setRegistrationId] = useState('');
-  const [pushStatus, setPushStatus] = useState<'idle' | 'waiting' | 'confirmed' | 'expired'>('idle');
+  const [pushStatus, setPushStatus] = useState<
+    'idle' | 'waiting' | 'confirmed' | 'expired'
+  >('idle');
   const [resetResendIn, setResetResendIn] = useState(0);
-  const [adminContact, setAdminContact] = useState<{ phone?: string; email?: string } | null>(null);
+  const [adminContact, setAdminContact] = useState<{
+    phone?: string;
+    email?: string;
+  } | null>(null);
   const {
     login: authLogin,
     requestRegistrationCode,
@@ -105,27 +125,29 @@ function LoginPageInner() {
   const { theme } = useTheme();
   const { toast } = useToast();
   const smsRegistrationEnabled = config?.smsRegistrationEnabled !== false;
-  const smsDisabledMessage = config?.smsRegistrationDisabledMessage?.trim()
-    || 'Скоро функция будет работать';
+  const smsDisabledMessage =
+    config?.smsRegistrationDisabledMessage?.trim() ||
+    'Скоро функция будет работать';
 
-  const finishPhoneRegistration = useCallback((result: {
-    message?: string;
-    user: User;
-    token: string;
-  }) => {
-    const message = result.message || 'Профиль успешно подтверждён. Вы вошли в аккаунт.';
-    setPushStatus('confirmed');
-    setSuccess(message);
-    toast(message, 'success');
-    setInfoMessage('');
-    setSmsResendIn(0);
-    setRegistrationId('');
-    setFieldErrors({});
-    completeSession(result.user, result.token);
-  }, [completeSession, toast]);
+  const finishPhoneRegistration = useCallback(
+    (result: { message?: string; user: User; token: string }) => {
+      const message =
+        result.message || 'Профиль успешно подтверждён. Вы вошли в аккаунт.';
+      setPushStatus('confirmed');
+      setSuccess(message);
+      toast(message, 'success');
+      setInfoMessage('');
+      setSmsResendIn(0);
+      setRegistrationId('');
+      setFieldErrors({});
+      completeSession(result.user, result.token);
+    },
+    [completeSession, toast],
+  );
 
   useEffect(() => {
-    api.getDevAccounts()
+    api
+      .getDevAccounts()
       .then((result) => setDevAccounts(result.accounts))
       .catch(() => setDevAccounts([]));
   }, []);
@@ -138,22 +160,28 @@ function LoginPageInner() {
 
   useEffect(() => {
     if (smsResendIn <= 0) return;
-    const timer = window.setTimeout(() => setSmsResendIn((prev) => prev - 1), 1000);
+    const timer = window.setTimeout(
+      () => setSmsResendIn((prev) => prev - 1),
+      1000,
+    );
     return () => window.clearTimeout(timer);
   }, [smsResendIn]);
 
   useEffect(() => {
     if (resetResendIn <= 0) return;
-    const timer = window.setTimeout(() => setResetResendIn((prev) => prev - 1), 1000);
+    const timer = window.setTimeout(
+      () => setResetResendIn((prev) => prev - 1),
+      1000,
+    );
     return () => window.clearTimeout(timer);
   }, [resetResendIn]);
 
   useEffect(() => {
     if (
-      mode !== 'register'
-      || registerStep !== 'verify'
-      || verificationChannel !== 'phone'
-      || !registrationId
+      mode !== 'register' ||
+      registerStep !== 'verify' ||
+      verificationChannel !== 'phone' ||
+      !registrationId
     ) {
       return;
     }
@@ -168,7 +196,9 @@ function LoginPageInner() {
         if (cancelled) return;
         if (result.status === 'confirmed') {
           if (!result.user || !result.token) {
-            setFormError('Профиль подтверждён, но не удалось войти автоматически. Войдите вручную.');
+            setFormError(
+              'Профиль подтверждён, но не удалось войти автоматически. Войдите вручную.',
+            );
             setPushStatus('confirmed');
             return;
           }
@@ -181,7 +211,10 @@ function LoginPageInner() {
         }
         if (result.status === 'expired') {
           setPushStatus('expired');
-          setFormError(result.message || 'Время подтверждения истекло. Запросите push снова.');
+          setFormError(
+            result.message ||
+              'Время подтверждения истекло. Запросите push снова.',
+          );
           return;
         }
         timer = window.setTimeout(checkStatus, 2500);
@@ -203,7 +236,13 @@ function LoginPageInner() {
       cancelled = true;
       if (timer) window.clearTimeout(timer);
     };
-  }, [mode, registerStep, verificationChannel, registrationId, finishPhoneRegistration]);
+  }, [
+    mode,
+    registerStep,
+    verificationChannel,
+    registrationId,
+    finishPhoneRegistration,
+  ]);
 
   useEffect(() => {
     if (mode !== 'forgot' || forgotStep !== 'waiting' || !resetToken) return;
@@ -223,7 +262,10 @@ function LoginPageInner() {
         if (result.status === 'expired') {
           setForgotStep('request');
           setResetToken('');
-          setFormError(result.message || 'Время подтверждения истекло. Запросите push снова.');
+          setFormError(
+            result.message ||
+              'Время подтверждения истекло. Запросите push снова.',
+          );
           return;
         }
         timer = window.setTimeout(checkStatus, 2500);
@@ -262,7 +304,8 @@ function LoginPageInner() {
     setFieldErrors({});
     setLoading(true);
     try {
-      const normalizedLogin = normalizeRuMobilePhone(loginValue) || loginValue.trim().toLowerCase();
+      const normalizedLogin =
+        normalizeRuMobilePhone(loginValue) || loginValue.trim().toLowerCase();
       const loggedIn = await authLogin(normalizedLogin, loginPassword);
       router.push(nextPath || getHomePath(loggedIn));
     } catch (err) {
@@ -278,7 +321,8 @@ function LoginPageInner() {
     if (verificationChannel === 'phone') {
       return smsRegistrationEnabled ? 'phone' : 'email';
     }
-    if (normalizedPhone && !trimmedEmail && smsRegistrationEnabled) return 'phone';
+    if (normalizedPhone && !trimmedEmail && smsRegistrationEnabled)
+      return 'phone';
     return 'email';
   };
 
@@ -337,7 +381,8 @@ function LoginPageInner() {
       return;
     }
 
-    const effectiveChannel = mode === 'register' ? resolveEffectiveChannel() : undefined;
+    const effectiveChannel =
+      mode === 'register' ? resolveEffectiveChannel() : undefined;
     const errors = validateLoginRegister({
       mode: mode === 'register' ? 'register' : 'login',
       email: mode === 'login' ? login : email,
@@ -352,7 +397,11 @@ function LoginPageInner() {
     setFieldErrors(errors);
     if (hasFieldErrors(errors)) return;
 
-    if (mode === 'register' && effectiveChannel === 'phone' && !smsRegistrationEnabled) {
+    if (
+      mode === 'register' &&
+      effectiveChannel === 'phone' &&
+      !smsRegistrationEnabled
+    ) {
       toast(smsDisabledMessage, 'info');
       return;
     }
@@ -363,16 +412,23 @@ function LoginPageInner() {
     }
 
     if (registerStep === 'verify') {
-      const codeErrors = validateRegistrationCode(verificationCode, verificationChannel);
+      const codeErrors = validateRegistrationCode(
+        verificationCode,
+        verificationChannel,
+      );
       setFieldErrors(codeErrors);
       if (hasFieldErrors(codeErrors)) return;
 
       setFormError('');
       setLoading(true);
       try {
-        const confirmPayload = verificationChannel === 'phone'
-          ? { phone: verifiedPhone, code: verificationCode.trim() }
-          : { email: email.trim().toLowerCase(), code: verificationCode.trim() };
+        const confirmPayload =
+          verificationChannel === 'phone'
+            ? { phone: verifiedPhone, code: verificationCode.trim() }
+            : {
+                email: email.trim().toLowerCase(),
+                code: verificationCode.trim(),
+              };
         const result = await confirmRegistration(confirmPayload);
         setSuccess(result.message);
         toast(result.message, 'success');
@@ -395,7 +451,9 @@ function LoginPageInner() {
       const payload = buildRegisterPayload();
       const result = await requestRegistrationCode(payload);
       setInfoMessage(result.message);
-      setVerificationChannel(result.verificationChannel || payload.verificationChannel);
+      setVerificationChannel(
+        result.verificationChannel || payload.verificationChannel,
+      );
       if (result.verificationChannel === 'phone') {
         setVerifiedPhone(payload.phone || '');
         setSmsResendIn(result.retryAfterSeconds ?? 0);
@@ -427,11 +485,15 @@ function LoginPageInner() {
       setLoading(true);
       try {
         const normalizedPhone = normalizeRuMobilePhone(resetPhone)!;
-        const result = await api.requestPasswordReset({ phone: normalizedPhone });
-        setAdminContact(result.contact || {
-          phone: config?.sitePhone,
-          email: config?.siteEmail,
+        const result = await api.requestPasswordReset({
+          phone: normalizedPhone,
         });
+        setAdminContact(
+          result.contact || {
+            phone: config?.sitePhone,
+            email: config?.siteEmail,
+          },
+        );
         setInfoMessage(result.message);
         if (result.recoveryChannel === 'phone' && result.resetToken) {
           setResetToken(result.resetToken);
@@ -443,7 +505,9 @@ function LoginPageInner() {
         }
         setFieldErrors({});
       } catch (err) {
-        setFormError(getErrorMessage(err, 'Не удалось запросить восстановление'));
+        setFormError(
+          getErrorMessage(err, 'Не удалось запросить восстановление'),
+        );
       } finally {
         setLoading(false);
       }
@@ -574,9 +638,10 @@ function LoginPageInner() {
     setPushStatus('idle');
   };
 
-  const verificationTarget = verificationChannel === 'phone'
-    ? formatRuMobilePhone(verifiedPhone || phone)
-    : email;
+  const verificationTarget =
+    verificationChannel === 'phone'
+      ? formatRuMobilePhone(verifiedPhone || phone)
+      : email;
 
   const contactPhone = adminContact?.phone || config?.sitePhone;
   const contactEmail = adminContact?.email || config?.siteEmail;
@@ -585,7 +650,9 @@ function LoginPageInner() {
     if (loading) return 'Загрузка...';
     if (mode === 'login') return 'Войти';
     if (mode === 'forgot') {
-      return forgotStep === 'confirm' ? 'Сохранить новый пароль' : 'Получить push';
+      return forgotStep === 'confirm'
+        ? 'Сохранить новый пароль'
+        : 'Получить push';
     }
     if (registerStep === 'verify') return 'Подтвердить регистрацию';
     return 'Получить код';
@@ -599,18 +666,35 @@ function LoginPageInner() {
       <div className="w-full max-w-md">
         <div className="text-center mb-8">
           <div className="flex justify-center mb-4">
-            <SiteBrand config={config} size="lg" showTagline layout="column" variant={theme === 'dark' ? 'dark' : 'light'} />
+            <SiteBrand
+              config={config}
+              size="lg"
+              showTagline
+              layout="column"
+              variant={theme === 'dark' ? 'dark' : 'light'}
+            />
           </div>
           {(config?.sitePhone || config?.siteEmail) && (
-            <div className="flex flex-wrap items-center justify-center gap-4 text-sm" style={{ color: 'var(--header-muted)' }}>
+            <div
+              className="flex flex-wrap items-center justify-center gap-4 text-sm"
+              style={{ color: 'var(--header-muted)' }}
+            >
               {config.sitePhone && (
-                <a href={`tel:${config.sitePhone}`} className="inline-flex items-center gap-1.5 hover:opacity-80 transition-opacity" style={{ color: 'var(--header-muted)' }}>
+                <a
+                  href={`tel:${config.sitePhone}`}
+                  className="inline-flex items-center gap-1.5 hover:opacity-80 transition-opacity"
+                  style={{ color: 'var(--header-muted)' }}
+                >
                   <Phone className="w-4 h-4" />
                   {config.sitePhone}
                 </a>
               )}
               {config.siteEmail && (
-                <a href={`mailto:${config.siteEmail}`} className="inline-flex items-center gap-1.5 hover:opacity-80 transition-opacity" style={{ color: 'var(--header-muted)' }}>
+                <a
+                  href={`mailto:${config.siteEmail}`}
+                  className="inline-flex items-center gap-1.5 hover:opacity-80 transition-opacity"
+                  style={{ color: 'var(--header-muted)' }}
+                >
                   <Mail className="w-4 h-4" />
                   {config.siteEmail}
                 </a>
@@ -641,9 +725,12 @@ function LoginPageInner() {
 
           {mode === 'forgot' && (
             <div className="mb-6">
-              <h2 className="text-lg font-semibold text-[var(--text)]">Восстановление пароля</h2>
+              <h2 className="text-lg font-semibold text-[var(--text)]">
+                Восстановление пароля
+              </h2>
               <p className="text-sm text-[var(--muted)] mt-1">
-                Подтвердите восстановление через SIM-PUSH на номере, привязанном к аккаунту.
+                Подтвердите восстановление через SIM-PUSH на номере, привязанном
+                к аккаунту.
               </p>
             </div>
           )}
@@ -658,23 +745,36 @@ function LoginPageInner() {
                   errors={fieldErrors}
                   onClearError={clearFieldError}
                 />
-                <FormField id="company" label="Компания (арендатор)" required error={fieldErrors.company}>
+                <FormField
+                  id="company"
+                  label="Компания (арендатор)"
+                  required
+                  error={fieldErrors.company}
+                >
                   <FormInput
                     id="company"
                     value={company}
-                    onChange={(e) => { setCompany(e.target.value); clearFieldError('company'); }}
+                    onChange={(e) => {
+                      setCompany(e.target.value);
+                      clearFieldError('company');
+                    }}
                     invalid={!!fieldErrors.company}
                     placeholder={ph.company}
                   />
                 </FormField>
 
                 <div className="space-y-2">
-                  <p className="text-sm font-medium text-[var(--text)]">Подтверждение регистрации</p>
+                  <p className="text-sm font-medium text-[var(--text)]">
+                    Подтверждение регистрации
+                  </p>
                   <div className="channel-tabs">
                     <button
                       type="button"
                       className={`channel-tabs__btn ${verificationChannel === 'email' ? 'channel-tabs__btn--active' : ''}`}
-                      onClick={() => { setVerificationChannel('email'); clearFieldError('phone'); }}
+                      onClick={() => {
+                        setVerificationChannel('email');
+                        clearFieldError('phone');
+                      }}
                     >
                       По email
                     </button>
@@ -682,9 +782,15 @@ function LoginPageInner() {
                       type="button"
                       className={[
                         'channel-tabs__btn',
-                        verificationChannel === 'phone' ? 'channel-tabs__btn--active' : '',
-                        !smsRegistrationEnabled ? 'channel-tabs__btn--disabled' : '',
-                      ].filter(Boolean).join(' ')}
+                        verificationChannel === 'phone'
+                          ? 'channel-tabs__btn--active'
+                          : '',
+                        !smsRegistrationEnabled
+                          ? 'channel-tabs__btn--disabled'
+                          : '',
+                      ]
+                        .filter(Boolean)
+                        .join(' ')}
                       onClick={handleSmsChannelClick}
                       aria-disabled={!smsRegistrationEnabled}
                     >
@@ -706,18 +812,28 @@ function LoginPageInner() {
                         id="email"
                         type="email"
                         value={email}
-                        onChange={(e) => { setEmail(e.target.value); clearFieldError('email'); }}
+                        onChange={(e) => {
+                          setEmail(e.target.value);
+                          clearFieldError('email');
+                        }}
                         invalid={!!fieldErrors.email}
                         autoComplete="email"
                         placeholder={ph.email}
                       />
                     </FormField>
-                    <FormField id="phone" label="Телефон" error={fieldErrors.phone}>
+                    <FormField
+                      id="phone"
+                      label="Телефон"
+                      error={fieldErrors.phone}
+                    >
                       <FormInput
                         id="phone"
                         type="tel"
                         value={phone}
-                        onChange={(e) => { setPhone(e.target.value); clearFieldError('phone'); }}
+                        onChange={(e) => {
+                          setPhone(e.target.value);
+                          clearFieldError('phone');
+                        }}
                         onBlur={handlePhoneBlur}
                         invalid={!!fieldErrors.phone}
                         placeholder={ph.phone}
@@ -726,12 +842,20 @@ function LoginPageInner() {
                   </>
                 ) : (
                   <>
-                    <FormField id="phone" label="Телефон" required error={fieldErrors.phone}>
+                    <FormField
+                      id="phone"
+                      label="Телефон"
+                      required
+                      error={fieldErrors.phone}
+                    >
                       <FormInput
                         id="phone"
                         type="tel"
                         value={phone}
-                        onChange={(e) => { setPhone(e.target.value); clearFieldError('phone'); }}
+                        onChange={(e) => {
+                          setPhone(e.target.value);
+                          clearFieldError('phone');
+                        }}
                         onBlur={handlePhoneBlur}
                         invalid={!!fieldErrors.phone}
                         placeholder={ph.phone}
@@ -747,7 +871,10 @@ function LoginPageInner() {
                         id="email"
                         type="text"
                         value={email}
-                        onChange={(e) => { setEmail(e.target.value); clearFieldError('email'); }}
+                        onChange={(e) => {
+                          setEmail(e.target.value);
+                          clearFieldError('email');
+                        }}
                         invalid={!!fieldErrors.email}
                         autoComplete="email"
                         placeholder={ph.email}
@@ -766,17 +893,22 @@ function LoginPageInner() {
                     : 'Введите 6-значный код, отправленный на '}
                   <span className="font-medium">{verificationTarget}</span>
                 </p>
-                {verificationChannel === 'phone' && pushStatus === 'waiting' && (
-                  <div className="surface-muted rounded p-3">
-                    <div className="text-sm text-[var(--muted)]">
-                      <span className="inline-block h-2 w-2 rounded-full bg-[var(--primary)] animate-pulse mr-2" />
-                      Вы получили push. Ожидаем ответ от сервера…
+                {verificationChannel === 'phone' &&
+                  pushStatus === 'waiting' && (
+                    <div className="surface-muted rounded p-3">
+                      <div className="text-sm text-[var(--muted)]">
+                        <span className="inline-block h-2 w-2 rounded-full bg-[var(--primary)] animate-pulse mr-2" />
+                        Вы получили push. Ожидаем ответ от сервера…
+                      </div>
                     </div>
-                  </div>
-                )}
+                  )}
                 <FormField
                   id="verificationCode"
-                  label={verificationChannel === 'phone' ? 'Код из SMS (если пришёл вместо push)' : 'Код подтверждения'}
+                  label={
+                    verificationChannel === 'phone'
+                      ? 'Код из SMS (если пришёл вместо push)'
+                      : 'Код подтверждения'
+                  }
                   required={verificationChannel === 'email'}
                   error={fieldErrors.code}
                 >
@@ -787,7 +919,9 @@ function LoginPageInner() {
                     value={verificationCode}
                     onChange={(e) => {
                       const maxLen = verificationChannel === 'phone' ? 8 : 6;
-                      setVerificationCode(e.target.value.replace(/\D/g, '').slice(0, maxLen));
+                      setVerificationCode(
+                        e.target.value.replace(/\D/g, '').slice(0, maxLen),
+                      );
                       clearFieldError('code');
                     }}
                     invalid={!!fieldErrors.code}
@@ -806,12 +940,20 @@ function LoginPageInner() {
 
             {mode === 'login' && (
               <>
-                <FormField id="login" label="Логин, email или телефон" required error={fieldErrors.email}>
+                <FormField
+                  id="login"
+                  label="Логин, email или телефон"
+                  required
+                  error={fieldErrors.email}
+                >
                   <FormInput
                     id="login"
                     type="text"
                     value={login}
-                    onChange={(e) => { setLogin(e.target.value); clearFieldError('email'); }}
+                    onChange={(e) => {
+                      setLogin(e.target.value);
+                      clearFieldError('email');
+                    }}
                     onBlur={() => {
                       const normalized = normalizeRuMobilePhone(login);
                       if (normalized) setLogin(formatRuMobilePhone(normalized));
@@ -821,11 +963,19 @@ function LoginPageInner() {
                     placeholder={ph.login}
                   />
                 </FormField>
-                <FormField id="password" label="Пароль" required error={fieldErrors.password}>
+                <FormField
+                  id="password"
+                  label="Пароль"
+                  required
+                  error={fieldErrors.password}
+                >
                   <PasswordInput
                     id="password"
                     value={password}
-                    onChange={(e) => { setPassword(e.target.value); clearFieldError('password'); }}
+                    onChange={(e) => {
+                      setPassword(e.target.value);
+                      clearFieldError('password');
+                    }}
                     invalid={!!fieldErrors.password}
                     autoComplete="current-password"
                   />
@@ -844,20 +994,37 @@ function LoginPageInner() {
 
             {mode === 'register' && registerStep === 'form' && (
               <>
-                <FormField id="password" label="Пароль" required error={fieldErrors.password} hint="Минимум 6 символов">
+                <FormField
+                  id="password"
+                  label="Пароль"
+                  required
+                  error={fieldErrors.password}
+                  hint="Минимум 6 символов"
+                >
                   <PasswordInput
                     id="password"
                     value={password}
-                    onChange={(e) => { setPassword(e.target.value); clearFieldError('password'); }}
+                    onChange={(e) => {
+                      setPassword(e.target.value);
+                      clearFieldError('password');
+                    }}
                     invalid={!!fieldErrors.password}
                     autoComplete="new-password"
                   />
                 </FormField>
-                <FormField id="passwordConfirm" label="Повторите пароль" required error={fieldErrors.passwordConfirm}>
+                <FormField
+                  id="passwordConfirm"
+                  label="Повторите пароль"
+                  required
+                  error={fieldErrors.passwordConfirm}
+                >
                   <PasswordInput
                     id="passwordConfirm"
                     value={passwordConfirm}
-                    onChange={(e) => { setPasswordConfirm(e.target.value); clearFieldError('passwordConfirm'); }}
+                    onChange={(e) => {
+                      setPasswordConfirm(e.target.value);
+                      clearFieldError('passwordConfirm');
+                    }}
                     invalid={!!fieldErrors.passwordConfirm}
                     autoComplete="new-password"
                   />
@@ -866,15 +1033,24 @@ function LoginPageInner() {
             )}
 
             {mode === 'forgot' && forgotStep === 'request' && (
-              <FormField id="resetPhone" label="Телефон аккаунта" required error={fieldErrors.phone}>
+              <FormField
+                id="resetPhone"
+                label="Телефон аккаунта"
+                required
+                error={fieldErrors.phone}
+              >
                 <FormInput
                   id="resetPhone"
                   type="tel"
                   value={resetPhone}
-                  onChange={(e) => { setResetPhone(e.target.value); clearFieldError('phone'); }}
+                  onChange={(e) => {
+                    setResetPhone(e.target.value);
+                    clearFieldError('phone');
+                  }}
                   onBlur={() => {
                     const normalized = normalizeRuMobilePhone(resetPhone);
-                    if (normalized) setResetPhone(formatRuMobilePhone(normalized));
+                    if (normalized)
+                      setResetPhone(formatRuMobilePhone(normalized));
                   }}
                   invalid={!!fieldErrors.phone}
                   autoComplete="tel"
@@ -895,22 +1071,40 @@ function LoginPageInner() {
             {mode === 'forgot' && forgotStep === 'confirm' && (
               <>
                 <p className="text-sm text-[var(--text)]">
-                  Номер <span className="font-medium">{resetPhone}</span> подтверждён. Установите новый пароль.
+                  Номер <span className="font-medium">{resetPhone}</span>{' '}
+                  подтверждён. Установите новый пароль.
                 </p>
-                <FormField id="newPassword" label="Новый пароль" required error={fieldErrors.password} hint="Минимум 6 символов">
+                <FormField
+                  id="newPassword"
+                  label="Новый пароль"
+                  required
+                  error={fieldErrors.password}
+                  hint="Минимум 6 символов"
+                >
                   <PasswordInput
                     id="newPassword"
                     value={password}
-                    onChange={(e) => { setPassword(e.target.value); clearFieldError('password'); }}
+                    onChange={(e) => {
+                      setPassword(e.target.value);
+                      clearFieldError('password');
+                    }}
                     invalid={!!fieldErrors.password}
                     autoComplete="new-password"
                   />
                 </FormField>
-                <FormField id="newPasswordConfirm" label="Повторите пароль" required error={fieldErrors.passwordConfirm}>
+                <FormField
+                  id="newPasswordConfirm"
+                  label="Повторите пароль"
+                  required
+                  error={fieldErrors.passwordConfirm}
+                >
                   <PasswordInput
                     id="newPasswordConfirm"
                     value={passwordConfirm}
-                    onChange={(e) => { setPasswordConfirm(e.target.value); clearFieldError('passwordConfirm'); }}
+                    onChange={(e) => {
+                      setPasswordConfirm(e.target.value);
+                      clearFieldError('passwordConfirm');
+                    }}
                     invalid={!!fieldErrors.passwordConfirm}
                     autoComplete="new-password"
                   />
@@ -932,16 +1126,24 @@ function LoginPageInner() {
 
             {mode === 'forgot' && (contactPhone || contactEmail) && (
               <div className="text-sm text-[var(--muted)] bg-[var(--surface-muted)] px-3 py-2 rounded-md border border-[var(--border)] space-y-1">
-                <p className="font-medium text-[var(--text)]">Связаться с администратором</p>
+                <p className="font-medium text-[var(--text)]">
+                  Связаться с администратором
+                </p>
                 {contactPhone && (
-                  <a href={`tel:${contactPhone}`} className="inline-flex items-center gap-1.5 text-[var(--primary)] hover:underline">
+                  <a
+                    href={`tel:${contactPhone}`}
+                    className="inline-flex items-center gap-1.5 text-[var(--primary)] hover:underline"
+                  >
                     <Phone className="w-3.5 h-3.5" />
                     {contactPhone}
                   </a>
                 )}
                 {contactEmail && (
                   <div>
-                    <a href={`mailto:${contactEmail}`} className="inline-flex items-center gap-1.5 text-[var(--primary)] hover:underline">
+                    <a
+                      href={`mailto:${contactEmail}`}
+                      className="inline-flex items-center gap-1.5 text-[var(--primary)] hover:underline"
+                    >
                       <Mail className="w-3.5 h-3.5" />
                       {contactEmail}
                     </a>
@@ -952,24 +1154,40 @@ function LoginPageInner() {
 
             <FormErrorBanner message={formError} />
 
-            {mode !== 'forgot' || forgotStep !== 'waiting' ? !(mode === 'register'
-              && registerStep === 'verify'
-              && verificationChannel === 'phone'
-              && !verificationCode) && (
-               <button type="submit" className="btn btn-primary w-full" disabled={loading}>
-                 {submitLabel}
-               </button>
-              ) : null}
+            {mode !== 'forgot' || forgotStep !== 'waiting'
+              ? !(
+                  mode === 'register' &&
+                  registerStep === 'verify' &&
+                  verificationChannel === 'phone' &&
+                  !verificationCode
+                ) && (
+                  <button
+                    type="submit"
+                    className="btn btn-primary w-full"
+                    disabled={loading}
+                  >
+                    {submitLabel}
+                  </button>
+                )
+              : null}
 
             {mode === 'register' && registerStep === 'verify' && (
               <div className="flex flex-col sm:flex-row gap-2">
-                <button type="button" className="btn btn-secondary flex-1" disabled={loading} onClick={backToRegisterForm}>
+                <button
+                  type="button"
+                  className="btn btn-secondary flex-1"
+                  disabled={loading}
+                  onClick={backToRegisterForm}
+                >
                   Изменить данные
                 </button>
                 <button
                   type="button"
                   className="btn btn-secondary flex-1"
-                  disabled={loading || (verificationChannel === 'phone' && smsResendIn > 0)}
+                  disabled={
+                    loading ||
+                    (verificationChannel === 'phone' && smsResendIn > 0)
+                  }
                   onClick={() => void handleResendCode()}
                 >
                   {verificationChannel === 'phone' && smsResendIn > 0
@@ -1006,7 +1224,9 @@ function LoginPageInner() {
 
           {devAccounts.length > 0 && mode === 'login' && (
             <div className="mt-6 pt-4 border-t border-[var(--border)]">
-              <p className="text-xs font-medium text-[var(--text)] mb-3">Быстрый вход (тестовые учётки)</p>
+              <p className="text-xs font-medium text-[var(--text)] mb-3">
+                Быстрый вход (тестовые учётки)
+              </p>
               <div className="grid grid-cols-2 gap-2">
                 {devAccounts.map((account) => (
                   <button
@@ -1014,7 +1234,9 @@ function LoginPageInner() {
                     type="button"
                     className="btn btn-secondary text-xs py-2 px-2"
                     disabled={loading}
-                    onClick={() => handleQuickLogin(account.email, account.password)}
+                    onClick={() =>
+                      handleQuickLogin(account.email, account.password)
+                    }
                   >
                     {account.label}
                   </button>
@@ -1032,12 +1254,12 @@ function LoginPageInner() {
 export default function LoginPage() {
   return (
     <Suspense
-      fallback={(
+      fallback={
         <div className="min-h-screen flex flex-col items-center justify-center gap-3">
           <div className="animate-pulse text-[var(--muted)]">Загрузка...</div>
           <AppVersion />
         </div>
-      )}
+      }
     >
       <LoginPageInner />
     </Suspense>

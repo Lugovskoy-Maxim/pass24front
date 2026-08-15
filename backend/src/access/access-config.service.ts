@@ -1,7 +1,10 @@
 import { BadRequestException, Injectable, OnModuleInit } from '@nestjs/common';
 import { InjectModel } from '@nestjs/mongoose';
 import { Model } from 'mongoose';
-import { AccessConfig, AccessConfigDocument } from '../schemas/access-config.schema';
+import {
+  AccessConfig,
+  AccessConfigDocument,
+} from '../schemas/access-config.schema';
 import {
   ALL_PASS_TYPES,
   ALL_PERMISSIONS,
@@ -26,7 +29,8 @@ const ROLE_KEY_PATTERN = /^[a-z][a-z0-9_]*$/;
 @Injectable()
 export class AccessConfigService implements OnModuleInit {
   constructor(
-    @InjectModel(AccessConfig.name) private accessConfigModel: Model<AccessConfigDocument>,
+    @InjectModel(AccessConfig.name)
+    private accessConfigModel: Model<AccessConfigDocument>,
   ) {}
 
   async onModuleInit() {
@@ -39,7 +43,10 @@ export class AccessConfigService implements OnModuleInit {
       await this.accessConfigModel.create({
         key: 'default',
         enabledPassTypes: [...ALL_PASS_TYPES],
-        rolePermissions: { ...DEFAULT_ROLE_PERMISSIONS, ...DEFAULT_EMPLOYEE_ROLE_PERMISSIONS },
+        rolePermissions: {
+          ...DEFAULT_ROLE_PERMISSIONS,
+          ...DEFAULT_EMPLOYEE_ROLE_PERMISSIONS,
+        },
         roleLabels: { ...BUILTIN_EMPLOYEE_ROLE_LABELS },
       });
       return;
@@ -71,8 +78,13 @@ export class AccessConfigService implements OnModuleInit {
     }
 
     for (const [role, perms] of Object.entries(existing.rolePermissions)) {
-      const sanitized = [...new Set((perms || []).filter((p) => validKeys.has(p)))];
-      const defaults = DEFAULT_ROLE_PERMISSIONS[role] || DEFAULT_EMPLOYEE_ROLE_PERMISSIONS[role] || [];
+      const sanitized = [
+        ...new Set((perms || []).filter((p) => validKeys.has(p))),
+      ];
+      const defaults =
+        DEFAULT_ROLE_PERMISSIONS[role] ||
+        DEFAULT_EMPLOYEE_ROLE_PERMISSIONS[role] ||
+        [];
 
       for (const perm of defaults) {
         if (!sanitized.includes(perm)) {
@@ -86,7 +98,10 @@ export class AccessConfigService implements OnModuleInit {
         changed = true;
       }
 
-      if (sanitized.length !== perms.length || sanitized.some((p, i) => p !== perms[i])) {
+      if (
+        sanitized.length !== perms.length ||
+        sanitized.some((p, i) => p !== perms[i])
+      ) {
         existing.rolePermissions[role] = sanitized;
         changed = true;
       }
@@ -115,12 +130,18 @@ export class AccessConfigService implements OnModuleInit {
     if (!doc) throw new BadRequestException('Конфигурация не найдена');
 
     if (data.enabledPassTypes) {
-      const invalid = data.enabledPassTypes.filter((t) => !ALL_PASS_TYPES.includes(t as any));
+      const invalid = data.enabledPassTypes.filter(
+        (t) => !ALL_PASS_TYPES.includes(t as any),
+      );
       if (invalid.length) {
-        throw new BadRequestException(`Неизвестные типы пропусков: ${invalid.join(', ')}`);
+        throw new BadRequestException(
+          `Неизвестные типы пропусков: ${invalid.join(', ')}`,
+        );
       }
       if (data.enabledPassTypes.length === 0) {
-        throw new BadRequestException('Должен быть включён хотя бы один тип пропуска');
+        throw new BadRequestException(
+          'Должен быть включён хотя бы один тип пропуска',
+        );
       }
       doc.enabledPassTypes = data.enabledPassTypes;
     }
@@ -130,13 +151,17 @@ export class AccessConfigService implements OnModuleInit {
 
       for (const role of SYSTEM_ROLES) {
         if (!data.rolePermissions[role]) {
-          throw new BadRequestException(`Нельзя удалить системную роль: ${role}`);
+          throw new BadRequestException(
+            `Нельзя удалить системную роль: ${role}`,
+          );
         }
       }
 
       for (const role of BUILTIN_EMPLOYEE_ROLES) {
         if (!data.rolePermissions[role]) {
-          throw new BadRequestException(`Нельзя удалить встроенную роль сотрудника: ${role}`);
+          throw new BadRequestException(
+            `Нельзя удалить встроенную роль сотрудника: ${role}`,
+          );
         }
       }
 
@@ -147,13 +172,20 @@ export class AccessConfigService implements OnModuleInit {
       }
 
       for (const [role, perms] of Object.entries(data.rolePermissions)) {
-        doc.rolePermissions[role] = (perms || []).filter((p) => validKeys.has(p));
+        doc.rolePermissions[role] = (perms || []).filter((p) =>
+          validKeys.has(p),
+        );
       }
 
       for (const [role, defaults] of Object.entries(DEFAULT_ROLE_PERMISSIONS)) {
         const current = doc.rolePermissions[role] || [];
         if (current.includes('admin.panel')) {
-          for (const perm of ['passes.view_all', 'passes.reception', 'passes.lookup', ...defaults]) {
+          for (const perm of [
+            'passes.view_all',
+            'passes.reception',
+            'passes.lookup',
+            ...defaults,
+          ]) {
             if (!current.includes(perm)) current.push(perm);
           }
           doc.rolePermissions[role] = current;
@@ -162,7 +194,10 @@ export class AccessConfigService implements OnModuleInit {
 
       if (!doc.rolePermissions.admin?.includes('admin.permissions')) {
         doc.rolePermissions.admin = [
-          ...new Set([...(doc.rolePermissions.admin || []), 'admin.permissions']),
+          ...new Set([
+            ...(doc.rolePermissions.admin || []),
+            'admin.permissions',
+          ]),
         ];
       }
 
@@ -213,7 +248,9 @@ export class AccessConfigService implements OnModuleInit {
   async assertEmployeeRole(role: string) {
     const config = await this.getConfig();
     if (SYSTEM_ROLES.includes(role as any)) {
-      throw new BadRequestException('Нельзя назначить системную роль сотруднику компании');
+      throw new BadRequestException(
+        'Нельзя назначить системную роль сотруднику компании',
+      );
     }
     if (!config.rolePermissions[role]) {
       throw new BadRequestException('Неизвестный тип пользователя');
@@ -230,7 +267,10 @@ export class AccessConfigService implements OnModuleInit {
     return perms.includes(permission);
   }
 
-  async canViewAllPasses(role: string, parentTenantId?: string): Promise<boolean> {
+  async canViewAllPasses(
+    role: string,
+    parentTenantId?: string,
+  ): Promise<boolean> {
     if (role === 'tenant' || parentTenantId) return false;
     if (await this.hasPermission(role, 'passes.view_all')) return true;
     return this.hasPermission(role, 'admin.panel');

@@ -55,9 +55,13 @@ export function PassOfficeHighlight({
         shortCode ? 'pass-card__office--code' : 'pass-card__office--named',
         alignClass,
         className,
-      ].filter(Boolean).join(' ')}
+      ]
+        .filter(Boolean)
+        .join(' ')}
     >
-      <div className={`text-[9px] sm:text-[10px] uppercase tracking-wide text-[var(--muted)] leading-none mb-0.5 truncate ${alignClass}`}>
+      <div
+        className={`text-[9px] sm:text-[10px] uppercase tracking-wide text-[var(--muted)] leading-none mb-0.5 truncate ${alignClass}`}
+      >
         {label}
       </div>
       <div

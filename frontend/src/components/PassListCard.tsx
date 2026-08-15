@@ -11,11 +11,7 @@ import {
   Wrench,
 } from 'lucide-react';
 import { Pass, PassType, TYPE_LABELS } from '@/lib/api';
-import {
-  getGuestOverdueKind,
-  getUiLabels,
-  UiLabels,
-} from '@/lib/ui-labels';
+import { getGuestOverdueKind, getUiLabels, UiLabels } from '@/lib/ui-labels';
 import {
   getPassCardShellClass,
   getPassIconTileClass,
@@ -61,11 +57,16 @@ export function PassListCard({
   const overdueKind = getGuestOverdueKind(pass);
   const stillInside = overdueKind !== null;
   const visitDateLabel = formatVisitDateLabel(pass.visitDate);
-  const visitWindow = formatVisitTimeWindow(pass.visitTimeFrom, pass.visitTimeTo);
+  const visitWindow = formatVisitTimeWindow(
+    pass.visitTimeFrom,
+    pass.visitTimeTo,
+  );
   const visitMeta = [visitDateLabel, visitWindow].filter(Boolean).join(' · ');
   const typeLabel = TYPE_LABELS[pass.passType as PassType];
   const metaParts = [visitMeta, typeLabel].filter(Boolean);
-  const metaTitle = [pass.visitDate, typeLabel, visitWindow].filter(Boolean).join(' · ');
+  const metaTitle = [pass.visitDate, typeLabel, visitWindow]
+    .filter(Boolean)
+    .join(' · ');
   const officeInline = formatOfficeDestination({
     office: pass.office,
     floor: pass.floor,
@@ -86,7 +87,10 @@ export function PassListCard({
 
   const inner = (
     <div className="flex items-stretch min-w-0 w-full">
-      <div className={getPassStatusStripeClass(pass.status, stillInside)} aria-hidden />
+      <div
+        className={getPassStatusStripeClass(pass.status, stillInside)}
+        aria-hidden
+      />
 
       <div className="pass-card__body pass-card__body--row px-3 py-2.5 min-w-0">
         {pass.companyLogo ? (
@@ -99,7 +103,9 @@ export function PassListCard({
             />
           </div>
         ) : (
-          <div className={`w-9 h-9 rounded-lg shrink-0 ${getPassIconTileClass(pass.status, stillInside)} self-center flex items-center justify-center`}>
+          <div
+            className={`w-9 h-9 rounded-lg shrink-0 ${getPassIconTileClass(pass.status, stillInside)} self-center flex items-center justify-center`}
+          >
             <Icon className="w-4 h-4" />
           </div>
         )}
@@ -110,7 +116,12 @@ export function PassListCard({
               {pass.visitorName}
             </div>
             <div className="pass-card__badges">
-              <StatusBadge status={pass.status} labels={labels} size="sm" overdueKind={overdueKind} />
+              <StatusBadge
+                status={pass.status}
+                labels={labels}
+                size="sm"
+                overdueKind={overdueKind}
+              />
             </div>
           </div>
 
@@ -118,12 +129,22 @@ export function PassListCard({
             <PassNumber value={pass.passNumber} size="sm" />
           </div>
 
-          <p className="pass-card__meta-line mt-0.5 text-[11px] text-[var(--muted)]" title={metaTitle}>
-            <span className="pass-card__visit-date text-[var(--text)] font-medium">{metaParts[0]}</span>
+          <p
+            className="pass-card__meta-line mt-0.5 text-[11px] text-[var(--muted)]"
+            title={metaTitle}
+          >
+            <span className="pass-card__visit-date text-[var(--text)] font-medium">
+              {metaParts[0]}
+            </span>
             {metaParts.length > 1 && (
-              <span className="text-[var(--muted)]"> · {metaParts.slice(1).join(' · ')}</span>
+              <span className="text-[var(--muted)]">
+                {' '}
+                · {metaParts.slice(1).join(' · ')}
+              </span>
             )}
-            <span className="pass-card__office--inline ml-1">· {officeInline}</span>
+            <span className="pass-card__office--inline ml-1">
+              · {officeInline}
+            </span>
           </p>
 
           <div className="pass-card__chips mt-1 text-[11px] text-[var(--muted)]">
@@ -146,7 +167,10 @@ export function PassListCard({
               </span>
             )}
             {pass.vehiclePlate && (
-              <span className="pass-card__chip font-mono" title={pass.vehiclePlate}>
+              <span
+                className="pass-card__chip font-mono"
+                title={pass.vehiclePlate}
+              >
                 <Car className="w-3 h-3 shrink-0" />
                 {pass.vehiclePlate}
               </span>
@@ -184,7 +208,11 @@ export function PassListCard({
   );
 
   if (href) {
-    return <Link href={href} className={className}>{inner}</Link>;
+    return (
+      <Link href={href} className={className}>
+        {inner}
+      </Link>
+    );
   }
 
   // Use div (not button) so nested action controls are valid HTML

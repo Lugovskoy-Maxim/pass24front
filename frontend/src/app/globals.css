@@ -1,4 +1,4 @@
-@import "tailwindcss";
+@import 'tailwindcss';
 
 :root {
   --m-accent: #eb711c;
@@ -14,7 +14,7 @@
   --radius-sm: 4px;
 }
 
-[data-theme="dark"] {
+[data-theme='dark'] {
   color-scheme: dark;
   --bg: #323232;
   --foreground: #ececec;
@@ -100,7 +100,7 @@
   --toast-warning-border: rgba(245, 158, 11, 0.35);
 }
 
-[data-theme="light"] {
+[data-theme='light'] {
   color-scheme: light;
   --bg: #e6e6e4;
   --foreground: #202020;
@@ -193,13 +193,22 @@
 body {
   background: var(--bg);
   color: var(--foreground);
-  font-family: var(--font-manrope), "Manrope", system-ui, -apple-system, "Segoe UI", Roboto, sans-serif;
+  font-family:
+    var(--font-manrope),
+    'Manrope',
+    system-ui,
+    -apple-system,
+    'Segoe UI',
+    Roboto,
+    sans-serif;
   min-height: 100vh;
   -webkit-font-smoothing: antialiased;
   -moz-osx-font-smoothing: grayscale;
 }
 
-h1, h2, h3 {
+h1,
+h2,
+h3 {
   letter-spacing: -0.02em;
 }
 
@@ -213,7 +222,10 @@ h1, h2, h3 {
   font-weight: 500;
   font-size: 0.875rem;
   letter-spacing: -0.01em;
-  transition: background 0.15s, border-color 0.15s, color 0.15s;
+  transition:
+    background 0.15s,
+    border-color 0.15s,
+    color 0.15s;
   cursor: pointer;
   border: none;
 }
@@ -234,9 +246,18 @@ h1, h2, h3 {
   background: var(--surface-muted);
   border-color: var(--border);
 }
-.btn-success { background: var(--success); color: var(--on-accent); }
-.btn-danger { background: var(--danger); color: var(--on-accent); }
-.btn:disabled { opacity: 0.5; cursor: not-allowed; }
+.btn-success {
+  background: var(--success);
+  color: var(--on-accent);
+}
+.btn-danger {
+  background: var(--danger);
+  color: var(--on-accent);
+}
+.btn:disabled {
+  opacity: 0.5;
+  cursor: not-allowed;
+}
 .btn-sm {
   padding: 0.375rem 0.625rem;
   font-size: 0.75rem;
@@ -261,7 +282,10 @@ h1, h2, h3 {
   font-family: inherit;
   background-color: var(--surface);
   color: var(--text);
-  transition: border-color 0.15s, box-shadow 0.15s, background-color 0.15s;
+  transition:
+    border-color 0.15s,
+    box-shadow 0.15s,
+    background-color 0.15s;
   appearance: none;
 }
 
@@ -276,13 +300,13 @@ h1, h2, h3 {
 }
 
 .input--invalid,
-.input[aria-invalid="true"] {
+.input[aria-invalid='true'] {
   border-color: var(--input-error-border);
   background-color: var(--input-error-bg);
 }
 
 .input--invalid:focus,
-.input[aria-invalid="true"]:focus {
+.input[aria-invalid='true']:focus {
   border-color: var(--input-error-border);
   box-shadow: 0 0 0 3px var(--input-error-ring);
 }
@@ -419,11 +443,11 @@ select.input option:disabled {
   color: var(--muted);
 }
 
-[data-theme="dark"] select.input {
+[data-theme='dark'] select.input {
   color-scheme: dark;
 }
 
-[data-theme="light"] select.input {
+[data-theme='light'] select.input {
   color-scheme: light;
 }
 
@@ -431,14 +455,14 @@ select.input::-ms-expand {
   display: none;
 }
 
-input[type="date"].input,
-input[type="time"].input,
-input[type="datetime-local"].input {
+input[type='date'].input,
+input[type='time'].input,
+input[type='datetime-local'].input {
   min-width: 9.5rem;
 }
 
-input[type="checkbox"].checkbox,
-input[type="checkbox"]:not(.checkbox) {
+input[type='checkbox'].checkbox,
+input[type='checkbox']:not(.checkbox) {
   width: 1rem;
   height: 1rem;
   min-height: 1rem;
@@ -547,7 +571,10 @@ input[type="checkbox"]:not(.checkbox) {
   font-weight: 500;
   border-radius: calc(var(--radius-sm) - 2px);
   color: var(--muted);
-  transition: background-color 0.15s, color 0.15s, box-shadow 0.15s;
+  transition:
+    background-color 0.15s,
+    color 0.15s,
+    box-shadow 0.15s;
 }
 
 .channel-tabs__btn:hover:not(.channel-tabs__btn--active) {
@@ -598,12 +625,18 @@ input[type="checkbox"]:not(.checkbox) {
 }
 
 .bg-gradient-surface {
-  background: linear-gradient(to bottom, var(--gradient-surface-from), var(--gradient-surface-to));
+  background: linear-gradient(
+    to bottom,
+    var(--gradient-surface-from),
+    var(--gradient-surface-to)
+  );
 }
 
 .nav-link {
   color: var(--header-muted);
-  transition: color 0.15s, background 0.15s;
+  transition:
+    color 0.15s,
+    background 0.15s;
 }
 .nav-link:hover {
   color: var(--header-text);
@@ -618,7 +651,9 @@ input[type="checkbox"]:not(.checkbox) {
 
 .nav-link-light {
   color: var(--muted);
-  transition: color 0.15s, background 0.15s;
+  transition:
+    color 0.15s,
+    background 0.15s;
 }
 .nav-link-light:hover {
   color: var(--text);
@@ -666,7 +701,10 @@ input[type="checkbox"]:not(.checkbox) {
   overflow: hidden;
   max-width: 100%;
   min-width: 0;
-  transition: border-color 0.15s, box-shadow 0.15s, transform 0.15s;
+  transition:
+    border-color 0.15s,
+    box-shadow 0.15s,
+    transform 0.15s;
 }
 
 .pass-card__body {
@@ -1146,7 +1184,10 @@ a.pass-detail__chip:hover,
   background: color-mix(in srgb, var(--link) 8%, transparent);
   border: 1px solid color-mix(in srgb, var(--link) 18%, transparent);
   max-width: 100%;
-  transition: background 0.15s, border-color 0.15s, color 0.15s;
+  transition:
+    background 0.15s,
+    border-color 0.15s,
+    color 0.15s;
 }
 
 .pass-detail__history-link:hover {
@@ -1203,7 +1244,7 @@ a.pass-detail__chip:hover,
   box-shadow: 0 4px 14px rgba(0, 0, 0, 0.12);
 }
 
-[data-theme="dark"] .pass-card--interactive:hover {
+[data-theme='dark'] .pass-card--interactive:hover {
   box-shadow: 0 4px 16px rgba(0, 0, 0, 0.38);
 }
 
@@ -1217,14 +1258,30 @@ a.pass-detail__chip:hover,
   box-shadow: var(--card-shadow);
 }
 
-.pass-card--selected-pending { box-shadow: 0 0 0 2px var(--status-pending-ring); }
-.pass-card--selected-approved { box-shadow: 0 0 0 2px var(--status-approved-ring); }
-.pass-card--selected-active { box-shadow: 0 0 0 2px var(--status-active-ring); }
-.pass-card--selected-rejected { box-shadow: 0 0 0 2px var(--status-rejected-ring); }
-.pass-card--selected-completed { box-shadow: 0 0 0 2px var(--status-completed-ring); }
-.pass-card--selected-expired { box-shadow: 0 0 0 2px var(--status-expired-ring); }
-.pass-card--selected-cancelled { box-shadow: 0 0 0 2px var(--status-cancelled-ring); }
-.pass-card--selected-overdue { box-shadow: 0 0 0 2px var(--status-overdue-ring); }
+.pass-card--selected-pending {
+  box-shadow: 0 0 0 2px var(--status-pending-ring);
+}
+.pass-card--selected-approved {
+  box-shadow: 0 0 0 2px var(--status-approved-ring);
+}
+.pass-card--selected-active {
+  box-shadow: 0 0 0 2px var(--status-active-ring);
+}
+.pass-card--selected-rejected {
+  box-shadow: 0 0 0 2px var(--status-rejected-ring);
+}
+.pass-card--selected-completed {
+  box-shadow: 0 0 0 2px var(--status-completed-ring);
+}
+.pass-card--selected-expired {
+  box-shadow: 0 0 0 2px var(--status-expired-ring);
+}
+.pass-card--selected-cancelled {
+  box-shadow: 0 0 0 2px var(--status-cancelled-ring);
+}
+.pass-card--selected-overdue {
+  box-shadow: 0 0 0 2px var(--status-overdue-ring);
+}
 
 .pass-stripe {
   width: 7px;
@@ -1240,23 +1297,119 @@ a.pass-detail__chip:hover,
   flex-shrink: 0;
 }
 
-.pass-stripe-top--pending { background: linear-gradient(90deg, var(--status-pending), color-mix(in srgb, var(--status-pending) 72%, #000)); }
-.pass-stripe-top--approved { background: linear-gradient(90deg, var(--status-approved), color-mix(in srgb, var(--status-approved) 72%, #000)); }
-.pass-stripe-top--active { background: linear-gradient(90deg, var(--status-active), color-mix(in srgb, var(--status-active) 72%, #000)); }
-.pass-stripe-top--rejected { background: linear-gradient(90deg, var(--status-rejected), color-mix(in srgb, var(--status-rejected) 72%, #000)); }
-.pass-stripe-top--completed { background: linear-gradient(90deg, var(--status-completed), color-mix(in srgb, var(--status-completed) 72%, #000)); }
-.pass-stripe-top--expired { background: linear-gradient(90deg, var(--status-expired), color-mix(in srgb, var(--status-expired) 72%, #000)); }
-.pass-stripe-top--cancelled { background: linear-gradient(90deg, var(--status-cancelled), color-mix(in srgb, var(--status-cancelled) 72%, #000)); }
-.pass-stripe-top--overdue { background: linear-gradient(90deg, var(--status-overdue), color-mix(in srgb, var(--status-overdue) 72%, #000)); }
+.pass-stripe-top--pending {
+  background: linear-gradient(
+    90deg,
+    var(--status-pending),
+    color-mix(in srgb, var(--status-pending) 72%, #000)
+  );
+}
+.pass-stripe-top--approved {
+  background: linear-gradient(
+    90deg,
+    var(--status-approved),
+    color-mix(in srgb, var(--status-approved) 72%, #000)
+  );
+}
+.pass-stripe-top--active {
+  background: linear-gradient(
+    90deg,
+    var(--status-active),
+    color-mix(in srgb, var(--status-active) 72%, #000)
+  );
+}
+.pass-stripe-top--rejected {
+  background: linear-gradient(
+    90deg,
+    var(--status-rejected),
+    color-mix(in srgb, var(--status-rejected) 72%, #000)
+  );
+}
+.pass-stripe-top--completed {
+  background: linear-gradient(
+    90deg,
+    var(--status-completed),
+    color-mix(in srgb, var(--status-completed) 72%, #000)
+  );
+}
+.pass-stripe-top--expired {
+  background: linear-gradient(
+    90deg,
+    var(--status-expired),
+    color-mix(in srgb, var(--status-expired) 72%, #000)
+  );
+}
+.pass-stripe-top--cancelled {
+  background: linear-gradient(
+    90deg,
+    var(--status-cancelled),
+    color-mix(in srgb, var(--status-cancelled) 72%, #000)
+  );
+}
+.pass-stripe-top--overdue {
+  background: linear-gradient(
+    90deg,
+    var(--status-overdue),
+    color-mix(in srgb, var(--status-overdue) 72%, #000)
+  );
+}
 
-.pass-stripe--pending { background: linear-gradient(180deg, var(--status-pending), color-mix(in srgb, var(--status-pending) 75%, #000)); }
-.pass-stripe--approved { background: linear-gradient(180deg, var(--status-approved), color-mix(in srgb, var(--status-approved) 75%, #000)); }
-.pass-stripe--active { background: linear-gradient(180deg, var(--status-active), color-mix(in srgb, var(--status-active) 75%, #000)); }
-.pass-stripe--rejected { background: linear-gradient(180deg, var(--status-rejected), color-mix(in srgb, var(--status-rejected) 75%, #000)); }
-.pass-stripe--completed { background: linear-gradient(180deg, var(--status-completed), color-mix(in srgb, var(--status-completed) 75%, #000)); }
-.pass-stripe--expired { background: linear-gradient(180deg, var(--status-expired), color-mix(in srgb, var(--status-expired) 75%, #000)); }
-.pass-stripe--cancelled { background: linear-gradient(180deg, var(--status-cancelled), color-mix(in srgb, var(--status-cancelled) 75%, #000)); }
-.pass-stripe--overdue { background: linear-gradient(180deg, var(--status-overdue), color-mix(in srgb, var(--status-overdue) 75%, #000)); }
+.pass-stripe--pending {
+  background: linear-gradient(
+    180deg,
+    var(--status-pending),
+    color-mix(in srgb, var(--status-pending) 75%, #000)
+  );
+}
+.pass-stripe--approved {
+  background: linear-gradient(
+    180deg,
+    var(--status-approved),
+    color-mix(in srgb, var(--status-approved) 75%, #000)
+  );
+}
+.pass-stripe--active {
+  background: linear-gradient(
+    180deg,
+    var(--status-active),
+    color-mix(in srgb, var(--status-active) 75%, #000)
+  );
+}
+.pass-stripe--rejected {
+  background: linear-gradient(
+    180deg,
+    var(--status-rejected),
+    color-mix(in srgb, var(--status-rejected) 75%, #000)
+  );
+}
+.pass-stripe--completed {
+  background: linear-gradient(
+    180deg,
+    var(--status-completed),
+    color-mix(in srgb, var(--status-completed) 75%, #000)
+  );
+}
+.pass-stripe--expired {
+  background: linear-gradient(
+    180deg,
+    var(--status-expired),
+    color-mix(in srgb, var(--status-expired) 75%, #000)
+  );
+}
+.pass-stripe--cancelled {
+  background: linear-gradient(
+    180deg,
+    var(--status-cancelled),
+    color-mix(in srgb, var(--status-cancelled) 75%, #000)
+  );
+}
+.pass-stripe--overdue {
+  background: linear-gradient(
+    180deg,
+    var(--status-overdue),
+    color-mix(in srgb, var(--status-overdue) 75%, #000)
+  );
+}
 
 .pass-badge-group {
   display: inline-flex;
@@ -1307,8 +1460,15 @@ a.pass-detail__chip:hover,
 }
 
 @keyframes pass-badge-pulse {
-  0%, 100% { opacity: 1; transform: scale(1); }
-  50% { opacity: 0.55; transform: scale(0.82); }
+  0%,
+  100% {
+    opacity: 1;
+    transform: scale(1);
+  }
+  50% {
+    opacity: 0.55;
+    transform: scale(0.82);
+  }
 }
 
 /* Заливка — активные статусы, хорошо читаются с первого взгляда */
@@ -1321,11 +1481,21 @@ a.pass-detail__chip:hover,
   border-color: transparent;
 }
 
-.pass-badge--pending { background: var(--status-pending); }
-.pass-badge--approved { background: var(--status-approved); }
-.pass-badge--active { background: var(--status-active); }
-.pass-badge--rejected { background: var(--status-rejected); }
-.pass-badge--overdue { background: var(--status-overdue); }
+.pass-badge--pending {
+  background: var(--status-pending);
+}
+.pass-badge--approved {
+  background: var(--status-approved);
+}
+.pass-badge--active {
+  background: var(--status-active);
+}
+.pass-badge--rejected {
+  background: var(--status-rejected);
+}
+.pass-badge--overdue {
+  background: var(--status-overdue);
+}
 
 .pass-badge--pending .pass-badge__dot,
 .pass-badge--approved .pass-badge__dot,
@@ -1357,80 +1527,221 @@ a.pass-detail__chip:hover,
   flex-shrink: 0;
 }
 
-.pass-icon-tile--pending { color: var(--status-pending); border-color: var(--status-pending-border); background: var(--status-pending-soft); }
-.pass-icon-tile--approved { color: var(--status-approved); border-color: var(--status-approved-border); background: var(--status-approved-soft); }
-.pass-icon-tile--active { color: var(--status-active); border-color: var(--status-active-border); background: var(--status-active-soft); }
-.pass-icon-tile--rejected { color: var(--status-rejected); border-color: var(--status-rejected-border); background: var(--status-rejected-soft); }
+.pass-icon-tile--pending {
+  color: var(--status-pending);
+  border-color: var(--status-pending-border);
+  background: var(--status-pending-soft);
+}
+.pass-icon-tile--approved {
+  color: var(--status-approved);
+  border-color: var(--status-approved-border);
+  background: var(--status-approved-soft);
+}
+.pass-icon-tile--active {
+  color: var(--status-active);
+  border-color: var(--status-active-border);
+  background: var(--status-active-soft);
+}
+.pass-icon-tile--rejected {
+  color: var(--status-rejected);
+  border-color: var(--status-rejected-border);
+  background: var(--status-rejected-soft);
+}
 .pass-icon-tile--completed,
 .pass-icon-tile--expired,
-.pass-icon-tile--cancelled { color: var(--status-completed); border-color: var(--status-completed-border); background: var(--status-completed-soft); }
-.pass-icon-tile--overdue { color: var(--status-overdue); border-color: var(--status-overdue-border); background: var(--status-overdue-soft); }
+.pass-icon-tile--cancelled {
+  color: var(--status-completed);
+  border-color: var(--status-completed-border);
+  background: var(--status-completed-soft);
+}
+.pass-icon-tile--overdue {
+  color: var(--status-overdue);
+  border-color: var(--status-overdue-border);
+  background: var(--status-overdue-soft);
+}
 
 /* Счётчики и KPI — цветовой акцент по статусу */
 .accent-stat {
   border-bottom: 3px solid var(--border-strong);
-  transition: background 0.15s, box-shadow 0.15s;
+  transition:
+    background 0.15s,
+    box-shadow 0.15s;
 }
 .accent-stat--interactive:hover {
   box-shadow: 0 4px 12px rgba(0, 0, 0, 0.1);
 }
-[data-theme="dark"] .accent-stat--interactive:hover {
+[data-theme='dark'] .accent-stat--interactive:hover {
   box-shadow: 0 4px 14px rgba(0, 0, 0, 0.35);
 }
-.accent-stat--total { border-bottom-color: var(--border-strong); }
-.accent-stat--pending { border-bottom-color: var(--status-pending); background: var(--status-pending-soft); }
-.accent-stat--approved { border-bottom-color: var(--status-approved); background: var(--status-approved-soft); }
-.accent-stat--active { border-bottom-color: var(--status-active); background: var(--status-active-soft); }
-.accent-stat--rejected { border-bottom-color: var(--status-rejected); background: var(--status-rejected-soft); }
-.accent-stat--completed { border-bottom-color: var(--status-completed); background: var(--status-completed-soft); }
-.accent-stat--expired { border-bottom-color: var(--status-expired); background: var(--status-expired-soft); }
-.accent-stat--cancelled { border-bottom-color: var(--status-cancelled); background: var(--status-cancelled-soft); }
-.accent-stat--overdue { border-bottom-color: var(--status-overdue); background: var(--status-overdue-soft); }
+.accent-stat--total {
+  border-bottom-color: var(--border-strong);
+}
+.accent-stat--pending {
+  border-bottom-color: var(--status-pending);
+  background: var(--status-pending-soft);
+}
+.accent-stat--approved {
+  border-bottom-color: var(--status-approved);
+  background: var(--status-approved-soft);
+}
+.accent-stat--active {
+  border-bottom-color: var(--status-active);
+  background: var(--status-active-soft);
+}
+.accent-stat--rejected {
+  border-bottom-color: var(--status-rejected);
+  background: var(--status-rejected-soft);
+}
+.accent-stat--completed {
+  border-bottom-color: var(--status-completed);
+  background: var(--status-completed-soft);
+}
+.accent-stat--expired {
+  border-bottom-color: var(--status-expired);
+  background: var(--status-expired-soft);
+}
+.accent-stat--cancelled {
+  border-bottom-color: var(--status-cancelled);
+  background: var(--status-cancelled-soft);
+}
+.accent-stat--overdue {
+  border-bottom-color: var(--status-overdue);
+  background: var(--status-overdue-soft);
+}
 
-.accent-stat__icon--total { color: var(--text); }
-.accent-stat__icon--pending { color: var(--status-pending); }
-.accent-stat__icon--approved { color: var(--status-approved); }
-.accent-stat__icon--active { color: var(--status-active); }
-.accent-stat__icon--rejected { color: var(--status-rejected); }
-.accent-stat__icon--completed { color: var(--status-completed); }
-.accent-stat__icon--expired { color: var(--status-expired); }
-.accent-stat__icon--cancelled { color: var(--status-cancelled); }
-.accent-stat__icon--overdue { color: var(--status-overdue); }
+.accent-stat__icon--total {
+  color: var(--text);
+}
+.accent-stat__icon--pending {
+  color: var(--status-pending);
+}
+.accent-stat__icon--approved {
+  color: var(--status-approved);
+}
+.accent-stat__icon--active {
+  color: var(--status-active);
+}
+.accent-stat__icon--rejected {
+  color: var(--status-rejected);
+}
+.accent-stat__icon--completed {
+  color: var(--status-completed);
+}
+.accent-stat__icon--expired {
+  color: var(--status-expired);
+}
+.accent-stat__icon--cancelled {
+  color: var(--status-cancelled);
+}
+.accent-stat__icon--overdue {
+  color: var(--status-overdue);
+}
 
-.accent-stat__value--total { color: var(--text); }
-.accent-stat__value--pending { color: var(--status-pending); }
-.accent-stat__value--approved { color: var(--status-approved); }
-.accent-stat__value--active { color: var(--status-active); }
-.accent-stat__value--rejected { color: var(--status-rejected); }
-.accent-stat__value--completed { color: var(--status-completed); }
-.accent-stat__value--expired { color: var(--status-expired); }
-.accent-stat__value--cancelled { color: var(--status-cancelled); }
-.accent-stat__value--overdue { color: var(--status-overdue); }
+.accent-stat__value--total {
+  color: var(--text);
+}
+.accent-stat__value--pending {
+  color: var(--status-pending);
+}
+.accent-stat__value--approved {
+  color: var(--status-approved);
+}
+.accent-stat__value--active {
+  color: var(--status-active);
+}
+.accent-stat__value--rejected {
+  color: var(--status-rejected);
+}
+.accent-stat__value--completed {
+  color: var(--status-completed);
+}
+.accent-stat__value--expired {
+  color: var(--status-expired);
+}
+.accent-stat__value--cancelled {
+  color: var(--status-cancelled);
+}
+.accent-stat__value--overdue {
+  color: var(--status-overdue);
+}
 
-.section-heading--pending { color: var(--status-pending); }
-.section-heading--approved { color: var(--status-approved); }
-.section-heading--active { color: var(--status-active); }
-.section-heading--rejected { color: var(--status-rejected); }
-.section-heading--completed { color: var(--status-completed); }
-.section-heading--expired { color: var(--status-expired); }
-.section-heading--cancelled { color: var(--status-cancelled); }
-.section-heading--overdue { color: var(--status-overdue); }
+.section-heading--pending {
+  color: var(--status-pending);
+}
+.section-heading--approved {
+  color: var(--status-approved);
+}
+.section-heading--active {
+  color: var(--status-active);
+}
+.section-heading--rejected {
+  color: var(--status-rejected);
+}
+.section-heading--completed {
+  color: var(--status-completed);
+}
+.section-heading--expired {
+  color: var(--status-expired);
+}
+.section-heading--cancelled {
+  color: var(--status-cancelled);
+}
+.section-heading--overdue {
+  color: var(--status-overdue);
+}
 
-.theme-toast-success { background: var(--toast-success-bg); color: var(--toast-success-text); border-color: var(--toast-success-border); }
-.theme-toast-error { background: var(--toast-error-bg); color: var(--toast-error-text); border-color: var(--toast-error-border); }
-.theme-toast-info { background: var(--toast-info-bg); color: var(--toast-info-text); border-color: var(--toast-info-border); }
-.theme-toast-warning { background: var(--toast-warning-bg); color: var(--toast-warning-text); border-color: var(--toast-warning-border); }
+.theme-toast-success {
+  background: var(--toast-success-bg);
+  color: var(--toast-success-text);
+  border-color: var(--toast-success-border);
+}
+.theme-toast-error {
+  background: var(--toast-error-bg);
+  color: var(--toast-error-text);
+  border-color: var(--toast-error-border);
+}
+.theme-toast-info {
+  background: var(--toast-info-bg);
+  color: var(--toast-info-text);
+  border-color: var(--toast-info-border);
+}
+.theme-toast-warning {
+  background: var(--toast-warning-bg);
+  color: var(--toast-warning-text);
+  border-color: var(--toast-warning-border);
+}
 
-.office-stat--active { border-bottom: 3px solid var(--status-active); background: var(--status-active-soft); }
-.office-stat--active .office-stat__value { color: var(--status-active); }
-.office-stat--assigned { border-bottom: 3px solid var(--status-approved); background: var(--status-approved-soft); }
-.office-stat--assigned .office-stat__value { color: var(--status-approved); }
-.office-stat--free { border-bottom: 3px solid var(--status-pending); background: var(--status-pending-soft); }
-.office-stat--free .office-stat__value { color: var(--status-pending); }
+.office-stat--active {
+  border-bottom: 3px solid var(--status-active);
+  background: var(--status-active-soft);
+}
+.office-stat--active .office-stat__value {
+  color: var(--status-active);
+}
+.office-stat--assigned {
+  border-bottom: 3px solid var(--status-approved);
+  background: var(--status-approved-soft);
+}
+.office-stat--assigned .office-stat__value {
+  color: var(--status-approved);
+}
+.office-stat--free {
+  border-bottom: 3px solid var(--status-pending);
+  background: var(--status-pending-soft);
+}
+.office-stat--free .office-stat__value {
+  color: var(--status-pending);
+}
 
 @keyframes slide-up {
-  from { opacity: 0; transform: translateY(12px); }
-  to { opacity: 1; transform: translateY(0); }
+  from {
+    opacity: 0;
+    transform: translateY(12px);
+  }
+  to {
+    opacity: 1;
+    transform: translateY(0);
+  }
 }
 
 .animate-slide-up {
@@ -1439,13 +1750,23 @@ a.pass-detail__chip:hover,
 
 /* ── Skeleton & empty states ── */
 @keyframes skeleton-pulse {
-  0%, 100% { opacity: 0.45; }
-  50% { opacity: 0.85; }
+  0%,
+  100% {
+    opacity: 0.45;
+  }
+  50% {
+    opacity: 0.85;
+  }
 }
 
 .skeleton {
   border-radius: var(--radius-sm);
-  background: linear-gradient(90deg, var(--surface-muted) 0%, var(--surface-elevated) 50%, var(--surface-muted) 100%);
+  background: linear-gradient(
+    90deg,
+    var(--surface-muted) 0%,
+    var(--surface-elevated) 50%,
+    var(--surface-muted) 100%
+  );
   background-size: 200% 100%;
   animation: skeleton-pulse 1.4s ease-in-out infinite;
 }
@@ -1608,7 +1929,9 @@ a.pass-detail__chip:hover,
   font-weight: 500;
   color: var(--header-muted);
   text-decoration: none;
-  transition: color 0.15s, background 0.15s;
+  transition:
+    color 0.15s,
+    background 0.15s;
   min-width: 0;
 }
 
@@ -1634,7 +1957,9 @@ a.pass-detail__chip:hover,
 
 /* ── Card hover polish ── */
 .card {
-  transition: box-shadow 0.2s ease, border-color 0.2s ease;
+  transition:
+    box-shadow 0.2s ease,
+    border-color 0.2s ease;
 }
 
 @media (hover: hover) {
@@ -1649,7 +1974,9 @@ a.pass-detail__chip:hover,
 }
 
 .accent-stat--interactive {
-  transition: transform 0.15s ease, box-shadow 0.15s ease;
+  transition:
+    transform 0.15s ease,
+    box-shadow 0.15s ease;
 }
 
 /* ── Спойлер паспортных данных ── */
@@ -1965,7 +2292,9 @@ a.pass-detail__chip:hover,
 }
 
 @media print {
-  body * { visibility: hidden; }
+  body * {
+    visibility: hidden;
+  }
   .print-pass-host {
     position: static;
     width: auto;
@@ -1974,7 +2303,10 @@ a.pass-detail__chip:hover,
     clip-path: none;
     white-space: normal;
   }
-  .print-pass, .print-pass * { visibility: visible; }
+  .print-pass,
+  .print-pass * {
+    visibility: visible;
+  }
   .print-pass {
     position: absolute;
     left: 0;
@@ -2165,7 +2497,9 @@ a.pass-detail__chip:hover,
   background: transparent;
   color: var(--muted);
   cursor: pointer;
-  transition: background 0.15s, color 0.15s;
+  transition:
+    background 0.15s,
+    color 0.15s;
 }
 
 .share-modal__close:hover:not(:disabled) {
@@ -2282,8 +2616,12 @@ a.pass-detail__chip:hover,
 }
 
 @keyframes help-faq-fade {
-  from { opacity: 0; }
-  to { opacity: 1; }
+  from {
+    opacity: 0;
+  }
+  to {
+    opacity: 1;
+  }
 }
 
 .help-faq__trigger {
@@ -2301,9 +2639,18 @@ a.pass-detail__chip:hover,
   border-radius: 999px;
   background: var(--surface-elevated);
   color: var(--accent);
-  box-shadow: 0 4px 16px rgba(0, 0, 0, 0.18), 0 0 0 1px rgba(255, 255, 255, 0.04) inset;
+  box-shadow:
+    0 4px 16px rgba(0, 0, 0, 0.18),
+    0 0 0 1px rgba(255, 255, 255, 0.04) inset;
   cursor: pointer;
-  transition: transform 0.15s ease, box-shadow 0.15s ease, background 0.15s ease, color 0.15s ease, width 0.2s ease, padding 0.2s ease, gap 0.2s ease;
+  transition:
+    transform 0.15s ease,
+    box-shadow 0.15s ease,
+    background 0.15s ease,
+    color 0.15s ease,
+    width 0.2s ease,
+    padding 0.2s ease,
+    gap 0.2s ease;
 }
 
 .help-faq__trigger:hover {
@@ -2314,7 +2661,9 @@ a.pass-detail__chip:hover,
 
 .help-faq__trigger:focus-visible {
   outline: none;
-  box-shadow: 0 0 0 3px var(--focus-ring), 0 4px 16px rgba(0, 0, 0, 0.18);
+  box-shadow:
+    0 0 0 3px var(--focus-ring),
+    0 4px 16px rgba(0, 0, 0, 0.18);
 }
 
 .help-faq__trigger--active {
@@ -2397,7 +2746,11 @@ a.pass-detail__chip:hover,
   gap: 0.75rem;
   padding: 0.875rem 0.875rem 0.625rem;
   border-bottom: 1px solid var(--border);
-  background: linear-gradient(180deg, var(--gradient-surface-from), var(--gradient-surface-to));
+  background: linear-gradient(
+    180deg,
+    var(--gradient-surface-from),
+    var(--gradient-surface-to)
+  );
 }
 
 .help-faq__title {
@@ -2427,7 +2780,9 @@ a.pass-detail__chip:hover,
   color: var(--muted);
   cursor: pointer;
   flex-shrink: 0;
-  transition: background 0.15s, color 0.15s;
+  transition:
+    background 0.15s,
+    color 0.15s;
 }
 
 .help-faq__icon-btn:hover {
@@ -2457,7 +2812,10 @@ a.pass-detail__chip:hover,
   font-size: 0.75rem;
   font-weight: 600;
   cursor: pointer;
-  transition: background 0.15s, color 0.15s, border-color 0.15s;
+  transition:
+    background 0.15s,
+    color 0.15s,
+    border-color 0.15s;
 }
 
 .help-faq__tab:hover {

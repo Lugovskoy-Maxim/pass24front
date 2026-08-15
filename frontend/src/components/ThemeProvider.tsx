@@ -1,7 +1,19 @@
 'use client';
 
-import { createContext, useCallback, useContext, useEffect, useState, type ReactNode } from 'react';
-import { applyTheme, getStoredTheme, storeTheme, type ThemeMode } from '@/lib/theme';
+import {
+  createContext,
+  useCallback,
+  useContext,
+  useEffect,
+  useState,
+  type ReactNode,
+} from 'react';
+import {
+  applyTheme,
+  getStoredTheme,
+  storeTheme,
+  type ThemeMode,
+} from '@/lib/theme';
 
 interface ThemeContextValue {
   theme: ThemeMode;

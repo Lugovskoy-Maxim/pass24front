@@ -14,7 +14,12 @@ import { useConfig } from '@/hooks/useConfig';
 import { getUiLabels } from '@/lib/ui-labels';
 import { useTheme } from '@/components/ThemeProvider';
 import { ThemeToggle } from '@/components/ThemeToggle';
-import { canManageTicketScan, canViewPasses, getHomePath, isTenantCompanyUser } from '@/lib/permissions';
+import {
+  canManageTicketScan,
+  canViewPasses,
+  getHomePath,
+  isTenantCompanyUser,
+} from '@/lib/permissions';
 import { AppVersion } from '@/components/AppVersion';
 
 export default function PassTicketPage() {
@@ -32,17 +37,19 @@ export default function PassTicketPage() {
   const homePath = getHomePath(user);
   const showStaffPanel = canManageTicketScan(user);
   const backHref = user && canViewPasses(user) ? '/passes' : homePath;
-  const backLabel = user && canViewPasses(user)
-    ? labels.buttons.backToPasses
-    : isTenantCompanyUser(user)
-      ? labels.buttons.backToTemplates
-      : labels.buttons.backToPasses;
+  const backLabel =
+    user && canViewPasses(user)
+      ? labels.buttons.backToPasses
+      : isTenantCompanyUser(user)
+        ? labels.buttons.backToTemplates
+        : labels.buttons.backToPasses;
 
   const loadTicket = useCallback(() => {
     setLoading(true);
     setError('');
     setErrorCause(null);
-    return api.getPublicTicket(passNumber)
+    return api
+      .getPublicTicket(passNumber)
       .then(({ ticket: t }) => setTicket(t))
       .catch((err) => {
         setErrorCause(err);
@@ -56,15 +63,27 @@ export default function PassTicketPage() {
   }, [loadTicket]);
 
   return (
-    <div className={`pass-ticket-page min-h-[100dvh] bg-[var(--bg)] ${showStaffPanel ? 'pass-ticket-page--staff' : ''}`}>
-      <header className="pass-ticket-page__header border-b" style={{ background: 'var(--header-bg)', borderColor: 'var(--header-border)' }}>
+    <div
+      className={`pass-ticket-page min-h-[100dvh] bg-[var(--bg)] ${showStaffPanel ? 'pass-ticket-page--staff' : ''}`}
+    >
+      <header
+        className="pass-ticket-page__header border-b"
+        style={{
+          background: 'var(--header-bg)',
+          borderColor: 'var(--header-border)',
+        }}
+      >
         <div className="pass-ticket-page__header-inner flex items-center justify-between gap-2">
           <Link
             href={homePath}
             className="pass-ticket-page__brand min-w-0 rounded-md transition-opacity hover:opacity-85 active:opacity-70 focus-visible:outline focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-[var(--accent)]"
             aria-label={labels.ticketPage.home}
           >
-            <SiteBrand config={config} size="sm" variant={theme === 'dark' ? 'dark' : 'light'} />
+            <SiteBrand
+              config={config}
+              size="sm"
+              variant={theme === 'dark' ? 'dark' : 'light'}
+            />
           </Link>
           <ThemeToggle compact />
         </div>
@@ -72,12 +91,21 @@ export default function PassTicketPage() {
 
       <main className="pass-ticket-page__main">
         {loading ? (
-          <div className="text-center text-[var(--muted)] animate-pulse text-sm py-8">{labels.ticketPage.loading}</div>
+          <div className="text-center text-[var(--muted)] animate-pulse text-sm py-8">
+            {labels.ticketPage.loading}
+          </div>
         ) : error ? (
           <div className="space-y-3">
-            <PageError message={error} error={errorCause} onRetry={loadTicket} retryLabel={labels.buttons.retry} />
+            <PageError
+              message={error}
+              error={errorCause}
+              onRetry={loadTicket}
+              retryLabel={labels.buttons.retry}
+            />
             <div className="text-center">
-              <Link href={homePath} className="btn btn-secondary text-sm">{labels.ticketPage.home}</Link>
+              <Link href={homePath} className="btn btn-secondary text-sm">
+                {labels.ticketPage.home}
+              </Link>
             </div>
           </div>
         ) : ticket ? (
@@ -89,7 +117,10 @@ export default function PassTicketPage() {
               compact
             />
             {showStaffPanel && (
-              <PassTicketStaffPanel passNumber={passNumber} onPassUpdated={loadTicket} />
+              <PassTicketStaffPanel
+                passNumber={passNumber}
+                onPassUpdated={loadTicket}
+              />
             )}
             {user && !showStaffPanel && (
               <div className="mt-4 text-center">

@@ -11,7 +11,13 @@ interface PassDetailModalProps {
   children: React.ReactNode;
 }
 
-export function PassDetailModal({ open, title, closeLabel, onClose, children }: PassDetailModalProps) {
+export function PassDetailModal({
+  open,
+  title,
+  closeLabel,
+  onClose,
+  children,
+}: PassDetailModalProps) {
   useEffect(() => {
     if (!open) return;
 
@@ -39,9 +45,14 @@ export function PassDetailModal({ open, title, closeLabel, onClose, children }: 
       aria-labelledby="pass-detail-modal-title"
       onClick={onClose}
     >
-      <div className="pass-detail-modal__panel" onClick={(e) => e.stopPropagation()}>
+      <div
+        className="pass-detail-modal__panel"
+        onClick={(e) => e.stopPropagation()}
+      >
         <div className="pass-detail-modal__header">
-          <h2 id="pass-detail-modal-title" className="share-modal__title">{title}</h2>
+          <h2 id="pass-detail-modal-title" className="share-modal__title">
+            {title}
+          </h2>
           <button
             type="button"
             className="share-modal__close"
@@ -51,9 +62,7 @@ export function PassDetailModal({ open, title, closeLabel, onClose, children }: 
             <X className="w-5 h-5" />
           </button>
         </div>
-        <div className="pass-detail-modal__body">
-          {children}
-        </div>
+        <div className="pass-detail-modal__body">{children}</div>
       </div>
     </div>
   );

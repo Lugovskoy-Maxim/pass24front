@@ -10,8 +10,23 @@
  */
 import { ChangeEvent, FormEvent, useEffect, useMemo, useState } from 'react';
 import {
-  ArrowDown, ArrowUp, Bell, BookOpen, CircleHelp, Globe, ImageIcon, Mail, MessageSquare, Palette, Phone,
-  Plus, RotateCcw, Trash2, Type, Upload, X,
+  ArrowDown,
+  ArrowUp,
+  Bell,
+  BookOpen,
+  CircleHelp,
+  Globe,
+  ImageIcon,
+  Mail,
+  MessageSquare,
+  Palette,
+  Phone,
+  Plus,
+  RotateCcw,
+  Trash2,
+  Type,
+  Upload,
+  X,
 } from 'lucide-react';
 import { useAuth } from '@/lib/auth';
 import { AdminLayout } from '@/components/AdminLayout';
@@ -20,7 +35,15 @@ import { SiteBrand } from '@/components/SiteBrand';
 import { SelectWrap } from '@/components/FormField';
 import { UiLabelsEditor } from '@/components/UiLabelsEditor';
 import { useToast } from '@/components/Toast';
-import { api, AdminUser, FaqItem, HelpGuideSection, SiteSettings, getErrorMessage, getRoleLabel } from '@/lib/api';
+import {
+  api,
+  AdminUser,
+  FaqItem,
+  HelpGuideSection,
+  SiteSettings,
+  getErrorMessage,
+  getRoleLabel,
+} from '@/lib/api';
 import { PageError } from '@/components/PageError';
 import { invalidateConfigCache } from '@/hooks/useConfig';
 import { MSTYLE_BRAND_DEFAULTS, resolveBrand } from '@/lib/brand-defaults';
@@ -92,18 +115,25 @@ function normalizeSettings(s: SiteSettings): SiteSettings {
   return {
     ...s,
     appVersion: (s.appVersion ?? '').toString().trim().slice(0, 32),
-    siteIconLight: s.siteIconLight?.trim() || legacy || MSTYLE_BRAND_DEFAULTS.siteIconLight,
-    siteIconDark: s.siteIconDark?.trim() || legacy || MSTYLE_BRAND_DEFAULTS.siteIconDark,
+    siteIconLight:
+      s.siteIconLight?.trim() || legacy || MSTYLE_BRAND_DEFAULTS.siteIconLight,
+    siteIconDark:
+      s.siteIconDark?.trim() || legacy || MSTYLE_BRAND_DEFAULTS.siteIconDark,
     brandMarkType: s.brandMarkType === 'text' ? 'text' : 'image',
-    brandMarkText: s.brandMarkText?.trim() || MSTYLE_BRAND_DEFAULTS.brandMarkText,
+    brandMarkText:
+      s.brandMarkText?.trim() || MSTYLE_BRAND_DEFAULTS.brandMarkText,
     brandShowName: s.brandShowName !== false,
     brandNameBeforeMark: s.brandNameBeforeMark !== false,
-    uiIconSelectChevron: s.uiIconSelectChevron?.trim() || MSTYLE_BRAND_DEFAULTS.uiIconSelectChevron,
+    uiIconSelectChevron:
+      s.uiIconSelectChevron?.trim() ||
+      MSTYLE_BRAND_DEFAULTS.uiIconSelectChevron,
     themePrimary: s.themePrimary?.trim() || MSTYLE_BRAND_DEFAULTS.themePrimary,
-    themePrimaryHover: s.themePrimaryHover?.trim() || MSTYLE_BRAND_DEFAULTS.themePrimaryHover,
+    themePrimaryHover:
+      s.themePrimaryHover?.trim() || MSTYLE_BRAND_DEFAULTS.themePrimaryHover,
     smsRegistrationEnabled: s.smsRegistrationEnabled !== false,
-    smsRegistrationDisabledMessage: s.smsRegistrationDisabledMessage?.trim()
-      || MSTYLE_BRAND_DEFAULTS.smsRegistrationDisabledMessage,
+    smsRegistrationDisabledMessage:
+      s.smsRegistrationDisabledMessage?.trim() ||
+      MSTYLE_BRAND_DEFAULTS.smsRegistrationDisabledMessage,
     smsRegistrationCodeText: s.smsRegistrationCodeText?.includes('{code}')
       ? s.smsRegistrationCodeText.trim()
       : MSTYLE_BRAND_DEFAULTS.smsRegistrationCodeText,
@@ -117,11 +147,13 @@ function normalizeSettings(s: SiteSettings): SiteSettings {
       ? s.registrationNotifyUserIds.map(String)
       : [],
     faqItems: resolveFaqItems(s.faqItems).map((item) => ({ ...item })),
-    helpGuideSections: resolveGuideSections(s.helpGuideSections).map((item) => ({
-      ...item,
-      steps: [...(item.steps || [])],
-      paragraphs: [...(item.paragraphs || [])],
-    })),
+    helpGuideSections: resolveGuideSections(s.helpGuideSections).map(
+      (item) => ({
+        ...item,
+        steps: [...(item.steps || [])],
+        paragraphs: [...(item.paragraphs || [])],
+      }),
+    ),
   };
 }
 
@@ -142,7 +174,8 @@ export default function AdminSiteSettingsPage() {
   const load = () => {
     setLoadError('');
     setLoadErrorCause(null);
-    api.admin.getSiteSettings()
+    api.admin
+      .getSiteSettings()
       .then(({ settings: s }) => {
         const normalized = normalizeSettings(s);
         setSettings(normalized);
@@ -161,13 +194,17 @@ export default function AdminSiteSettingsPage() {
 
   useEffect(() => {
     if (!isSuperAdmin || tab !== 'registration') return;
-    api.admin.getUsers({ category: 'staff' })
+    api.admin
+      .getUsers({ category: 'staff' })
       .then(({ users }) => setStaffUsers(users.filter((u) => !!u.email)))
       .catch(() => setStaffUsers([]));
   }, [isSuperAdmin, tab]);
 
   const staffWithEmail = useMemo(
-    () => staffUsers.filter((u) => u.email && ['admin', 'security', 'bc_admin'].includes(u.role)),
+    () =>
+      staffUsers.filter(
+        (u) => u.email && ['admin', 'security', 'bc_admin'].includes(u.role),
+      ),
     [staffUsers],
   );
 
@@ -198,35 +235,39 @@ export default function AdminSiteSettingsPage() {
     if (!settings) return;
     setSettings({
       ...settings,
-      registrationNotifyEmails: (settings.registrationNotifyEmails || []).filter((e) => e !== email),
+      registrationNotifyEmails: (
+        settings.registrationNotifyEmails || []
+      ).filter((e) => e !== email),
     });
   };
 
-  const handleIconUpload = (field: 'siteIconLight' | 'siteIconDark') => (e: ChangeEvent<HTMLInputElement>) => {
-    const file = e.target.files?.[0];
-    if (!file || !settings) return;
+  const handleIconUpload =
+    (field: 'siteIconLight' | 'siteIconDark') =>
+    (e: ChangeEvent<HTMLInputElement>) => {
+      const file = e.target.files?.[0];
+      if (!file || !settings) return;
 
-    if (!file.type.startsWith('image/')) {
-      toast('Загрузите изображение (PNG, JPG, SVG)', 'error');
-      return;
-    }
-    if (file.size > MAX_ICON_BYTES) {
-      toast('Файл слишком большой. Максимум 80 КБ', 'error');
-      return;
-    }
+      if (!file.type.startsWith('image/')) {
+        toast('Загрузите изображение (PNG, JPG, SVG)', 'error');
+        return;
+      }
+      if (file.size > MAX_ICON_BYTES) {
+        toast('Файл слишком большой. Максимум 80 КБ', 'error');
+        return;
+      }
 
-    const reader = new FileReader();
-    reader.onload = () => {
-      const value = String(reader.result || '');
-      setSettings({
-        ...settings,
-        [field]: value,
-        ...(field === 'siteIconLight' ? { siteIcon: value } : {}),
-      });
+      const reader = new FileReader();
+      reader.onload = () => {
+        const value = String(reader.result || '');
+        setSettings({
+          ...settings,
+          [field]: value,
+          ...(field === 'siteIconLight' ? { siteIcon: value } : {}),
+        });
+      };
+      reader.readAsDataURL(file);
+      e.target.value = '';
     };
-    reader.readAsDataURL(file);
-    e.target.value = '';
-  };
 
   const updateFaqItems = (faqItems: FaqItem[]) => {
     if (!settings) return;
@@ -240,16 +281,15 @@ export default function AdminSiteSettingsPage() {
       toast(`Не больше ${MAX_FAQ_ITEMS} вопросов`, 'error');
       return;
     }
-    updateFaqItems([
-      ...items,
-      { id: newFaqId(), question: '', answer: '' },
-    ]);
+    updateFaqItems([...items, { id: newFaqId(), question: '', answer: '' }]);
   };
 
   const updateFaqItem = (index: number, patch: Partial<FaqItem>) => {
     if (!settings?.faqItems) return;
     updateFaqItems(
-      settings.faqItems.map((item, i) => (i === index ? { ...item, ...patch } : item)),
+      settings.faqItems.map((item, i) =>
+        i === index ? { ...item, ...patch } : item,
+      ),
     );
   };
 
@@ -280,7 +320,9 @@ export default function AdminSiteSettingsPage() {
   };
 
   const updateGuideForm = (index: number, patch: Partial<GuideSectionForm>) => {
-    setGuideForms(guideForms.map((item, i) => (i === index ? { ...item, ...patch } : item)));
+    setGuideForms(
+      guideForms.map((item, i) => (i === index ? { ...item, ...patch } : item)),
+    );
   };
 
   const removeGuideSection = (index: number) => {
@@ -300,7 +342,10 @@ export default function AdminSiteSettingsPage() {
   const resetHelpContent = () => {
     updateFaqItems(HELP_FAQ_ITEMS.map((item) => ({ ...item })));
     setGuideForms(toGuideForm(HELP_GUIDE_SECTIONS));
-    toast('Вопросы и инструкции сброшены к стандартным — не забудьте сохранить', 'info');
+    toast(
+      'Вопросы и инструкции сброшены к стандартным — не забудьте сохранить',
+      'info',
+    );
   };
 
   const handleSubmit = async (e: FormEvent) => {
@@ -317,7 +362,10 @@ export default function AdminSiteSettingsPage() {
         .filter((item) => item.question || item.answer);
       const incomplete = cleaned.find((item) => !item.question || !item.answer);
       if (incomplete) {
-        toast('Заполните и вопрос, и ответ у каждой записи (или удалите пустые)', 'error');
+        toast(
+          'Заполните и вопрос, и ответ у каждой записи (или удалите пустые)',
+          'error',
+        );
         return;
       }
       if (!cleaned.length) {
@@ -329,13 +377,19 @@ export default function AdminSiteSettingsPage() {
     if (tab === 'guide') {
       const incomplete = guideForms.find((item) => {
         const hasTitle = !!item.title.trim();
-        const hasBody = textToLines(item.stepsText).length > 0 || textToLines(item.paragraphsText).length > 0;
-        const empty = !hasTitle && !item.stepsText.trim() && !item.paragraphsText.trim();
+        const hasBody =
+          textToLines(item.stepsText).length > 0 ||
+          textToLines(item.paragraphsText).length > 0;
+        const empty =
+          !hasTitle && !item.stepsText.trim() && !item.paragraphsText.trim();
         if (empty) return false;
         return !hasTitle || !hasBody;
       });
       if (incomplete) {
-        toast('У каждого раздела укажите заголовок и хотя бы один шаг или абзац (или удалите пустые)', 'error');
+        toast(
+          'У каждого раздела укажите заголовок и хотя бы один шаг или абзац (или удалите пустые)',
+          'error',
+        );
         return;
       }
       if (!fromGuideForm(guideForms).length) {
@@ -358,7 +412,9 @@ export default function AdminSiteSettingsPage() {
 
       const { settings: updated } = await api.admin.updateSiteSettings({
         ...settings,
-        faqItems: payloadFaq.length ? payloadFaq : HELP_FAQ_ITEMS.map((item) => ({ ...item })),
+        faqItems: payloadFaq.length
+          ? payloadFaq
+          : HELP_FAQ_ITEMS.map((item) => ({ ...item })),
         helpGuideSections: payloadGuide.length
           ? payloadGuide
           : HELP_GUIDE_SECTIONS.map((item) => ({
@@ -385,7 +441,12 @@ export default function AdminSiteSettingsPage() {
   if (loadError) {
     return (
       <AdminLayout title="Базовые настройки">
-        <PageError message={loadError} error={loadErrorCause} onRetry={load} retryLabel="Повторить" />
+        <PageError
+          message={loadError}
+          error={loadErrorCause}
+          onRetry={load}
+          retryLabel="Повторить"
+        />
       </AdminLayout>
     );
   }
@@ -425,7 +486,8 @@ export default function AdminSiteSettingsPage() {
   return (
     <AdminLayout title="Базовые настройки">
       <p className="text-[var(--muted)] -mt-4 mb-6">
-        Бренд портала меняется без пересборки: сохраните настройки — изменения появятся сразу у всех пользователей
+        Бренд портала меняется без пересборки: сохраните настройки — изменения
+        появятся сразу у всех пользователей
       </p>
 
       <div className="flex flex-wrap gap-2 mb-6">
@@ -490,25 +552,32 @@ export default function AdminSiteSettingsPage() {
                 <input
                   className="input"
                   value={settings.siteName}
-                  onChange={(e) => setSettings({ ...settings, siteName: e.target.value })}
+                  onChange={(e) =>
+                    setSettings({ ...settings, siteName: e.target.value })
+                  }
                   placeholder={MSTYLE_BRAND_DEFAULTS.siteName}
                   required
                 />
               </div>
 
               <div>
-                <label className="label" htmlFor="appVersion">Версия сайта</label>
+                <label className="label" htmlFor="appVersion">
+                  Версия сайта
+                </label>
                 <input
                   id="appVersion"
                   className="input"
                   value={settings.appVersion || ''}
-                  onChange={(e) => setSettings({ ...settings, appVersion: e.target.value })}
+                  onChange={(e) =>
+                    setSettings({ ...settings, appVersion: e.target.value })
+                  }
                   placeholder="v.220726"
                   maxLength={32}
                 />
                 <p className="text-xs text-[var(--muted)] mt-1">
-                  Показывается мелким шрифтом внизу страниц (например <span className="font-mono">v.220726</span>).
-                  Оставьте пустым — подставится дата сборки фронтенда.
+                  Показывается мелким шрифтом внизу страниц (например{' '}
+                  <span className="font-mono">v.220726</span>). Оставьте пустым
+                  — подставится дата сборки фронтенда.
                 </p>
               </div>
 
@@ -517,7 +586,9 @@ export default function AdminSiteSettingsPage() {
                 <input
                   className="input"
                   value={settings.siteTagline}
-                  onChange={(e) => setSettings({ ...settings, siteTagline: e.target.value })}
+                  onChange={(e) =>
+                    setSettings({ ...settings, siteTagline: e.target.value })
+                  }
                   placeholder={MSTYLE_BRAND_DEFAULTS.siteTagline}
                 />
               </div>
@@ -528,7 +599,12 @@ export default function AdminSiteSettingsPage() {
                     type="checkbox"
                     className="checkbox"
                     checked={settings.brandShowName}
-                    onChange={(e) => setSettings({ ...settings, brandShowName: e.target.checked })}
+                    onChange={(e) =>
+                      setSettings({
+                        ...settings,
+                        brandShowName: e.target.checked,
+                      })
+                    }
                   />
                   Показывать название сайта
                 </label>
@@ -537,7 +613,12 @@ export default function AdminSiteSettingsPage() {
                     type="checkbox"
                     className="checkbox"
                     checked={settings.brandNameBeforeMark}
-                    onChange={(e) => setSettings({ ...settings, brandNameBeforeMark: e.target.checked })}
+                    onChange={(e) =>
+                      setSettings({
+                        ...settings,
+                        brandNameBeforeMark: e.target.checked,
+                      })
+                    }
                   />
                   Название перед знаком (логотипом)
                 </label>
@@ -549,10 +630,13 @@ export default function AdminSiteSettingsPage() {
                   <select
                     className="input"
                     value={settings.brandMarkType}
-                    onChange={(e) => setSettings({
-                      ...settings,
-                      brandMarkType: e.target.value as SiteSettings['brandMarkType'],
-                    })}
+                    onChange={(e) =>
+                      setSettings({
+                        ...settings,
+                        brandMarkType: e.target
+                          .value as SiteSettings['brandMarkType'],
+                      })
+                    }
                   >
                     <option value="image">Картинка (логотип)</option>
                     <option value="text">Текст (как иконка)</option>
@@ -567,17 +651,25 @@ export default function AdminSiteSettingsPage() {
                     className="input"
                     value={settings.brandMarkText}
                     maxLength={8}
-                    onChange={(e) => setSettings({ ...settings, brandMarkText: e.target.value })}
+                    onChange={(e) =>
+                      setSettings({
+                        ...settings,
+                        brandMarkText: e.target.value,
+                      })
+                    }
                     placeholder={MSTYLE_BRAND_DEFAULTS.brandMarkText}
                   />
-                  <p className="text-xs text-[var(--muted)] mt-1">До 8 символов, например «M» или «BC»</p>
+                  <p className="text-xs text-[var(--muted)] mt-1">
+                    До 8 символов, например «M» или «BC»
+                  </p>
                 </div>
               ) : (
                 <div className="space-y-4">
                   <p className="text-xs text-[var(--muted)]">
-                    Загрузите отдельные логотипы для светлой и тёмной темы — так знак будет одинаково читаем на любом фоне.
+                    Загрузите отдельные логотипы для светлой и тёмной темы — так
+                    знак будет одинаково читаем на любом фоне.
                   </p>
-                  {([
+                  {[
                     {
                       field: 'siteIconLight' as const,
                       label: 'Логотип для светлой темы',
@@ -590,7 +682,7 @@ export default function AdminSiteSettingsPage() {
                       hint: 'Светлый знак на тёмном фоне',
                       placeholder: MSTYLE_BRAND_DEFAULTS.siteIconDark,
                     },
-                  ]).map(({ field, label, hint, placeholder }) => (
+                  ].map(({ field, label, hint, placeholder }) => (
                     <div key={field}>
                       <label className="label">{label}</label>
                       <p className="text-xs text-[var(--muted)] mb-2">{hint}</p>
@@ -598,27 +690,40 @@ export default function AdminSiteSettingsPage() {
                         <input
                           className="input flex-1"
                           value={iconInputValue(settings[field])}
-                          onChange={(e) => setSettings({
-                            ...settings,
-                            [field]: e.target.value,
-                            ...(field === 'siteIconLight' ? { siteIcon: e.target.value } : {}),
-                          })}
+                          onChange={(e) =>
+                            setSettings({
+                              ...settings,
+                              [field]: e.target.value,
+                              ...(field === 'siteIconLight'
+                                ? { siteIcon: e.target.value }
+                                : {}),
+                            })
+                          }
                           placeholder={placeholder}
                         />
                         <label className="btn btn-secondary cursor-pointer shrink-0">
                           <Upload className="w-4 h-4" />
                           Загрузить
-                          <input type="file" accept="image/*" className="hidden" onChange={handleIconUpload(field)} />
+                          <input
+                            type="file"
+                            accept="image/*"
+                            className="hidden"
+                            onChange={handleIconUpload(field)}
+                          />
                         </label>
                         {settings[field] && (
                           <button
                             type="button"
                             className="btn btn-secondary shrink-0"
-                            onClick={() => setSettings({
-                              ...settings,
-                              [field]: '',
-                              ...(field === 'siteIconLight' ? { siteIcon: '' } : {}),
-                            })}
+                            onClick={() =>
+                              setSettings({
+                                ...settings,
+                                [field]: '',
+                                ...(field === 'siteIconLight'
+                                  ? { siteIcon: '' }
+                                  : {}),
+                              })
+                            }
                           >
                             <Trash2 className="w-4 h-4" />
                           </button>
@@ -627,7 +732,8 @@ export default function AdminSiteSettingsPage() {
                     </div>
                   ))}
                   <p className="text-xs text-[var(--muted)]">
-                    Ссылка, файл до 80 КБ или путь вида /brand/mstyle-logo-light.svg
+                    Ссылка, файл до 80 КБ или путь вида
+                    /brand/mstyle-logo-light.svg
                   </p>
                 </div>
               )}
@@ -635,7 +741,9 @@ export default function AdminSiteSettingsPage() {
               <IconPickerField
                 label="Иконка выпадающих списков"
                 value={settings.uiIconSelectChevron}
-                onChange={(uiIconSelectChevron) => setSettings({ ...settings, uiIconSelectChevron })}
+                onChange={(uiIconSelectChevron) =>
+                  setSettings({ ...settings, uiIconSelectChevron })
+                }
                 hint="Иконки из библиотеки Lucide. Применяется ко всем select на сайте."
               />
 
@@ -647,7 +755,9 @@ export default function AdminSiteSettingsPage() {
                 <input
                   className="input"
                   value={settings.sitePhone}
-                  onChange={(e) => setSettings({ ...settings, sitePhone: e.target.value })}
+                  onChange={(e) =>
+                    setSettings({ ...settings, sitePhone: e.target.value })
+                  }
                   placeholder={MSTYLE_BRAND_DEFAULTS.sitePhone}
                 />
               </div>
@@ -661,7 +771,9 @@ export default function AdminSiteSettingsPage() {
                   className="input"
                   type="email"
                   value={settings.siteEmail}
-                  onChange={(e) => setSettings({ ...settings, siteEmail: e.target.value })}
+                  onChange={(e) =>
+                    setSettings({ ...settings, siteEmail: e.target.value })
+                  }
                   placeholder={MSTYLE_BRAND_DEFAULTS.siteEmail}
                 />
               </div>
@@ -674,23 +786,43 @@ export default function AdminSiteSettingsPage() {
               </div>
               <div className="space-y-3">
                 <div className="rounded-lg border border-[var(--border)] p-4 bg-[#f0efec]">
-                  <div className="text-xs text-[var(--muted)] mb-2">Светлая тема</div>
-                  <SiteBrand config={previewConfig} size="lg" showTagline layout="column" variant="light" />
+                  <div className="text-xs text-[var(--muted)] mb-2">
+                    Светлая тема
+                  </div>
+                  <SiteBrand
+                    config={previewConfig}
+                    size="lg"
+                    showTagline
+                    layout="column"
+                    variant="light"
+                  />
                 </div>
                 <div className="rounded-lg border border-[var(--border)] p-4 bg-[#323232]">
                   <div className="text-xs text-[#a3a3a3] mb-2">Тёмная тема</div>
-                  <SiteBrand config={previewConfig} size="lg" showTagline layout="column" variant="dark" />
+                  <SiteBrand
+                    config={previewConfig}
+                    size="lg"
+                    showTagline
+                    layout="column"
+                    variant="dark"
+                  />
                 </div>
               </div>
               <div className="pt-3 border-t border-[var(--border)] space-y-2 text-sm">
                 {settings.sitePhone && (
-                  <a href={`tel:${settings.sitePhone}`} className="flex items-center gap-2 text-[var(--primary)] hover:underline">
+                  <a
+                    href={`tel:${settings.sitePhone}`}
+                    className="flex items-center gap-2 text-[var(--primary)] hover:underline"
+                  >
                     <Phone className="w-4 h-4" />
                     {settings.sitePhone}
                   </a>
                 )}
                 {settings.siteEmail && (
-                  <a href={`mailto:${settings.siteEmail}`} className="flex items-center gap-2 text-[var(--primary)] hover:underline">
+                  <a
+                    href={`mailto:${settings.siteEmail}`}
+                    className="flex items-center gap-2 text-[var(--primary)] hover:underline"
+                  >
                     <Mail className="w-4 h-4" />
                     {settings.siteEmail}
                   </a>
@@ -704,7 +836,8 @@ export default function AdminSiteSettingsPage() {
           <div className="grid lg:grid-cols-[1fr_280px] gap-6 max-w-4xl">
             <div className="card p-6 space-y-5">
               <p className="text-sm text-[var(--muted)]">
-                Основной акцентный цвет кнопок, ссылок и активных элементов интерфейса
+                Основной акцентный цвет кнопок, ссылок и активных элементов
+                интерфейса
               </p>
               <div className="grid sm:grid-cols-2 gap-4">
                 <div>
@@ -714,12 +847,22 @@ export default function AdminSiteSettingsPage() {
                       type="color"
                       className="h-10 w-14 rounded border border-[var(--border)] bg-transparent cursor-pointer"
                       value={settings.themePrimary}
-                      onChange={(e) => setSettings({ ...settings, themePrimary: e.target.value })}
+                      onChange={(e) =>
+                        setSettings({
+                          ...settings,
+                          themePrimary: e.target.value,
+                        })
+                      }
                     />
                     <input
                       className="input font-mono text-sm flex-1"
                       value={settings.themePrimary}
-                      onChange={(e) => setSettings({ ...settings, themePrimary: e.target.value })}
+                      onChange={(e) =>
+                        setSettings({
+                          ...settings,
+                          themePrimary: e.target.value,
+                        })
+                      }
                       pattern="^#[0-9A-Fa-f]{6}$"
                       placeholder={THEME_COLOR_DEFAULTS.themePrimary}
                     />
@@ -732,12 +875,22 @@ export default function AdminSiteSettingsPage() {
                       type="color"
                       className="h-10 w-14 rounded border border-[var(--border)] bg-transparent cursor-pointer"
                       value={settings.themePrimaryHover}
-                      onChange={(e) => setSettings({ ...settings, themePrimaryHover: e.target.value })}
+                      onChange={(e) =>
+                        setSettings({
+                          ...settings,
+                          themePrimaryHover: e.target.value,
+                        })
+                      }
                     />
                     <input
                       className="input font-mono text-sm flex-1"
                       value={settings.themePrimaryHover}
-                      onChange={(e) => setSettings({ ...settings, themePrimaryHover: e.target.value })}
+                      onChange={(e) =>
+                        setSettings({
+                          ...settings,
+                          themePrimaryHover: e.target.value,
+                        })
+                      }
                       pattern="^#[0-9A-Fa-f]{6}$"
                       placeholder={THEME_COLOR_DEFAULTS.themePrimaryHover}
                     />
@@ -746,18 +899,31 @@ export default function AdminSiteSettingsPage() {
               </div>
             </div>
             <div className="card p-5 h-fit space-y-4">
-              <div className="text-sm font-medium text-[var(--muted)]">Предпросмотр</div>
+              <div className="text-sm font-medium text-[var(--muted)]">
+                Предпросмотр
+              </div>
               <div className="flex flex-wrap gap-2">
                 <button
                   type="button"
                   className="btn btn-primary text-sm"
-                  style={{ background: settings.themePrimary, borderColor: settings.themePrimary }}
-                  onMouseEnter={(e) => { e.currentTarget.style.background = settings.themePrimaryHover; }}
-                  onMouseLeave={(e) => { e.currentTarget.style.background = settings.themePrimary; }}
+                  style={{
+                    background: settings.themePrimary,
+                    borderColor: settings.themePrimary,
+                  }}
+                  onMouseEnter={(e) => {
+                    e.currentTarget.style.background =
+                      settings.themePrimaryHover;
+                  }}
+                  onMouseLeave={(e) => {
+                    e.currentTarget.style.background = settings.themePrimary;
+                  }}
                 >
                   Кнопка
                 </button>
-                <span style={{ color: settings.themePrimary }} className="text-sm font-medium self-center">
+                <span
+                  style={{ color: settings.themePrimary }}
+                  className="text-sm font-medium self-center"
+                >
                   Акцентный текст
                 </span>
               </div>
@@ -775,10 +941,12 @@ export default function AdminSiteSettingsPage() {
           <div className="card p-6 max-w-3xl space-y-5">
             <div className="flex flex-col sm:flex-row sm:items-start sm:justify-between gap-3">
               <div>
-                <h2 className="text-base font-semibold mb-1">Вопросы и ответы</h2>
+                <h2 className="text-base font-semibold mb-1">
+                  Вопросы и ответы
+                </h2>
                 <p className="text-sm text-[var(--muted)]">
-                  Эти записи показываются в кнопке «Помощь» (внизу справа) на вкладке «Вопросы».
-                  Порядок в списке = порядок в панели помощи.
+                  Эти записи показываются в кнопке «Помощь» (внизу справа) на
+                  вкладке «Вопросы». Порядок в списке = порядок в панели помощи.
                 </p>
               </div>
               <div className="flex flex-wrap gap-2 shrink-0">
@@ -791,7 +959,11 @@ export default function AdminSiteSettingsPage() {
                   <RotateCcw className="w-4 h-4" />
                   Сбросить
                 </button>
-                <button type="button" className="btn btn-secondary text-sm" onClick={addFaqItem}>
+                <button
+                  type="button"
+                  className="btn btn-secondary text-sm"
+                  onClick={addFaqItem}
+                >
                   <Plus className="w-4 h-4" />
                   Добавить
                 </button>
@@ -841,23 +1013,31 @@ export default function AdminSiteSettingsPage() {
                     </div>
                   </div>
                   <div>
-                    <label className="label" htmlFor={`faq-q-${index}`}>Вопрос</label>
+                    <label className="label" htmlFor={`faq-q-${index}`}>
+                      Вопрос
+                    </label>
                     <input
                       id={`faq-q-${index}`}
                       className="input"
                       value={item.question}
-                      onChange={(e) => updateFaqItem(index, { question: e.target.value })}
+                      onChange={(e) =>
+                        updateFaqItem(index, { question: e.target.value })
+                      }
                       placeholder="Например: Как заказать пропуск в БЦ Добрынинский?"
                       maxLength={300}
                     />
                   </div>
                   <div>
-                    <label className="label" htmlFor={`faq-a-${index}`}>Ответ</label>
+                    <label className="label" htmlFor={`faq-a-${index}`}>
+                      Ответ
+                    </label>
                     <textarea
                       id={`faq-a-${index}`}
                       className="input min-h-[100px] resize-y"
                       value={item.answer}
-                      onChange={(e) => updateFaqItem(index, { answer: e.target.value })}
+                      onChange={(e) =>
+                        updateFaqItem(index, { answer: e.target.value })
+                      }
                       placeholder="Краткий ответ для арендаторов M-STYLE / БЦ Добрынинский"
                       maxLength={2000}
                     />
@@ -868,7 +1048,7 @@ export default function AdminSiteSettingsPage() {
                 </div>
               ))}
 
-              {!(settings.faqItems?.length) && (
+              {!settings.faqItems?.length && (
                 <div className="text-sm text-[var(--muted)] border border-dashed border-[var(--border)] rounded-lg p-6 text-center">
                   Список пуст. Нажмите «Добавить» или «Сбросить».
                 </div>
@@ -883,7 +1063,8 @@ export default function AdminSiteSettingsPage() {
               <div>
                 <h2 className="text-base font-semibold mb-1">Инструкции</h2>
                 <p className="text-sm text-[var(--muted)]">
-                  Разделы вкладки «Инструкции» в кнопке «Помощь». Каждый пункт шага или абзац — с новой строки.
+                  Разделы вкладки «Инструкции» в кнопке «Помощь». Каждый пункт
+                  шага или абзац — с новой строки.
                 </p>
               </div>
               <div className="flex flex-wrap gap-2 shrink-0">
@@ -896,7 +1077,11 @@ export default function AdminSiteSettingsPage() {
                   <RotateCcw className="w-4 h-4" />
                   Сбросить
                 </button>
-                <button type="button" className="btn btn-secondary text-sm" onClick={addGuideSection}>
+                <button
+                  type="button"
+                  className="btn btn-secondary text-sm"
+                  onClick={addGuideSection}
+                >
                   <Plus className="w-4 h-4" />
                   Добавить
                 </button>
@@ -946,12 +1131,16 @@ export default function AdminSiteSettingsPage() {
                     </div>
                   </div>
                   <div>
-                    <label className="label" htmlFor={`guide-title-${index}`}>Заголовок</label>
+                    <label className="label" htmlFor={`guide-title-${index}`}>
+                      Заголовок
+                    </label>
                     <input
                       id={`guide-title-${index}`}
                       className="input"
                       value={item.title}
-                      onChange={(e) => updateGuideForm(index, { title: e.target.value })}
+                      onChange={(e) =>
+                        updateGuideForm(index, { title: e.target.value })
+                      }
                       placeholder="Например: Заказ пропуска в БЦ Добрынинский"
                       maxLength={200}
                     />
@@ -964,8 +1153,12 @@ export default function AdminSiteSettingsPage() {
                       id={`guide-steps-${index}`}
                       className="input min-h-[110px] resize-y"
                       value={item.stepsText}
-                      onChange={(e) => updateGuideForm(index, { stepsText: e.target.value })}
-                      placeholder={'Раздел «Пропуска» → «Заказать пропуск».\nУкажите посетителя, офис ООО «М-СТИЛЬ ОФИС» и дату визита в БЦ Добрынинский.'}
+                      onChange={(e) =>
+                        updateGuideForm(index, { stepsText: e.target.value })
+                      }
+                      placeholder={
+                        'Раздел «Пропуска» → «Заказать пропуск».\nУкажите посетителя, офис ООО «М-СТИЛЬ ОФИС» и дату визита в БЦ Добрынинский.'
+                      }
                     />
                   </div>
                   <div>
@@ -976,11 +1169,16 @@ export default function AdminSiteSettingsPage() {
                       id={`guide-p-${index}`}
                       className="input min-h-[80px] resize-y"
                       value={item.paragraphsText}
-                      onChange={(e) => updateGuideForm(index, { paragraphsText: e.target.value })}
+                      onChange={(e) =>
+                        updateGuideForm(index, {
+                          paragraphsText: e.target.value,
+                        })
+                      }
                       placeholder="Например: Пропуск действует только на дату визита в БЦ Добрынинский или БЦ Добрынинский-2."
                     />
                     <p className="text-xs text-[var(--muted)] mt-1">
-                      Нужен хотя бы один шаг или абзац. Шаги в панели помощи показываются нумерованным списком.
+                      Нужен хотя бы один шаг или абзац. Шаги в панели помощи
+                      показываются нумерованным списком.
                     </p>
                   </div>
                 </div>
@@ -998,9 +1196,12 @@ export default function AdminSiteSettingsPage() {
         {tab === 'registration' && isSuperAdmin && (
           <div className="card p-6 max-w-2xl space-y-5">
             <div>
-              <h2 className="text-base font-semibold mb-1">Регистрация по SMS</h2>
+              <h2 className="text-base font-semibold mb-1">
+                Регистрация по SMS
+              </h2>
               <p className="text-sm text-[var(--muted)]">
-                Управляет вкладкой «По SMS» на странице регистрации. Изменения применяются сразу после сохранения.
+                Управляет вкладкой «По SMS» на странице регистрации. Изменения
+                применяются сразу после сохранения.
               </p>
             </div>
             <label className="flex items-start gap-3 cursor-pointer">
@@ -1008,15 +1209,20 @@ export default function AdminSiteSettingsPage() {
                 type="checkbox"
                 className="checkbox mt-0.5"
                 checked={settings.smsRegistrationEnabled !== false}
-                onChange={(e) => setSettings({
-                  ...settings,
-                  smsRegistrationEnabled: e.target.checked,
-                })}
+                onChange={(e) =>
+                  setSettings({
+                    ...settings,
+                    smsRegistrationEnabled: e.target.checked,
+                  })
+                }
               />
               <span>
-                <span className="text-sm font-medium block">Разрешить регистрацию по SMS</span>
+                <span className="text-sm font-medium block">
+                  Разрешить регистрацию по SMS
+                </span>
                 <span className="text-xs text-[var(--muted)]">
-                  Если выключено, пользователи смогут регистрироваться только по email.
+                  Если выключено, пользователи смогут регистрироваться только по
+                  email.
                 </span>
               </span>
             </label>
@@ -1028,15 +1234,20 @@ export default function AdminSiteSettingsPage() {
                 id="smsDisabledMessage"
                 className="input min-h-[96px] resize-y"
                 value={settings.smsRegistrationDisabledMessage || ''}
-                onChange={(e) => setSettings({
-                  ...settings,
-                  smsRegistrationDisabledMessage: e.target.value,
-                })}
-                placeholder={MSTYLE_BRAND_DEFAULTS.smsRegistrationDisabledMessage}
+                onChange={(e) =>
+                  setSettings({
+                    ...settings,
+                    smsRegistrationDisabledMessage: e.target.value,
+                  })
+                }
+                placeholder={
+                  MSTYLE_BRAND_DEFAULTS.smsRegistrationDisabledMessage
+                }
                 maxLength={500}
               />
               <p className="text-xs text-[var(--muted)] mt-1">
-                Показывается во всплывающем уведомлении, когда пользователь нажимает «По SMS» или пытается зарегистрироваться по телефону.
+                Показывается во всплывающем уведомлении, когда пользователь
+                нажимает «По SMS» или пытается зарегистрироваться по телефону.
               </p>
             </div>
             <div>
@@ -1047,27 +1258,35 @@ export default function AdminSiteSettingsPage() {
                 id="smsCodeText"
                 className="input min-h-[96px] resize-y font-mono text-sm"
                 value={settings.smsRegistrationCodeText || ''}
-                onChange={(e) => setSettings({
-                  ...settings,
-                  smsRegistrationCodeText: e.target.value,
-                })}
+                onChange={(e) =>
+                  setSettings({
+                    ...settings,
+                    smsRegistrationCodeText: e.target.value,
+                  })
+                }
                 placeholder={MSTYLE_BRAND_DEFAULTS.smsRegistrationCodeText}
                 maxLength={300}
               />
               <p className="text-xs text-[var(--muted)] mt-1">
-                Регистрация по телефону идёт через <strong>мобильную авторизацию SMS Aero</strong>
-                (SIM-PUSH / SMS OTP). Текст SMS задаётся одобренным шаблоном в кабинете SMS Aero
-                для имени <code className="text-[var(--text)]">SMSAERO_SIGN</code> — поле ниже
-                справочное и на отправку не влияет.
+                Регистрация по телефону идёт через{' '}
+                <strong>мобильную авторизацию SMS Aero</strong>
+                (SIM-PUSH / SMS OTP). Текст SMS задаётся одобренным шаблоном в
+                кабинете SMS Aero для имени{' '}
+                <code className="text-[var(--text)]">SMSAERO_SIGN</code> — поле
+                ниже справочное и на отправку не влияет.
               </p>
             </div>
 
             <div className="border-t border-[var(--border)] pt-5 space-y-3">
               <div>
-                <h2 className="text-base font-semibold mb-1">Запрещённые email-домены</h2>
+                <h2 className="text-base font-semibold mb-1">
+                  Запрещённые email-домены
+                </h2>
                 <p className="text-sm text-[var(--muted)]">
-                  При регистрации нельзя указать адрес на этих доменах (Gmail, Outlook, iCloud и т.п.).
-                  По-прежнему разрешены только зоны <strong>.ru</strong> / <strong>.рф</strong> / <strong>.su</strong>.
+                  При регистрации нельзя указать адрес на этих доменах (Gmail,
+                  Outlook, iCloud и т.п.). По-прежнему разрешены только зоны{' '}
+                  <strong>.ru</strong> / <strong>.рф</strong> /{' '}
+                  <strong>.su</strong>.
                 </p>
               </div>
               <div>
@@ -1078,25 +1297,32 @@ export default function AdminSiteSettingsPage() {
                   id="blockedEmailDomains"
                   className="input min-h-[200px] resize-y font-mono text-sm"
                   value={formatBlockedDomainsText(settings.blockedEmailDomains)}
-                  onChange={(e) => setSettings({
-                    ...settings,
-                    blockedEmailDomains: parseBlockedDomainsText(e.target.value),
-                  })}
+                  onChange={(e) =>
+                    setSettings({
+                      ...settings,
+                      blockedEmailDomains: parseBlockedDomainsText(
+                        e.target.value,
+                      ),
+                    })
+                  }
                   placeholder={DEFAULT_BLOCKED_EMAIL_DOMAINS.join('\n')}
                   spellCheck={false}
                 />
                 <p className="text-xs text-[var(--muted)] mt-1">
-                  Пример: <code className="text-[var(--text)]">gmail.com</code>. Без символа @.
-                  Пустой список — блокировка free-mail отключена (остаётся только правило зоны .ru).
+                  Пример: <code className="text-[var(--text)]">gmail.com</code>.
+                  Без символа @. Пустой список — блокировка free-mail отключена
+                  (остаётся только правило зоны .ru).
                 </p>
               </div>
               <button
                 type="button"
                 className="btn btn-secondary text-sm"
-                onClick={() => setSettings({
-                  ...settings,
-                  blockedEmailDomains: [...DEFAULT_BLOCKED_EMAIL_DOMAINS],
-                })}
+                onClick={() =>
+                  setSettings({
+                    ...settings,
+                    blockedEmailDomains: [...DEFAULT_BLOCKED_EMAIL_DOMAINS],
+                  })
+                }
               >
                 Восстановить стандартный список
               </button>
@@ -1109,19 +1335,24 @@ export default function AdminSiteSettingsPage() {
                   Уведомления о новых заявках
                 </h2>
                 <p className="text-sm text-[var(--muted)]">
-                  Кому слать письмо, когда арендатор завершил регистрацию и ждёт одобрения.
-                  Можно отметить сотрудников и добавить email вручную.
+                  Кому слать письмо, когда арендатор завершил регистрацию и ждёт
+                  одобрения. Можно отметить сотрудников и добавить email
+                  вручную.
                 </p>
               </div>
 
               <div>
                 <div className="label mb-2">Сотрудники (с email)</div>
                 {staffWithEmail.length === 0 ? (
-                  <p className="text-sm text-[var(--muted)]">Нет сотрудников с email в категории staff.</p>
+                  <p className="text-sm text-[var(--muted)]">
+                    Нет сотрудников с email в категории staff.
+                  </p>
                 ) : (
                   <div className="space-y-1.5 max-h-48 overflow-y-auto rounded-md border border-[var(--border)] p-2">
                     {staffWithEmail.map((u) => {
-                      const checked = (settings.registrationNotifyUserIds || []).includes(u.id);
+                      const checked = (
+                        settings.registrationNotifyUserIds || []
+                      ).includes(u.id);
                       return (
                         <label
                           key={u.id}
@@ -1134,7 +1365,9 @@ export default function AdminSiteSettingsPage() {
                             onChange={() => toggleNotifyUser(u.id)}
                           />
                           <span className="min-w-0 text-sm">
-                            <span className="font-medium block truncate">{u.fullName || u.email}</span>
+                            <span className="font-medium block truncate">
+                              {u.fullName || u.email}
+                            </span>
                             <span className="text-xs text-[var(--muted)]">
                               {u.email} · {getRoleLabel(u.role)}
                             </span>
@@ -1165,7 +1398,11 @@ export default function AdminSiteSettingsPage() {
                     }}
                     placeholder="admin@company.ru"
                   />
-                  <button type="button" className="btn btn-secondary shrink-0" onClick={addManualEmail}>
+                  <button
+                    type="button"
+                    className="btn btn-secondary shrink-0"
+                    onClick={addManualEmail}
+                  >
                     <Plus className="w-4 h-4" />
                     Добавить
                   </button>
@@ -1192,7 +1429,8 @@ export default function AdminSiteSettingsPage() {
                   </div>
                 )}
                 <p className="text-xs text-[var(--muted)] mt-1.5">
-                  Если списки пусты — письма о заявках не отправляются (заявки всё равно появятся в «Пользователи»).
+                  Если списки пусты — письма о заявках не отправляются (заявки
+                  всё равно появятся в «Пользователи»).
                 </p>
               </div>
             </div>
@@ -1223,17 +1461,25 @@ export default function AdminSiteSettingsPage() {
                     brandMarkType: MSTYLE_BRAND_DEFAULTS.brandMarkType,
                     brandMarkText: MSTYLE_BRAND_DEFAULTS.brandMarkText,
                     brandShowName: MSTYLE_BRAND_DEFAULTS.brandShowName,
-                    brandNameBeforeMark: MSTYLE_BRAND_DEFAULTS.brandNameBeforeMark,
-                    uiIconSelectChevron: MSTYLE_BRAND_DEFAULTS.uiIconSelectChevron,
+                    brandNameBeforeMark:
+                      MSTYLE_BRAND_DEFAULTS.brandNameBeforeMark,
+                    uiIconSelectChevron:
+                      MSTYLE_BRAND_DEFAULTS.uiIconSelectChevron,
                   });
-                  toast('Подставлены значения M-STYLE. Нажмите «Сохранить» для применения.', 'info');
+                  toast(
+                    'Подставлены значения M-STYLE. Нажмите «Сохранить» для применения.',
+                    'info',
+                  );
                 } else {
                   setSettings({
                     ...settings,
                     themePrimary: MSTYLE_BRAND_DEFAULTS.themePrimary,
                     themePrimaryHover: MSTYLE_BRAND_DEFAULTS.themePrimaryHover,
                   });
-                  toast('Подставлены цвета M-STYLE. Нажмите «Сохранить» для применения.', 'info');
+                  toast(
+                    'Подставлены цвета M-STYLE. Нажмите «Сохранить» для применения.',
+                    'info',
+                  );
                 }
               }}
             >

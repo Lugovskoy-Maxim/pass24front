@@ -15,7 +15,11 @@ import { MobileNav } from './MobileNav';
 import { PendingApprovalBanner } from './PendingApprovalBanner';
 import { AppVersion } from './AppVersion';
 import { UserRole } from '@/lib/api';
-import { getHomePath, hasAllPermissions, hasAnyPermission } from '@/lib/permissions';
+import {
+  getHomePath,
+  hasAllPermissions,
+  hasAnyPermission,
+} from '@/lib/permissions';
 
 interface ProtectedLayoutProps {
   children: React.ReactNode;
@@ -26,7 +30,12 @@ interface ProtectedLayoutProps {
 }
 
 function loginRedirectUrl(pathname: string | null, search = ''): string {
-  if (!pathname || pathname === '/' || pathname.startsWith('/login') || pathname.startsWith('/invite')) {
+  if (
+    !pathname ||
+    pathname === '/' ||
+    pathname.startsWith('/login') ||
+    pathname.startsWith('/invite')
+  ) {
     return '/login';
   }
   const target = `${pathname}${search || ''}`;
@@ -34,21 +43,30 @@ function loginRedirectUrl(pathname: string | null, search = ''): string {
   return `/login?${qs.toString()}`;
 }
 
-export function ProtectedLayout({ children, roles, permissions, anyPermissions, wide = false }: ProtectedLayoutProps) {
+export function ProtectedLayout({
+  children,
+  roles,
+  permissions,
+  anyPermissions,
+  wide = false,
+}: ProtectedLayoutProps) {
   const { user, loading } = useAuth();
   const router = useRouter();
   const pathname = usePathname();
 
   const roleDenied = !!roles && !!user && !roles.includes(user.role);
-  const permDenied = !!permissions?.length && !hasAllPermissions(user, ...permissions);
-  const anyPermDenied = !!anyPermissions?.length && !hasAnyPermission(user, ...anyPermissions);
+  const permDenied =
+    !!permissions?.length && !hasAllPermissions(user, ...permissions);
+  const anyPermDenied =
+    !!anyPermissions?.length && !hasAnyPermission(user, ...anyPermissions);
   const denied = roleDenied || permDenied || anyPermDenied;
 
   // Неавторизован → сразу на login (с next= для возврата после входа)
   useEffect(() => {
     if (loading) return;
     if (!user) {
-      const search = typeof window !== 'undefined' ? window.location.search : '';
+      const search =
+        typeof window !== 'undefined' ? window.location.search : '';
       router.replace(loginRedirectUrl(pathname, search));
     }
   }, [user, loading, router, pathname]);
@@ -71,7 +89,9 @@ export function ProtectedLayout({ children, roles, permissions, anyPermissions, 
   if (!user) {
     return (
       <div className="min-h-screen flex flex-col items-center justify-center gap-3">
-        <div className="animate-pulse text-[var(--muted)]">Переход на страницу входа…</div>
+        <div className="animate-pulse text-[var(--muted)]">
+          Переход на страницу входа…
+        </div>
         <AppVersion />
       </div>
     );
@@ -80,7 +100,9 @@ export function ProtectedLayout({ children, roles, permissions, anyPermissions, 
   if (denied) {
     return (
       <div className="min-h-screen flex flex-col items-center justify-center gap-3">
-        <div className="animate-pulse text-[var(--muted)]">Нет доступа, перенаправление…</div>
+        <div className="animate-pulse text-[var(--muted)]">
+          Нет доступа, перенаправление…
+        </div>
         <AppVersion />
       </div>
     );
@@ -89,7 +111,9 @@ export function ProtectedLayout({ children, roles, permissions, anyPermissions, 
   return (
     <>
       <Header />
-      <main className={`app-main w-full mx-auto px-4 py-6 ${wide ? 'max-w-[1600px]' : 'max-w-6xl'}`}>
+      <main
+        className={`app-main w-full mx-auto px-4 py-6 ${wide ? 'max-w-[1600px]' : 'max-w-6xl'}`}
+      >
         <PendingApprovalBanner user={user} />
         {children}
         <AppVersion className="mt-10 mb-2 pb-[env(safe-area-inset-bottom,0px)]" />

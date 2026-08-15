@@ -3,7 +3,17 @@
  * Публичные: login, register*, password-reset*, invite*.
  * JWT: me, profile, email/verify, tenant/employees*.
  */
-import { Body, Controller, Delete, Get, Param, Patch, Post, Req, UseGuards } from '@nestjs/common';
+import {
+  Body,
+  Controller,
+  Delete,
+  Get,
+  Param,
+  Patch,
+  Post,
+  Req,
+  UseGuards,
+} from '@nestjs/common';
 import { AuthGuard } from '@nestjs/passport';
 import { AccessConfigService } from '../access/access-config.service';
 import { AuthService } from './auth.service';
@@ -92,7 +102,10 @@ export class AuthController {
 
   @UseGuards(AuthGuard('jwt'))
   @Post('email/verify/confirm')
-  async confirmEmailVerification(@Req() req: any, @Body() dto: ConfirmEmailVerifyDto) {
+  async confirmEmailVerification(
+    @Req() req: any,
+    @Body() dto: ConfirmEmailVerifyDto,
+  ) {
     return this.authService.confirmEmailVerification(req.user.userId, dto);
   }
 
@@ -139,7 +152,11 @@ export class AuthController {
     @Param('id') id: string,
     @Body() dto: SetTenantEmployeeActiveDto,
   ) {
-    return this.authService.setTenantEmployeeActive(req.user.userId, id, dto.isActive);
+    return this.authService.setTenantEmployeeActive(
+      req.user.userId,
+      id,
+      dto.isActive,
+    );
   }
 
   @UseGuards(AuthGuard('jwt'))

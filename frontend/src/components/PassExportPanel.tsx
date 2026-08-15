@@ -16,7 +16,15 @@ import {
 import { getStatusLabel, getUiLabels } from '@/lib/ui-labels';
 import { useConfig } from '@/hooks/useConfig';
 
-const ALL_STATUSES: PassStatus[] = ['pending', 'approved', 'active', 'completed', 'rejected', 'expired', 'cancelled'];
+const ALL_STATUSES: PassStatus[] = [
+  'pending',
+  'approved',
+  'active',
+  'completed',
+  'rejected',
+  'expired',
+  'cancelled',
+];
 
 const EMPTY_FILTERS: PassExportFiltersInput = {
   status: '',
@@ -36,7 +44,11 @@ interface PassExportPanelProps {
   initialFilters?: Partial<PassExportFiltersInput>;
 }
 
-export function PassExportPanel({ open, onClose, initialFilters }: PassExportPanelProps) {
+export function PassExportPanel({
+  open,
+  onClose,
+  initialFilters,
+}: PassExportPanelProps) {
   const { toast } = useToast();
   const config = useConfig();
   const labels = getUiLabels(config);
@@ -49,7 +61,8 @@ export function PassExportPanel({ open, onClose, initialFilters }: PassExportPan
     if (!open) return;
     setFilters({ ...EMPTY_FILTERS, ...initialFilters });
     setLoadingOptions(true);
-    api.getPassExportFilters()
+    api
+      .getPassExportFilters()
       .then(setOptions)
       .catch(() => setOptions(null))
       .finally(() => setLoadingOptions(false));
@@ -90,7 +103,9 @@ export function PassExportPanel({ open, onClose, initialFilters }: PassExportPan
       </p>
 
       {loadingOptions ? (
-        <p className="text-sm text-[var(--muted)] animate-pulse">Загрузка фильтров...</p>
+        <p className="text-sm text-[var(--muted)] animate-pulse">
+          Загрузка фильтров...
+        </p>
       ) : (
         <div className="space-y-4">
           <FilterField label="Поиск">
@@ -98,7 +113,9 @@ export function PassExportPanel({ open, onClose, initialFilters }: PassExportPan
               className="input w-full"
               placeholder={labels.passes.searchPlaceholder}
               value={filters.search || ''}
-              onChange={(e) => setFilters((prev) => ({ ...prev, search: e.target.value }))}
+              onChange={(e) =>
+                setFilters((prev) => ({ ...prev, search: e.target.value }))
+              }
             />
           </FilterField>
 
@@ -108,21 +125,32 @@ export function PassExportPanel({ open, onClose, initialFilters }: PassExportPan
                 className="input w-full"
                 type="date"
                 value={filters.date || ''}
-                onChange={(e) => setFilters((prev) => ({ ...prev, date: e.target.value, dateFrom: '', dateTo: '' }))}
+                onChange={(e) =>
+                  setFilters((prev) => ({
+                    ...prev,
+                    date: e.target.value,
+                    dateFrom: '',
+                    dateTo: '',
+                  }))
+                }
               />
             </FilterField>
             <FilterField label="Статус">
               <div className="select-wrap w-full">
-              <select
-                className="input w-full"
-                value={filters.status || ''}
-                onChange={(e) => setFilters((prev) => ({ ...prev, status: e.target.value }))}
-              >
-                <option value="">{labels.passes.allStatuses}</option>
-                {ALL_STATUSES.map((status) => (
-                  <option key={status} value={status}>{getStatusLabel(status, labels)}</option>
-                ))}
-              </select>
+                <select
+                  className="input w-full"
+                  value={filters.status || ''}
+                  onChange={(e) =>
+                    setFilters((prev) => ({ ...prev, status: e.target.value }))
+                  }
+                >
+                  <option value="">{labels.passes.allStatuses}</option>
+                  {ALL_STATUSES.map((status) => (
+                    <option key={status} value={status}>
+                      {getStatusLabel(status, labels)}
+                    </option>
+                  ))}
+                </select>
               </div>
             </FilterField>
           </div>
@@ -133,7 +161,13 @@ export function PassExportPanel({ open, onClose, initialFilters }: PassExportPan
                 className="input w-full"
                 type="date"
                 value={filters.dateFrom || ''}
-                onChange={(e) => setFilters((prev) => ({ ...prev, dateFrom: e.target.value, date: '' }))}
+                onChange={(e) =>
+                  setFilters((prev) => ({
+                    ...prev,
+                    dateFrom: e.target.value,
+                    date: '',
+                  }))
+                }
               />
             </FilterField>
             <FilterField label="Период по">
@@ -141,7 +175,13 @@ export function PassExportPanel({ open, onClose, initialFilters }: PassExportPan
                 className="input w-full"
                 type="date"
                 value={filters.dateTo || ''}
-                onChange={(e) => setFilters((prev) => ({ ...prev, dateTo: e.target.value, date: '' }))}
+                onChange={(e) =>
+                  setFilters((prev) => ({
+                    ...prev,
+                    dateTo: e.target.value,
+                    date: '',
+                  }))
+                }
               />
             </FilterField>
           </div>
@@ -150,11 +190,18 @@ export function PassExportPanel({ open, onClose, initialFilters }: PassExportPan
             <select
               className="input w-full"
               value={filters.passType || ''}
-              onChange={(e) => setFilters((prev) => ({ ...prev, passType: e.target.value as PassType | '' }))}
+              onChange={(e) =>
+                setFilters((prev) => ({
+                  ...prev,
+                  passType: e.target.value as PassType | '',
+                }))
+              }
             >
               <option value="">Все типы</option>
               {(Object.keys(TYPE_LABELS) as PassType[]).map((type) => (
-                <option key={type} value={type}>{TYPE_LABELS[type]}</option>
+                <option key={type} value={type}>
+                  {TYPE_LABELS[type]}
+                </option>
               ))}
             </select>
           </FilterField>
@@ -164,15 +211,19 @@ export function PassExportPanel({ open, onClose, initialFilters }: PassExportPan
               <select
                 className="input w-full"
                 value={filters.propertyId || ''}
-                onChange={(e) => setFilters((prev) => ({
-                  ...prev,
-                  propertyId: e.target.value,
-                  officeId: '',
-                }))}
+                onChange={(e) =>
+                  setFilters((prev) => ({
+                    ...prev,
+                    propertyId: e.target.value,
+                    officeId: '',
+                  }))
+                }
               >
                 <option value="">Все БЦ</option>
                 {options?.businessCenters.map((bc) => (
-                  <option key={bc.id} value={bc.id}>{bc.name}</option>
+                  <option key={bc.id} value={bc.id}>
+                    {bc.name}
+                  </option>
                 ))}
               </select>
             </FilterField>
@@ -183,12 +234,16 @@ export function PassExportPanel({ open, onClose, initialFilters }: PassExportPan
               <select
                 className="input w-full"
                 value={filters.officeId || ''}
-                onChange={(e) => setFilters((prev) => ({ ...prev, officeId: e.target.value }))}
+                onChange={(e) =>
+                  setFilters((prev) => ({ ...prev, officeId: e.target.value }))
+                }
               >
                 <option value="">Все офисы</option>
                 {officesInBc.map((office) => (
                   <option key={office.id} value={office.id}>
-                    {office.businessCenterName ? `${office.businessCenterName}: ` : ''}
+                    {office.businessCenterName
+                      ? `${office.businessCenterName}: `
+                      : ''}
                     оф. {office.number}
                     {office.company ? ` · ${office.company}` : ''}
                   </option>
@@ -202,12 +257,15 @@ export function PassExportPanel({ open, onClose, initialFilters }: PassExportPan
               <select
                 className="input w-full"
                 value={filters.tenantId || ''}
-                onChange={(e) => setFilters((prev) => ({ ...prev, tenantId: e.target.value }))}
+                onChange={(e) =>
+                  setFilters((prev) => ({ ...prev, tenantId: e.target.value }))
+                }
               >
                 <option value="">Все арендаторы</option>
                 {options?.tenants.map((tenant) => (
                   <option key={tenant.id} value={tenant.id}>
-                    {tenant.company}{tenant.email ? ` · ${tenant.email}` : ''}
+                    {tenant.company}
+                    {tenant.email ? ` · ${tenant.email}` : ''}
                   </option>
                 ))}
               </select>
@@ -228,7 +286,9 @@ export function PassExportPanel({ open, onClose, initialFilters }: PassExportPan
               type="button"
               className="btn btn-secondary"
               disabled={exporting}
-              onClick={() => setFilters({ ...EMPTY_FILTERS, ...initialFilters })}
+              onClick={() =>
+                setFilters({ ...EMPTY_FILTERS, ...initialFilters })
+              }
             >
               {labels.buttons.reset}
             </button>
@@ -239,7 +299,13 @@ export function PassExportPanel({ open, onClose, initialFilters }: PassExportPan
   );
 }
 
-function FilterField({ label, children }: { label: string; children: React.ReactNode }) {
+function FilterField({
+  label,
+  children,
+}: {
+  label: string;
+  children: React.ReactNode;
+}) {
   return (
     <label className="block text-sm">
       <span className="text-[var(--muted)] mb-1 block">{label}</span>

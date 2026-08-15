@@ -5,7 +5,19 @@
  *
  * site-settings: SMS-поля может менять только role===admin (см. updateSiteSettings).
  */
-import { Body, Controller, Delete, Get, Param, Patch, Post, Query, Req, Res, UseGuards } from '@nestjs/common';
+import {
+  Body,
+  Controller,
+  Delete,
+  Get,
+  Param,
+  Patch,
+  Post,
+  Query,
+  Req,
+  Res,
+  UseGuards,
+} from '@nestjs/common';
 import type { Response } from 'express';
 import { AuditQuery } from '../audit/audit.service';
 import { AuthGuard } from '@nestjs/passport';
@@ -53,7 +65,10 @@ export class AdminController {
 
   @Patch('access-config')
   @RequireAllPermissions('admin.permissions')
-  async updateAccessConfig(@Body() dto: UpdateAccessConfigDto, @Req() req: any) {
+  async updateAccessConfig(
+    @Body() dto: UpdateAccessConfigDto,
+    @Req() req: any,
+  ) {
     if (dto.rolePermissions) {
       const current = await this.accessConfigService.getConfig();
       const nextRoles = new Set(Object.keys(dto.rolePermissions));
@@ -67,7 +82,9 @@ export class AdminController {
       actor: req.user,
       details: {
         enabledPassTypes: dto.enabledPassTypes,
-        roles: dto.rolePermissions ? Object.keys(dto.rolePermissions) : undefined,
+        roles: dto.rolePermissions
+          ? Object.keys(dto.rolePermissions)
+          : undefined,
       },
     });
     return result;
@@ -94,7 +111,11 @@ export class AdminController {
 
   @Patch('users/:id')
   @RequireAllPermissions('admin.users')
-  updateUser(@Param('id') id: string, @Body() dto: Partial<CreateUserDto & { isActive: boolean }>, @Req() req: any) {
+  updateUser(
+    @Param('id') id: string,
+    @Body() dto: Partial<CreateUserDto & { isActive: boolean }>,
+    @Req() req: any,
+  ) {
     return this.adminService.updateUser(id, dto, req.user);
   }
 
@@ -148,7 +169,11 @@ export class AdminController {
 
   @Patch('business-centers/:id')
   @RequireAllPermissions('admin.offices')
-  updateBusinessCenter(@Param('id') id: string, @Body() dto: UpdateBusinessCenterDto, @Req() req: any) {
+  updateBusinessCenter(
+    @Param('id') id: string,
+    @Body() dto: UpdateBusinessCenterDto,
+    @Req() req: any,
+  ) {
     return this.adminService.updateBusinessCenter(id, dto, req.user);
   }
 
@@ -194,7 +219,11 @@ export class AdminController {
 
   @Patch('offices/:id')
   @RequireAllPermissions('admin.offices')
-  updateOffice(@Param('id') id: string, @Body() dto: Partial<CreateOfficeDto & { isActive: boolean }>, @Req() req: any) {
+  updateOffice(
+    @Param('id') id: string,
+    @Body() dto: Partial<CreateOfficeDto & { isActive: boolean }>,
+    @Req() req: any,
+  ) {
     return this.adminService.updateOffice(id, dto, req.user);
   }
 
@@ -205,8 +234,13 @@ export class AdminController {
   }
 
   @Get('audit/export')
-  async exportAudit(@Query() query: Record<string, string>, @Res() res: Response) {
-    const csv = await this.adminService.exportAuditCsv(this.parseAuditQuery(query));
+  async exportAudit(
+    @Query() query: Record<string, string>,
+    @Res() res: Response,
+  ) {
+    const csv = await this.adminService.exportAuditCsv(
+      this.parseAuditQuery(query),
+    );
     const filename = `audit-${new Date().toISOString().slice(0, 10)}.csv`;
     res.setHeader('Content-Type', 'text/csv; charset=utf-8');
     res.setHeader('Content-Disposition', `attachment; filename="${filename}"`);
@@ -240,7 +274,10 @@ export class AdminController {
 
   @Patch('site-settings')
   @RequireAllPermissions('admin.settings')
-  async updateSiteSettings(@Body() dto: UpdateSiteSettingsDto, @Req() req: any) {
+  async updateSiteSettings(
+    @Body() dto: UpdateSiteSettingsDto,
+    @Req() req: any,
+  ) {
     const payload: Parameters<SiteSettingsService['update']>[0] = {
       ...dto,
       faqItems: dto.faqItems?.map((item) => ({
@@ -275,6 +312,10 @@ export class AdminController {
 
   @Get('reports/daily')
   getDailyReport(@Query('date') date?: string) {
-    return { date: date || new Date().toISOString().slice(0, 10), summary: [], visitors: [] };
+    return {
+      date: date || new Date().toISOString().slice(0, 10),
+      summary: [],
+      visitors: [],
+    };
   }
 }

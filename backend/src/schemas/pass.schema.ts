@@ -124,7 +124,12 @@ export class Pass {
 export const PassSchema = SchemaFactory.createForClass(Pass);
 
 PassSchema.index({ status: 1, visitDate: -1 });
-PassSchema.index({ visitorName: 'text', vehiclePlate: 'text', companyName: 'text', visitorPassportNumber: 'text' });
+PassSchema.index({
+  visitorName: 'text',
+  vehiclePlate: 'text',
+  companyName: 'text',
+  visitorPassportNumber: 'text',
+});
 PassSchema.index({ visitorPhone: 1 });
 PassSchema.index({ office: 1 });
 PassSchema.index({ property: 1, visitDate: -1 });

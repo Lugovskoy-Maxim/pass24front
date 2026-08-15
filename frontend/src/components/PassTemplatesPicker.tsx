@@ -1,9 +1,23 @@
 'use client';
 
 import { useEffect, useState } from 'react';
-import { Bookmark, Car, Package, RefreshCw, Trash2, User, Wrench } from 'lucide-react';
+import {
+  Bookmark,
+  Car,
+  Package,
+  RefreshCw,
+  Trash2,
+  User,
+  Wrench,
+} from 'lucide-react';
 import { useToast } from '@/components/Toast';
-import { api, getErrorMessage, PassTemplate, PassType, TYPE_LABELS } from '@/lib/api';
+import {
+  api,
+  getErrorMessage,
+  PassTemplate,
+  PassType,
+  TYPE_LABELS,
+} from '@/lib/api';
 
 const TYPE_ICONS: Record<PassType, typeof User> = {
   visitor: User,
@@ -18,7 +32,11 @@ interface PassTemplatesPickerProps {
   onSelect: (template: PassTemplate) => void;
 }
 
-export function PassTemplatesPicker({ enabledTypes, selectedId, onSelect }: PassTemplatesPickerProps) {
+export function PassTemplatesPicker({
+  enabledTypes,
+  selectedId,
+  onSelect,
+}: PassTemplatesPickerProps) {
   const { toast } = useToast();
   const [templates, setTemplates] = useState<PassTemplate[]>([]);
   const [loading, setLoading] = useState(true);
@@ -27,9 +45,12 @@ export function PassTemplatesPicker({ enabledTypes, selectedId, onSelect }: Pass
 
   const load = () => {
     setLoading(true);
-    return api.getPassTemplates()
+    return api
+      .getPassTemplates()
       .then(({ templates: data }) => setTemplates(data))
-      .catch((err) => toast(getErrorMessage(err, 'Не удалось загрузить шаблоны'), 'error'))
+      .catch((err) =>
+        toast(getErrorMessage(err, 'Не удалось загрузить шаблоны'), 'error'),
+      )
       .finally(() => setLoading(false));
   };
 
@@ -42,7 +63,12 @@ export function PassTemplatesPicker({ enabledTypes, selectedId, onSelect }: Pass
     try {
       const { templates: data, imported } = await api.syncPassTemplates();
       setTemplates(data);
-      toast(imported > 0 ? `Импортировано шаблонов: ${imported}` : 'Новых шаблонов из пропусков нет', 'success');
+      toast(
+        imported > 0
+          ? `Импортировано шаблонов: ${imported}`
+          : 'Новых шаблонов из пропусков нет',
+        'success',
+      );
     } catch (err) {
       toast(getErrorMessage(err, 'Не удалось выполнить действие'), 'error');
     } finally {
@@ -71,7 +97,9 @@ export function PassTemplatesPicker({ enabledTypes, selectedId, onSelect }: Pass
           <Bookmark className="w-4 h-4 text-[var(--accent)] shrink-0 mt-0.5" />
           <div>
             <h2 className="text-sm font-semibold">Шаблоны</h2>
-            <p className="text-xs text-[var(--muted)] mt-0.5">Выберите шаблон, чтобы заполнить форму</p>
+            <p className="text-xs text-[var(--muted)] mt-0.5">
+              Выберите шаблон, чтобы заполнить форму
+            </p>
           </div>
         </div>
         <button
@@ -80,16 +108,21 @@ export function PassTemplatesPicker({ enabledTypes, selectedId, onSelect }: Pass
           onClick={handleSync}
           disabled={syncing}
         >
-          <RefreshCw className={`w-3.5 h-3.5 ${syncing ? 'animate-spin' : ''}`} />
+          <RefreshCw
+            className={`w-3.5 h-3.5 ${syncing ? 'animate-spin' : ''}`}
+          />
           {syncing ? 'Импорт...' : 'Из пропусков'}
         </button>
       </div>
 
       {loading ? (
-        <p className="text-sm text-[var(--muted)] animate-pulse">Загрузка шаблонов...</p>
+        <p className="text-sm text-[var(--muted)] animate-pulse">
+          Загрузка шаблонов...
+        </p>
       ) : templates.length === 0 ? (
         <p className="text-sm text-[var(--muted)]">
-          Шаблонов пока нет. Импортируйте из прошлых пропусков или заполните форму вручную.
+          Шаблонов пока нет. Импортируйте из прошлых пропусков или заполните
+          форму вручную.
         </p>
       ) : (
         <div className="flex flex-wrap gap-2">
@@ -110,11 +143,17 @@ export function PassTemplatesPicker({ enabledTypes, selectedId, onSelect }: Pass
                   type="button"
                   className="flex items-center gap-2 px-3 py-2 text-sm text-left min-w-0 disabled:opacity-50"
                   disabled={disabledType}
-                  title={disabledType ? 'Тип пропуска отключён' : template.visitorName}
+                  title={
+                    disabledType
+                      ? 'Тип пропуска отключён'
+                      : template.visitorName
+                  }
                   onClick={() => onSelect(template)}
                 >
                   <Icon className="w-3.5 h-3.5 shrink-0 text-[var(--status-approved)]" />
-                  <span className="font-medium truncate max-w-[140px] sm:max-w-[200px]">{template.name}</span>
+                  <span className="font-medium truncate max-w-[140px] sm:max-w-[200px]">
+                    {template.name}
+                  </span>
                   <span className="text-xs text-[var(--muted)] hidden sm:inline truncate max-w-[120px]">
                     {template.visitorName}
                   </span>
@@ -136,7 +175,8 @@ export function PassTemplatesPicker({ enabledTypes, selectedId, onSelect }: Pass
 
       {templates.length > 0 && (
         <p className="text-xs text-[var(--muted)]">
-          {TYPE_LABELS.visitor}, {TYPE_LABELS.parking} и другие типы подставляются из шаблона
+          {TYPE_LABELS.visitor}, {TYPE_LABELS.parking} и другие типы
+          подставляются из шаблона
         </p>
       )}
     </div>

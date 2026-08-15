@@ -92,21 +92,31 @@ const MAX_TITLE = 200;
 const MAX_LINE = 500;
 const MAX_LINES = 30;
 
-function normalizeStringList(raw: unknown, maxLines = MAX_LINES, maxLen = MAX_LINE): string[] {
+function normalizeStringList(
+  raw: unknown,
+  maxLines = MAX_LINES,
+  maxLen = MAX_LINE,
+): string[] {
   if (!Array.isArray(raw)) return [];
   const out: string[] = [];
   for (const item of raw) {
     if (out.length >= maxLines) break;
-    const line = String(item ?? '').trim().slice(0, maxLen);
+    const line = String(item ?? '')
+      .trim()
+      .slice(0, maxLen);
     if (line) out.push(line);
   }
   return out;
 }
 
-function toNormalized(section: GuideSection, index: number): NormalizedGuideSection {
+function toNormalized(
+  section: GuideSection,
+  index: number,
+): NormalizedGuideSection {
   return {
     id: (section.id || '').trim().slice(0, 64) || `guide-${index + 1}`,
-    title: (section.title || '').trim().slice(0, MAX_TITLE) || `Раздел ${index + 1}`,
+    title:
+      (section.title || '').trim().slice(0, MAX_TITLE) || `Раздел ${index + 1}`,
     steps: normalizeStringList(section.steps),
     paragraphs: normalizeStringList(section.paragraphs),
   };
@@ -121,13 +131,18 @@ export function normalizeGuideSections(raw: unknown): NormalizedGuideSection[] {
   for (let i = 0; i < Math.min(raw.length, MAX_GUIDE_SECTIONS); i += 1) {
     const row = raw[i];
     if (!row || typeof row !== 'object') continue;
-    const title = String((row as GuideSection).title ?? '').trim().slice(0, MAX_TITLE);
+    const title = String((row as GuideSection).title ?? '')
+      .trim()
+      .slice(0, MAX_TITLE);
     if (!title) continue;
     const steps = normalizeStringList((row as GuideSection).steps);
     const paragraphs = normalizeStringList((row as GuideSection).paragraphs);
     if (!steps.length && !paragraphs.length) continue;
     result.push({
-      id: String((row as GuideSection).id ?? '').trim().slice(0, 64) || `guide-${i + 1}`,
+      id:
+        String((row as GuideSection).id ?? '')
+          .trim()
+          .slice(0, 64) || `guide-${i + 1}`,
       title,
       steps,
       paragraphs,

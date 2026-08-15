@@ -17,7 +17,8 @@ import { User, UserDocument } from '../schemas';
 export class JwtStrategy extends PassportStrategy(Strategy) {
   constructor(
     private configService: ConfigService,
-    @InjectModel(User.name, AUTH_CONNECTION) private userModel: Model<UserDocument>,
+    @InjectModel(User.name, AUTH_CONNECTION)
+    private userModel: Model<UserDocument>,
     private accessConfigService: AccessConfigService,
   ) {
     super({
@@ -38,12 +39,16 @@ export class JwtStrategy extends PassportStrategy(Strategy) {
       );
     }
     if (user.parentTenantId && user.isActive === false) {
-      throw new UnauthorizedException('Учётная запись отключена владельцем компании');
+      throw new UnauthorizedException(
+        'Учётная запись отключена владельцем компании',
+      );
     }
     if (user.isBlocked) {
       throw new UnauthorizedException('Учётная запись заблокирована');
     }
-    const permissions = await this.accessConfigService.getPermissionsForRole(user.role || 'tenant');
+    const permissions = await this.accessConfigService.getPermissionsForRole(
+      user.role || 'tenant',
+    );
     // Форма req.user, которую ждут controllers (userId, не sub)
     return {
       userId: payload.sub,

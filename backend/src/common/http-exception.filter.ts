@@ -40,32 +40,47 @@ function humanizeValidationItem(text: string): string {
 function normalizeMessage(message: unknown): string | string[] {
   if (typeof message === 'string') return humanizeValidationItem(message);
   if (Array.isArray(message)) {
-    const parts = message.map((item) => {
-      if (typeof item === 'string') return humanizeValidationItem(item);
-      if (item && typeof item === 'object' && 'constraints' in item) {
-        const c = (item as { constraints?: Record<string, string> }).constraints;
-        return Object.values(c || {}).map(humanizeValidationItem).join('. ');
-      }
-      return '';
-    }).filter(Boolean);
+    const parts = message
+      .map((item) => {
+        if (typeof item === 'string') return humanizeValidationItem(item);
+        if (item && typeof item === 'object' && 'constraints' in item) {
+          const c = (item as { constraints?: Record<string, string> })
+            .constraints;
+          return Object.values(c || {})
+            .map(humanizeValidationItem)
+            .join('. ');
+        }
+        return '';
+      })
+      .filter(Boolean);
     return parts.length === 1 ? parts[0] : parts;
   }
   return 'Проверьте введённые данные';
 }
 
 function isMongoDuplicate(err: unknown): boolean {
-  return !!(err && typeof err === 'object' && 'code' in err && (err as { code: number }).code === 11000);
+  return !!(
+    err &&
+    typeof err === 'object' &&
+    'code' in err &&
+    (err as { code: number }).code === 11000
+  );
 }
 
 function mongoDuplicateMessage(err: unknown): string {
   const key = String(
-    (err as { keyPattern?: Record<string, unknown>; message?: string }).keyPattern
-      ? Object.keys((err as { keyPattern: Record<string, unknown> }).keyPattern).join(',')
+    (err as { keyPattern?: Record<string, unknown>; message?: string })
+      .keyPattern
+      ? Object.keys(
+          (err as { keyPattern: Record<string, unknown> }).keyPattern,
+        ).join(',')
       : (err as { message?: string }).message || '',
   ).toLowerCase();
-  if (key.includes('phone')) return 'Пользователь с таким телефоном уже существует';
+  if (key.includes('phone'))
+    return 'Пользователь с таким телефоном уже существует';
   if (key.includes('email')) return 'Пользователь с таким email уже существует';
-  if (key.includes('username')) return 'Пользователь с таким логином уже существует';
+  if (key.includes('username'))
+    return 'Пользователь с таким логином уже существует';
   return 'Запись с такими данными уже существует';
 }
 
@@ -95,7 +110,8 @@ export class AllExceptionsFilter implements ExceptionFilter {
         message = body;
       } else if (body && typeof body === 'object') {
         const obj = body as { message?: unknown; error?: string };
-        if (obj.message !== undefined) message = normalizeMessage(obj.message) as string | string[];
+        if (obj.message !== undefined)
+          message = normalizeMessage(obj.message) as string | string[];
         if (obj.error) errorName = obj.error;
       }
 
@@ -103,9 +119,11 @@ export class AllExceptionsFilter implements ExceptionFilter {
       if (typeof message === 'string') {
         const m = message.trim();
         if (status >= 500 && /^internal server error$/i.test(m)) {
-          message = 'На сервере произошла ошибка. Попробуйте позже или обратитесь к администратору.';
+          message =
+            'На сервере произошла ошибка. Попробуйте позже или обратитесь к администратору.';
         } else if (status === 401 && (!m || /^unauthorized$/i.test(m))) {
-          message = 'Нужно войти в систему или указать верные данные для входа.';
+          message =
+            'Нужно войти в систему или указать верные данные для входа.';
         } else if (status === 403 && (!m || /^forbidden$/i.test(m))) {
           message = 'Недостаточно прав для этого действия.';
         } else if (status === 404 && (!m || /^not found$/i.test(m))) {
@@ -117,7 +135,9 @@ export class AllExceptionsFilter implements ExceptionFilter {
 
       if (status >= 500) {
         this.logger.error(
-          exception instanceof Error ? exception.stack || exception.message : String(exception),
+          exception instanceof Error
+            ? exception.stack || exception.message
+            : String(exception),
         );
       }
 
@@ -129,12 +149,15 @@ export class AllExceptionsFilter implements ExceptionFilter {
     }
 
     this.logger.error(
-      exception instanceof Error ? exception.stack || exception.message : String(exception),
+      exception instanceof Error
+        ? exception.stack || exception.message
+        : String(exception),
     );
 
     return res.status(HttpStatus.INTERNAL_SERVER_ERROR).json({
       statusCode: HttpStatus.INTERNAL_SERVER_ERROR,
-      message: 'На сервере произошла ошибка. Попробуйте позже или обратитесь к администратору.',
+      message:
+        'На сервере произошла ошибка. Попробуйте позже или обратитесь к администратору.',
       error: 'Internal Server Error',
     });
   }

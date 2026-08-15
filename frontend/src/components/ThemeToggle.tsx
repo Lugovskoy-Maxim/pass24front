@@ -8,7 +8,10 @@ interface ThemeToggleProps {
   compact?: boolean;
 }
 
-export function ThemeToggle({ className = '', compact = false }: ThemeToggleProps) {
+export function ThemeToggle({
+  className = '',
+  compact = false,
+}: ThemeToggleProps) {
   const { theme, toggleTheme } = useTheme();
   const isDark = theme === 'dark';
 

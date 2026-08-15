@@ -43,4 +43,6 @@ export const DEV_TEST_ACCOUNTS: DevTestAccount[] = [
   },
 ];
 
-export const DEV_TEST_ACCOUNT_EMAILS = new Set(DEV_TEST_ACCOUNTS.map((account) => account.email));
+export const DEV_TEST_ACCOUNT_EMAILS = new Set(
+  DEV_TEST_ACCOUNTS.map((account) => account.email),
+);

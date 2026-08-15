@@ -69,7 +69,8 @@ const ENTITY_LABELS: Record<string, string> = {
 export class AuditService {
   constructor(
     @InjectModel(AuditLog.name) private auditLogModel: Model<AuditLogDocument>,
-    @InjectModel(User.name, AUTH_CONNECTION) private userModel: Model<UserDocument>,
+    @InjectModel(User.name, AUTH_CONNECTION)
+    private userModel: Model<UserDocument>,
   ) {}
 
   async log(params: {
@@ -86,7 +87,10 @@ export class AuditService {
 
     if (actor?.userId) {
       userId = new Types.ObjectId(actor.userId);
-      const user = await this.userModel.findById(actor.userId).select('fullName email').lean();
+      const user = await this.userModel
+        .findById(actor.userId)
+        .select('fullName email')
+        .lean();
       if (user) {
         userName = user.fullName;
         userEmail = user.email;
@@ -96,7 +100,9 @@ export class AuditService {
     await this.auditLogModel.create({
       action: params.action,
       entityType: params.entityType,
-      entityId: params.entityId ? new Types.ObjectId(params.entityId) : undefined,
+      entityId: params.entityId
+        ? new Types.ObjectId(params.entityId)
+        : undefined,
       userId,
       userName,
       userEmail,
@@ -110,7 +116,12 @@ export class AuditService {
     const filter = this.buildFilter(query);
 
     const [entries, total] = await Promise.all([
-      this.auditLogModel.find(filter).sort({ createdAt: -1 }).skip(offset).limit(limit).lean(),
+      this.auditLogModel
+        .find(filter)
+        .sort({ createdAt: -1 })
+        .skip(offset)
+        .limit(limit)
+        .lean(),
       this.auditLogModel.countDocuments(filter),
     ]);
 
@@ -130,11 +141,20 @@ export class AuditService {
       .limit(EXPORT_LIMIT)
       .lean();
 
-    const header = ['Дата и время', 'Действие', 'Пользователь', 'Email', 'Объект', 'Детали'];
+    const header = [
+      'Дата и время',
+      'Действие',
+      'Пользователь',
+      'Email',
+      'Объект',
+      'Детали',
+    ];
     const rows = entries.map((doc) => {
       const entry = this.mapEntry(doc);
       return [
-        entry.createdAt ? new Date(entry.createdAt).toLocaleString('ru-RU') : '',
+        entry.createdAt
+          ? new Date(entry.createdAt).toLocaleString('ru-RU')
+          : '',
         ACTION_LABELS[entry.action] || entry.action,
         entry.userName || '',
         entry.userEmail || '',
@@ -143,7 +163,11 @@ export class AuditService {
       ];
     });
 
-    return [header, ...rows].map((row) => row.map((cell) => this.escapeCsv(String(cell ?? ''))).join(';')).join('\r\n');
+    return [header, ...rows]
+      .map((row) =>
+        row.map((cell) => this.escapeCsv(String(cell ?? ''))).join(';'),
+      )
+      .join('\r\n');
   }
 
   private buildFilter(query: AuditQuery) {
@@ -162,10 +186,14 @@ export class AuditService {
 
     if (query.action?.trim()) filter.action = query.action.trim();
     if (query.entityType?.trim()) filter.entityType = query.entityType.trim();
-    if (query.userId?.trim()) filter.userId = new Types.ObjectId(query.userId.trim());
+    if (query.userId?.trim())
+      filter.userId = new Types.ObjectId(query.userId.trim());
 
     if (query.search?.trim()) {
-      const rx = new RegExp(query.search.trim().replace(/[.*+?^${}()|[\]\\]/g, '\\$&'), 'i');
+      const rx = new RegExp(
+        query.search.trim().replace(/[.*+?^${}()|[\]\\]/g, '\\$&'),
+        'i',
+      );
       filter.$or = [
         { userName: rx },
         { userEmail: rx },
@@ -191,7 +219,11 @@ export class AuditService {
   }
 
   async getRecent(limit = 10) {
-    const entries = await this.auditLogModel.find().sort({ createdAt: -1 }).limit(limit).lean();
+    const entries = await this.auditLogModel
+      .find()
+      .sort({ createdAt: -1 })
+      .limit(limit)
+      .lean();
     return entries.map((e) => this.mapEntry(e));
   }
 
@@ -210,15 +242,20 @@ export class AuditService {
     };
   }
 
-  private formatEntityLabel(doc: { entityType?: string; details?: Record<string, unknown> }) {
-    const type = ENTITY_LABELS[doc.entityType || ''] || doc.entityType || 'Объект';
+  private formatEntityLabel(doc: {
+    entityType?: string;
+    details?: Record<string, unknown>;
+  }) {
+    const type =
+      ENTITY_LABELS[doc.entityType || ''] || doc.entityType || 'Объект';
     const d = doc.details || {};
 
     switch (doc.entityType) {
       case 'pass': {
         const passNumber = d.passNumber as string | undefined;
         const visitorName = d.visitorName as string | undefined;
-        if (passNumber && visitorName) return `${type} ${passNumber} · ${visitorName}`;
+        if (passNumber && visitorName)
+          return `${type} ${passNumber} · ${visitorName}`;
         if (passNumber) return `${type} ${passNumber}`;
         break;
       }

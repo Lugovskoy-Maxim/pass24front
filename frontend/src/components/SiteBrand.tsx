@@ -97,7 +97,9 @@ export function SiteBrand({
   const markEl = <BrandMark brand={brand} size={size} iconSrc={iconSrc} />;
 
   const brandRow = (
-    <div className={`flex gap-2.5 min-w-0 items-center ${layout === 'column' ? 'flex-col' : ''}`}>
+    <div
+      className={`flex gap-2.5 min-w-0 items-center ${layout === 'column' ? 'flex-col' : ''}`}
+    >
       {brand.brandNameBeforeMark ? (
         <>
           {nameEl}

@@ -7,7 +7,9 @@ import { AuditService } from './audit.service';
 @Global()
 @Module({
   imports: [
-    MongooseModule.forFeature([{ name: AuditLog.name, schema: AuditLogSchema }]),
+    MongooseModule.forFeature([
+      { name: AuditLog.name, schema: AuditLogSchema },
+    ]),
     AuthDatabaseModule.forFeature([{ name: User.name, schema: UserSchema }]),
   ],
   providers: [AuditService],

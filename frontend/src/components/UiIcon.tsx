@@ -8,7 +8,11 @@ interface UiIconProps {
   strokeWidth?: number;
 }
 
-export function UiIcon({ name, className = 'w-4 h-4', strokeWidth = 2 }: UiIconProps) {
+export function UiIcon({
+  name,
+  className = 'w-4 h-4',
+  strokeWidth = 2,
+}: UiIconProps) {
   const Icon = resolveUiIcon(name);
   return <Icon className={className} strokeWidth={strokeWidth} aria-hidden />;
 }

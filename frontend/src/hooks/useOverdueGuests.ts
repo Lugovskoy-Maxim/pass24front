@@ -13,29 +13,39 @@ export function useOverdueGuests(
   const [timeTick, setTimeTick] = useState(0);
   const allProperties = !!options?.allProperties;
 
-  const refresh = useCallback((opts?: { silent?: boolean }): Promise<Pass[]> => {
-    if (!enabled) return Promise.resolve([]);
-    const silent = opts?.silent;
-    if (!silent) setLoading(true);
-    return api.getOverdueActive({ allProperties })
-      .then(({ passes: data }) => {
-        setPasses(data);
-        return data;
-      })
-      .catch(() => {
-        setPasses([]);
-        return [] as Pass[];
-      })
-      .finally(() => {
-        if (!silent) setLoading(false);
-      });
-  }, [enabled, allProperties]);
+  const refresh = useCallback(
+    (opts?: { silent?: boolean }): Promise<Pass[]> => {
+      if (!enabled) return Promise.resolve([]);
+      const silent = opts?.silent;
+      if (!silent) setLoading(true);
+      return api
+        .getOverdueActive({ allProperties })
+        .then(({ passes: data }) => {
+          setPasses(data);
+          return data;
+        })
+        .catch(() => {
+          setPasses([]);
+          return [] as Pass[];
+        })
+        .finally(() => {
+          if (!silent) setLoading(false);
+        });
+    },
+    [enabled, allProperties],
+  );
 
   useEffect(() => {
     refresh();
     if (!enabled) return;
-    const pollId = window.setInterval(() => refresh({ silent: true }), AUTO_REFRESH_MS);
-    const tickId = window.setInterval(() => setTimeTick((t) => t + 1), AUTO_REFRESH_MS);
+    const pollId = window.setInterval(
+      () => refresh({ silent: true }),
+      AUTO_REFRESH_MS,
+    );
+    const tickId = window.setInterval(
+      () => setTimeTick((t) => t + 1),
+      AUTO_REFRESH_MS,
+    );
     return () => {
       window.clearInterval(pollId);
       window.clearInterval(tickId);

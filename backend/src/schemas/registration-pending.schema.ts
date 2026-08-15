@@ -52,6 +52,7 @@ export class RegistrationPending {
   company: string;
 }
 
-export const RegistrationPendingSchema = SchemaFactory.createForClass(RegistrationPending);
+export const RegistrationPendingSchema =
+  SchemaFactory.createForClass(RegistrationPending);
 
 RegistrationPendingSchema.index({ expiresAt: 1 }, { expireAfterSeconds: 0 });

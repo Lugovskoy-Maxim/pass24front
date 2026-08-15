@@ -2,13 +2,28 @@
 
 import Link from 'next/link';
 import { usePathname } from 'next/navigation';
-import { AlertCircle, LogOut, Plus, List, ClipboardList, Settings, User } from 'lucide-react';
+import {
+  AlertCircle,
+  LogOut,
+  Plus,
+  List,
+  ClipboardList,
+  Settings,
+  User,
+} from 'lucide-react';
 import { useAuth } from '@/lib/auth';
 import { useConfig } from '@/hooks/useConfig';
 import { SiteBrand } from '@/components/SiteBrand';
 import { formatTenantOffices } from '@/lib/api';
 import { getUserRoleLabel } from '@/lib/permissions';
-import { canOrderPasses, canSeeOverdueAlerts, canUseReception, canViewPasses, getHomePath, hasPermission } from '@/lib/permissions';
+import {
+  canOrderPasses,
+  canSeeOverdueAlerts,
+  canUseReception,
+  canViewPasses,
+  getHomePath,
+  hasPermission,
+} from '@/lib/permissions';
 import { getUiLabels } from '@/lib/ui-labels';
 import { useOverdueGuests } from '@/hooks/useOverdueGuests';
 import { OverdueGuestsAlert } from '@/components/OverdueGuestsAlert';
@@ -28,43 +43,69 @@ export function Header() {
   const { passes: overduePasses } = useOverdueGuests(showOverdueAlerts);
 
   const onControlPage = pathname === '/control';
-  const showHeaderOverdueBanner = showOverdueAlerts && overduePasses.length > 0 && !onControlPage;
+  const showHeaderOverdueBanner =
+    showOverdueAlerts && overduePasses.length > 0 && !onControlPage;
 
   const scrollToOverdueSection = () => {
-    document.getElementById('reception-section-overdue')?.scrollIntoView({ behavior: 'smooth', block: 'start' });
+    document
+      .getElementById('reception-section-overdue')
+      ?.scrollIntoView({ behavior: 'smooth', block: 'start' });
   };
 
   const homePath = getHomePath(user);
 
   const links = [
-    { href: '/passes', label: L.nav.passes, icon: List, show: canViewPasses(user) },
+    {
+      href: '/passes',
+      label: L.nav.passes,
+      icon: List,
+      show: canViewPasses(user),
+    },
     {
       href: '/passes/new',
       label: L.nav.orderPass,
       icon: Plus,
       show: canOrderPasses(user),
     },
-    { href: '/control', label: L.nav.reception, icon: ClipboardList, show: canUseReception(user) },
+    {
+      href: '/control',
+      label: L.nav.reception,
+      icon: ClipboardList,
+      show: canUseReception(user),
+    },
     { href: '/profile', label: L.nav.profile, icon: User, show: true },
-    { href: '/admin', label: L.nav.admin, icon: Settings, show: hasPermission(user, 'admin.panel') },
+    {
+      href: '/admin',
+      label: L.nav.admin,
+      icon: Settings,
+      show: hasPermission(user, 'admin.panel'),
+    },
   ].filter((l) => l.show);
 
   return (
     <header
       className="sticky top-0 z-50 border-b"
-      style={{ background: 'var(--header-bg)', borderColor: 'var(--header-border)' }}
+      style={{
+        background: 'var(--header-bg)',
+        borderColor: 'var(--header-border)',
+      }}
     >
       <div className="max-w-6xl mx-auto px-4 py-3 flex items-center justify-between gap-4">
         <div className="flex items-center gap-6">
           <Link href={homePath} style={{ color: 'var(--header-text)' }}>
-            <SiteBrand config={config} size="sm" variant={theme === 'dark' ? 'dark' : 'light'} className="max-w-[200px] sm:max-w-none" />
+            <SiteBrand
+              config={config}
+              size="sm"
+              variant={theme === 'dark' ? 'dark' : 'light'}
+              className="max-w-[200px] sm:max-w-none"
+            />
           </Link>
           <nav className="hidden sm:flex items-center gap-1">
             {links.map(({ href, label, icon: Icon }) => {
               const active =
-                pathname === href
-                || (href !== '/admin' && pathname.startsWith(href))
-                || (href === '/admin' && pathname.startsWith('/admin'));
+                pathname === href ||
+                (href !== '/admin' && pathname.startsWith(href)) ||
+                (href === '/admin' && pathname.startsWith('/admin'));
               return (
                 <Link
                   key={href}
@@ -79,8 +120,9 @@ export function Header() {
           </nav>
         </div>
         <div className="flex items-center gap-3">
-          {showOverdueAlerts && overduePasses.length > 0 && (
-            onControlPage ? (
+          {showOverdueAlerts &&
+            overduePasses.length > 0 &&
+            (onControlPage ? (
               <button
                 type="button"
                 onClick={scrollToOverdueSection}
@@ -90,11 +132,21 @@ export function Header() {
                 <span className="truncate">{overduePasses.length}</span>
               </button>
             ) : (
-              <OverdueGuestsAlert passes={overduePasses} labels={L} compact linkHref="/control#reception-section-overdue" />
-            )
-          )}
-          <div className="text-right hidden md:block" style={{ color: 'var(--header-text)' }}>
-            <Link href="/profile" className="text-sm font-medium hover:opacity-80 hover:underline block">
+              <OverdueGuestsAlert
+                passes={overduePasses}
+                labels={L}
+                compact
+                linkHref="/control#reception-section-overdue"
+              />
+            ))}
+          <div
+            className="text-right hidden md:block"
+            style={{ color: 'var(--header-text)' }}
+          >
+            <Link
+              href="/profile"
+              className="text-sm font-medium hover:opacity-80 hover:underline block"
+            >
               {user.full_name}
             </Link>
             <div className="text-xs" style={{ color: 'var(--header-muted)' }}>

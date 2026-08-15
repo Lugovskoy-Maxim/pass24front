@@ -66,20 +66,30 @@ export function parseBoolRu(value?: string, defaultValue = true): boolean {
   return defaultValue;
 }
 
-export function parseOfficeCsv(text: string): { rows: OfficeCsvRow[]; errors: string[] } {
+export function parseOfficeCsv(text: string): {
+  rows: OfficeCsvRow[];
+  errors: string[];
+} {
   const normalized = text.replace(/^\uFEFF/, '').trim();
   if (!normalized) {
     return { rows: [], errors: ['Файл пустой'] };
   }
 
-  const lines = normalized.split(/\r?\n/).map((l) => l.trim()).filter(Boolean);
+  const lines = normalized
+    .split(/\r?\n/)
+    .map((l) => l.trim())
+    .filter(Boolean);
   if (!lines.length) {
     return { rows: [], errors: ['Файл пустой'] };
   }
 
   const delimiter = detectDelimiter(lines[0]);
-  const headerCells = parseCsvLine(lines[0], delimiter).map((c) => c.toLowerCase());
-  const hasHeader = headerCells.some((c) => c.includes('бц') || c.includes('номер'));
+  const headerCells = parseCsvLine(lines[0], delimiter).map((c) =>
+    c.toLowerCase(),
+  );
+  const hasHeader = headerCells.some(
+    (c) => c.includes('бц') || c.includes('номер'),
+  );
   const dataLines = hasHeader ? lines.slice(1) : lines;
 
   const rows: OfficeCsvRow[] = [];
@@ -99,7 +109,10 @@ export function parseOfficeCsv(text: string): { rows: OfficeCsvRow[]; errors: st
 
     const areaRaw = cells[3]?.trim().replace(',', '.');
     const areaSqm = areaRaw ? Number(areaRaw) : undefined;
-    if (areaRaw && (areaSqm === undefined || !Number.isFinite(areaSqm) || areaSqm < 0)) {
+    if (
+      areaRaw &&
+      (areaSqm === undefined || !Number.isFinite(areaSqm) || areaSqm < 0)
+    ) {
       errors.push(`Строка ${rowNum}: некорректная площадь`);
       return;
     }
@@ -118,25 +131,31 @@ export function parseOfficeCsv(text: string): { rows: OfficeCsvRow[]; errors: st
   return { rows, errors };
 }
 
-export function buildOfficeCsv(rows: Array<{
-  businessCenterName: string;
-  number: string;
-  floor?: string;
-  areaSqm?: number;
-  company?: string;
-  tenantEmail?: string;
-  isActive: boolean;
-}>): string {
+export function buildOfficeCsv(
+  rows: Array<{
+    businessCenterName: string;
+    number: string;
+    floor?: string;
+    areaSqm?: number;
+    company?: string;
+    tenantEmail?: string;
+    isActive: boolean;
+  }>,
+): string {
   const header = OFFICE_CSV_HEADERS.join(';');
-  const body = rows.map((row) => [
-    escapeCsvCell(row.businessCenterName || ''),
-    escapeCsvCell(row.number || ''),
-    escapeCsvCell(row.floor || ''),
-    row.areaSqm !== undefined && row.areaSqm !== null ? String(row.areaSqm) : '',
-    escapeCsvCell(row.company || ''),
-    escapeCsvCell(row.tenantEmail || ''),
-    row.isActive ? 'да' : 'нет',
-  ].join(';'));
+  const body = rows.map((row) =>
+    [
+      escapeCsvCell(row.businessCenterName || ''),
+      escapeCsvCell(row.number || ''),
+      escapeCsvCell(row.floor || ''),
+      row.areaSqm !== undefined && row.areaSqm !== null
+        ? String(row.areaSqm)
+        : '',
+      escapeCsvCell(row.company || ''),
+      escapeCsvCell(row.tenantEmail || ''),
+      row.isActive ? 'да' : 'нет',
+    ].join(';'),
+  );
 
   return [header, ...body].join('\n');
 }

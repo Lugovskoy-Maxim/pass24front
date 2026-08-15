@@ -14,15 +14,18 @@ interface BeforeInstallPromptEvent extends Event {
 function isStandalone(): boolean {
   if (typeof window === 'undefined') return false;
   return (
-    window.matchMedia('(display-mode: standalone)').matches
-    || (window.navigator as Navigator & { standalone?: boolean }).standalone === true
+    window.matchMedia('(display-mode: standalone)').matches ||
+    (window.navigator as Navigator & { standalone?: boolean }).standalone ===
+      true
   );
 }
 
 function isIos(): boolean {
   if (typeof navigator === 'undefined') return false;
-  return /iphone|ipad|ipod/i.test(navigator.userAgent)
-    || (navigator.platform === 'MacIntel' && navigator.maxTouchPoints > 1);
+  return (
+    /iphone|ipad|ipod/i.test(navigator.userAgent) ||
+    (navigator.platform === 'MacIntel' && navigator.maxTouchPoints > 1)
+  );
 }
 
 function wasDismissedRecently(): boolean {
@@ -37,14 +40,18 @@ function wasDismissedRecently(): boolean {
 }
 
 export function PwaInstallPrompt() {
-  const [deferred, setDeferred] = useState<BeforeInstallPromptEvent | null>(null);
+  const [deferred, setDeferred] = useState<BeforeInstallPromptEvent | null>(
+    null,
+  );
   const [visible, setVisible] = useState(false);
   const [iosMode, setIosMode] = useState(false);
 
   useEffect(() => {
-    window.dispatchEvent(new CustomEvent('pass24:pwa-install-visibility', {
-      detail: { visible },
-    }));
+    window.dispatchEvent(
+      new CustomEvent('pass24:pwa-install-visibility', {
+        detail: { visible },
+      }),
+    );
   }, [visible]);
 
   const dismiss = useCallback(() => {
@@ -72,7 +79,8 @@ export function PwaInstallPrompt() {
       setVisible(true);
     }
 
-    return () => window.removeEventListener('beforeinstallprompt', onBeforeInstall);
+    return () =>
+      window.removeEventListener('beforeinstallprompt', onBeforeInstall);
   }, []);
 
   const install = async () => {
@@ -92,7 +100,11 @@ export function PwaInstallPrompt() {
   if (!visible) return null;
 
   return (
-    <div className="pwa-install" role="dialog" aria-label="Установить приложение">
+    <div
+      className="pwa-install"
+      role="dialog"
+      aria-label="Установить приложение"
+    >
       <div className="pwa-install__card card">
         <button
           type="button"
@@ -120,7 +132,11 @@ export function PwaInstallPrompt() {
             <span>Поделиться → На экран «Домой»</span>
           </div>
         ) : (
-          <button type="button" className="btn btn-primary pwa-install__btn" onClick={install}>
+          <button
+            type="button"
+            className="btn btn-primary pwa-install__btn"
+            onClick={install}
+          >
             <Download className="w-4 h-4" />
             Установить
           </button>

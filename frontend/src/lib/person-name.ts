@@ -13,7 +13,9 @@ export interface PersonNameLabels {
   sectionTitle?: string;
 }
 
-export function buildFullName(parts: Partial<PersonNameParts> & { fullName?: string }): string {
+export function buildFullName(
+  parts: Partial<PersonNameParts> & { fullName?: string },
+): string {
   if (parts.fullName?.trim()) return parts.fullName.trim();
   return [parts.lastName, parts.firstName, parts.middleName]
     .map((p) => p?.trim())

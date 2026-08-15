@@ -46,14 +46,22 @@ export function PassTicketView({
   const labels = getUiLabels(config);
   const [qrOpen, setQrOpen] = useState(false);
 
-  const businessCenterName = ticket.businessCenterName || fallbackBusinessCenterName || labels.ticket.defaultBcName;
-  const businessCenterAddress = ticket.businessCenterAddress?.trim()
-    || config?.businessCenters?.find((bc) => bc.name === businessCenterName)?.address?.trim()
-    || '';
+  const businessCenterName =
+    ticket.businessCenterName ||
+    fallbackBusinessCenterName ||
+    labels.ticket.defaultBcName;
+  const businessCenterAddress =
+    ticket.businessCenterAddress?.trim() ||
+    config?.businessCenters
+      ?.find((bc) => bc.name === businessCenterName)
+      ?.address?.trim() ||
+    '';
 
-  const routeProvider = ticket.routeMapsProvider
-    || config?.businessCenters?.find((bc) => bc.name === businessCenterName)?.routeMapsProvider
-    || 'yandex';
+  const routeProvider =
+    ticket.routeMapsProvider ||
+    config?.businessCenters?.find((bc) => bc.name === businessCenterName)
+      ?.routeMapsProvider ||
+    'yandex';
 
   const ticketUrl = useMemo(() => {
     if (typeof window === 'undefined') return '';
@@ -64,7 +72,9 @@ export function PassTicketView({
     ? `${ticket.visitTimeFrom}${ticket.visitTimeTo ? ` – ${ticket.visitTimeTo}` : ''}`
     : null;
 
-  const isTerminal = ['rejected', 'cancelled', 'expired', 'completed'].includes(ticket.status);
+  const isTerminal = ['rejected', 'cancelled', 'expired', 'completed'].includes(
+    ticket.status,
+  );
 
   const typeLabel = TYPE_LABELS[ticket.passType as PassType] || ticket.passType;
   const qrSize = compact ? 112 : 180;
@@ -75,16 +85,26 @@ export function PassTicketView({
     : '';
 
   return (
-    <div className={`pass-ticket ${compact ? 'pass-ticket--compact' : ''} max-w-md mx-auto min-w-0 w-full`}>
-      <article className={`${getPassCardShellClass()} pass-ticket__card min-w-0 max-w-full overflow-hidden`}>
-        <div className={getPassStatusTopStripeClass(ticket.status)} aria-hidden />
+    <div
+      className={`pass-ticket ${compact ? 'pass-ticket--compact' : ''} max-w-md mx-auto min-w-0 w-full`}
+    >
+      <article
+        className={`${getPassCardShellClass()} pass-ticket__card min-w-0 max-w-full overflow-hidden`}
+      >
+        <div
+          className={getPassStatusTopStripeClass(ticket.status)}
+          aria-hidden
+        />
 
         <header className="pass-ticket__header text-center border-b border-[var(--border)] bg-gradient-surface">
           <div className="inline-flex items-baseline justify-center gap-1.5 text-[var(--text)] max-w-full min-w-0 px-1">
             <span className="text-[11px] sm:text-xs font-semibold uppercase tracking-wide text-[var(--muted)] shrink-0">
               {labels.card.businessCenterAbbr}
             </span>
-            <span className="font-bold leading-tight truncate pass-ticket__bc-name" title={businessCenterName}>
+            <span
+              className="font-bold leading-tight truncate pass-ticket__bc-name"
+              title={businessCenterName}
+            >
               {businessCenterName}
             </span>
           </div>
@@ -97,11 +117,16 @@ export function PassTicketView({
               {businessCenterAddress}
             </p>
           ) : null}
-          <p className="text-[10px] text-[var(--muted)] mt-0.5">{labels.card.electronicPass}</p>
+          <p className="text-[10px] text-[var(--muted)] mt-0.5">
+            {labels.card.electronicPass}
+          </p>
         </header>
 
         <section className="pass-ticket__guest text-center border-b border-[var(--border)]">
-          <h1 className="pass-ticket__name font-bold leading-snug break-words max-w-full" title={ticket.visitorName}>
+          <h1
+            className="pass-ticket__name font-bold leading-snug break-words max-w-full"
+            title={ticket.visitorName}
+          >
             {ticket.visitorName}
           </h1>
           <div className="pass-ticket__number mt-1 flex justify-center">
@@ -132,11 +157,15 @@ export function PassTicketView({
             {(ticket.floor || businessCenterName) && (
               <div className="pass-ticket__office-meta">
                 {ticket.floor ? (
-                  <span>{ticket.floor} {labels.card.floorSuffix}</span>
+                  <span>
+                    {ticket.floor} {labels.card.floorSuffix}
+                  </span>
                 ) : null}
                 {ticket.floor && businessCenterName ? <span> · </span> : null}
                 {businessCenterName ? (
-                  <span className="pass-ticket__office-bc">{businessCenterName}</span>
+                  <span className="pass-ticket__office-bc">
+                    {businessCenterName}
+                  </span>
                 ) : null}
               </div>
             )}
@@ -144,7 +173,9 @@ export function PassTicketView({
           <div className="flex items-start gap-1.5 text-xs min-w-0">
             <Calendar className="w-3.5 h-3.5 text-[var(--muted)] shrink-0 mt-0.5" />
             <div className="min-w-0">
-              <div className="text-[9px] uppercase tracking-wide text-[var(--muted)]">{labels.card.visitDate}</div>
+              <div className="text-[9px] uppercase tracking-wide text-[var(--muted)]">
+                {labels.card.visitDate}
+              </div>
               <div className="font-medium">{ticket.visitDate}</div>
             </div>
           </div>
@@ -152,7 +183,9 @@ export function PassTicketView({
             <div className="flex items-start gap-1.5 text-xs min-w-0">
               <Clock className="w-3.5 h-3.5 text-[var(--muted)] shrink-0 mt-0.5" />
               <div className="min-w-0">
-                <div className="text-[9px] uppercase tracking-wide text-[var(--muted)]">Время</div>
+                <div className="text-[9px] uppercase tracking-wide text-[var(--muted)]">
+                  Время
+                </div>
                 <div className="font-medium">{visitWindow}</div>
               </div>
             </div>
@@ -172,8 +205,12 @@ export function PassTicketView({
                 <Building2 className="w-3.5 h-3.5 text-[var(--muted)] shrink-0 mt-0.5" />
               )}
               <div className="min-w-0">
-                <div className="text-[9px] uppercase tracking-wide text-[var(--muted)]">{labels.card.company}</div>
-                <div className="font-medium truncate" title={companyName}>{companyName}</div>
+                <div className="text-[9px] uppercase tracking-wide text-[var(--muted)]">
+                  {labels.card.company}
+                </div>
+                <div className="font-medium truncate" title={companyName}>
+                  {companyName}
+                </div>
               </div>
             </div>
           )}
@@ -234,7 +271,9 @@ export function PassTicketView({
         </section>
 
         {passShowsVisitTimeline(ticket) && (
-          <section className={`pass-ticket__timeline pass-card__timeline ${isTerminal ? 'bg-[var(--surface-muted)]' : 'bg-[var(--surface)]'}`}>
+          <section
+            className={`pass-ticket__timeline pass-card__timeline ${isTerminal ? 'bg-[var(--surface-muted)]' : 'bg-[var(--surface)]'}`}
+          >
             <PassVisitTimeline pass={ticket} labels={labels} compact />
           </section>
         )}

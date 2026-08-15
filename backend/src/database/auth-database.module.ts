@@ -10,8 +10,12 @@ function resolveAuthUri(configService: ConfigService): string {
   const explicit = configService.get<string>('MONGODB_AUTH_URI');
   if (explicit) return explicit;
 
-  const mainUri = configService.get<string>('MONGODB_URI') || 'mongodb://localhost:27017/pass24';
-  const match = mainUri.match(/^(mongodb(?:\+srv)?:\/\/[^/]+)(\/[^/?]+)?(\?.*)?$/);
+  const mainUri =
+    configService.get<string>('MONGODB_URI') ||
+    'mongodb://localhost:27017/pass24';
+  const match = mainUri.match(
+    /^(mongodb(?:\+srv)?:\/\/[^/]+)(\/[^/?]+)?(\?.*)?$/,
+  );
   if (!match) return 'mongodb://localhost:27017/pass24_auth';
 
   const base = match[1];
@@ -26,7 +30,9 @@ function resolveAuthUri(configService: ConfigService): string {
       imports: [ConfigModule],
       useFactory: (configService: ConfigService) => {
         const uri = resolveAuthUri(configService);
-        console.log(`🔐 Connecting to Auth MongoDB at: ${uri.replace(/:[^:]*@/, ':****@')}`);
+        console.log(
+          `🔐 Connecting to Auth MongoDB at: ${uri.replace(/:[^:]*@/, ':****@')}`,
+        );
         return {
           uri,
           serverSelectionTimeoutMS: 5000,
@@ -39,7 +45,9 @@ function resolveAuthUri(configService: ConfigService): string {
   exports: [MongooseModule],
 })
 export class AuthDatabaseModule {
-  static forFeature(models: { name: string; schema: unknown }[]): DynamicModule {
+  static forFeature(
+    models: { name: string; schema: unknown }[],
+  ): DynamicModule {
     return MongooseModule.forFeature(models, AUTH_CONNECTION);
   }
 }

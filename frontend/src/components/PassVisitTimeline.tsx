@@ -1,14 +1,7 @@
 'use client';
 
 import { useEffect, useState } from 'react';
-import {
-  Ban,
-  Check,
-  Circle,
-  Clock,
-  LogIn,
-  LogOut,
-} from 'lucide-react';
+import { Ban, Check, Circle, Clock, LogIn, LogOut } from 'lucide-react';
 import { PassStatus, PassTimelineData } from '@/lib/api';
 import { passShowsVisitTimeline } from '@/lib/pass-checkout';
 import { getPassTimelineCurrentClasses } from '@/lib/pass-status';
@@ -25,7 +18,10 @@ interface TimelineStep {
 
 function formatTime(iso?: string) {
   if (!iso) return null;
-  return new Date(iso).toLocaleTimeString('ru-RU', { hour: '2-digit', minute: '2-digit' });
+  return new Date(iso).toLocaleTimeString('ru-RU', {
+    hour: '2-digit',
+    minute: '2-digit',
+  });
 }
 
 function formatDuration(checkIn: string, checkOut?: string, now = Date.now()) {
@@ -39,9 +35,18 @@ function formatDuration(checkIn: string, checkOut?: string, now = Date.now()) {
   return m ? `${h} ч ${m} мин` : `${h} ч`;
 }
 
-function buildSteps(pass: PassTimelineData, now: number, t: UiLabels['timeline']): TimelineStep[] {
+function buildSteps(
+  pass: PassTimelineData,
+  now: number,
+  t: UiLabels['timeline'],
+): TimelineStep[] {
   const fail = (label: string, sublabel?: string): TimelineStep[] => [
-    { key: 'request', label: t.request, state: 'done', sublabel: formatTime(pass.createdAt) || undefined },
+    {
+      key: 'request',
+      label: t.request,
+      state: 'done',
+      sublabel: formatTime(pass.createdAt) || undefined,
+    },
     { key: 'entry', label, state: 'failed', sublabel },
     { key: 'inside', label: t.inside, state: 'skipped' },
     { key: 'exit', label: t.exit, state: 'skipped' },
@@ -121,9 +126,12 @@ function buildSteps(pass: PassTimelineData, now: number, t: UiLabels['timeline']
 
 const NODE_STYLES: Record<Exclude<StepState, 'current'>, string> = {
   done: 'bg-[var(--status-active)] text-white border-[var(--status-active)]',
-  upcoming: 'bg-[var(--surface-elevated)] text-[var(--border-strong)] border-[var(--border)]',
-  failed: 'bg-[var(--status-rejected)] text-white border-[var(--status-rejected)]',
-  skipped: 'bg-[var(--surface-muted)] text-[var(--border-strong)] border-[var(--border)]',
+  upcoming:
+    'bg-[var(--surface-elevated)] text-[var(--border-strong)] border-[var(--border)]',
+  failed:
+    'bg-[var(--status-rejected)] text-white border-[var(--status-rejected)]',
+  skipped:
+    'bg-[var(--surface-muted)] text-[var(--border-strong)] border-[var(--border)]',
 };
 
 const LABEL_STYLES: Record<Exclude<StepState, 'current'>, string> = {
@@ -195,11 +203,16 @@ export function PassVisitTimeline({
                   : 'upcoming';
 
           return (
-            <div key={step.key} className="flex-1 min-w-0 flex flex-col items-center relative">
+            <div
+              key={step.key}
+              className="flex-1 min-w-0 flex flex-col items-center relative"
+            >
               {index > 0 && (
                 <div
                   className={`absolute ${topOffset} right-1/2 w-full h-0.5 -z-0 ${
-                    lineState === 'current' ? currentStyles.line : LINE_STYLES[lineState]
+                    lineState === 'current'
+                      ? currentStyles.line
+                      : LINE_STYLES[lineState]
                   }`}
                   aria-hidden
                 />
@@ -208,7 +221,9 @@ export function PassVisitTimeline({
               <div
                 className={[
                   `relative z-10 ${nodeSize} rounded-full border-2 flex items-center justify-center shrink-0 transition-all`,
-                  step.state === 'current' ? currentStyles.node : NODE_STYLES[step.state],
+                  step.state === 'current'
+                    ? currentStyles.node
+                    : NODE_STYLES[step.state],
                   step.state === 'current' ? 'scale-110' : '',
                 ].join(' ')}
               >
@@ -217,16 +232,22 @@ export function PassVisitTimeline({
 
               <p
                 className={`text-[11px] sm:text-xs mt-2 text-center leading-tight truncate max-w-full px-0.5 ${
-                  step.state === 'current' ? currentStyles.label : LABEL_STYLES[step.state]
+                  step.state === 'current'
+                    ? currentStyles.label
+                    : LABEL_STYLES[step.state]
                 }`}
                 title={step.label}
               >
                 {step.label}
               </p>
               {step.sublabel && (
-                <p className={`text-[10px] mt-0.5 text-center leading-tight truncate max-w-full px-0.5 ${
-                  step.state === 'current' ? currentStyles.sublabel : 'text-[var(--muted)]'
-                }`}>
+                <p
+                  className={`text-[10px] mt-0.5 text-center leading-tight truncate max-w-full px-0.5 ${
+                    step.state === 'current'
+                      ? currentStyles.sublabel
+                      : 'text-[var(--muted)]'
+                  }`}
+                >
                   {step.sublabel}
                 </p>
               )}

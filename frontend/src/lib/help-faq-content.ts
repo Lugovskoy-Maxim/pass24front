@@ -171,7 +171,10 @@ export function resolveGuideSections(
         paragraphs,
       };
     })
-    .filter((item) => item.title && (item.steps.length > 0 || item.paragraphs.length > 0));
+    .filter(
+      (item) =>
+        item.title && (item.steps.length > 0 || item.paragraphs.length > 0),
+    );
   return normalized.length ? normalized : HELP_GUIDE_SECTIONS;
 }
 

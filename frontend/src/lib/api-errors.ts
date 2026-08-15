@@ -8,7 +8,10 @@ export class ApiError extends Error {
   status?: number;
   isNetworkError: boolean;
 
-  constructor(message: string, options?: { status?: number; isNetworkError?: boolean }) {
+  constructor(
+    message: string,
+    options?: { status?: number; isNetworkError?: boolean },
+  ) {
     super(message);
     this.name = 'ApiError';
     this.status = options?.status;
@@ -33,17 +36,32 @@ const NETWORK_ERROR_MARKERS = [
 
 /** Английские / технические ответы → понятный русский */
 const MESSAGE_REPLACEMENTS: Array<[RegExp, string]> = [
-  [/^internal server error\.?$/i, 'На сервере произошла ошибка. Попробуйте позже или обратитесь к администратору.'],
+  [
+    /^internal server error\.?$/i,
+    'На сервере произошла ошибка. Попробуйте позже или обратитесь к администратору.',
+  ],
   [/^bad request\.?$/i, 'Проверьте введённые данные и попробуйте снова.'],
   [/^unauthorized\.?$/i, 'Нужно войти в систему.'],
   [/^forbidden\.?$/i, 'Недостаточно прав для этого действия.'],
   [/^not found\.?$/i, 'Запрошенные данные не найдены.'],
-  [/^conflict\.?$/i, 'Данные уже используются. Измените значения и попробуйте снова.'],
-  [/^too many requests\.?$/i, 'Слишком много запросов. Подождите немного и попробуйте снова.'],
-  [/^service unavailable\.?$/i, 'Сервис временно недоступен. Попробуйте позже.'],
+  [
+    /^conflict\.?$/i,
+    'Данные уже используются. Измените значения и попробуйте снова.',
+  ],
+  [
+    /^too many requests\.?$/i,
+    'Слишком много запросов. Подождите немного и попробуйте снова.',
+  ],
+  [
+    /^service unavailable\.?$/i,
+    'Сервис временно недоступен. Попробуйте позже.',
+  ],
   [/^gateway timeout\.?$/i, 'Сервер не ответил вовремя. Попробуйте позже.'],
   [/^bad gateway\.?$/i, 'Сервер временно недоступен. Попробуйте позже.'],
-  [/^request failed with status code \d+$/i, 'Не удалось выполнить запрос. Попробуйте снова.'],
+  [
+    /^request failed with status code \d+$/i,
+    'Не удалось выполнить запрос. Попробуйте снова.',
+  ],
   [/^jwt (expired|malformed|invalid).*$/i, 'Сессия истекла. Войдите снова.'],
   [/^invalid credentials\.?$/i, 'Неверный логин или пароль.'],
   [/^throttlerException.*$/i, 'Слишком много запросов. Подождите немного.'],
@@ -51,21 +69,45 @@ const MESSAGE_REPLACEMENTS: Array<[RegExp, string]> = [
   [/\bmust be an email\b/i, 'Некорректный email'],
   [/\bmust be a valid (email|phone)\b/i, 'Некорректное значение'],
   [/\bshould not be empty\b/i, 'Заполните обязательное поле'],
-  [/\bmust be longer than or equal to (\d+) characters?\b/i, 'Минимум $1 символов'],
-  [/\bmust be shorter than or equal to (\d+) characters?\b/i, 'Не более $1 символов'],
-  [/\bmust be a (string|number|boolean|array|object)\b/i, 'Некорректный формат данных'],
+  [
+    /\bmust be longer than or equal to (\d+) characters?\b/i,
+    'Минимум $1 символов',
+  ],
+  [
+    /\bmust be shorter than or equal to (\d+) characters?\b/i,
+    'Не более $1 символов',
+  ],
+  [
+    /\bmust be a (string|number|boolean|array|object)\b/i,
+    'Некорректный формат данных',
+  ],
   [/\bmust match .* regular expression\b/i, 'Значение в неверном формате'],
   [/\beach value in .* must be\b/i, 'Некорректное значение в списке'],
-  [/\bproperty \w+ should not exist\b/i, 'Передано лишнее поле. Обновите страницу и попробуйте снова.'],
-  [/\bwhitelist validation failed\b/i, 'Переданы недопустимые данные. Обновите страницу и попробуйте снова.'],
+  [
+    /\bproperty \w+ should not exist\b/i,
+    'Передано лишнее поле. Обновите страницу и попробуйте снова.',
+  ],
+  [
+    /\bwhitelist validation failed\b/i,
+    'Переданы недопустимые данные. Обновите страницу и попробуйте снова.',
+  ],
   // HTML / nginx
   [/<html[\s\S]*>/i, 'Сервер временно недоступен. Попробуйте позже.'],
   [/^<!doctype html/i, 'Сервер временно недоступен. Попробуйте позже.'],
   [/\b502 Bad Gateway\b/i, 'Сервер временно недоступен. Попробуйте позже.'],
-  [/\b503 Service Unavailable\b/i, 'Сервис временно недоступен. Попробуйте позже.'],
+  [
+    /\b503 Service Unavailable\b/i,
+    'Сервис временно недоступен. Попробуйте позже.',
+  ],
   [/\b504 Gateway Timeout\b/i, 'Сервер не ответил вовремя. Попробуйте позже.'],
-  [/\bECONNREFUSED\b/i, 'Нет связи с сервером. Проверьте интернет и попробуйте снова.'],
-  [/\bMongo(Server)?Error\b/i, 'Ошибка сохранения данных. Попробуйте снова или обратитесь к администратору.'],
+  [
+    /\bECONNREFUSED\b/i,
+    'Нет связи с сервером. Проверьте интернет и попробуйте снова.',
+  ],
+  [
+    /\bMongo(Server)?Error\b/i,
+    'Ошибка сохранения данных. Попробуйте снова или обратитесь к администратору.',
+  ],
   [/\bE11000\b/i, 'Такая запись уже существует.'],
 ];
 
@@ -86,9 +128,16 @@ function humanizePart(raw: string): string {
   }
 
   // Если остался чисто английский короткий системный текст
-  if (/^[A-Za-z][A-Za-z0-9 .,_-]{0,80}$/.test(text) && !/[а-яА-ЯёЁ]/.test(text)) {
+  if (
+    /^[A-Za-z][A-Za-z0-9 .,_-]{0,80}$/.test(text) &&
+    !/[а-яА-ЯёЁ]/.test(text)
+  ) {
     const lower = text.toLowerCase();
-    if (lower.includes('error') || lower.includes('exception') || lower.includes('failed')) {
+    if (
+      lower.includes('error') ||
+      lower.includes('exception') ||
+      lower.includes('failed')
+    ) {
       return 'Не удалось выполнить действие. Попробуйте снова.';
     }
   }
@@ -112,8 +161,9 @@ function collectMessageParts(value: unknown, depth = 0): string[] {
     const obj = value as Record<string, unknown>;
     // Nest validation: { property, constraints: { isEmail: '...' } }
     if (obj.constraints && typeof obj.constraints === 'object') {
-      return Object.values(obj.constraints as Record<string, unknown>)
-        .flatMap((v) => collectMessageParts(v, depth + 1));
+      return Object.values(obj.constraints as Record<string, unknown>).flatMap(
+        (v) => collectMessageParts(v, depth + 1),
+      );
     }
     if (typeof obj.message === 'string' || Array.isArray(obj.message)) {
       return collectMessageParts(obj.message, depth + 1);
@@ -187,7 +237,10 @@ export function messageForStatus(
   }
 }
 
-export function getErrorMessage(error: unknown, fallback = 'Произошла ошибка. Попробуйте снова.'): string {
+export function getErrorMessage(
+  error: unknown,
+  fallback = 'Произошла ошибка. Попробуйте снова.',
+): string {
   if (error instanceof ApiError) {
     const msg = humanizePart(error.message || '');
     return msg || fallback;
@@ -215,17 +268,22 @@ export function isNetworkError(error: unknown): boolean {
   return false;
 }
 
-export async function parseErrorBody(res: Response): Promise<{ message?: string; error?: string }> {
+export async function parseErrorBody(
+  res: Response,
+): Promise<{ message?: string; error?: string }> {
   const contentType = res.headers.get('content-type') || '';
 
   if (contentType.includes('application/json')) {
     const data = await res.json().catch(() => ({}));
-    const extracted = extractApiMessage(data as { message?: unknown; error?: unknown });
+    const extracted = extractApiMessage(
+      data as { message?: unknown; error?: unknown },
+    );
     return {
       message: extracted,
-      error: typeof (data as { error?: unknown }).error === 'string'
-        ? humanizePart((data as { error: string }).error)
-        : undefined,
+      error:
+        typeof (data as { error?: unknown }).error === 'string'
+          ? humanizePart((data as { error: string }).error)
+          : undefined,
     };
   }
 
@@ -237,5 +295,7 @@ export async function parseErrorBody(res: Response): Promise<{ message?: string;
 
 export async function throwForResponse(res: Response): Promise<never> {
   const data = await parseErrorBody(res);
-  throw new ApiError(messageForStatus(res.status, data), { status: res.status });
+  throw new ApiError(messageForStatus(res.status, data), {
+    status: res.status,
+  });
 }

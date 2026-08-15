@@ -38,8 +38,10 @@ export const DEFAULT_UI_LABELS = {
     statActive: 'Сейчас в здании',
     statToday: 'Сегодня',
     quickOrderTitle: 'Быстрый заказ',
-    quickOrderEmpty: 'Создайте шаблон посетителя или импортируйте из прошлых пропусков.',
-    emptyPasses: 'Пропусков пока нет. Закажите пропуск для посетителя или курьера.',
+    quickOrderEmpty:
+      'Создайте шаблон посетителя или импортируйте из прошлых пропусков.',
+    emptyPasses:
+      'Пропусков пока нет. Закажите пропуск для посетителя или курьера.',
     goToTemplates: 'Перейти к шаблонам',
   },
   print: {
@@ -66,11 +68,13 @@ export const DEFAULT_UI_LABELS = {
     shareSocial: 'В приложения и соцсети',
     sendToEmail: 'Отправить на почту',
     sendEmailTitle: 'Отправить пропуск на почту',
-    sendEmailHint: 'На указанный адрес придёт письмо со ссылкой на пропуск и QR-кодом',
+    sendEmailHint:
+      'На указанный адрес придёт письмо со ссылкой на пропуск и QR-кодом',
     sendEmailSubmit: 'Отправить',
     sendEmailSending: 'Отправка…',
     sendEmailSuccess: 'Письмо отправлено',
-    sendEmailSuccessHint: 'Если письма нет во «Входящих», проверьте папку «Спам».',
+    sendEmailSuccessHint:
+      'Если письма нет во «Входящих», проверьте папку «Спам».',
     sendEmailError: 'Не удалось отправить письмо',
     sendEmailClose: 'Закрыть',
     sendEmailRetry: 'Повторить',
@@ -118,16 +122,22 @@ export const DEFAULT_UI_LABELS = {
     sectionExpired: 'Истёкшие',
     sectionRejected: 'Отклонённые',
     sectionCancelled: 'Отменённые',
-    rejectPlaceholder: 'Например: нет свободных мест на ресепшн БЦ Добрынинский',
+    rejectPlaceholder:
+      'Например: нет свободных мест на ресепшн БЦ Добрынинский',
     lookupPlaceholder: 'Номер пропуска, ФИО, А777МС77…',
     emptySection: 'Нет пропусков в этом разделе',
-    overdueInsideBanner: 'Посетители всё ещё в здании после даты визита — оформите выход вручную',
+    overdueInsideBanner:
+      'Посетители всё ещё в здании после даты визита — оформите выход вручную',
     overdueInsideBadge: 'Просрочен визит',
-    overdueInsideCard: 'Гость в здании после даты визита — пропуск сохранён, оформите выход',
-    overdueEndTimeBanner: 'Гости не вышли до назначенного времени — оформите выход вручную',
+    overdueInsideCard:
+      'Гость в здании после даты визита — пропуск сохранён, оформите выход',
+    overdueEndTimeBanner:
+      'Гости не вышли до назначенного времени — оформите выход вручную',
     overdueEndTimeBadge: 'Просрочен выход',
-    overdueEndTimeCard: 'Гость в здании после {time} — пропуск сохранён, оформите выход',
-    overdueMixedBanner: 'Гости не вышли в срок (время или дата визита) — оформите выход вручную',
+    overdueEndTimeCard:
+      'Гость в здании после {time} — пропуск сохранён, оформите выход',
+    overdueMixedBanner:
+      'Гости не вышли в срок (время или дата визита) — оформите выход вручную',
     lookupResult: 'Результат поиска',
     journalLoading: 'Загрузка журнала...',
     journalEmpty: 'На выбранную дату пропусков нет',
@@ -169,7 +179,8 @@ export const DEFAULT_UI_LABELS = {
   },
   ticket: {
     hint: 'Подойдите на стойку охраны и скажите своё ФИО или покажите QR-код',
-    footer: 'Сохраните эту страницу — ссылка постоянная и действует на дату визита',
+    footer:
+      'Сохраните эту страницу — ссылка постоянная и действует на дату визита',
     defaultBcName: 'БЦ Добрынинский',
     showQrHint: 'Нажмите, чтобы показать QR-код охране',
   },
@@ -180,7 +191,8 @@ export const DEFAULT_UI_LABELS = {
     checkedOut: 'Выход зафиксирован',
     actionDone: 'Действие выполнено',
     passFound: 'Найден пропуск',
-    guestStillInside: 'Посетитель всё ещё в здании. Пропуск не аннулирован — оформите выход.',
+    guestStillInside:
+      'Посетитель всё ещё в здании. Пропуск не аннулирован — оформите выход.',
     guestPastEndTime: 'Посетитель не вышел до {time}. Оформите выход вручную.',
   },
   /** Подсказки в полях ввода — редактируются в админке (Тексты UI). */
@@ -212,16 +224,30 @@ export const DEFAULT_UI_LABELS = {
 
 export type UiLabels = typeof DEFAULT_UI_LABELS;
 
-export function deepMergeUiLabels(partial?: Record<string, unknown> | null): UiLabels {
+export function deepMergeUiLabels(
+  partial?: Record<string, unknown> | null,
+): UiLabels {
   if (!partial || typeof partial !== 'object') {
     return JSON.parse(JSON.stringify(DEFAULT_UI_LABELS));
   }
 
-  const merge = (base: Record<string, unknown>, patch: Record<string, unknown>): Record<string, unknown> => {
+  const merge = (
+    base: Record<string, unknown>,
+    patch: Record<string, unknown>,
+  ): Record<string, unknown> => {
     const out: Record<string, unknown> = { ...base };
     for (const [key, value] of Object.entries(patch)) {
-      if (value && typeof value === 'object' && !Array.isArray(value) && base[key] && typeof base[key] === 'object') {
-        out[key] = merge(base[key] as Record<string, unknown>, value as Record<string, unknown>);
+      if (
+        value &&
+        typeof value === 'object' &&
+        !Array.isArray(value) &&
+        base[key] &&
+        typeof base[key] === 'object'
+      ) {
+        out[key] = merge(
+          base[key] as Record<string, unknown>,
+          value as Record<string, unknown>,
+        );
       } else if (typeof value === 'string' && value.trim()) {
         out[key] = value.trim();
       }

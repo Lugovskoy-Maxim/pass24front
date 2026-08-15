@@ -1,6 +1,11 @@
 import { PassStatus } from '@/lib/api';
 import { getPassStatusBadgeClass } from '@/lib/pass-status';
-import { getOverdueBadgeLabel, getStatusLabel, mergeUiLabels, UiLabels } from '@/lib/ui-labels';
+import {
+  getOverdueBadgeLabel,
+  getStatusLabel,
+  mergeUiLabels,
+  UiLabels,
+} from '@/lib/ui-labels';
 import type { GuestOverdueKind } from '@/lib/pass-overdue';
 
 type BadgeSize = 'sm' | 'md';
@@ -17,10 +22,19 @@ interface StatusBadgeProps {
   overdueKind?: GuestOverdueKind | null;
 }
 
-export function StatusBadge({ status, labels, size = 'md', overdueKind }: StatusBadgeProps) {
+export function StatusBadge({
+  status,
+  labels,
+  size = 'md',
+  overdueKind,
+}: StatusBadgeProps) {
   const L = labels || mergeUiLabels();
   const badge = (
-    <span className={[getPassStatusBadgeClass(status), badgeSizeClass(size)].filter(Boolean).join(' ')}>
+    <span
+      className={[getPassStatusBadgeClass(status), badgeSizeClass(size)]
+        .filter(Boolean)
+        .join(' ')}
+    >
       <span className="pass-badge__dot" aria-hidden />
       {getStatusLabel(status, L)}
     </span>
@@ -45,7 +59,11 @@ interface OverdueBadgeProps {
 export function OverdueBadge({ kind, labels, size = 'md' }: OverdueBadgeProps) {
   const L = labels || mergeUiLabels();
   return (
-    <span className={['pass-badge pass-badge--overdue', badgeSizeClass(size)].filter(Boolean).join(' ')}>
+    <span
+      className={['pass-badge pass-badge--overdue', badgeSizeClass(size)]
+        .filter(Boolean)
+        .join(' ')}
+    >
       <span className="pass-badge__dot pass-badge__dot--pulse" aria-hidden />
       {getOverdueBadgeLabel(kind, L)}
     </span>

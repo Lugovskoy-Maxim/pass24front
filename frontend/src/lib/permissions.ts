@@ -19,25 +19,40 @@ export function isTenantCompanyUser(user: User | null | undefined): boolean {
 }
 
 /** Owner после регистрации, is_active=false — ждёт админа (не путать с отключённым employee). */
-export function isAwaitingAdminApproval(user: User | null | undefined): boolean {
+export function isAwaitingAdminApproval(
+  user: User | null | undefined,
+): boolean {
   return !!user && user.is_active === false && isTenantOwner(user);
 }
 
 export function getUserRoleLabel(user: User | null | undefined): string {
   if (!user) return '';
-  return user.role_label || ROLE_LABELS[user.role as keyof typeof ROLE_LABELS] || user.role;
+  return (
+    user.role_label ||
+    ROLE_LABELS[user.role as keyof typeof ROLE_LABELS] ||
+    user.role
+  );
 }
 
-export function hasPermission(user: User | null | undefined, permission: string): boolean {
+export function hasPermission(
+  user: User | null | undefined,
+  permission: string,
+): boolean {
   return !!user?.permissions?.includes(permission);
 }
 
-export function hasAnyPermission(user: User | null | undefined, ...permissions: string[]): boolean {
+export function hasAnyPermission(
+  user: User | null | undefined,
+  ...permissions: string[]
+): boolean {
   if (!user?.permissions) return false;
   return permissions.some((p) => user.permissions!.includes(p));
 }
 
-export function hasAllPermissions(user: User | null | undefined, ...permissions: string[]): boolean {
+export function hasAllPermissions(
+  user: User | null | undefined,
+  ...permissions: string[]
+): boolean {
   if (!user?.permissions) return false;
   return permissions.every((p) => user.permissions!.includes(p));
 }
@@ -47,7 +62,10 @@ export function isAdminPanelUser(user: User | null | undefined): boolean {
 }
 
 export function canViewPasses(user: User | null | undefined): boolean {
-  return hasAnyPermission(user, 'passes.view_own', 'passes.view_all') || isAdminPanelUser(user);
+  return (
+    hasAnyPermission(user, 'passes.view_own', 'passes.view_all') ||
+    isAdminPanelUser(user)
+  );
 }
 
 export function canViewAllPasses(user: User | null | undefined): boolean {
@@ -70,12 +88,18 @@ export function canOrderPasses(user: User | null | undefined): boolean {
 }
 
 export function canUseReception(user: User | null | undefined): boolean {
-  return hasAnyPermission(user, 'passes.reception', 'passes.lookup') || isAdminPanelUser(user);
+  return (
+    hasAnyPermission(user, 'passes.reception', 'passes.lookup') ||
+    isAdminPanelUser(user)
+  );
 }
 
 /** Одобрение и дополнение пропуска после сканирования QR */
 export function canManageTicketScan(user: User | null | undefined): boolean {
-  return hasAnyPermission(user, 'passes.approve', 'passes.reception') || isAdminPanelUser(user);
+  return (
+    hasAnyPermission(user, 'passes.approve', 'passes.reception') ||
+    isAdminPanelUser(user)
+  );
 }
 
 export function canSeeOverdueAlerts(user: User | null | undefined): boolean {

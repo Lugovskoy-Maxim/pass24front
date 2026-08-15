@@ -14,7 +14,10 @@ export function normalizePersonName(name?: string | null): string {
   return (name || '').trim().toLowerCase().replace(/\s+/g, ' ');
 }
 
-export function normalizePassport(series?: string | null, number?: string | null): string {
+export function normalizePassport(
+  series?: string | null,
+  number?: string | null,
+): string {
   const s = (series || '').replace(/\s/g, '').toUpperCase();
   const n = (number || '').replace(/\s/g, '');
   return s || n ? `${s}${n}` : '';

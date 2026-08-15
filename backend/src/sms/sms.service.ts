@@ -38,9 +38,11 @@ export class SmsService {
   constructor(private readonly configService: ConfigService) {}
 
   isConfigured(): boolean {
-    return this.configService.get<string>('SMS_ENABLED') === 'true'
-      && !!this.configService.get<string>('SMSAERO_EMAIL')
-      && !!this.configService.get<string>('SMSAERO_API_KEY');
+    return (
+      this.configService.get<string>('SMS_ENABLED') === 'true' &&
+      !!this.configService.get<string>('SMSAERO_EMAIL') &&
+      !!this.configService.get<string>('SMSAERO_API_KEY')
+    );
   }
 
   /**
@@ -71,17 +73,23 @@ export class SmsService {
 
     if (!response.success) {
       const payload = JSON.stringify(response);
-      this.logger.error(`Mobile ID send failed for ${phone} (sign="${sign}"): ${payload}`);
-      throw new InternalServerErrorException(this.mapMobileIdError(response, sign));
+      this.logger.error(
+        `Mobile ID send failed for ${phone} (sign="${sign}"): ${payload}`,
+      );
+      throw new InternalServerErrorException(
+        this.mapMobileIdError(response, sign),
+      );
     }
 
-    const data = (response.data && typeof response.data === 'object'
-      ? response.data
-      : {}) as Record<string, unknown>;
+    const data = (
+      response.data && typeof response.data === 'object' ? response.data : {}
+    ) as Record<string, unknown>;
 
     const requestId = Number(data.id);
     if (!Number.isFinite(requestId) || requestId <= 0) {
-      this.logger.error(`Mobile ID send: no id in response: ${JSON.stringify(response)}`);
+      this.logger.error(
+        `Mobile ID send: no id in response: ${JSON.stringify(response)}`,
+      );
       throw new InternalServerErrorException(
         'SMS Aero не вернул id запроса мобильной авторизации',
       );
@@ -105,7 +113,9 @@ export class SmsService {
     }
 
     // SIM-PUSH: пользователь подтвердил на телефоне — код не нужен
-    const already = await this.isMobileAuthVerified(requestId).catch(() => false);
+    const already = await this.isMobileAuthVerified(requestId).catch(
+      () => false,
+    );
     if (already) {
       this.logger.log(`Mobile ID already verified (SIM-PUSH): id=${requestId}`);
       return true;
@@ -124,9 +134,9 @@ export class SmsService {
     });
 
     if (response.success) {
-      const data = (response.data && typeof response.data === 'object'
-        ? response.data
-        : {}) as Record<string, unknown>;
+      const data = (
+        response.data && typeof response.data === 'object' ? response.data : {}
+      ) as Record<string, unknown>;
       const status = data.status != null ? Number(data.status) : undefined;
       this.logger.log(
         `Mobile ID verify ok: id=${requestId}, status=${status ?? '?'}, authType=${data.authType ?? '?'}`,
@@ -141,8 +151,14 @@ export class SmsService {
 
   /** Успешная Mobile ID-проверка возвращает status=1 (в некоторых версиях API — 3). */
   async isMobileAuthVerified(requestId: number): Promise<boolean> {
-    const response = await this.requestForm('mobile-id/status', { id: requestId });
-    if (!response.success || !response.data || typeof response.data !== 'object') {
+    const response = await this.requestForm('mobile-id/status', {
+      id: requestId,
+    });
+    if (
+      !response.success ||
+      !response.data ||
+      typeof response.data !== 'object'
+    ) {
       this.logger.warn(
         `Mobile ID status failed: id=${requestId}, response=${JSON.stringify(response)}`,
       );
@@ -165,10 +181,15 @@ export class SmsService {
   }
 
   private resolveCallbackUrl(): string {
-    const explicit = (this.configService.get<string>('SMSAERO_CALLBACK_URL') || '').trim();
+    const explicit = (
+      this.configService.get<string>('SMSAERO_CALLBACK_URL') || ''
+    ).trim();
     if (explicit) return explicit;
 
-    const appUrl = (this.configService.get<string>('PUBLIC_APP_URL') || 'https://pass.mstyle.ru')
+    const appUrl = (
+      this.configService.get<string>('PUBLIC_APP_URL') ||
+      'https://pass.mstyle.ru'
+    )
       .trim()
       .replace(/\/$/, '');
     return `${appUrl}/api/sms/mobile-id/callback`;
@@ -179,8 +200,8 @@ export class SmsService {
     let sign = this.configService.get<string>('SMSAERO_SIGN') || 'SMS Aero';
     sign = sign.replace(/^\uFEFF/, '').trim();
     if (
-      (sign.startsWith('"') && sign.endsWith('"'))
-      || (sign.startsWith("'") && sign.endsWith("'"))
+      (sign.startsWith('"') && sign.endsWith('"')) ||
+      (sign.startsWith("'") && sign.endsWith("'"))
     ) {
       sign = sign.slice(1, -1).trim();
     }
@@ -188,33 +209,39 @@ export class SmsService {
   }
 
   private mapMobileIdError(response: SmsAeroResponse, sign: string): string {
-    const data = response.data && typeof response.data === 'object'
-      ? response.data as Record<string, unknown>
-      : {};
-    const messageStr = typeof response.message === 'string'
-      ? response.message
-      : JSON.stringify(response.message ?? '');
+    const data =
+      response.data && typeof response.data === 'object'
+        ? (response.data as Record<string, unknown>)
+        : {};
+    const messageStr =
+      typeof response.message === 'string'
+        ? response.message
+        : JSON.stringify(response.message ?? '');
     const lower = `${messageStr} ${JSON.stringify(data)}`.toLowerCase();
 
     if (lower.includes('not enough money') || lower.includes('no credits')) {
       return 'На балансе SMS Aero недостаточно средств для мобильной авторизации';
     }
     if (
-      lower.includes('sign')
-      || lower.includes('incorrect')
-      || lower.includes('name')
-      || lower.includes('sender')
+      lower.includes('sign') ||
+      lower.includes('incorrect') ||
+      lower.includes('name') ||
+      lower.includes('sender')
     ) {
       return (
-        `SMS Aero Mobile ID: имя «${sign}» недоступно или не одобрено для мобильной авторизации. `
-        + 'Проверьте SMSAERO_SIGN (имя из раздела «Мобильная авторизация», напр. mts_mstyle) '
-        + 'и что API-ключ от того же кабинета.'
+        `SMS Aero Mobile ID: имя «${sign}» недоступно или не одобрено для мобильной авторизации. ` +
+        'Проверьте SMSAERO_SIGN (имя из раздела «Мобильная авторизация», напр. mts_mstyle) ' +
+        'и что API-ключ от того же кабинета.'
       );
     }
-    if (lower.includes('validation') || lower.includes('moderation') || lower.includes('template')) {
+    if (
+      lower.includes('validation') ||
+      lower.includes('moderation') ||
+      lower.includes('template')
+    ) {
       return (
-        'SMS Aero отклонил запрос Mobile ID (validation). '
-        + 'Проверьте одобренные шаблоны SIM-PUSH/SMS для имени в кабинете.'
+        'SMS Aero отклонил запрос Mobile ID (validation). ' +
+        'Проверьте одобренные шаблоны SIM-PUSH/SMS для имени в кабинете.'
       );
     }
     if (messageStr && messageStr !== 'null') {
@@ -228,10 +255,16 @@ export class SmsService {
     path: string,
     body: Record<string, string | number>,
   ): Promise<SmsAeroResponse> {
-    const email = (this.configService.get<string>('SMSAERO_EMAIL') || '').trim();
-    const apiKey = (this.configService.get<string>('SMSAERO_API_KEY') || '').trim();
+    const email = (
+      this.configService.get<string>('SMSAERO_EMAIL') || ''
+    ).trim();
+    const apiKey = (
+      this.configService.get<string>('SMSAERO_API_KEY') || ''
+    ).trim();
     if (!email || !apiKey) {
-      throw new BadRequestException('SMSAERO_EMAIL / SMSAERO_API_KEY не заданы');
+      throw new BadRequestException(
+        'SMSAERO_EMAIL / SMSAERO_API_KEY не заданы',
+      );
     }
     const auth = Buffer.from(`${email}:${apiKey}`).toString('base64');
     const url = `${this.apiBase}${path}`;
@@ -252,7 +285,9 @@ export class SmsService {
       });
       const data = (await res.json()) as SmsAeroResponse;
       if (!res.ok) {
-        this.logger.error(`SMS Aero HTTP ${res.status} ${path}: ${JSON.stringify(data)}`);
+        this.logger.error(
+          `SMS Aero HTTP ${res.status} ${path}: ${JSON.stringify(data)}`,
+        );
       }
       return data;
     } catch (err) {

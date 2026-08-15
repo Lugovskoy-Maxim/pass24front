@@ -17,8 +17,10 @@ export function buildHistoryHref(query: HistoryQuery): string {
   const params = new URLSearchParams({ scope: query.scope });
   if (query.visitorName) params.set('visitorName', query.visitorName);
   if (query.visitorPhone) params.set('visitorPhone', query.visitorPhone);
-  if (query.visitorPassportSeries) params.set('visitorPassportSeries', query.visitorPassportSeries);
-  if (query.visitorPassportNumber) params.set('visitorPassportNumber', query.visitorPassportNumber);
+  if (query.visitorPassportSeries)
+    params.set('visitorPassportSeries', query.visitorPassportSeries);
+  if (query.visitorPassportNumber)
+    params.set('visitorPassportNumber', query.visitorPassportNumber);
   if (query.officeId) params.set('officeId', query.officeId);
   if (query.officeLabel) params.set('officeLabel', query.officeLabel);
   if (query.companyName) params.set('companyName', query.companyName);
@@ -48,6 +50,7 @@ export function formatVisitCount(n: number): string {
   const mod10 = abs % 10;
   const mod100 = abs % 100;
   if (mod10 === 1 && mod100 !== 11) return `${n} визит`;
-  if (mod10 >= 2 && mod10 <= 4 && (mod100 < 12 || mod100 > 14)) return `${n} визита`;
+  if (mod10 >= 2 && mod10 <= 4 && (mod100 < 12 || mod100 > 14))
+    return `${n} визита`;
   return `${n} визитов`;
 }

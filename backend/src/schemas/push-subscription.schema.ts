@@ -24,5 +24,6 @@ export class PushSubscription {
   userAgent?: string;
 }
 
-export const PushSubscriptionSchema = SchemaFactory.createForClass(PushSubscription);
+export const PushSubscriptionSchema =
+  SchemaFactory.createForClass(PushSubscription);
 PushSubscriptionSchema.index({ userId: 1, endpoint: 1 }, { unique: true });

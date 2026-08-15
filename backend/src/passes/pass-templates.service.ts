@@ -1,8 +1,20 @@
-import { BadRequestException, ForbiddenException, Injectable, NotFoundException } from '@nestjs/common';
+import {
+  BadRequestException,
+  ForbiddenException,
+  Injectable,
+  NotFoundException,
+} from '@nestjs/common';
 import { InjectModel } from '@nestjs/mongoose';
 import { Model, Types } from 'mongoose';
 import {
-  Office, OfficeDocument, Pass, PassDocument, PassTemplate, PassTemplateDocument, Property, PropertyDocument,
+  Office,
+  OfficeDocument,
+  Pass,
+  PassDocument,
+  PassTemplate,
+  PassTemplateDocument,
+  Property,
+  PropertyDocument,
 } from '../schemas';
 import { isTenantCompanyUser } from '../common/tenant-account';
 import { tenantOwnerObjectId } from '../common/tenant-owner';
@@ -11,7 +23,8 @@ import { CreatePassTemplateDto } from './dto/create-pass-template.dto';
 @Injectable()
 export class PassTemplatesService {
   constructor(
-    @InjectModel(PassTemplate.name) private templateModel: Model<PassTemplateDocument>,
+    @InjectModel(PassTemplate.name)
+    private templateModel: Model<PassTemplateDocument>,
     @InjectModel(Pass.name) private passModel: Model<PassDocument>,
     @InjectModel(Office.name) private officeModel: Model<OfficeDocument>,
     @InjectModel(Property.name) private propertyModel: Model<PropertyDocument>,
@@ -49,7 +62,9 @@ export class PassTemplatesService {
     const pass = await this.passModel.findById(passId).lean();
     if (!pass) throw new NotFoundException('Пропуск не найден');
     if (pass.createdBy?.toString() !== user.userId) {
-      throw new ForbiddenException('Можно сохранять шаблон только из своих пропусков');
+      throw new ForbiddenException(
+        'Можно сохранять шаблон только из своих пропусков',
+      );
     }
 
     const template = await this.upsertFromPass(pass, user.userId, name);
@@ -92,17 +107,32 @@ export class PassTemplatesService {
     this.ensureOwner(template, user);
 
     if (dto.name !== undefined) template.name = dto.name.trim();
-    if (dto.visitorName !== undefined) template.visitorName = dto.visitorName.trim();
-    if (dto.visitorPhone !== undefined) template.visitorPhone = dto.visitorPhone?.trim();
-    if (dto.companyName !== undefined) template.companyName = dto.companyName?.trim();
-    if (dto.visitPurpose !== undefined) template.visitPurpose = dto.visitPurpose?.trim();
+    if (dto.visitorName !== undefined)
+      template.visitorName = dto.visitorName.trim();
+    if (dto.visitorPhone !== undefined)
+      template.visitorPhone = dto.visitorPhone?.trim();
+    if (dto.companyName !== undefined)
+      template.companyName = dto.companyName?.trim();
+    if (dto.visitPurpose !== undefined)
+      template.visitPurpose = dto.visitPurpose?.trim();
     if (dto.passType !== undefined) template.passType = dto.passType;
-    if (dto.vehiclePlate !== undefined) template.vehiclePlate = dto.vehiclePlate?.trim();
-    if (dto.vehicleModel !== undefined) template.vehicleModel = dto.vehicleModel?.trim();
-    if (dto.visitTimeFrom !== undefined) template.visitTimeFrom = dto.visitTimeFrom;
+    if (dto.vehiclePlate !== undefined)
+      template.vehiclePlate = dto.vehiclePlate?.trim();
+    if (dto.vehicleModel !== undefined)
+      template.vehicleModel = dto.vehicleModel?.trim();
+    if (dto.visitTimeFrom !== undefined)
+      template.visitTimeFrom = dto.visitTimeFrom;
     if (dto.visitTimeTo !== undefined) template.visitTimeTo = dto.visitTimeTo;
     if (dto.officeId !== undefined) {
-      const resolved = await this.resolveOfficeFields({ ...dto, visitorName: template.visitorName, passType: template.passType, name: template.name }, user);
+      const resolved = await this.resolveOfficeFields(
+        {
+          ...dto,
+          visitorName: template.visitorName,
+          passType: template.passType,
+          name: template.name,
+        },
+        user,
+      );
       Object.assign(template, resolved);
     } else {
       if (dto.office !== undefined) template.office = dto.office?.trim();
@@ -187,10 +217,16 @@ export class PassTemplatesService {
     }
 
     const office = await this.officeModel.findById(dto.officeId).lean();
-    if (!office || !office.isActive) throw new NotFoundException('Офис не найден');
+    if (!office || !office.isActive)
+      throw new NotFoundException('Офис не найден');
 
-    if (isTenantCompanyUser(user) && office.tenantId?.toString() !== tenantOwnerId?.toString()) {
-      throw new ForbiddenException('Можно использовать только офисы своей компании');
+    if (
+      isTenantCompanyUser(user) &&
+      office.tenantId?.toString() !== tenantOwnerId?.toString()
+    ) {
+      throw new ForbiddenException(
+        'Можно использовать только офисы своей компании',
+      );
     }
 
     const property = await this.propertyModel.findById(office.property).lean();

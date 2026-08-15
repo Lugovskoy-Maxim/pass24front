@@ -26,21 +26,31 @@ function serializeSubscription(subscription: PushSubscription) {
 }
 
 function isIos(): boolean {
-  return /iphone|ipad|ipod/i.test(navigator.userAgent)
-    || (navigator.platform === 'MacIntel' && navigator.maxTouchPoints > 1);
+  return (
+    /iphone|ipad|ipod/i.test(navigator.userAgent) ||
+    (navigator.platform === 'MacIntel' && navigator.maxTouchPoints > 1)
+  );
 }
 
 function isStandalone(): boolean {
-  return window.matchMedia('(display-mode: standalone)').matches
-    || (navigator as Navigator & { standalone?: boolean }).standalone === true;
+  return (
+    window.matchMedia('(display-mode: standalone)').matches ||
+    (navigator as Navigator & { standalone?: boolean }).standalone === true
+  );
 }
 
-function subscriptionUsesKey(subscription: PushSubscription, publicKey: string): boolean {
+function subscriptionUsesKey(
+  subscription: PushSubscription,
+  publicKey: string,
+): boolean {
   const current = subscription.options.applicationServerKey;
   if (!current) return false;
   const expected = base64UrlToUint8Array(publicKey);
   const actual = new Uint8Array(current);
-  return actual.length === expected.length && actual.every((value, index) => value === expected[index]);
+  return (
+    actual.length === expected.length &&
+    actual.every((value, index) => value === expected[index])
+  );
 }
 
 async function getRegistration(): Promise<ServiceWorkerRegistration> {
@@ -56,60 +66,75 @@ export function PushNotificationPrompt() {
   const [requiresInstall, setRequiresInstall] = useState(false);
   const [busy, setBusy] = useState(false);
   const [error, setError] = useState('');
-  const [permission, setPermission] = useState<NotificationPermission>('default');
+  const [permission, setPermission] =
+    useState<NotificationPermission>('default');
   const syncPromiseRef = useRef<Promise<boolean> | null>(null);
 
-  const syncSubscription = useCallback(async (key: string, allowCreate: boolean) => {
-    if (syncPromiseRef.current) return syncPromiseRef.current;
-    const operation = (async () => {
-      const registration = await getRegistration();
-      let subscription = await registration.pushManager.getSubscription();
+  const syncSubscription = useCallback(
+    async (key: string, allowCreate: boolean) => {
+      if (syncPromiseRef.current) return syncPromiseRef.current;
+      const operation = (async () => {
+        const registration = await getRegistration();
+        let subscription = await registration.pushManager.getSubscription();
 
-      if (subscription && !subscriptionUsesKey(subscription, key)) {
-        await subscription.unsubscribe();
-        subscription = null;
+        if (subscription && !subscriptionUsesKey(subscription, key)) {
+          await subscription.unsubscribe();
+          subscription = null;
+        }
+        if (!subscription && allowCreate) {
+          subscription = await registration.pushManager.subscribe({
+            userVisibleOnly: true,
+            applicationServerKey: base64UrlToUint8Array(key),
+          });
+        }
+        if (!subscription) return false;
+        const result = await api.savePushSubscription(
+          serializeSubscription(subscription),
+        );
+        const renewalConfig = {
+          type: 'CONFIGURE_PUSH_RENEWAL',
+          publicKey: key,
+          renewalToken: result.renewalToken,
+          renewalUrl: getPushRenewalUrl(),
+        };
+        [registration.active, registration.waiting, registration.installing]
+          .filter((worker): worker is ServiceWorker => !!worker)
+          .forEach((worker) => worker.postMessage(renewalConfig));
+        sessionStorage.removeItem(DISMISSED_KEY);
+        return true;
+      })();
+      syncPromiseRef.current = operation;
+      try {
+        return await operation;
+      } finally {
+        if (syncPromiseRef.current === operation) syncPromiseRef.current = null;
       }
-      if (!subscription && allowCreate) {
-        subscription = await registration.pushManager.subscribe({
-          userVisibleOnly: true,
-          applicationServerKey: base64UrlToUint8Array(key),
-        });
-      }
-      if (!subscription) return false;
-      const result = await api.savePushSubscription(serializeSubscription(subscription));
-      const renewalConfig = {
-        type: 'CONFIGURE_PUSH_RENEWAL',
-        publicKey: key,
-        renewalToken: result.renewalToken,
-        renewalUrl: getPushRenewalUrl(),
-      };
-      [registration.active, registration.waiting, registration.installing]
-        .filter((worker): worker is ServiceWorker => !!worker)
-        .forEach((worker) => worker.postMessage(renewalConfig));
-      sessionStorage.removeItem(DISMISSED_KEY);
-      return true;
-    })();
-    syncPromiseRef.current = operation;
-    try {
-      return await operation;
-    } finally {
-      if (syncPromiseRef.current === operation) syncPromiseRef.current = null;
-    }
-  }, []);
+    },
+    [],
+  );
 
   useEffect(() => {
     const onInstallVisibility = (event: Event) => {
       const customEvent = event as CustomEvent<{ visible?: boolean }>;
       setInstallPromptVisible(customEvent.detail?.visible === true);
     };
-    window.addEventListener('pass24:pwa-install-visibility', onInstallVisibility);
-    return () => window.removeEventListener('pass24:pwa-install-visibility', onInstallVisibility);
+    window.addEventListener(
+      'pass24:pwa-install-visibility',
+      onInstallVisibility,
+    );
+    return () =>
+      window.removeEventListener(
+        'pass24:pwa-install-visibility',
+        onInstallVisibility,
+      );
   }, []);
 
   useEffect(() => {
     if (!isTenantCompanyUser(user)) return;
     if (!window.isSecureContext) {
-      setError('Уведомления работают только через защищённое HTTPS-соединение.');
+      setError(
+        'Уведомления работают только через защищённое HTTPS-соединение.',
+      );
       setVisible(true);
       return;
     }
@@ -118,14 +143,22 @@ export function PushNotificationPrompt() {
     // До установки инструкции показывает PwaInstallPrompt.
     if (isIos() && !isStandalone()) {
       setRequiresInstall(true);
-      setError('На iPhone и iPad сначала добавьте приложение на экран «Домой», затем откройте его с иконки.');
+      setError(
+        'На iPhone и iPad сначала добавьте приложение на экран «Домой», затем откройте его с иконки.',
+      );
       setVisible(true);
       return;
     }
     setRequiresInstall(false);
 
-    if (!('serviceWorker' in navigator) || !('PushManager' in window) || !('Notification' in window)) {
-      setError('Этот браузер не поддерживает Web Push. Обновите браузер или установите приложение.');
+    if (
+      !('serviceWorker' in navigator) ||
+      !('PushManager' in window) ||
+      !('Notification' in window)
+    ) {
+      setError(
+        'Этот браузер не поддерживает Web Push. Обновите браузер или установите приложение.',
+      );
       setVisible(true);
       return;
     }
@@ -140,7 +173,9 @@ export function PushNotificationPrompt() {
         setPermission(currentPermission);
 
         if (currentPermission === 'denied') {
-          setError('Уведомления заблокированы. Разрешите их в настройках сайта и обновите страницу.');
+          setError(
+            'Уведомления заблокированы. Разрешите их в настройках сайта и обновите страницу.',
+          );
           setVisible(true);
           return;
         }
@@ -158,7 +193,9 @@ export function PushNotificationPrompt() {
         }
       } catch {
         if (cancelled) return;
-        setError('Не удалось подключить уведомления. Проверьте интернет и попробуйте ещё раз.');
+        setError(
+          'Не удалось подключить уведомления. Проверьте интернет и попробуйте ещё раз.',
+        );
         setVisible(true);
       }
     };
@@ -177,7 +214,10 @@ export function PushNotificationPrompt() {
       cancelled = true;
       window.removeEventListener('focus', onVisible);
       document.removeEventListener('visibilitychange', onVisible);
-      navigator.serviceWorker.removeEventListener('message', onServiceWorkerMessage);
+      navigator.serviceWorker.removeEventListener(
+        'message',
+        onServiceWorkerMessage,
+      );
     };
   }, [syncSubscription, user]);
 
@@ -189,28 +229,35 @@ export function PushNotificationPrompt() {
   const subscribe = async () => {
     if (!publicKey) return;
     if (Notification.permission === 'denied') {
-      setError('Уведомления заблокированы. Разрешите их в настройках сайта и обновите страницу.');
+      setError(
+        'Уведомления заблокированы. Разрешите их в настройках сайта и обновите страницу.',
+      );
       return;
     }
 
     setBusy(true);
     setError('');
     try {
-      const result = Notification.permission === 'granted'
-        ? 'granted'
-        : await Notification.requestPermission();
+      const result =
+        Notification.permission === 'granted'
+          ? 'granted'
+          : await Notification.requestPermission();
       setPermission(result);
       if (result !== 'granted') {
-        setError(result === 'denied'
-          ? 'Уведомления заблокированы. Разрешите их в настройках сайта.'
-          : 'Разрешение не выдано. Нажмите «Включить», когда будете готовы.');
+        setError(
+          result === 'denied'
+            ? 'Уведомления заблокированы. Разрешите их в настройках сайта.'
+            : 'Разрешение не выдано. Нажмите «Включить», когда будете готовы.',
+        );
         return;
       }
       const connected = await syncSubscription(publicKey, true);
       if (!connected) throw new Error('Push subscription was not created');
       setVisible(false);
     } catch {
-      setError('Не удалось включить уведомления. Проверьте настройки браузера и повторите попытку.');
+      setError(
+        'Не удалось включить уведомления. Проверьте настройки браузера и повторите попытку.',
+      );
     } finally {
       setBusy(false);
     }
@@ -218,18 +265,31 @@ export function PushNotificationPrompt() {
 
   if (!visible || installPromptVisible) return null;
   return (
-    <div className="pwa-install" role="dialog" aria-label="Уведомления о гостях">
+    <div
+      className="pwa-install"
+      role="dialog"
+      aria-label="Уведомления о гостях"
+    >
       <div className="pwa-install__card card">
-        <button type="button" className="pwa-install__close" onClick={dismiss} aria-label="Закрыть">
+        <button
+          type="button"
+          className="pwa-install__close"
+          onClick={dismiss}
+          aria-label="Закрыть"
+        >
           <X className="w-4 h-4" />
         </button>
-        <div className="pwa-install__icon" aria-hidden><Bell className="w-6 h-6" /></div>
+        <div className="pwa-install__icon" aria-hidden>
+          <Bell className="w-6 h-6" />
+        </div>
         <div className="pwa-install__body">
           <p className="pwa-install__title">Узнавайте о приходе гостей</p>
           <p className="pwa-install__text">
             Включите уведомления — сообщим, когда гость войдёт в бизнес-центр.
           </p>
-          {error && <p className="pwa-install__text text-[var(--danger)]">{error}</p>}
+          {error && (
+            <p className="pwa-install__text text-[var(--danger)]">{error}</p>
+          )}
         </div>
         <button
           type="button"

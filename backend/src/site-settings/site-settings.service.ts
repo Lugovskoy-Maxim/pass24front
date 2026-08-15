@@ -1,13 +1,23 @@
 import { BadRequestException, Injectable, OnModuleInit } from '@nestjs/common';
 import { InjectModel } from '@nestjs/mongoose';
 import { Model } from 'mongoose';
-import { AppSettings, AppSettingsDocument } from '../schemas/app-settings.schema';
-import { MSTYLE_BRAND_DEFAULTS, isLegacyBrandSettings } from '../brand/brand-defaults';
+import {
+  AppSettings,
+  AppSettingsDocument,
+} from '../schemas/app-settings.schema';
+import {
+  MSTYLE_BRAND_DEFAULTS,
+  isLegacyBrandSettings,
+} from '../brand/brand-defaults';
 import {
   normalizeBlockedEmailDomains,
   resolveBlockedEmailDomains,
 } from '../common/email-policy';
-import { DEFAULT_FAQ_ITEMS, NormalizedFaqItem, normalizeFaqItems } from './faq-defaults';
+import {
+  DEFAULT_FAQ_ITEMS,
+  NormalizedFaqItem,
+  normalizeFaqItems,
+} from './faq-defaults';
 import {
   DEFAULT_GUIDE_SECTIONS,
   NormalizedGuideSection,
@@ -65,7 +75,8 @@ export interface SiteSettingsDto {
 @Injectable()
 export class SiteSettingsService implements OnModuleInit {
   constructor(
-    @InjectModel(AppSettings.name) private appSettingsModel: Model<AppSettingsDocument>,
+    @InjectModel(AppSettings.name)
+    private appSettingsModel: Model<AppSettingsDocument>,
   ) {}
 
   async onModuleInit() {
@@ -92,7 +103,9 @@ export class SiteSettingsService implements OnModuleInit {
   }
 
   async get(): Promise<SiteSettingsDto> {
-    const doc = await this.appSettingsModel.findOne({ key: SETTINGS_KEY }).lean();
+    const doc = await this.appSettingsModel
+      .findOne({ key: SETTINGS_KEY })
+      .lean();
     return this.map(doc);
   }
 
@@ -128,15 +141,22 @@ export class SiteSettingsService implements OnModuleInit {
       paragraphs?: string[];
     }>;
   }): Promise<SiteSettingsDto> {
-    for (const field of ['siteIcon', 'siteIconLight', 'siteIconDark'] as const) {
+    for (const field of [
+      'siteIcon',
+      'siteIconLight',
+      'siteIconDark',
+    ] as const) {
       const value = data[field];
       if (value !== undefined && value.length > MAX_ICON_LENGTH) {
-        throw new BadRequestException('Иконка слишком большая. Загрузите файл до 80 КБ.');
+        throw new BadRequestException(
+          'Иконка слишком большая. Загрузите файл до 80 КБ.',
+        );
       }
     }
 
     const update: Partial<AppSettings> = {};
-    if (data.siteName !== undefined) update.siteName = data.siteName.trim() || MSTYLE_BRAND_DEFAULTS.siteName;
+    if (data.siteName !== undefined)
+      update.siteName = data.siteName.trim() || MSTYLE_BRAND_DEFAULTS.siteName;
     if (data.appVersion !== undefined) {
       // Пустая строка допустима — сброс на версию сборки фронта
       update.appVersion = data.appVersion.trim().slice(0, 32);
@@ -146,37 +166,53 @@ export class SiteSettingsService implements OnModuleInit {
       update.siteIconLight = data.siteIconLight.trim();
       update.siteIcon = data.siteIconLight.trim();
     }
-    if (data.siteIconDark !== undefined) update.siteIconDark = data.siteIconDark.trim();
-    if (data.siteTagline !== undefined) update.siteTagline = data.siteTagline.trim();
+    if (data.siteIconDark !== undefined)
+      update.siteIconDark = data.siteIconDark.trim();
+    if (data.siteTagline !== undefined)
+      update.siteTagline = data.siteTagline.trim();
     if (data.sitePhone !== undefined) update.sitePhone = data.sitePhone.trim();
     if (data.siteEmail !== undefined) update.siteEmail = data.siteEmail.trim();
     if (data.brandMarkType !== undefined) {
       update.brandMarkType = data.brandMarkType === 'text' ? 'text' : 'image';
     }
     if (data.brandMarkText !== undefined) {
-      update.brandMarkText = data.brandMarkText.trim().slice(0, 8) || MSTYLE_BRAND_DEFAULTS.brandMarkText;
+      update.brandMarkText =
+        data.brandMarkText.trim().slice(0, 8) ||
+        MSTYLE_BRAND_DEFAULTS.brandMarkText;
     }
-    if (data.brandShowName !== undefined) update.brandShowName = !!data.brandShowName;
-    if (data.brandNameBeforeMark !== undefined) update.brandNameBeforeMark = !!data.brandNameBeforeMark;
+    if (data.brandShowName !== undefined)
+      update.brandShowName = !!data.brandShowName;
+    if (data.brandNameBeforeMark !== undefined)
+      update.brandNameBeforeMark = !!data.brandNameBeforeMark;
     if (data.uiIconSelectChevron !== undefined) {
-      update.uiIconSelectChevron = data.uiIconSelectChevron.trim() || MSTYLE_BRAND_DEFAULTS.uiIconSelectChevron;
+      update.uiIconSelectChevron =
+        data.uiIconSelectChevron.trim() ||
+        MSTYLE_BRAND_DEFAULTS.uiIconSelectChevron;
     }
     if (data.themePrimary !== undefined) {
-      update.themePrimary = this.normalizeHexColor(data.themePrimary, MSTYLE_BRAND_DEFAULTS.themePrimary);
+      update.themePrimary = this.normalizeHexColor(
+        data.themePrimary,
+        MSTYLE_BRAND_DEFAULTS.themePrimary,
+      );
     }
     if (data.themePrimaryHover !== undefined) {
-      update.themePrimaryHover = this.normalizeHexColor(data.themePrimaryHover, MSTYLE_BRAND_DEFAULTS.themePrimaryHover);
+      update.themePrimaryHover = this.normalizeHexColor(
+        data.themePrimaryHover,
+        MSTYLE_BRAND_DEFAULTS.themePrimaryHover,
+      );
     }
     if (data.uiLabels !== undefined) {
-      update.uiLabels = deepMergeUiLabels(data.uiLabels as Record<string, unknown>);
+      update.uiLabels = deepMergeUiLabels(
+        data.uiLabels as Record<string, unknown>,
+      );
     }
     if (data.smsRegistrationEnabled !== undefined) {
       update.smsRegistrationEnabled = !!data.smsRegistrationEnabled;
     }
     if (data.smsRegistrationDisabledMessage !== undefined) {
       const message = data.smsRegistrationDisabledMessage.trim();
-      update.smsRegistrationDisabledMessage = message
-        || MSTYLE_BRAND_DEFAULTS.smsRegistrationDisabledMessage;
+      update.smsRegistrationDisabledMessage =
+        message || MSTYLE_BRAND_DEFAULTS.smsRegistrationDisabledMessage;
     }
     if (data.smsRegistrationCodeText !== undefined) {
       const text = data.smsRegistrationCodeText.trim();
@@ -186,10 +222,14 @@ export class SiteSettingsService implements OnModuleInit {
     }
     if (data.blockedEmailDomains !== undefined) {
       // Пустой массив допустим: только проверка зоны .ru, без списка free-mail
-      update.blockedEmailDomains = normalizeBlockedEmailDomains(data.blockedEmailDomains);
+      update.blockedEmailDomains = normalizeBlockedEmailDomains(
+        data.blockedEmailDomains,
+      );
     }
     if (data.registrationNotifyEmails !== undefined) {
-      update.registrationNotifyEmails = this.normalizeEmailList(data.registrationNotifyEmails);
+      update.registrationNotifyEmails = this.normalizeEmailList(
+        data.registrationNotifyEmails,
+      );
     }
     if (data.registrationNotifyUserIds !== undefined) {
       update.registrationNotifyUserIds = [
@@ -208,7 +248,11 @@ export class SiteSettingsService implements OnModuleInit {
     }
 
     const doc = await this.appSettingsModel
-      .findOneAndUpdate({ key: SETTINGS_KEY }, { $set: update }, { new: true, upsert: true })
+      .findOneAndUpdate(
+        { key: SETTINGS_KEY },
+        { $set: update },
+        { new: true, upsert: true },
+      )
       .lean();
 
     return this.map(doc);
@@ -216,8 +260,14 @@ export class SiteSettingsService implements OnModuleInit {
 
   private map(doc?: Partial<AppSettings> | null): SiteSettingsDto {
     const legacyIcon = doc?.siteIcon?.trim() || '';
-    const siteIconLight = doc?.siteIconLight?.trim() || legacyIcon || MSTYLE_BRAND_DEFAULTS.siteIconLight;
-    const siteIconDark = doc?.siteIconDark?.trim() || legacyIcon || MSTYLE_BRAND_DEFAULTS.siteIconDark;
+    const siteIconLight =
+      doc?.siteIconLight?.trim() ||
+      legacyIcon ||
+      MSTYLE_BRAND_DEFAULTS.siteIconLight;
+    const siteIconDark =
+      doc?.siteIconDark?.trim() ||
+      legacyIcon ||
+      MSTYLE_BRAND_DEFAULTS.siteIconDark;
 
     return {
       siteName: doc?.siteName?.trim() || MSTYLE_BRAND_DEFAULTS.siteName,
@@ -225,39 +275,66 @@ export class SiteSettingsService implements OnModuleInit {
       siteIcon: siteIconLight,
       siteIconLight,
       siteIconDark,
-      siteTagline: doc?.siteTagline?.trim() || MSTYLE_BRAND_DEFAULTS.siteTagline,
+      siteTagline:
+        doc?.siteTagline?.trim() || MSTYLE_BRAND_DEFAULTS.siteTagline,
       sitePhone: doc?.sitePhone?.trim() || MSTYLE_BRAND_DEFAULTS.sitePhone,
       siteEmail: doc?.siteEmail?.trim() || MSTYLE_BRAND_DEFAULTS.siteEmail,
       brandMarkType: doc?.brandMarkType === 'text' ? 'text' : 'image',
-      brandMarkText: doc?.brandMarkText?.trim() || MSTYLE_BRAND_DEFAULTS.brandMarkText,
+      brandMarkText:
+        doc?.brandMarkText?.trim() || MSTYLE_BRAND_DEFAULTS.brandMarkText,
       brandShowName: doc?.brandShowName !== false,
       brandNameBeforeMark: doc?.brandNameBeforeMark !== false,
-      uiIconSelectChevron: doc?.uiIconSelectChevron?.trim() || MSTYLE_BRAND_DEFAULTS.uiIconSelectChevron,
-      themePrimary: this.normalizeHexColor(doc?.themePrimary, MSTYLE_BRAND_DEFAULTS.themePrimary),
-      themePrimaryHover: this.normalizeHexColor(doc?.themePrimaryHover, MSTYLE_BRAND_DEFAULTS.themePrimaryHover),
+      uiIconSelectChevron:
+        doc?.uiIconSelectChevron?.trim() ||
+        MSTYLE_BRAND_DEFAULTS.uiIconSelectChevron,
+      themePrimary: this.normalizeHexColor(
+        doc?.themePrimary,
+        MSTYLE_BRAND_DEFAULTS.themePrimary,
+      ),
+      themePrimaryHover: this.normalizeHexColor(
+        doc?.themePrimaryHover,
+        MSTYLE_BRAND_DEFAULTS.themePrimaryHover,
+      ),
       uiLabels: deepMergeUiLabels(doc?.uiLabels),
       smsRegistrationEnabled: doc?.smsRegistrationEnabled !== false,
-      smsRegistrationDisabledMessage: doc?.smsRegistrationDisabledMessage?.trim()
-        || MSTYLE_BRAND_DEFAULTS.smsRegistrationDisabledMessage,
-      smsRegistrationCodeText: doc?.smsRegistrationCodeText?.trim()?.includes('{code}')
+      smsRegistrationDisabledMessage:
+        doc?.smsRegistrationDisabledMessage?.trim() ||
+        MSTYLE_BRAND_DEFAULTS.smsRegistrationDisabledMessage,
+      smsRegistrationCodeText: doc?.smsRegistrationCodeText
+        ?.trim()
+        ?.includes('{code}')
         ? doc.smsRegistrationCodeText.trim()
         : MSTYLE_BRAND_DEFAULTS.smsRegistrationCodeText,
       blockedEmailDomains: resolveBlockedEmailDomains(
         // undefined field → defaults; explicit [] stays empty
-        Array.isArray(doc?.blockedEmailDomains) ? doc!.blockedEmailDomains : undefined,
+        Array.isArray(doc?.blockedEmailDomains)
+          ? doc!.blockedEmailDomains
+          : undefined,
       ),
-      registrationNotifyEmails: this.normalizeEmailList(doc?.registrationNotifyEmails || []),
+      registrationNotifyEmails: this.normalizeEmailList(
+        doc?.registrationNotifyEmails || [],
+      ),
       registrationNotifyUserIds: Array.isArray(doc?.registrationNotifyUserIds)
-        ? doc!.registrationNotifyUserIds.map(String).filter(Boolean).slice(0, 50)
+        ? doc!.registrationNotifyUserIds
+            .map(String)
+            .filter(Boolean)
+            .slice(0, 50)
         : [],
-      faqItems: normalizeFaqItems(doc?.faqItems?.length ? doc.faqItems : DEFAULT_FAQ_ITEMS),
+      faqItems: normalizeFaqItems(
+        doc?.faqItems?.length ? doc.faqItems : DEFAULT_FAQ_ITEMS,
+      ),
       helpGuideSections: normalizeGuideSections(
-        doc?.helpGuideSections?.length ? doc.helpGuideSections : DEFAULT_GUIDE_SECTIONS,
+        doc?.helpGuideSections?.length
+          ? doc.helpGuideSections
+          : DEFAULT_GUIDE_SECTIONS,
       ),
     };
   }
 
-  private normalizeHexColor(value: string | undefined, fallback: string): string {
+  private normalizeHexColor(
+    value: string | undefined,
+    fallback: string,
+  ): string {
     const trimmed = value?.trim() || '';
     return /^#[0-9A-Fa-f]{6}$/.test(trimmed) ? trimmed.toLowerCase() : fallback;
   }

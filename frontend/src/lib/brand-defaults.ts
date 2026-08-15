@@ -44,28 +44,46 @@ export function resolveSiteIcon(
   variant: 'light' | 'dark',
 ): string {
   const legacy = config?.siteIcon?.trim() || '';
-  const forLight = config?.siteIconLight?.trim() || legacy || MSTYLE_BRAND_DEFAULTS.siteIconLight;
-  const forDark = config?.siteIconDark?.trim() || legacy || MSTYLE_BRAND_DEFAULTS.siteIconDark;
+  const forLight =
+    config?.siteIconLight?.trim() ||
+    legacy ||
+    MSTYLE_BRAND_DEFAULTS.siteIconLight;
+  const forDark =
+    config?.siteIconDark?.trim() ||
+    legacy ||
+    MSTYLE_BRAND_DEFAULTS.siteIconDark;
   return variant === 'dark' ? forDark : forLight;
 }
 
-export function resolveBrand(config?: Partial<BrandFields> | null): Required<BrandFields> {
+export function resolveBrand(
+  config?: Partial<BrandFields> | null,
+): Required<BrandFields> {
   const legacy = config?.siteIcon?.trim() || '';
-  const siteIconLight = config?.siteIconLight?.trim() || legacy || MSTYLE_BRAND_DEFAULTS.siteIconLight;
-  const siteIconDark = config?.siteIconDark?.trim() || legacy || MSTYLE_BRAND_DEFAULTS.siteIconDark;
+  const siteIconLight =
+    config?.siteIconLight?.trim() ||
+    legacy ||
+    MSTYLE_BRAND_DEFAULTS.siteIconLight;
+  const siteIconDark =
+    config?.siteIconDark?.trim() ||
+    legacy ||
+    MSTYLE_BRAND_DEFAULTS.siteIconDark;
 
   return {
     siteName: config?.siteName?.trim() || MSTYLE_BRAND_DEFAULTS.siteName,
     siteIcon: siteIconLight,
     siteIconLight,
     siteIconDark,
-    siteTagline: config?.siteTagline?.trim() || MSTYLE_BRAND_DEFAULTS.siteTagline,
+    siteTagline:
+      config?.siteTagline?.trim() || MSTYLE_BRAND_DEFAULTS.siteTagline,
     sitePhone: config?.sitePhone?.trim() || MSTYLE_BRAND_DEFAULTS.sitePhone,
     siteEmail: config?.siteEmail?.trim() || MSTYLE_BRAND_DEFAULTS.siteEmail,
     brandMarkType: config?.brandMarkType === 'text' ? 'text' : 'image',
-    brandMarkText: config?.brandMarkText?.trim() || MSTYLE_BRAND_DEFAULTS.brandMarkText,
+    brandMarkText:
+      config?.brandMarkText?.trim() || MSTYLE_BRAND_DEFAULTS.brandMarkText,
     brandShowName: config?.brandShowName !== false,
     brandNameBeforeMark: config?.brandNameBeforeMark !== false,
-    uiIconSelectChevron: config?.uiIconSelectChevron?.trim() || MSTYLE_BRAND_DEFAULTS.uiIconSelectChevron,
+    uiIconSelectChevron:
+      config?.uiIconSelectChevron?.trim() ||
+      MSTYLE_BRAND_DEFAULTS.uiIconSelectChevron,
   };
 }

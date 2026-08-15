@@ -6,7 +6,11 @@ import { Pass } from '@/lib/api';
 import { api, getErrorMessage } from '@/lib/api';
 import { useAuth } from '@/lib/auth';
 import { useConfig } from '@/hooks/useConfig';
-import { canManageTicketScan, hasPermission, isAdminPanelUser } from '@/lib/permissions';
+import {
+  canManageTicketScan,
+  hasPermission,
+  isAdminPanelUser,
+} from '@/lib/permissions';
 import { isAwaitingEntry } from '@/lib/pass-entry';
 import { passRequiresCheckout } from '@/lib/pass-checkout';
 import { getUiLabels } from '@/lib/ui-labels';
@@ -18,7 +22,10 @@ interface PassTicketStaffPanelProps {
   onPassUpdated: () => void;
 }
 
-export function PassTicketStaffPanel({ passNumber, onPassUpdated }: PassTicketStaffPanelProps) {
+export function PassTicketStaffPanel({
+  passNumber,
+  onPassUpdated,
+}: PassTicketStaffPanelProps) {
   const { user } = useAuth();
   const config = useConfig();
   const labels = getUiLabels(config);
@@ -29,12 +36,14 @@ export function PassTicketStaffPanel({ passNumber, onPassUpdated }: PassTicketSt
   const [rejectReason, setRejectReason] = useState('');
 
   const canManage = canManageTicketScan(user);
-  const canReception = hasPermission(user, 'passes.reception') || isAdminPanelUser(user);
+  const canReception =
+    hasPermission(user, 'passes.reception') || isAdminPanelUser(user);
 
   const loadPass = useCallback(() => {
     if (!canManage) return;
     setLoading(true);
-    api.lookupPass(passNumber)
+    api
+      .lookupPass(passNumber)
       .then(({ pass: p }) => setPass(p))
       .catch(() => setPass(null))
       .finally(() => setLoading(false));
@@ -56,16 +65,24 @@ export function PassTicketStaffPanel({ passNumber, onPassUpdated }: PassTicketSt
           toast('Укажите причину отклонения', 'error');
           return;
         }
-        ({ pass: updated } = await api.updateStatus(pass.id, 'rejected', rejectReason.trim()));
-      } else if (action === 'checkin') ({ pass: updated } = await api.checkIn(pass.id));
+        ({ pass: updated } = await api.updateStatus(
+          pass.id,
+          'rejected',
+          rejectReason.trim(),
+        ));
+      } else if (action === 'checkin')
+        ({ pass: updated } = await api.checkIn(pass.id));
       else ({ pass: updated } = await api.checkOut(pass.id));
 
       setPass(updated);
       setRejectReason('');
       onPassUpdated();
-      const toastMsg = action === 'reject' ? labels.toasts.rejected
-        : action === 'checkin' ? labels.toasts.checkedIn
-        : labels.toasts.checkedOut;
+      const toastMsg =
+        action === 'reject'
+          ? labels.toasts.rejected
+          : action === 'checkin'
+            ? labels.toasts.checkedIn
+            : labels.toasts.checkedOut;
       toast(toastMsg, 'success');
     } catch (err) {
       toast(getErrorMessage(err, 'Не удалось выполнить действие'), 'error');
@@ -74,9 +91,11 @@ export function PassTicketStaffPanel({ passNumber, onPassUpdated }: PassTicketSt
     }
   };
 
-  const hasActions = pass && canReception && (
-    isAwaitingEntry(pass.status) || (pass.status === 'active' && passRequiresCheckout(pass))
-  );
+  const hasActions =
+    pass &&
+    canReception &&
+    (isAwaitingEntry(pass.status) ||
+      (pass.status === 'active' && passRequiresCheckout(pass)));
 
   return (
     <section className="pass-ticket-staff" aria-label="Действия ресепшн">
@@ -87,9 +106,13 @@ export function PassTicketStaffPanel({ passNumber, onPassUpdated }: PassTicketSt
         </div>
 
         {loading && !pass ? (
-          <p className="px-3 py-4 text-sm text-[var(--muted)] animate-pulse">Загрузка...</p>
+          <p className="px-3 py-4 text-sm text-[var(--muted)] animate-pulse">
+            Загрузка...
+          </p>
         ) : !pass ? (
-          <p className="px-3 py-4 text-sm text-[var(--muted)]">Нет доступа к управлению пропуском</p>
+          <p className="px-3 py-4 text-sm text-[var(--muted)]">
+            Нет доступа к управлению пропуском
+          </p>
         ) : (
           <>
             {hasActions && (

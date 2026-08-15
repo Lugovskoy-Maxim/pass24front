@@ -68,7 +68,9 @@ export class AppSettings {
   @Prop({ default: 'Скоро функция будет работать' })
   smsRegistrationDisabledMessage: string;
 
-  @Prop({ default: 'Код подтверждения регистрации: {code}. Действует 15 минут.' })
+  @Prop({
+    default: 'Код подтверждения регистрации: {code}. Действует 15 минут.',
+  })
   smsRegistrationCodeText: string;
 
   /**

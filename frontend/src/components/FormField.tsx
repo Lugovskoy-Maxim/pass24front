@@ -29,7 +29,9 @@ export function getInputClassName(options?: {
     options?.iconLeft ? 'input--icon-left' : '',
     options?.readOnly ? 'input--readonly' : '',
     options?.className,
-  ].filter(Boolean).join(' ');
+  ]
+    .filter(Boolean)
+    .join(' ');
 }
 
 interface FormFieldProps {
@@ -55,11 +57,20 @@ export function FormField({
   const hintId = id && hint && !error ? `${id}-hint` : undefined;
 
   return (
-    <div className={['form-field', error ? 'form-field--invalid' : '', className].filter(Boolean).join(' ')}>
+    <div
+      className={['form-field', error ? 'form-field--invalid' : '', className]
+        .filter(Boolean)
+        .join(' ')}
+    >
       {label && (
         <label className="label" htmlFor={id}>
           {label}
-          {required && <span className="label-required" aria-hidden> *</span>}
+          {required && (
+            <span className="label-required" aria-hidden>
+              {' '}
+              *
+            </span>
+          )}
         </label>
       )}
       {children}
@@ -88,7 +99,16 @@ export const PasswordInput = forwardRef<
   HTMLInputElement,
   Omit<InputHTMLAttributes<HTMLInputElement>, 'type'> & FormControlProps
 >(function PasswordInput(
-  { invalid, inputAuto, mono, iconLeft, className, readOnly, disabled, ...props },
+  {
+    invalid,
+    inputAuto,
+    mono,
+    iconLeft,
+    className,
+    readOnly,
+    disabled,
+    ...props
+  },
   ref,
 ) {
   const [visible, setVisible] = useState(false);
@@ -102,7 +122,9 @@ export const PasswordInput = forwardRef<
         inputAuto={inputAuto}
         mono={mono}
         iconLeft={iconLeft}
-        className={['password-field__input', className].filter(Boolean).join(' ')}
+        className={['password-field__input', className]
+          .filter(Boolean)
+          .join(' ')}
         readOnly={readOnly}
         disabled={disabled}
         {...props}
@@ -126,7 +148,16 @@ export const FormInput = forwardRef<
   HTMLInputElement,
   InputHTMLAttributes<HTMLInputElement> & FormControlProps
 >(function FormInput(
-  { invalid, inputAuto, mono, iconLeft, className, readOnly, disabled, ...props },
+  {
+    invalid,
+    inputAuto,
+    mono,
+    iconLeft,
+    className,
+    readOnly,
+    disabled,
+    ...props
+  },
   ref,
 ) {
   return (
@@ -135,7 +166,14 @@ export const FormInput = forwardRef<
       readOnly={readOnly}
       disabled={disabled}
       aria-invalid={invalid || undefined}
-      className={getInputClassName({ invalid, auto: inputAuto, mono, iconLeft, readOnly: readOnly || disabled, className })}
+      className={getInputClassName({
+        invalid,
+        auto: inputAuto,
+        mono,
+        iconLeft,
+        readOnly: readOnly || disabled,
+        className,
+      })}
       {...props}
     />
   );
@@ -154,7 +192,12 @@ export const FormSelect = forwardRef<
         ref={ref}
         disabled={disabled}
         aria-invalid={invalid || undefined}
-        className={getInputClassName({ invalid, auto: inputAuto, readOnly: disabled, className })}
+        className={getInputClassName({
+          invalid,
+          auto: inputAuto,
+          readOnly: disabled,
+          className,
+        })}
         {...props}
       >
         {children}
@@ -166,14 +209,21 @@ export const FormSelect = forwardRef<
 export const FormTextarea = forwardRef<
   HTMLTextAreaElement,
   TextareaHTMLAttributes<HTMLTextAreaElement> & FormControlProps
->(function FormTextarea({ invalid, className, readOnly, disabled, ...props }, ref) {
+>(function FormTextarea(
+  { invalid, className, readOnly, disabled, ...props },
+  ref,
+) {
   return (
     <textarea
       ref={ref}
       readOnly={readOnly}
       disabled={disabled}
       aria-invalid={invalid || undefined}
-      className={getInputClassName({ invalid, readOnly: readOnly || disabled, className: ['input--textarea', className].filter(Boolean).join(' ') })}
+      className={getInputClassName({
+        invalid,
+        readOnly: readOnly || disabled,
+        className: ['input--textarea', className].filter(Boolean).join(' '),
+      })}
       {...props}
     />
   );
@@ -195,7 +245,11 @@ export function SelectWrap({
   const chevron = iconName ?? brand.uiIconSelectChevron;
 
   return (
-    <div className={['select-wrap', auto ? 'select-wrap--auto' : '', className].filter(Boolean).join(' ')}>
+    <div
+      className={['select-wrap', auto ? 'select-wrap--auto' : '', className]
+        .filter(Boolean)
+        .join(' ')}
+    >
       {children}
       <span className="select-wrap__icon" aria-hidden>
         <UiIcon name={chevron} className="w-4 h-4 text-[var(--muted)]" />
@@ -204,10 +258,19 @@ export function SelectWrap({
   );
 }
 
-export function FormErrorBanner({ message, className = '' }: { message?: string; className?: string }) {
+export function FormErrorBanner({
+  message,
+  className = '',
+}: {
+  message?: string;
+  className?: string;
+}) {
   if (!message) return null;
   return (
-    <div className={['form-error-banner', className].filter(Boolean).join(' ')} role="alert">
+    <div
+      className={['form-error-banner', className].filter(Boolean).join(' ')}
+      role="alert"
+    >
       {message}
     </div>
   );

@@ -17,7 +17,8 @@ export class SeedService implements OnModuleInit {
   private readonly logger = new Logger(SeedService.name);
 
   constructor(
-    @InjectModel(User.name, AUTH_CONNECTION) private userModel: Model<UserDocument>,
+    @InjectModel(User.name, AUTH_CONNECTION)
+    private userModel: Model<UserDocument>,
     @InjectConnection() private mainConnection: Connection,
     private configService: ConfigService,
     private testDataSeedService: TestDataSeedService,
@@ -45,27 +46,36 @@ export class SeedService implements OnModuleInit {
 
     try {
       await this.userModel.insertMany(legacyUsers, { ordered: false });
-      this.logger.log(`Мигрировано ${legacyUsers.length} пользователей в auth-базу (pass24_auth)`);
+      this.logger.log(
+        `Мигрировано ${legacyUsers.length} пользователей в auth-базу (pass24_auth)`,
+      );
     } catch (err) {
       this.logger.warn(`Миграция users в auth-базу: ${(err as Error).message}`);
     }
   }
 
   private async seedAdminUser() {
-    const username = this.configService.get<string>('ADMIN_USERNAME', 'admin').toLowerCase();
-    const password = this.configService.get<string>('ADMIN_PASSWORD', '01.03.1986');
+    const username = this.configService
+      .get<string>('ADMIN_USERNAME', 'admin')
+      .toLowerCase();
+    const password = this.configService.get<string>(
+      'ADMIN_PASSWORD',
+      '01.03.1986',
+    );
     const fullName = this.configService.get<string>('ADMIN_FULL_NAME', 'Админ');
     const role = this.configService.get<string>('ADMIN_ROLE', 'admin');
-    const legacyEmail = this.configService.get<string>('ADMIN_EMAIL', '')?.trim().toLowerCase();
+    const legacyEmail = this.configService
+      .get<string>('ADMIN_EMAIL', '')
+      ?.trim()
+      .toLowerCase();
 
     const existing = await this.userModel.findOne({
-      $or: [
-        { username },
-        ...(legacyEmail ? [{ email: legacyEmail }] : []),
-      ],
+      $or: [{ username }, ...(legacyEmail ? [{ email: legacyEmail }] : [])],
     });
     if (existing) {
-      this.logger.log(`Супер-администратор уже существует: ${existing.username || existing.email}`);
+      this.logger.log(
+        `Супер-администратор уже существует: ${existing.username || existing.email}`,
+      );
       return;
     }
 

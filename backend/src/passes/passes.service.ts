@@ -1,4 +1,10 @@
-import { BadRequestException, ForbiddenException, Injectable, NotFoundException, OnModuleInit } from '@nestjs/common';
+import {
+  BadRequestException,
+  ForbiddenException,
+  Injectable,
+  NotFoundException,
+  OnModuleInit,
+} from '@nestjs/common';
 import { ConfigService } from '@nestjs/config';
 import { AccessConfigService } from '../access/access-config.service';
 import { AuditActor, AuditService } from '../audit/audit.service';
@@ -6,13 +12,33 @@ import { MailService } from '../mail/mail.service';
 import { InjectModel } from '@nestjs/mongoose';
 import { Model, Types } from 'mongoose';
 import { AUTH_CONNECTION } from '../database/auth-database.constants';
-import { Office, OfficeDocument, Pass, PassDocument, Property, PropertyDocument, User, UserDocument } from '../schemas';
+import {
+  Office,
+  OfficeDocument,
+  Pass,
+  PassDocument,
+  Property,
+  PropertyDocument,
+  User,
+  UserDocument,
+} from '../schemas';
 import { PropertyType } from '../schemas/enums';
-import { deriveVisitPurpose, normalizePassport, normalizePersonName, normalizePhone } from '../common/pass-helpers';
-import { resolveTenantOwnerId, tenantOwnerObjectId } from '../common/tenant-owner';
+import {
+  deriveVisitPurpose,
+  normalizePassport,
+  normalizePersonName,
+  normalizePhone,
+} from '../common/pass-helpers';
+import {
+  resolveTenantOwnerId,
+  tenantOwnerObjectId,
+} from '../common/tenant-owner';
 import { isTenantCompanyUser } from '../common/tenant-account';
 import { userHasPermission } from '../common/user-permissions';
-import { assertVisitDateBookable, parseClosedWeekdays } from '../common/bookable-visit-dates';
+import {
+  assertVisitDateBookable,
+  parseClosedWeekdays,
+} from '../common/bookable-visit-dates';
 import { isValidVisitDateString } from '../common/visit-date';
 import { buildPassCsv } from '../common/pass-csv';
 import { CreatePassDto } from './dto/create-pass.dto';
@@ -44,7 +70,8 @@ export class PassesService implements OnModuleInit {
     @InjectModel(Pass.name) private passModel: Model<PassDocument>,
     @InjectModel(Office.name) private officeModel: Model<OfficeDocument>,
     @InjectModel(Property.name) private propertyModel: Model<PropertyDocument>,
-    @InjectModel(User.name, AUTH_CONNECTION) private userModel: Model<UserDocument>,
+    @InjectModel(User.name, AUTH_CONNECTION)
+    private userModel: Model<UserDocument>,
     private accessConfigService: AccessConfigService,
     private passTemplatesService: PassTemplatesService,
     private auditService: AuditService,
@@ -80,7 +107,10 @@ export class PassesService implements OnModuleInit {
     return h * 60 + (Number.isNaN(m) ? 0 : m);
   }
 
-  private isPassOverdueInBuilding(pass: { status: string; visitDate: string; visitTimeTo?: string }, now = new Date()) {
+  private isPassOverdueInBuilding(
+    pass: { status: string; visitDate: string; visitTimeTo?: string },
+    now = new Date(),
+  ) {
     if (pass.status !== 'active') return false;
 
     const today = this.getLocalDateString(now);
@@ -101,7 +131,10 @@ export class PassesService implements OnModuleInit {
   async expirePastPasses() {
     const today = this.getTodayDate();
     const toExpire = await this.passModel
-      .find({ visitDate: { $lt: today }, status: { $in: ['pending', 'approved'] } })
+      .find({
+        visitDate: { $lt: today },
+        status: { $in: ['pending', 'approved'] },
+      })
       .select('_id passNumber visitDate')
       .lean();
 
@@ -128,10 +161,7 @@ export class PassesService implements OnModuleInit {
   /** LEGACY: createdBy мог сохраняться и string, и ObjectId — учитываем оба. */
   private createdByFilter(userId: string) {
     return {
-      $or: [
-        { createdBy: userId },
-        { createdBy: new Types.ObjectId(userId) },
-      ],
+      $or: [{ createdBy: userId }, { createdBy: new Types.ObjectId(userId) }],
     };
   }
 
@@ -143,7 +173,10 @@ export class PassesService implements OnModuleInit {
    * Owner + все сотрудники (активные и нет).
    * resolveTenantOwnerId: employee → parentTenantId, owner → userId.
    */
-  private async getTenantTeamIds(user?: { userId?: string; parentTenantId?: string }) {
+  private async getTenantTeamIds(user?: {
+    userId?: string;
+    parentTenantId?: string;
+  }) {
     const ownerId = resolveTenantOwnerId(user);
     if (!ownerId) return [];
 
@@ -174,17 +207,28 @@ export class PassesService implements OnModuleInit {
       if (!teamIds.length) return { _id: null };
 
       const canViewCompany =
-        !user.parentTenantId
-        || userHasPermission(user, 'passes.view_own')
-        || userHasPermission(user, 'passes.create')
-        || await this.accessConfigService.hasPermission(user.role, 'passes.view_own')
-        || await this.accessConfigService.hasPermission(user.role, 'passes.create');
+        !user.parentTenantId ||
+        userHasPermission(user, 'passes.view_own') ||
+        userHasPermission(user, 'passes.create') ||
+        (await this.accessConfigService.hasPermission(
+          user.role,
+          'passes.view_own',
+        )) ||
+        (await this.accessConfigService.hasPermission(
+          user.role,
+          'passes.create',
+        ));
 
       if (!canViewCompany) return { _id: null };
       return this.createdByTeamFilter(teamIds);
     }
 
-    if (await this.accessConfigService.canViewAllPasses(user.role, user.parentTenantId)) {
+    if (
+      await this.accessConfigService.canViewAllPasses(
+        user.role,
+        user.parentTenantId,
+      )
+    ) {
       return {};
     }
 
@@ -195,7 +239,9 @@ export class PassesService implements OnModuleInit {
       return { _id: null };
     }
 
-    if (await this.accessConfigService.hasPermission(user.role, 'passes.view_own')) {
+    if (
+      await this.accessConfigService.hasPermission(user.role, 'passes.view_own')
+    ) {
       return this.createdByFilter(user.userId);
     }
 
@@ -222,7 +268,10 @@ export class PassesService implements OnModuleInit {
     });
   }
 
-  private async assertTenantExportScope(user: any, params: { propertyId?: string; officeId?: string }) {
+  private async assertTenantExportScope(
+    user: any,
+    params: { propertyId?: string; officeId?: string },
+  ) {
     const ownerId = resolveTenantOwnerId(user);
     if (!ownerId) throw new ForbiddenException('Нет доступа');
 
@@ -233,7 +282,9 @@ export class PassesService implements OnModuleInit {
 
     const officeIds = new Set(offices.map((o) => o._id.toString()));
     const propertyIds = new Set(
-      offices.map((o) => o.property?.toString()).filter((id): id is string => !!id),
+      offices
+        .map((o) => o.property?.toString())
+        .filter((id): id is string => !!id),
     );
 
     if (params.officeId && !officeIds.has(params.officeId)) {
@@ -290,38 +341,66 @@ export class PassesService implements OnModuleInit {
       if (isTenantCompanyUser(user)) {
         await this.assertTenantExportScope(user, params);
       }
-      if (params.propertyId) filter.property = new Types.ObjectId(params.propertyId);
-      if (params.officeId) filter.officeId = new Types.ObjectId(params.officeId);
+      if (params.propertyId)
+        filter.property = new Types.ObjectId(params.propertyId);
+      if (params.officeId)
+        filter.officeId = new Types.ObjectId(params.officeId);
     }
 
     if (params.tenantId) {
       if (isTenantCompanyUser(user)) {
         throw new ForbiddenException('Фильтр по арендатору недоступен');
       }
-      if (!(await this.accessConfigService.canViewAllPasses(user.role, user.parentTenantId))) {
+      if (
+        !(await this.accessConfigService.canViewAllPasses(
+          user.role,
+          user.parentTenantId,
+        ))
+      ) {
         throw new ForbiddenException('Нет доступа к фильтру по арендатору');
       }
       filter.createdBy = new Types.ObjectId(params.tenantId);
     }
 
     if (params.companyName?.trim()) {
-      filter.companyName = new RegExp(`^${this.escapeRegex(params.companyName.trim())}$`, 'i');
+      filter.companyName = new RegExp(
+        `^${this.escapeRegex(params.companyName.trim())}$`,
+        'i',
+      );
     }
 
     return filter;
   }
 
   async findAll(
-    params: { status?: string; date?: string; search?: string; limit?: string; offset?: string },
+    params: {
+      status?: string;
+      date?: string;
+      search?: string;
+      limit?: string;
+      offset?: string;
+    },
     user?: any,
   ) {
     await this.expirePastPasses();
     const filter = await this.buildListFilter(params, user);
-    const limit = Math.min(Math.max(parseInt(params.limit || String(PASS_LIST_PAGE_SIZE), 10) || PASS_LIST_PAGE_SIZE, 1), 200);
+    const limit = Math.min(
+      Math.max(
+        parseInt(params.limit || String(PASS_LIST_PAGE_SIZE), 10) ||
+          PASS_LIST_PAGE_SIZE,
+        1,
+      ),
+      200,
+    );
     const offset = Math.max(parseInt(params.offset || '0', 10) || 0, 0);
 
     const [passes, total] = await Promise.all([
-      this.passModel.find(filter).sort({ createdAt: -1 }).skip(offset).limit(limit).lean(),
+      this.passModel
+        .find(filter)
+        .sort({ createdAt: -1 })
+        .skip(offset)
+        .limit(limit)
+        .lean(),
       this.passModel.countDocuments(filter),
     ]);
     const withCheckout = await this.enrichPassCheckoutSettings(passes);
@@ -336,28 +415,51 @@ export class PassesService implements OnModuleInit {
   }
 
   async getExportFilters(user?: any) {
-    const canFilterTenants = !isTenantCompanyUser(user)
-      && !!(await this.accessConfigService.canViewAllPasses(user?.role, user?.parentTenantId));
+    const canFilterTenants =
+      !isTenantCompanyUser(user) &&
+      !!(await this.accessConfigService.canViewAllPasses(
+        user?.role,
+        user?.parentTenantId,
+      ));
 
     if (isTenantCompanyUser(user)) {
       const ownerId = resolveTenantOwnerId(user);
       const offices = ownerId
-        ? await this.officeModel.find({ tenantId: new Types.ObjectId(ownerId), isActive: true }).lean()
+        ? await this.officeModel
+            .find({ tenantId: new Types.ObjectId(ownerId), isActive: true })
+            .lean()
         : [];
-      const propertyIds = [...new Set(offices.map((o) => o.property?.toString()).filter((id): id is string => !!id))];
+      const propertyIds = [
+        ...new Set(
+          offices
+            .map((o) => o.property?.toString())
+            .filter((id): id is string => !!id),
+        ),
+      ];
       const properties = propertyIds.length
-        ? await this.propertyModel.find({ _id: { $in: propertyIds.map((id) => new Types.ObjectId(id)) } }).select('name').lean()
+        ? await this.propertyModel
+            .find({
+              _id: { $in: propertyIds.map((id) => new Types.ObjectId(id)) },
+            })
+            .select('name')
+            .lean()
         : [];
-      const propertyMap = new Map(properties.map((p) => [p._id.toString(), p.name]));
+      const propertyMap = new Map(
+        properties.map((p) => [p._id.toString(), p.name]),
+      );
 
       return {
         scope: 'own' as const,
-        businessCenters: propertyIds.map((id) => ({ id, name: propertyMap.get(id) || 'БЦ' })),
+        businessCenters: propertyIds.map((id) => ({
+          id,
+          name: propertyMap.get(id) || 'БЦ',
+        })),
         offices: offices.map((o) => ({
           id: o._id.toString(),
           propertyId: o.property?.toString(),
           number: o.number,
-          businessCenterName: propertyMap.get(o.property?.toString() || '') || '',
+          businessCenterName:
+            propertyMap.get(o.property?.toString() || '') || '',
           company: o.company,
         })),
         tenants: [] as Array<{ id: string; company: string; email?: string }>,
@@ -365,22 +467,34 @@ export class PassesService implements OnModuleInit {
     }
 
     const [properties, offices, tenants] = await Promise.all([
-      this.propertyModel.find({ type: PropertyType.BUSINESS_CENTER, isActive: true }).sort({ name: 1 }).lean(),
+      this.propertyModel
+        .find({ type: PropertyType.BUSINESS_CENTER, isActive: true })
+        .sort({ name: 1 })
+        .lean(),
       this.officeModel.find({ isActive: true }).sort({ number: 1 }).lean(),
       canFilterTenants
         ? this.userModel
-            .find({ role: 'tenant', parentTenantId: null, isActive: { $ne: false } })
+            .find({
+              role: 'tenant',
+              parentTenantId: null,
+              isActive: { $ne: false },
+            })
             .select('fullName company email')
             .sort({ company: 1, fullName: 1 })
             .lean()
         : Promise.resolve([]),
     ]);
 
-    const propertyMap = new Map(properties.map((p) => [p._id.toString(), p.name]));
+    const propertyMap = new Map(
+      properties.map((p) => [p._id.toString(), p.name]),
+    );
 
     return {
       scope: 'all' as const,
-      businessCenters: properties.map((p) => ({ id: p._id.toString(), name: p.name })),
+      businessCenters: properties.map((p) => ({
+        id: p._id.toString(),
+        name: p.name,
+      })),
       offices: offices.map((o) => ({
         id: o._id.toString(),
         propertyId: o.property?.toString(),
@@ -408,7 +522,10 @@ export class PassesService implements OnModuleInit {
     }
 
     const filter = await this.buildListFilter(reportQuery, user);
-    const limit = Math.min(reportQuery.limit || PASS_REPORT_PAGE_SIZE, PASS_REPORT_PAGE_SIZE);
+    const limit = Math.min(
+      reportQuery.limit || PASS_REPORT_PAGE_SIZE,
+      PASS_REPORT_PAGE_SIZE,
+    );
     const offset = Math.max(reportQuery.offset || 0, 0);
 
     const [passes, total] = await Promise.all([
@@ -490,9 +607,13 @@ export class PassesService implements OnModuleInit {
   }
 
   async create(dto: CreatePassDto, user: any) {
-    const enabled = await this.accessConfigService.isPassTypeEnabled(dto.passType);
+    const enabled = await this.accessConfigService.isPassTypeEnabled(
+      dto.passType,
+    );
     if (!enabled) {
-      throw new BadRequestException('Этот тип пропуска отключён администратором');
+      throw new BadRequestException(
+        'Этот тип пропуска отключён администратором',
+      );
     }
 
     const { sendEmail, recipientEmail, ...passDto } = dto;
@@ -504,23 +625,37 @@ export class PassesService implements OnModuleInit {
       throw new BadRequestException('Некорректная дата визита');
     }
     const resolved = await this.resolveOfficeFields(passDto, user);
-    const closedWeekdays = await this.getClosedWeekdaysForProperty(resolved.property);
+    const closedWeekdays = await this.getClosedWeekdaysForProperty(
+      resolved.property,
+    );
     try {
-      assertVisitDateBookable(passDto.visitDate, this.getTodayDate(), closedWeekdays);
+      assertVisitDateBookable(
+        passDto.visitDate,
+        this.getTodayDate(),
+        closedWeekdays,
+      );
     } catch (e) {
       if (e instanceof Error && e.message === 'PAST_DATE') {
-        throw new BadRequestException('Нельзя заказать пропуск на прошедшую дату');
+        throw new BadRequestException(
+          'Нельзя заказать пропуск на прошедшую дату',
+        );
       }
       if (e instanceof Error && e.message === 'NOT_BOOKABLE') {
         throw new BadRequestException('Выберите одну из доступных дат визита');
       }
       throw new BadRequestException('Некорректная дата визита');
     }
-    const workingHours = await this.resolveWorkingHours(resolved.property, passDto);
+    const workingHours = await this.resolveWorkingHours(
+      resolved.property,
+      passDto,
+    );
     passDto.visitTimeFrom = workingHours.from;
     passDto.visitTimeTo = workingHours.to;
     const creator = user?.userId
-      ? await this.userModel.findById(user.userId).select('fullName phone company email').lean()
+      ? await this.userModel
+          .findById(user.userId)
+          .select('fullName phone company email')
+          .lean()
       : null;
 
     const passNumber = this.generatePassNumber();
@@ -535,11 +670,15 @@ export class PassesService implements OnModuleInit {
       createdBy: user?.userId ? new Types.ObjectId(user.userId) : undefined,
       creatorName: creator?.fullName || user?.fullName || user?.email,
       creatorPhone: creator?.phone,
-      creatorCompany: resolved.companyName || passDto.companyName || creator?.company,
+      creatorCompany:
+        resolved.companyName || passDto.companyName || creator?.company,
     });
 
     if (isTenantCompanyUser(user)) {
-      await this.passTemplatesService.upsertFromPass(doc.toObject(), user.userId);
+      await this.passTemplatesService.upsertFromPass(
+        doc.toObject(),
+        user.userId,
+      );
     }
 
     await this.auditService.log({
@@ -547,7 +686,11 @@ export class PassesService implements OnModuleInit {
       entityType: 'pass',
       entityId: doc._id,
       actor: user,
-      details: { passNumber: doc.passNumber, visitorName: doc.visitorName, status: doc.status },
+      details: {
+        passNumber: doc.passNumber,
+        visitorName: doc.visitorName,
+        status: doc.status,
+      },
     });
 
     let emailSent = false;
@@ -561,7 +704,9 @@ export class PassesService implements OnModuleInit {
 
   async sendPassEmail(idOrNumber: string, email: string, user?: any) {
     const isObjectId = /^[a-f0-9]{24}$/i.test(idOrNumber);
-    let pass = isObjectId ? await this.passModel.findById(idOrNumber).lean() : null;
+    let pass = isObjectId
+      ? await this.passModel.findById(idOrNumber).lean()
+      : null;
     if (!pass) {
       pass = await this.passModel.findOne({ passNumber: idOrNumber }).lean();
     }
@@ -588,7 +733,10 @@ export class PassesService implements OnModuleInit {
   }
 
   private buildTicketUrl(passNumber: string) {
-    const base = (this.configService.get<string>('PUBLIC_APP_URL') || 'http://127.0.0.1:3000').replace(/\/$/, '');
+    const base = (
+      this.configService.get<string>('PUBLIC_APP_URL') ||
+      'http://127.0.0.1:3000'
+    ).replace(/\/$/, '');
     return `${base}/ticket/${encodeURIComponent(passNumber)}`;
   }
 
@@ -597,26 +745,39 @@ export class PassesService implements OnModuleInit {
     if (!pass) throw new NotFoundException('Пропуск не найден');
 
     const canApprove = actor?.role
-      ? await this.accessConfigService.hasPermission(actor.role, 'passes.approve')
+      ? await this.accessConfigService.hasPermission(
+          actor.role,
+          'passes.approve',
+        )
       : false;
     const canReception = actor?.role
-      ? await this.accessConfigService.hasPermission(actor.role, 'passes.reception')
+      ? await this.accessConfigService.hasPermission(
+          actor.role,
+          'passes.reception',
+        )
       : false;
-    const isCreator = actor?.userId && pass.createdBy?.toString() === actor.userId;
+    const isCreator =
+      actor?.userId && pass.createdBy?.toString() === actor.userId;
 
     if (dto.status === 'cancelled') {
       if (!canApprove && !isCreator) {
         throw new ForbiddenException('Нельзя отменить этот пропуск');
       }
       if (!canApprove && !['pending', 'approved'].includes(pass.status)) {
-        throw new BadRequestException('Можно отменить только до входа в здание');
+        throw new BadRequestException(
+          'Можно отменить только до входа в здание',
+        );
       }
     } else if (dto.status === 'rejected') {
       if (!canApprove && !canReception) {
-        throw new ForbiddenException('Недостаточно прав для отклонения пропуска');
+        throw new ForbiddenException(
+          'Недостаточно прав для отклонения пропуска',
+        );
       }
       if (!['pending', 'approved'].includes(pass.status)) {
-        throw new BadRequestException('Можно отклонить только до входа в здание');
+        throw new BadRequestException(
+          'Можно отклонить только до входа в здание',
+        );
       }
     } else if (!canApprove) {
       throw new ForbiddenException('Недостаточно прав для изменения статуса');
@@ -659,7 +820,9 @@ export class PassesService implements OnModuleInit {
     const pass = await this.passModel.findById(id);
     if (!pass) throw new NotFoundException('Пропуск не найден');
     if (!['pending', 'approved'].includes(pass.status)) {
-      throw new BadRequestException('Пропуск нельзя впустить в текущем статусе');
+      throw new BadRequestException(
+        'Пропуск нельзя впустить в текущем статусе',
+      );
     }
 
     if (pass.status === 'pending' && !pass.approvedAt) {
@@ -694,7 +857,9 @@ export class PassesService implements OnModuleInit {
       passNumber: pass.passNumber,
     });
 
-    const [withCheckout] = await this.enrichPassCheckoutSettings([pass.toObject()]);
+    const [withCheckout] = await this.enrichPassCheckoutSettings([
+      pass.toObject(),
+    ]);
     return { pass: this.mapToFrontend(withCheckout) };
   }
 
@@ -714,7 +879,9 @@ export class PassesService implements OnModuleInit {
       details: { passNumber: pass.passNumber, visitorName: pass.visitorName },
     });
 
-    const [withCheckout] = await this.enrichPassCheckoutSettings([pass.toObject()]);
+    const [withCheckout] = await this.enrichPassCheckoutSettings([
+      pass.toObject(),
+    ]);
     return { pass: this.mapToFrontend(withCheckout) };
   }
 
@@ -759,21 +926,27 @@ export class PassesService implements OnModuleInit {
       pending: mapped.filter((p) => p.status === 'pending').length,
       active: mapped.filter((p) => p.status === 'active').length,
       completed: mapped.filter((p) => p.status === 'completed').length,
-      approved: mapped.filter((p) => p.status === 'approved' || p.status === 'pending').length,
+      approved: mapped.filter(
+        (p) => p.status === 'approved' || p.status === 'pending',
+      ).length,
     };
 
     return {
       date: targetDate,
       stats,
       passes: mapped,
-      scopedToProperties: !options?.allProperties && !!(user?.propertyIds?.length),
+      scopedToProperties:
+        !options?.allProperties && !!user?.propertyIds?.length,
     };
   }
 
   async getHistory(query: PassHistoryQueryDto, user?: any) {
     await this.expirePastPasses();
     const accessFilter = await this.buildAccessFilter(user);
-    const limit = Math.min(Math.max(parseInt(query.limit || '50', 10) || 50, 1), 200);
+    const limit = Math.min(
+      Math.max(parseInt(query.limit || '50', 10) || 50, 1),
+      200,
+    );
     const offset = Math.max(parseInt(query.offset || '0', 10) || 0, 0);
     const filter: any = { ...accessFilter };
 
@@ -784,12 +957,17 @@ export class PassesService implements OnModuleInit {
         break;
       }
       case 'company': {
-        if (!query.companyName?.trim()) throw new BadRequestException('Укажите companyName');
-        filter.companyName = new RegExp(`^${this.escapeRegex(query.companyName.trim())}$`, 'i');
+        if (!query.companyName?.trim())
+          throw new BadRequestException('Укажите companyName');
+        filter.companyName = new RegExp(
+          `^${this.escapeRegex(query.companyName.trim())}$`,
+          'i',
+        );
         break;
       }
       case 'bc': {
-        if (!query.propertyId) throw new BadRequestException('Укажите propertyId');
+        if (!query.propertyId)
+          throw new BadRequestException('Укажите propertyId');
         filter.property = new Types.ObjectId(query.propertyId);
         break;
       }
@@ -798,7 +976,9 @@ export class PassesService implements OnModuleInit {
         const or: any[] = [];
         const name = query.visitorName?.trim();
         if (name) {
-          or.push({ visitorName: new RegExp(`^${this.escapeRegex(name)}$`, 'i') });
+          or.push({
+            visitorName: new RegExp(`^${this.escapeRegex(name)}$`, 'i'),
+          });
         }
         const phone = normalizePhone(query.visitorPhone);
         if (phone) {
@@ -806,13 +986,24 @@ export class PassesService implements OnModuleInit {
           or.push({ visitorPhone: new RegExp(phonePattern) });
         }
         if (query.visitorPassportNumber?.trim()) {
-          or.push({ visitorPassportNumber: new RegExp(this.escapeRegex(query.visitorPassportNumber.trim())) });
+          or.push({
+            visitorPassportNumber: new RegExp(
+              this.escapeRegex(query.visitorPassportNumber.trim()),
+            ),
+          });
         }
         if (query.visitorPassportSeries?.trim()) {
-          or.push({ visitorPassportSeries: new RegExp(this.escapeRegex(query.visitorPassportSeries.trim()), 'i') });
+          or.push({
+            visitorPassportSeries: new RegExp(
+              this.escapeRegex(query.visitorPassportSeries.trim()),
+              'i',
+            ),
+          });
         }
         if (!or.length) {
-          throw new BadRequestException('Укажите ФИО, телефон или паспортные данные');
+          throw new BadRequestException(
+            'Укажите ФИО, телефон или паспортные данные',
+          );
         }
         filter.$or = or;
         break;
@@ -872,29 +1063,44 @@ export class PassesService implements OnModuleInit {
     };
   }
 
-  async updateVisitorData(id: string, dto: UpdatePassVisitorDto, actor?: AuditActor) {
+  async updateVisitorData(
+    id: string,
+    dto: UpdatePassVisitorDto,
+    actor?: AuditActor,
+  ) {
     if (!actor?.role) throw new ForbiddenException('Недостаточно прав');
 
     const canEdit =
-      await this.accessConfigService.hasPermission(actor.role, 'passes.reception')
-      || await this.accessConfigService.hasPermission(actor.role, 'passes.approve')
-      || await this.accessConfigService.hasPermission(actor.role, 'admin.panel');
+      (await this.accessConfigService.hasPermission(
+        actor.role,
+        'passes.reception',
+      )) ||
+      (await this.accessConfigService.hasPermission(
+        actor.role,
+        'passes.approve',
+      )) ||
+      (await this.accessConfigService.hasPermission(actor.role, 'admin.panel'));
 
     if (!canEdit) {
-      throw new ForbiddenException('Паспортные данные может вносить только ресепшн или администратор');
+      throw new ForbiddenException(
+        'Паспортные данные может вносить только ресепшн или администратор',
+      );
     }
 
     const pass = await this.passModel.findById(id);
     if (!pass) throw new NotFoundException('Пропуск не найден');
 
     if (dto.visitorPassportSeries !== undefined) {
-      pass.visitorPassportSeries = dto.visitorPassportSeries.trim() || undefined;
+      pass.visitorPassportSeries =
+        dto.visitorPassportSeries.trim() || undefined;
     }
     if (dto.visitorPassportNumber !== undefined) {
-      pass.visitorPassportNumber = dto.visitorPassportNumber.trim() || undefined;
+      pass.visitorPassportNumber =
+        dto.visitorPassportNumber.trim() || undefined;
     }
     if (dto.visitorPassportIssuedBy !== undefined) {
-      pass.visitorPassportIssuedBy = dto.visitorPassportIssuedBy.trim() || undefined;
+      pass.visitorPassportIssuedBy =
+        dto.visitorPassportIssuedBy.trim() || undefined;
     }
 
     await pass.save();
@@ -907,7 +1113,9 @@ export class PassesService implements OnModuleInit {
       details: {
         passNumber: pass.passNumber,
         visitorName: pass.visitorName,
-        hasPassport: !!(pass.visitorPassportSeries || pass.visitorPassportNumber),
+        hasPassport: !!(
+          pass.visitorPassportSeries || pass.visitorPassportNumber
+        ),
       },
     });
 
@@ -923,7 +1131,10 @@ export class PassesService implements OnModuleInit {
     const pass = await this.passModel.findOne({ passNumber }).lean();
     if (!pass) throw new NotFoundException('Пропуск не найден');
     const [withCheckout] = await this.enrichPassCheckoutSettings([pass]);
-    const [enriched] = await this.enrichCreatorFields([withCheckout], user || { role: 'security' });
+    const [enriched] = await this.enrichCreatorFields(
+      [withCheckout],
+      user || { role: 'security' },
+    );
     return { pass: this.mapToFrontend(enriched, user) };
   }
 
@@ -961,7 +1172,8 @@ export class PassesService implements OnModuleInit {
     return {
       count: enriched.length,
       passes: enriched.map((p) => this.mapToFrontend(p, user)),
-      scopedToProperties: !options?.allProperties && !!(user?.propertyIds?.length),
+      scopedToProperties:
+        !options?.allProperties && !!user?.propertyIds?.length,
     };
   }
 
@@ -983,11 +1195,17 @@ export class PassesService implements OnModuleInit {
 
   private async getClosedWeekdaysForProperty(propertyId?: Types.ObjectId) {
     if (!propertyId) return [];
-    const property = await this.propertyModel.findById(propertyId).select('settings').lean();
+    const property = await this.propertyModel
+      .findById(propertyId)
+      .select('settings')
+      .lean();
     return parseClosedWeekdays(property?.settings?.closed_weekdays);
   }
 
-  private async resolveWorkingHours(propertyId: Types.ObjectId | undefined, dto: CreatePassDto) {
+  private async resolveWorkingHours(
+    propertyId: Types.ObjectId | undefined,
+    dto: CreatePassDto,
+  ) {
     if (dto.visitTimeFrom && dto.visitTimeTo) {
       return { from: dto.visitTimeFrom, to: dto.visitTimeTo };
     }
@@ -1009,13 +1227,20 @@ export class PassesService implements OnModuleInit {
 
   private async getRequireCheckoutForPass(pass: { property?: Types.ObjectId }) {
     if (!pass.property) return true;
-    const property = await this.propertyModel.findById(pass.property).select('settings').lean();
+    const property = await this.propertyModel
+      .findById(pass.property)
+      .select('settings')
+      .lean();
     return property?.settings?.require_checkout !== 'false';
   }
 
   private async enrichPassCheckoutSettings(docs: any[]) {
     const propertyIds = [
-      ...new Set(docs.map((doc) => doc.property?.toString()).filter((id): id is string => !!id)),
+      ...new Set(
+        docs
+          .map((doc) => doc.property?.toString())
+          .filter((id): id is string => !!id),
+      ),
     ];
     if (!propertyIds.length) return docs;
 
@@ -1024,13 +1249,16 @@ export class PassesService implements OnModuleInit {
       .select('settings')
       .lean();
     const checkoutMap = new Map(
-      properties.map((p) => [p._id.toString(), p.settings?.require_checkout !== 'false']),
+      properties.map((p) => [
+        p._id.toString(),
+        p.settings?.require_checkout !== 'false',
+      ]),
     );
 
     return docs.map((doc) => ({
       ...doc,
       requireCheckout: doc.property
-        ? checkoutMap.get(doc.property.toString()) ?? true
+        ? (checkoutMap.get(doc.property.toString()) ?? true)
         : true,
     }));
   }
@@ -1065,7 +1293,8 @@ export class PassesService implements OnModuleInit {
 
       if (isTenantCompanyUser(user)) {
         // Сотрудник и владелец — только в офисы своей компании, не чужие и не «свободный» ввод
-        const ownsOffice = office.tenantId?.toString() === tenantOwnerId?.toString();
+        const ownsOffice =
+          office.tenantId?.toString() === tenantOwnerId?.toString();
         if (!ownsOffice) {
           throw new ForbiddenException(
             'Можно заказывать пропуска только в офисы своей компании',
@@ -1073,7 +1302,9 @@ export class PassesService implements OnModuleInit {
         }
       }
 
-      const property = await this.propertyModel.findById(office.property).lean();
+      const property = await this.propertyModel
+        .findById(office.property)
+        .lean();
       return {
         officeId: office._id,
         property: office.property,
@@ -1093,9 +1324,13 @@ export class PassesService implements OnModuleInit {
     }
 
     const officeNumber = dto.office.trim();
-    const office = await this.officeModel.findOne({ number: officeNumber, isActive: true }).lean();
+    const office = await this.officeModel
+      .findOne({ number: officeNumber, isActive: true })
+      .lean();
     if (office) {
-      const property = await this.propertyModel.findById(office.property).lean();
+      const property = await this.propertyModel
+        .findById(office.property)
+        .lean();
       return {
         officeId: office._id,
         property: office.property,
@@ -1122,7 +1357,9 @@ export class PassesService implements OnModuleInit {
       .lean();
   }
 
-  private async resolveBusinessCenterName(doc: any): Promise<string | undefined> {
+  private async resolveBusinessCenterName(
+    doc: any,
+  ): Promise<string | undefined> {
     const info = await this.resolveBusinessCenterInfo(doc);
     return info.name;
   }
@@ -1132,13 +1369,23 @@ export class PassesService implements OnModuleInit {
     address?: string;
     routeMapsProvider: 'yandex' | 'google';
   }> {
-    const fromProperty = (property?: { name?: string; address?: string; settings?: Record<string, any> } | null) => {
+    const fromProperty = (
+      property?: {
+        name?: string;
+        address?: string;
+        settings?: Record<string, any>;
+      } | null,
+    ) => {
       if (!property) return null;
-      const maps = String(property.settings?.route_maps_provider || 'yandex').toLowerCase();
+      const maps = String(
+        property.settings?.route_maps_provider || 'yandex',
+      ).toLowerCase();
       return {
         name: property.name,
         address: property.address || undefined,
-        routeMapsProvider: (maps === 'google' ? 'google' : 'yandex') as 'yandex' | 'google',
+        routeMapsProvider: (maps === 'google' ? 'google' : 'yandex') as
+          | 'yandex'
+          | 'google',
       };
     };
 
@@ -1156,7 +1403,9 @@ export class PassesService implements OnModuleInit {
     if (doc.officeId) {
       const office = await this.officeModel.findById(doc.officeId).lean();
       if (office?.property) {
-        const property = await this.propertyModel.findById(office.property).lean();
+        const property = await this.propertyModel
+          .findById(office.property)
+          .lean();
         const info = fromProperty(property);
         if (info?.name) {
           return {
@@ -1168,9 +1417,13 @@ export class PassesService implements OnModuleInit {
     }
 
     if (doc.office) {
-      const office = await this.officeModel.findOne({ number: String(doc.office), isActive: true }).lean();
+      const office = await this.officeModel
+        .findOne({ number: String(doc.office), isActive: true })
+        .lean();
       if (office?.property) {
-        const property = await this.propertyModel.findById(office.property).lean();
+        const property = await this.propertyModel
+          .findById(office.property)
+          .lean();
         const info = fromProperty(property);
         if (info?.name) {
           return {
@@ -1183,7 +1436,11 @@ export class PassesService implements OnModuleInit {
 
     if (doc.businessCenterName) {
       const byName = await this.propertyModel
-        .findOne({ type: PropertyType.BUSINESS_CENTER, name: doc.businessCenterName, isActive: true })
+        .findOne({
+          type: PropertyType.BUSINESS_CENTER,
+          name: doc.businessCenterName,
+          isActive: true,
+        })
         .lean();
       const info = fromProperty(byName);
       if (info) return info;
@@ -1215,31 +1472,49 @@ export class PassesService implements OnModuleInit {
 
   /** Проверка доступа к одному pass (детали, смена статуса, email). */
   private async ensurePassAccess(pass: any, user?: any) {
-    if (!user?.role) throw new ForbiddenException('Нет доступа к этому пропуску');
+    if (!user?.role)
+      throw new ForbiddenException('Нет доступа к этому пропуску');
 
     if (isTenantCompanyUser(user)) {
       const teamIds = await this.getTenantTeamIds(user);
       const createdBy = pass.createdBy?.toString();
       const hasAccess = teamIds.some((id) => id.toString() === createdBy);
-      if (!hasAccess) throw new ForbiddenException('Нет доступа к этому пропуску');
+      if (!hasAccess)
+        throw new ForbiddenException('Нет доступа к этому пропуску');
       // Ранее employee видел только свои — снято: вся команда = вся компания
       return;
     }
 
-    if (await this.accessConfigService.canViewAllPasses(user.role, user.parentTenantId)) return;
+    if (
+      await this.accessConfigService.canViewAllPasses(
+        user.role,
+        user.parentTenantId,
+      )
+    )
+      return;
 
     const isCreator = pass.createdBy?.toString() === user.userId;
-    if (isCreator && await this.accessConfigService.hasPermission(user.role, 'passes.view_own')) return;
+    if (
+      isCreator &&
+      (await this.accessConfigService.hasPermission(
+        user.role,
+        'passes.view_own',
+      ))
+    )
+      return;
 
     throw new ForbiddenException('Нет доступа к этому пропуску');
   }
 
   private countBy(arr: any[], key: string) {
-    return arr.reduce((acc, item) => {
-      const val = item[key] || 'unknown';
-      acc[val] = (acc[val] || 0) + 1;
-      return acc;
-    }, {} as Record<string, number>);
+    return arr.reduce(
+      (acc, item) => {
+        const val = item[key] || 'unknown';
+        acc[val] = (acc[val] || 0) + 1;
+        return acc;
+      },
+      {} as Record<string, number>,
+    );
   }
 
   private mapToPublicTicket(doc: any) {
@@ -1303,12 +1578,15 @@ export class PassesService implements OnModuleInit {
     const parentMap = new Map(parents.map((u) => [u._id.toString(), u]));
 
     const withLogo = docs.map((doc) => {
-      const creator = doc.createdBy ? creatorMap.get(doc.createdBy.toString()) : null;
+      const creator = doc.createdBy
+        ? creatorMap.get(doc.createdBy.toString())
+        : null;
       if (!creator) return doc;
       const parent = creator.parentTenantId
         ? parentMap.get(creator.parentTenantId.toString())
         : null;
-      const companyLogo = creator.companyLogo || parent?.companyLogo || undefined;
+      const companyLogo =
+        creator.companyLogo || parent?.companyLogo || undefined;
       const base = {
         ...doc,
         companyLogo: doc.companyLogo || companyLogo,
@@ -1318,7 +1596,8 @@ export class PassesService implements OnModuleInit {
         ...base,
         creatorName: doc.creatorName || creator.fullName,
         creatorPhone: doc.creatorPhone || creator.phone,
-        creatorCompany: doc.creatorCompany || creator.company || parent?.company,
+        creatorCompany:
+          doc.creatorCompany || creator.company || parent?.company,
       };
     });
 

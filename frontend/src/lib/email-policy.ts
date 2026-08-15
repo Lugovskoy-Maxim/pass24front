@@ -61,7 +61,12 @@ export function isAllowedRegistrationEmail(
   if (!/^[^\s@]+@[^\s@]+\.[^\s@]+$/.test(normalized)) return false;
 
   const domain = normalized.split('@')[1] || '';
-  if (!domain || domain.includes('..') || domain.startsWith('.') || domain.endsWith('.')) {
+  if (
+    !domain ||
+    domain.includes('..') ||
+    domain.startsWith('.') ||
+    domain.endsWith('.')
+  ) {
     return false;
   }
 
@@ -70,7 +75,9 @@ export function isAllowedRegistrationEmail(
 
   const requireRu = options?.requireRuZone !== false;
   if (requireRu) {
-    return domain.endsWith('.ru') || domain.endsWith('.рф') || domain.endsWith('.su');
+    return (
+      domain.endsWith('.ru') || domain.endsWith('.рф') || domain.endsWith('.su')
+    );
   }
   return true;
 }
@@ -78,7 +85,10 @@ export function isAllowedRegistrationEmail(
 /** Текст из textarea (по строке) → массив доменов. */
 export function parseBlockedDomainsText(text: string): string[] {
   return normalizeBlockedEmailDomains(
-    text.split(/[\n,;]+/).map((s) => s.trim()).filter(Boolean),
+    text
+      .split(/[\n,;]+/)
+      .map((s) => s.trim())
+      .filter(Boolean),
   );
 }
 

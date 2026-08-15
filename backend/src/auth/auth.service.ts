@@ -7,14 +7,20 @@ import {
   UnauthorizedException,
 } from '@nestjs/common';
 import { resolvePersonName, splitFullName } from '../common/person-name';
-import { mapProfileChangeRequest, profileFieldsEqual } from '../common/profile-change';
+import {
+  mapProfileChangeRequest,
+  profileFieldsEqual,
+} from '../common/profile-change';
 import { InjectModel } from '@nestjs/mongoose';
 import { Model, Types } from 'mongoose';
 import * as bcrypt from 'bcryptjs';
 import * as crypto from 'crypto';
 import { JwtService } from '@nestjs/jwt';
 import { AccessConfigService } from '../access/access-config.service';
-import { BUILTIN_EMPLOYEE_ROLE, BUILTIN_EMPLOYEE_ROLE_LABELS } from '../access/access.constants';
+import {
+  BUILTIN_EMPLOYEE_ROLE,
+  BUILTIN_EMPLOYEE_ROLE_LABELS,
+} from '../access/access.constants';
 import { AuditService } from '../audit/audit.service';
 import { AUTH_CONNECTION } from '../database/auth-database.constants';
 import { MailService } from '../mail/mail.service';
@@ -48,7 +54,10 @@ import { LoginDto } from './dto/login.dto';
 import { RegisterDto } from './dto/register.dto';
 import { RequestPasswordResetDto } from './dto/request-password-reset.dto';
 import { UpdateProfileDto } from './dto/update-profile.dto';
-import { DEV_TEST_ACCOUNTS, DEV_TEST_ACCOUNT_EMAILS } from '../database/dev-test-accounts';
+import {
+  DEV_TEST_ACCOUNTS,
+  DEV_TEST_ACCOUNT_EMAILS,
+} from '../database/dev-test-accounts';
 import { SiteSettingsService } from '../site-settings/site-settings.service';
 
 /** Антиспам: SMS OTP регистрации — не чаще 1 раза за интервал. */
@@ -76,7 +85,8 @@ const INVITE_TTL_HOURS = 72;
 @Injectable()
 export class AuthService {
   constructor(
-    @InjectModel(User.name, AUTH_CONNECTION) private userModel: Model<UserDocument>,
+    @InjectModel(User.name, AUTH_CONNECTION)
+    private userModel: Model<UserDocument>,
     @InjectModel(RegistrationPending.name, AUTH_CONNECTION)
     private pendingModel: Model<RegistrationPendingDocument>,
     @InjectModel(Office.name) private officeModel: Model<OfficeDocument>,
@@ -109,29 +119,42 @@ export class AuthService {
       throw new BadRequestException('Укажите email для подтверждения');
     }
     if (channel === 'phone' && !phone) {
-      throw new BadRequestException('Укажите номер телефона в формате +79XXXXXXXXX');
+      throw new BadRequestException(
+        'Укажите номер телефона в формате +79XXXXXXXXX',
+      );
     }
     let siteSettings = await this.siteSettingsService.get();
     // Email (основной или доп. при SMS): зона .ru + список запрещённых доменов из админки
-    if (email && !isAllowedRegistrationEmail(email, { blockedDomains: siteSettings.blockedEmailDomains })) {
+    if (
+      email &&
+      !isAllowedRegistrationEmail(email, {
+        blockedDomains: siteSettings.blockedEmailDomains,
+      })
+    ) {
       throw new BadRequestException(REGISTRATION_EMAIL_POLICY_MESSAGE);
     }
     if (channel === 'phone') {
       if (!siteSettings.smsRegistrationEnabled) {
-        throw new BadRequestException(siteSettings.smsRegistrationDisabledMessage);
+        throw new BadRequestException(
+          siteSettings.smsRegistrationDisabledMessage,
+        );
       }
     }
 
     if (email) {
       const existingEmail = await this.findUserByEmail(email);
       if (existingEmail) {
-        throw new ConflictException('Пользователь с таким email уже существует');
+        throw new ConflictException(
+          'Пользователь с таким email уже существует',
+        );
       }
     }
     if (phone) {
       const existingPhone = await this.findUserByPhone(phone);
       if (existingPhone) {
-        throw new ConflictException('Пользователь с таким телефоном уже существует');
+        throw new ConflictException(
+          'Пользователь с таким телефоном уже существует',
+        );
       }
     }
 
@@ -146,11 +169,12 @@ export class AuthService {
     const existingPending = await this.pendingModel.findOne(pendingKey).lean();
 
     let retryAfterSeconds = 0;
-    const reuseMobileSession = channel === 'phone'
-      && !!existingPending?.mobileIdRequestId
-      && existingPending.expiresAt.getTime() > Date.now()
-      && existingPending.lastCodeSentAt
-      && (retryAfterSeconds = this.getRetryAfterSeconds(
+    const reuseMobileSession =
+      channel === 'phone' &&
+      !!existingPending?.mobileIdRequestId &&
+      existingPending.expiresAt.getTime() > Date.now() &&
+      existingPending.lastCodeSentAt &&
+      (retryAfterSeconds = this.getRetryAfterSeconds(
         existingPending.lastCodeSentAt,
         SMS_RESEND_INTERVAL_MS,
       )) > 0;
@@ -162,7 +186,9 @@ export class AuthService {
     const pendingData: Record<string, unknown> = {
       verificationChannel: channel,
       expiresAt: reuseMobileSession ? existingPending!.expiresAt : expiresAt,
-      lastCodeSentAt: reuseMobileSession ? existingPending!.lastCodeSentAt : now,
+      lastCodeSentAt: reuseMobileSession
+        ? existingPending!.lastCodeSentAt
+        : now,
       password: passwordHash,
       fullName: personName.fullName,
       lastName: personName.lastName,
@@ -206,11 +232,12 @@ export class AuthService {
     return {
       verificationRequired: true,
       verificationChannel: channel,
-      message: channel === 'phone'
-        ? reuseMobileSession
-          ? `Продолжаем ранее начатое подтверждение номера ${phone}`
-          : `Запрос подтверждения отправлен на ${phone} (мобильная авторизация)`
-        : `Код подтверждения отправлен на ${email}`,
+      message:
+        channel === 'phone'
+          ? reuseMobileSession
+            ? `Продолжаем ранее начатое подтверждение номера ${phone}`
+            : `Запрос подтверждения отправлен на ${phone} (мобильная авторизация)`
+          : `Код подтверждения отправлен на ${email}`,
       expiresInMinutes: 15,
       retryAfterSeconds: channel === 'phone' ? retryAfterSeconds : 0,
       registrationId: channel === 'phone' ? String(pending._id) : undefined,
@@ -228,17 +255,24 @@ export class AuthService {
       .lean();
 
     if (!pending || pending.verificationChannel !== 'phone' || !pending.phone) {
-      throw new NotFoundException('Запрос регистрации не найден или уже завершён');
+      throw new NotFoundException(
+        'Запрос регистрации не найден или уже завершён',
+      );
     }
     if (pending.expiresAt.getTime() < Date.now()) {
       await this.pendingModel.deleteOne({ _id: pending._id });
-      return { status: 'expired' as const, message: 'Время подтверждения истекло' };
+      return {
+        status: 'expired' as const,
+        message: 'Время подтверждения истекло',
+      };
     }
     if (!pending.mobileIdRequestId) {
       throw new BadRequestException('Сессия мобильной авторизации не найдена');
     }
 
-    const verified = await this.smsService.isMobileAuthVerified(pending.mobileIdRequestId);
+    const verified = await this.smsService.isMobileAuthVerified(
+      pending.mobileIdRequestId,
+    );
     if (!verified) {
       return { status: 'waiting' as const };
     }
@@ -266,26 +300,37 @@ export class AuthService {
       .lean();
 
     if (!pending) {
-      throw new BadRequestException('Код не найден. Запросите новый код регистрации.');
+      throw new BadRequestException(
+        'Код не найден. Запросите новый код регистрации.',
+      );
     }
 
     if (pending.expiresAt.getTime() < Date.now()) {
       await this.pendingModel.deleteOne(pendingFilter);
-      throw new BadRequestException('Код истёк. Запросите новый код регистрации.');
+      throw new BadRequestException(
+        'Код истёк. Запросите новый код регистрации.',
+      );
     }
 
     if (pending.verificationChannel === 'phone') {
       const requestId = pending.mobileIdRequestId;
       if (!requestId) {
-        throw new BadRequestException('Сессия мобильной авторизации не найдена. Запросите код снова.');
+        throw new BadRequestException(
+          'Сессия мобильной авторизации не найдена. Запросите код снова.',
+        );
       }
-      const codeOk = await this.smsService.verifyMobileAuth(requestId, dto.code);
+      const codeOk = await this.smsService.verifyMobileAuth(
+        requestId,
+        dto.code,
+      );
       if (!codeOk) {
         throw new BadRequestException('Неверный код подтверждения');
       }
     } else {
       if (!pending.codeHash) {
-        throw new BadRequestException('Код не найден. Запросите новый код регистрации.');
+        throw new BadRequestException(
+          'Код не найден. Запросите новый код регистрации.',
+        );
       }
       const codeOk = await bcrypt.compare(dto.code, pending.codeHash);
       if (!codeOk) {
@@ -295,25 +340,34 @@ export class AuthService {
 
     if (pending.email) {
       const emailPolicy = await this.siteSettingsService.get();
-      if (!isAllowedRegistrationEmail(pending.email, { blockedDomains: emailPolicy.blockedEmailDomains })) {
+      if (
+        !isAllowedRegistrationEmail(pending.email, {
+          blockedDomains: emailPolicy.blockedEmailDomains,
+        })
+      ) {
         await this.pendingModel.deleteOne(pendingFilter);
         throw new BadRequestException(REGISTRATION_EMAIL_POLICY_MESSAGE);
       }
       const existingEmail = await this.findUserByEmail(pending.email);
       if (existingEmail) {
         await this.pendingModel.deleteOne(pendingFilter);
-        throw new ConflictException('Пользователь с таким email уже существует');
+        throw new ConflictException(
+          'Пользователь с таким email уже существует',
+        );
       }
     }
     if (pending.phone) {
       const existingPhone = await this.findUserByPhone(pending.phone);
       if (existingPhone) {
         await this.pendingModel.deleteOne(pendingFilter);
-        throw new ConflictException('Пользователь с таким телефоном уже существует');
+        throw new ConflictException(
+          'Пользователь с таким телефоном уже существует',
+        );
       }
     }
 
-    const emailVerified = pending.verificationChannel === 'email' && !!pending.email;
+    const emailVerified =
+      pending.verificationChannel === 'email' && !!pending.email;
 
     let user: UserDocument;
     try {
@@ -372,10 +426,14 @@ export class AuthService {
   }) {
     const settings = await this.siteSettingsService.get();
     const emails = new Set<string>(
-      (settings.registrationNotifyEmails || []).map((e) => e.trim().toLowerCase()).filter(Boolean),
+      (settings.registrationNotifyEmails || [])
+        .map((e) => e.trim().toLowerCase())
+        .filter(Boolean),
     );
 
-    const staffIds = (settings.registrationNotifyUserIds || []).filter((id) => /^[a-fA-F0-9]{24}$/.test(id));
+    const staffIds = (settings.registrationNotifyUserIds || []).filter((id) =>
+      /^[a-fA-F0-9]{24}$/.test(id),
+    );
     if (staffIds.length) {
       const staff = await this.userModel
         .find({
@@ -415,11 +473,16 @@ export class AuthService {
     if (dto.phone) {
       const phone = normalizeRuMobilePhone(dto.phone);
       if (!phone) {
-        throw new BadRequestException('Некорректный номер телефона. Формат: +7 9XX XXX-XX-XX');
+        throw new BadRequestException(
+          'Некорректный номер телефона. Формат: +7 9XX XXX-XX-XX',
+        );
       }
 
       const resetToken = `${Date.now().toString(36)}.${crypto.randomBytes(32).toString('hex')}`;
-      const tokenHash = crypto.createHash('sha256').update(resetToken).digest('hex');
+      const tokenHash = crypto
+        .createHash('sha256')
+        .update(resetToken)
+        .digest('hex');
       const user = await this.userModel.findOne({ phone }).exec();
 
       // Ответ не раскрывает, существует ли номер в системе.
@@ -427,7 +490,8 @@ export class AuthService {
         return {
           recoveryChannel: 'phone' as const,
           resetToken,
-          message: 'Если номер привязан к аккаунту, на телефон отправлен запрос подтверждения.',
+          message:
+            'Если номер привязан к аккаунту, на телефон отправлен запрос подтверждения.',
           expiresInMinutes: 15,
           retryAfterSeconds: Math.floor(SMS_RESEND_INTERVAL_MS / 1000),
           contact: adminContact,
@@ -437,10 +501,18 @@ export class AuthService {
       const now = new Date();
       let requestId = user.passwordResetMobileIdRequestId;
       let retryAfterSeconds = user.passwordResetLastSentAt
-        ? this.getRetryAfterSeconds(user.passwordResetLastSentAt, SMS_RESEND_INTERVAL_MS)
+        ? this.getRetryAfterSeconds(
+            user.passwordResetLastSentAt,
+            SMS_RESEND_INTERVAL_MS,
+          )
         : 0;
 
-      if (!requestId || !user.passwordResetExpiresAt || user.passwordResetExpiresAt <= now || retryAfterSeconds <= 0) {
+      if (
+        !requestId ||
+        !user.passwordResetExpiresAt ||
+        user.passwordResetExpiresAt <= now ||
+        retryAfterSeconds <= 0
+      ) {
         const mobileAuth = await this.smsService.startMobileAuth(phone);
         requestId = mobileAuth.requestId;
         retryAfterSeconds = Math.floor(SMS_RESEND_INTERVAL_MS / 1000);
@@ -531,7 +603,10 @@ export class AuthService {
   }
 
   async getPasswordResetStatus(resetToken: string) {
-    const tokenHash = crypto.createHash('sha256').update(resetToken).digest('hex');
+    const tokenHash = crypto
+      .createHash('sha256')
+      .update(resetToken)
+      .digest('hex');
     const user = await this.userModel
       .findOne({ passwordResetTokenHash: tokenHash })
       .select('+passwordResetTokenHash')
@@ -542,14 +617,23 @@ export class AuthService {
     if (!user) {
       const issuedAt = Number.parseInt(resetToken.split('.', 1)[0], 36);
       if (Number.isFinite(issuedAt) && Date.now() - issuedAt >= CODE_TTL_MS) {
-        return { status: 'expired' as const, message: 'Время подтверждения истекло' };
+        return {
+          status: 'expired' as const,
+          message: 'Время подтверждения истекло',
+        };
       }
       return { status: 'waiting' as const };
     }
 
-    if (!user.passwordResetExpiresAt || user.passwordResetExpiresAt.getTime() < Date.now()) {
+    if (
+      !user.passwordResetExpiresAt ||
+      user.passwordResetExpiresAt.getTime() < Date.now()
+    ) {
       await this.clearMobilePasswordReset(user._id);
-      return { status: 'expired' as const, message: 'Время подтверждения истекло' };
+      return {
+        status: 'expired' as const,
+        message: 'Время подтверждения истекло',
+      };
     }
     if (user.passwordResetVerifiedAt) {
       return { status: 'confirmed' as const };
@@ -587,7 +671,9 @@ export class AuthService {
       .exec();
 
     if (!user?.passwordResetCodeHash || !user.passwordResetExpiresAt) {
-      throw new BadRequestException('Код не найден. Запросите восстановление пароля заново.');
+      throw new BadRequestException(
+        'Код не найден. Запросите восстановление пароля заново.',
+      );
     }
 
     if (user.passwordResetExpiresAt.getTime() < Date.now()) {
@@ -595,7 +681,9 @@ export class AuthService {
         { _id: user._id },
         { $unset: { passwordResetCodeHash: 1, passwordResetExpiresAt: 1 } },
       );
-      throw new BadRequestException('Код истёк. Запросите восстановление пароля заново.');
+      throw new BadRequestException(
+        'Код истёк. Запросите восстановление пароля заново.',
+      );
     }
 
     const codeOk = await bcrypt.compare(dto.code, user.passwordResetCodeHash);
@@ -632,17 +720,20 @@ export class AuthService {
   }
 
   private async confirmMobilePasswordReset(dto: ConfirmPasswordResetDto) {
-    const tokenHash = crypto.createHash('sha256').update(dto.resetToken!).digest('hex');
+    const tokenHash = crypto
+      .createHash('sha256')
+      .update(dto.resetToken!)
+      .digest('hex');
     const user = await this.userModel
       .findOne({ passwordResetTokenHash: tokenHash })
       .select('+password +passwordResetTokenHash')
       .exec();
 
     if (
-      !user
-      || !user.passwordResetVerifiedAt
-      || !user.passwordResetExpiresAt
-      || user.passwordResetExpiresAt.getTime() < Date.now()
+      !user ||
+      !user.passwordResetVerifiedAt ||
+      !user.passwordResetExpiresAt ||
+      user.passwordResetExpiresAt.getTime() < Date.now()
     ) {
       throw new BadRequestException(
         'Подтверждение не найдено или истекло. Запросите восстановление заново.',
@@ -753,7 +844,10 @@ export class AuthService {
     }
 
     if (user.emailVerified) {
-      const offices = await this.getUserOffices(userId, user.parentTenantId?.toString());
+      const offices = await this.getUserOffices(
+        userId,
+        user.parentTenantId?.toString(),
+      );
       return {
         message: 'Email уже подтверждён',
         user: await this.toUserDto(user, offices),
@@ -799,7 +893,10 @@ export class AuthService {
       details: { email: user.email },
     });
 
-    const offices = await this.getUserOffices(userId, user.parentTenantId?.toString());
+    const offices = await this.getUserOffices(
+      userId,
+      user.parentTenantId?.toString(),
+    );
     return {
       message: 'Email успешно подтверждён',
       user: await this.toUserDto(user, offices),
@@ -815,12 +912,17 @@ export class AuthService {
 
     const login = loginRaw.toLowerCase();
     const phone = normalizeRuMobilePhone(loginRaw);
-    const orConditions: Record<string, string>[] = [{ username: login }, { email: login }];
+    const orConditions: Record<string, string>[] = [
+      { username: login },
+      { email: login },
+    ];
     if (phone) orConditions.push({ phone });
 
-    const user = await this.userModel.findOne({
-      $or: orConditions,
-    }).select('+password') as any;
+    const user = (await this.userModel
+      .findOne({
+        $or: orConditions,
+      })
+      .select('+password')) as any;
 
     if (!user) {
       if (DEV_TEST_ACCOUNT_EMAILS.has(login)) {
@@ -851,7 +953,10 @@ export class AuthService {
       throw new UnauthorizedException('Учётная запись заблокирована');
     }
 
-    const offices = await this.getUserOffices(user._id.toString(), user.parentTenantId?.toString());
+    const offices = await this.getUserOffices(
+      user._id.toString(),
+      user.parentTenantId?.toString(),
+    );
     const token = this.generateToken(user);
     return { user: await this.toUserDto(user, offices), token };
   }
@@ -859,7 +964,10 @@ export class AuthService {
   async me(userId: string) {
     const user = await this.userModel.findById(userId);
     if (!user) throw new UnauthorizedException();
-    const offices = await this.getUserOffices(userId, user.parentTenantId?.toString());
+    const offices = await this.getUserOffices(
+      userId,
+      user.parentTenantId?.toString(),
+    );
     return { user: await this.toUserDto(user, offices) };
   }
 
@@ -867,10 +975,14 @@ export class AuthService {
     const user = await this.userModel.findById(userId);
     if (!user) throw new UnauthorizedException();
     if (user.parentTenantId) {
-      throw new ForbiddenException('Сотрудники компании не могут изменять профиль — обратитесь к владельцу аккаунта');
+      throw new ForbiddenException(
+        'Сотрудники компании не могут изменять профиль — обратитесь к владельцу аккаунта',
+      );
     }
     if (user.role !== 'tenant') {
-      throw new ForbiddenException('Редактирование профиля доступно только арендаторам');
+      throw new ForbiddenException(
+        'Редактирование профиля доступно только арендаторам',
+      );
     }
 
     let personName;
@@ -884,13 +996,14 @@ export class AuthService {
       throw new BadRequestException('Укажите фамилию и имя');
     }
 
-    const current = user.lastName || user.firstName
-      ? {
-          lastName: user.lastName || '',
-          firstName: user.firstName || '',
-          middleName: user.middleName || '',
-        }
-      : splitFullName(user.fullName);
+    const current =
+      user.lastName || user.firstName
+        ? {
+            lastName: user.lastName || '',
+            firstName: user.firstName || '',
+            middleName: user.middleName || '',
+          }
+        : splitFullName(user.fullName);
 
     const requested = {
       lastName: personName.lastName,
@@ -900,11 +1013,15 @@ export class AuthService {
       company: dto.company?.trim() || '',
     };
 
-    if (profileFieldsEqual(
-      { ...current, phone: user.phone || '', company: user.company || '' },
-      requested,
-    )) {
-      throw new BadRequestException('Нет изменений для отправки на подтверждение');
+    if (
+      profileFieldsEqual(
+        { ...current, phone: user.phone || '', company: user.company || '' },
+        requested,
+      )
+    ) {
+      throw new BadRequestException(
+        'Нет изменений для отправки на подтверждение',
+      );
     }
 
     user.profileChangeRequest = {
@@ -940,15 +1057,27 @@ export class AuthService {
     const user = await this.userModel.findById(userId);
     if (!user) throw new UnauthorizedException();
     if (user.parentTenantId || user.role !== 'tenant') {
-      throw new ForbiddenException('Логотип компании может менять только владелец-арендатор');
+      throw new ForbiddenException(
+        'Логотип компании может менять только владелец-арендатор',
+      );
     }
 
     const value = companyLogo?.trim() || '';
     if (value.length > 200_000) {
       throw new BadRequestException('Файл логотипа слишком большой');
     }
-    if (value && !(value.startsWith('data:image/') || value.startsWith('http://') || value.startsWith('https://') || value.startsWith('/'))) {
-      throw new BadRequestException('Логотип: укажите URL или загрузите изображение');
+    if (
+      value &&
+      !(
+        value.startsWith('data:image/') ||
+        value.startsWith('http://') ||
+        value.startsWith('https://') ||
+        value.startsWith('/')
+      )
+    ) {
+      throw new BadRequestException(
+        'Логотип: укажите URL или загрузите изображение',
+      );
     }
 
     if (value) user.companyLogo = value;
@@ -976,7 +1105,10 @@ export class AuthService {
     user.profileChangeRequest = null;
     user.markModified('profileChangeRequest');
     await user.save();
-    const offices = await this.getUserOffices(userId, user.parentTenantId?.toString());
+    const offices = await this.getUserOffices(
+      userId,
+      user.parentTenantId?.toString(),
+    );
     return { user: await this.toUserDto(user, offices) };
   }
 
@@ -984,7 +1116,9 @@ export class AuthService {
     const owner = await this.userModel.findById(userId);
     if (!owner) throw new UnauthorizedException();
     if (owner.role !== 'tenant' || owner.parentTenantId) {
-      throw new ForbiddenException('Управление сотрудниками доступно только владельцу компании');
+      throw new ForbiddenException(
+        'Управление сотрудниками доступно только владельцу компании',
+      );
     }
 
     const employees = await this.userModel
@@ -992,7 +1126,8 @@ export class AuthService {
       .sort({ createdAt: -1 })
       .lean();
 
-    const { roles } = await this.accessConfigService.getEmployeeAssignableRoles();
+    const { roles } =
+      await this.accessConfigService.getEmployeeAssignableRoles();
     const roleLabelMap = new Map(roles.map((item) => [item.key, item.label]));
 
     return {
@@ -1008,10 +1143,14 @@ export class AuthService {
     const owner = await this.userModel.findById(userId);
     if (!owner) throw new UnauthorizedException();
     if (owner.role !== 'tenant' || owner.parentTenantId) {
-      throw new ForbiddenException('Добавлять сотрудников может только владелец компании');
+      throw new ForbiddenException(
+        'Добавлять сотрудников может только владелец компании',
+      );
     }
 
-    const employeesCount = await this.userModel.countDocuments({ parentTenantId: owner._id });
+    const employeesCount = await this.userModel.countDocuments({
+      parentTenantId: owner._id,
+    });
     if (employeesCount >= MAX_TENANT_EMPLOYEES) {
       throw new BadRequestException(
         `В компании можно добавить не более ${MAX_TENANT_EMPLOYEES} сотрудников`,
@@ -1037,11 +1176,15 @@ export class AuthService {
 
     const employeeRole = BUILTIN_EMPLOYEE_ROLE;
     await this.accessConfigService.assertEmployeeRole(employeeRole);
-    const roleLabel = BUILTIN_EMPLOYEE_ROLE_LABELS[employeeRole] || 'Сотрудник компании';
+    const roleLabel =
+      BUILTIN_EMPLOYEE_ROLE_LABELS[employeeRole] || 'Сотрудник компании';
 
     const { rawToken, tokenHash, expiresAt } = this.createInviteToken();
     // Случайный хэш — вход по паролю невозможен, пока не примут invite
-    const placeholderPassword = await bcrypt.hash(crypto.randomBytes(32).toString('hex'), 10);
+    const placeholderPassword = await bcrypt.hash(
+      crypto.randomBytes(32).toString('hex'),
+      10,
+    );
 
     const employee = await this.userModel.create({
       email,
@@ -1087,7 +1230,9 @@ export class AuthService {
 
     return {
       message: `Приглашение отправлено на ${email}`,
-      employee: this.mapEmployeeDto(employee.toObject ? employee.toObject() : employee),
+      employee: this.mapEmployeeDto(
+        employee.toObject ? employee.toObject() : employee,
+      ),
     };
   }
 
@@ -1096,18 +1241,25 @@ export class AuthService {
     const owner = await this.userModel.findById(userId);
     if (!owner) throw new UnauthorizedException();
     if (owner.role !== 'tenant' || owner.parentTenantId) {
-      throw new ForbiddenException('Управлять сотрудниками может только владелец компании');
+      throw new ForbiddenException(
+        'Управлять сотрудниками может только владелец компании',
+      );
     }
 
     const employee = await this.userModel
       .findById(employeeId)
       .select('+inviteTokenHash')
       .exec();
-    if (!employee || employee.parentTenantId?.toString() !== owner._id.toString()) {
+    if (
+      !employee ||
+      employee.parentTenantId?.toString() !== owner._id.toString()
+    ) {
       throw new NotFoundException('Сотрудник не найден');
     }
     if (!employee.invitePending) {
-      throw new BadRequestException('Сотрудник уже активировал аккаунт — приглашение не требуется');
+      throw new BadRequestException(
+        'Сотрудник уже активировал аккаунт — приглашение не требуется',
+      );
     }
 
     if (employee.inviteLastSentAt) {
@@ -1197,15 +1349,24 @@ export class AuthService {
   }
 
   /** Вкл/выкл. Нельзя «включить» invitePending — только resend + accept. */
-  async setTenantEmployeeActive(userId: string, employeeId: string, isActive: boolean) {
+  async setTenantEmployeeActive(
+    userId: string,
+    employeeId: string,
+    isActive: boolean,
+  ) {
     const owner = await this.userModel.findById(userId);
     if (!owner) throw new UnauthorizedException();
     if (owner.role !== 'tenant' || owner.parentTenantId) {
-      throw new ForbiddenException('Управлять сотрудниками может только владелец компании');
+      throw new ForbiddenException(
+        'Управлять сотрудниками может только владелец компании',
+      );
     }
 
     const employee = await this.userModel.findById(employeeId);
-    if (!employee || employee.parentTenantId?.toString() !== owner._id.toString()) {
+    if (
+      !employee ||
+      employee.parentTenantId?.toString() !== owner._id.toString()
+    ) {
       throw new NotFoundException('Сотрудник не найден');
     }
 
@@ -1236,9 +1397,16 @@ export class AuthService {
     };
   }
 
-  private createInviteToken(): { rawToken: string; tokenHash: string; expiresAt: Date } {
+  private createInviteToken(): {
+    rawToken: string;
+    tokenHash: string;
+    expiresAt: Date;
+  } {
     const rawToken = crypto.randomBytes(32).toString('hex');
-    const tokenHash = crypto.createHash('sha256').update(rawToken).digest('hex');
+    const tokenHash = crypto
+      .createHash('sha256')
+      .update(rawToken)
+      .digest('hex');
     const expiresAt = new Date(Date.now() + INVITE_TTL_MS);
     return { rawToken, tokenHash, expiresAt };
   }
@@ -1247,7 +1415,9 @@ export class AuthService {
     return `${this.mailService.getPublicAppOrigin()}/invite/${rawToken}`;
   }
 
-  private async findEmployeeByInviteToken(rawToken: string): Promise<UserDocument> {
+  private async findEmployeeByInviteToken(
+    rawToken: string,
+  ): Promise<UserDocument> {
     const token = (rawToken || '').trim();
     if (!token || token.length < 32) {
       throw new BadRequestException('Некорректная ссылка приглашения');
@@ -1259,9 +1429,14 @@ export class AuthService {
       .exec();
 
     if (!employee) {
-      throw new BadRequestException('Ссылка приглашения недействительна или уже использована');
+      throw new BadRequestException(
+        'Ссылка приглашения недействительна или уже использована',
+      );
     }
-    if (!employee.inviteExpiresAt || employee.inviteExpiresAt.getTime() < Date.now()) {
+    if (
+      !employee.inviteExpiresAt ||
+      employee.inviteExpiresAt.getTime() < Date.now()
+    ) {
       throw new BadRequestException(
         'Срок действия ссылки истёк (72 часа). Попросите руководителя отправить приглашение снова.',
       );
@@ -1269,15 +1444,10 @@ export class AuthService {
     return employee;
   }
 
-  private mapEmployeeDto(
-    e: any,
-    roleLabelMap?: Map<string, string>,
-  ) {
+  private mapEmployeeDto(e: any, roleLabelMap?: Map<string, string>) {
     const role = e.role || BUILTIN_EMPLOYEE_ROLE;
     const roleLabel =
-      roleLabelMap?.get(role)
-      || BUILTIN_EMPLOYEE_ROLE_LABELS[role]
-      || role;
+      roleLabelMap?.get(role) || BUILTIN_EMPLOYEE_ROLE_LABELS[role] || role;
     const invitePending = !!e.invitePending;
     return {
       id: e._id.toString(),
@@ -1305,11 +1475,16 @@ export class AuthService {
     const owner = await this.userModel.findById(userId);
     if (!owner) throw new UnauthorizedException();
     if (owner.role !== 'tenant' || owner.parentTenantId) {
-      throw new ForbiddenException('Удалять сотрудников может только владелец компании');
+      throw new ForbiddenException(
+        'Удалять сотрудников может только владелец компании',
+      );
     }
 
     const employee = await this.userModel.findById(employeeId);
-    if (!employee || employee.parentTenantId?.toString() !== owner._id.toString()) {
+    if (
+      !employee ||
+      employee.parentTenantId?.toString() !== owner._id.toString()
+    ) {
       throw new NotFoundException('Сотрудник не найден');
     }
 
@@ -1341,11 +1516,15 @@ export class AuthService {
 
   async getUserOffices(userId: string, parentTenantId?: string) {
     const ownerId = resolveTenantOwnerId({ userId, parentTenantId }) || userId;
-    const offices = await this.officeModel.find({ tenantId: new Types.ObjectId(ownerId), isActive: true }).lean();
+    const offices = await this.officeModel
+      .find({ tenantId: new Types.ObjectId(ownerId), isActive: true })
+      .lean();
     if (!offices.length) return [];
 
     const propertyIds = [...new Set(offices.map((o) => o.property.toString()))];
-    const properties = await this.propertyModel.find({ _id: { $in: propertyIds } }).lean();
+    const properties = await this.propertyModel
+      .find({ _id: { $in: propertyIds } })
+      .lean();
     const propertyMap = new Map(properties.map((p) => [p._id.toString(), p]));
 
     return offices.map((o) => {
@@ -1371,7 +1550,10 @@ export class AuthService {
     phone?: string | null,
   ): 'email' | 'phone' {
     if (dto.verificationChannel === 'phone') {
-      if (!phone) throw new BadRequestException('Укажите корректный номер телефона в формате +79XXXXXXXXX');
+      if (!phone)
+        throw new BadRequestException(
+          'Укажите корректный номер телефона в формате +79XXXXXXXXX',
+        );
       return 'phone';
     }
     if (dto.verificationChannel === 'email') {
@@ -1380,7 +1562,9 @@ export class AuthService {
     }
     if (phone && !email) return 'phone';
     if (email) return 'email';
-    throw new BadRequestException('Укажите email или телефон для подтверждения регистрации');
+    throw new BadRequestException(
+      'Укажите email или телефон для подтверждения регистрации',
+    );
   }
 
   /** Варианты хранения телефона в БД (старые записи, разные форматы ввода). */
@@ -1388,12 +1572,16 @@ export class AuthService {
     const normalized = normalizeRuMobilePhone(phone);
     if (!normalized) return [phone.trim()].filter(Boolean);
     const digits = normalized.replace(/\D/g, '');
-    return [...new Set([
-      normalized,
-      digits,
-      `+${digits}`,
-      digits.startsWith('7') ? `8${digits.slice(1)}` : '',
-    ].filter(Boolean))];
+    return [
+      ...new Set(
+        [
+          normalized,
+          digits,
+          `+${digits}`,
+          digits.startsWith('7') ? `8${digits.slice(1)}` : '',
+        ].filter(Boolean),
+      ),
+    ];
   }
 
   private async findUserByPhone(phone: string) {
@@ -1410,22 +1598,32 @@ export class AuthService {
 
   /** Mongo E11000 → понятный 409 вместо Internal Server Error. */
   private mapUserCreateConflict(err: unknown): never {
-    const code = err && typeof err === 'object' && 'code' in err
-      ? (err as { code?: number }).code
-      : undefined;
+    const code =
+      err && typeof err === 'object' && 'code' in err
+        ? (err as { code?: number }).code
+        : undefined;
     if (code === 11000) {
       const key = String(
-        (err as { keyPattern?: Record<string, unknown>; message?: string }).keyPattern
-          ? Object.keys((err as { keyPattern: Record<string, unknown> }).keyPattern).join(',')
+        (err as { keyPattern?: Record<string, unknown>; message?: string })
+          .keyPattern
+          ? Object.keys(
+              (err as { keyPattern: Record<string, unknown> }).keyPattern,
+            ).join(',')
           : (err as { message?: string }).message || '',
       ).toLowerCase();
       if (key.includes('phone')) {
-        throw new ConflictException('Пользователь с таким телефоном уже существует');
+        throw new ConflictException(
+          'Пользователь с таким телефоном уже существует',
+        );
       }
       if (key.includes('email')) {
-        throw new ConflictException('Пользователь с таким email уже существует');
+        throw new ConflictException(
+          'Пользователь с таким email уже существует',
+        );
       }
-      throw new ConflictException('Пользователь с таким email или телефоном уже существует');
+      throw new ConflictException(
+        'Пользователь с таким email или телефоном уже существует',
+      );
     }
     throw err;
   }
@@ -1454,9 +1652,13 @@ export class AuthService {
 
   private async toUserDto(user: any, offices: any[] = []) {
     const role = user.role || 'tenant';
-    const permissions = await this.accessConfigService.getPermissionsForRole(role);
-    const { enabledPassTypes, roleLabels } = await this.accessConfigService.getConfig();
-    const propertyIds = (user.properties || []).map((p: { toString: () => string }) => p.toString());
+    const permissions =
+      await this.accessConfigService.getPermissionsForRole(role);
+    const { enabledPassTypes, roleLabels } =
+      await this.accessConfigService.getConfig();
+    const propertyIds = (user.properties || []).map(
+      (p: { toString: () => string }) => p.toString(),
+    );
 
     let companyLogo = user.companyLogo || undefined;
     let company = user.company;
@@ -1494,13 +1696,22 @@ export class AuthService {
       parent_tenant_id: user.parentTenantId?.toString(),
       is_tenant_owner: user.role === 'tenant' && !user.parentTenantId,
       is_active: user.isActive !== false,
-      profile_change_request: mapProfileChangeRequest(user.profileChangeRequest),
+      profile_change_request: mapProfileChangeRequest(
+        user.profileChangeRequest,
+      ),
     };
   }
 
   getDevAccounts() {
     if (process.env.NODE_ENV === 'production') {
-      return { accounts: [] as Array<{ label: string; email: string; password: string; role: string }> };
+      return {
+        accounts: [] as Array<{
+          label: string;
+          email: string;
+          password: string;
+          role: string;
+        }>,
+      };
     }
 
     return {
@@ -1514,7 +1725,9 @@ export class AuthService {
   }
 
   private async createTestUser(email: string, password: string) {
-    const account = DEV_TEST_ACCOUNTS.find((item) => item.email === email.toLowerCase());
+    const account = DEV_TEST_ACCOUNTS.find(
+      (item) => item.email === email.toLowerCase(),
+    );
     if (!account) {
       throw new UnauthorizedException('Неверный логин или пароль');
     }
@@ -1536,7 +1749,10 @@ export class AuthService {
       } as any);
     }
 
-    const offices = await this.getUserOffices(user._id.toString(), user.parentTenantId?.toString());
+    const offices = await this.getUserOffices(
+      user._id.toString(),
+      user.parentTenantId?.toString(),
+    );
     const token = this.generateToken(user);
     return { user: await this.toUserDto(user, offices), token };
   }

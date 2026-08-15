@@ -6,9 +6,9 @@ API сервиса пропусков PASS24 / M-STYLE.
 
 См. корневой каталог **[docs/](../docs/)**:
 
-- [DEVELOPMENT.md](../docs/DEVELOPMENT.md) — запуск и env  
-- [ARCHITECTURE.md](../docs/ARCHITECTURE.md) — модули и БД  
-- [API.md](../docs/API.md) — эндпоинты  
+- [DEVELOPMENT.md](../docs/DEVELOPMENT.md) — запуск и env
+- [ARCHITECTURE.md](../docs/ARCHITECTURE.md) — модули и БД
+- [API.md](../docs/API.md) — эндпоинты
 
 Swagger после старта: `http://127.0.0.1:4000/api/docs`
 

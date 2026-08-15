@@ -7,7 +7,10 @@ import { formatOfficeDestination } from '@/lib/pass-display';
 import { Pass, TYPE_LABELS, getPassTicketUrl } from '@/lib/api';
 import { useConfig } from '@/hooks/useConfig';
 import { getUiLabels } from '@/lib/ui-labels';
-import { getPassCardShellClass, getPassStatusTopStripeClass } from '@/lib/pass-status';
+import {
+  getPassCardShellClass,
+  getPassStatusTopStripeClass,
+} from '@/lib/pass-status';
 import { Building2, Printer } from 'lucide-react';
 import { StatusBadge } from './StatusBadge';
 
@@ -17,7 +20,13 @@ interface PassPrintCardProps {
   hidePrintButton?: boolean;
 }
 
-function PrintDetailRow({ label, value }: { label: string; value?: string | null }) {
+function PrintDetailRow({
+  label,
+  value,
+}: {
+  label: string;
+  value?: string | null;
+}) {
   if (!value?.trim()) return null;
   return (
     <div className="print-pass__row flex justify-between gap-4">
@@ -27,12 +36,22 @@ function PrintDetailRow({ label, value }: { label: string; value?: string | null
   );
 }
 
-export function PassPrintCard({ pass, businessCenterName, hidePrintButton }: PassPrintCardProps) {
+export function PassPrintCard({
+  pass,
+  businessCenterName,
+  hidePrintButton,
+}: PassPrintCardProps) {
   const config = useConfig();
   const labels = getUiLabels(config);
-  const bcName = pass.businessCenterName || businessCenterName || labels.ticket.defaultBcName;
+  const bcName =
+    pass.businessCenterName ||
+    businessCenterName ||
+    labels.ticket.defaultBcName;
 
-  const ticketUrl = useMemo(() => getPassTicketUrl(pass.passNumber), [pass.passNumber]);
+  const ticketUrl = useMemo(
+    () => getPassTicketUrl(pass.passNumber),
+    [pass.passNumber],
+  );
 
   const visitTime = pass.visitTimeFrom
     ? `${pass.visitTimeFrom}${pass.visitTimeTo ? `–${pass.visitTimeTo}` : ''}`
@@ -54,7 +73,9 @@ export function PassPrintCard({ pass, businessCenterName, hidePrintButton }: Pas
 
   return (
     <div>
-      <div className={`print-pass ${getPassCardShellClass()} p-6 max-w-md mx-auto`}>
+      <div
+        className={`print-pass ${getPassCardShellClass()} p-6 max-w-md mx-auto`}
+      >
         <div className={getPassStatusTopStripeClass(pass.status)} aria-hidden />
 
         <div className="text-center border-b border-[var(--border)] pb-4 mb-4">
@@ -62,11 +83,17 @@ export function PassPrintCard({ pass, businessCenterName, hidePrintButton }: Pas
             <Building2 className="w-5 h-5 shrink-0" />
             <span className="font-bold text-lg">{bcName}</span>
           </div>
-          <div className="text-xs text-[var(--muted)]">{labels.print.guestPass}</div>
+          <div className="text-xs text-[var(--muted)]">
+            {labels.print.guestPass}
+          </div>
         </div>
 
         <div className="text-center mb-4">
-          <PassNumber value={pass.passNumber} size="lg" className="text-2xl sm:text-3xl" />
+          <PassNumber
+            value={pass.passNumber}
+            size="lg"
+            className="text-2xl sm:text-3xl"
+          />
           <div className="mt-2 flex justify-center">
             <StatusBadge status={pass.status} labels={labels} />
           </div>
@@ -84,23 +111,40 @@ export function PassPrintCard({ pass, businessCenterName, hidePrintButton }: Pas
         )}
 
         <dl className="print-pass__details space-y-2 text-sm">
-          <PrintDetailRow label={labels.card.visitor} value={pass.visitorName} />
+          <PrintDetailRow
+            label={labels.card.visitor}
+            value={pass.visitorName}
+          />
           <PrintDetailRow label={labels.card.phone} value={pass.visitorPhone} />
-          <PrintDetailRow label={labels.card.company} value={pass.companyName} />
+          <PrintDetailRow
+            label={labels.card.company}
+            value={pass.companyName}
+          />
           <PrintDetailRow
             label={labels.print.dateShort}
-            value={visitTime ? `${pass.visitDate} ${visitTime}` : pass.visitDate}
+            value={
+              visitTime ? `${pass.visitDate} ${visitTime}` : pass.visitDate
+            }
           />
           <PrintDetailRow label={labels.card.office} value={officeLine} />
-          <PrintDetailRow label={labels.card.type} value={TYPE_LABELS[pass.passType]} />
+          <PrintDetailRow
+            label={labels.card.type}
+            value={TYPE_LABELS[pass.passType]}
+          />
           <PrintDetailRow label={labels.card.vehicle} value={vehicleLine} />
-          <PrintDetailRow label={labels.card.orderedBy} value={pass.creatorName} />
+          <PrintDetailRow
+            label={labels.card.orderedBy}
+            value={pass.creatorName}
+          />
           <PrintDetailRow label={labels.card.comment} value={pass.comment} />
         </dl>
       </div>
 
       {!hidePrintButton && (
-        <button className="btn btn-secondary mt-4 mx-auto flex print:hidden" onClick={handlePrint}>
+        <button
+          className="btn btn-secondary mt-4 mx-auto flex print:hidden"
+          onClick={handlePrint}
+        >
           <Printer className="w-4 h-4" />
           {labels.print.printButton}
         </button>

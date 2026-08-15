@@ -5,7 +5,13 @@
  * При mount — api.me() если токен есть.
  * После login/logout/refreshUser обновляет React state.
  */
-import { createContext, useContext, useEffect, useState, ReactNode } from 'react';
+import {
+  createContext,
+  useContext,
+  useEffect,
+  useState,
+  ReactNode,
+} from 'react';
 import { api, User } from './api';
 
 interface AuthContextType {
@@ -47,8 +53,12 @@ export function AuthProvider({ children }: { children: ReactNode }) {
 
   useEffect(() => {
     const token = localStorage.getItem('pass24_token');
-    if (!token) { setLoading(false); return; }
-    api.me()
+    if (!token) {
+      setLoading(false);
+      return;
+    }
+    api
+      .me()
       .then(({ user }) => setUser(user))
       .catch(() => localStorage.removeItem('pass24_token'))
       .finally(() => setLoading(false));
@@ -108,16 +118,18 @@ export function AuthProvider({ children }: { children: ReactNode }) {
   };
 
   return (
-    <AuthContext.Provider value={{
-      user,
-      loading,
-      login,
-      requestRegistrationCode,
-      confirmRegistration,
-      completeSession,
-      logout,
-      refreshUser,
-    }}>
+    <AuthContext.Provider
+      value={{
+        user,
+        loading,
+        login,
+        requestRegistrationCode,
+        confirmRegistration,
+        completeSession,
+        logout,
+        refreshUser,
+      }}
+    >
       {children}
     </AuthContext.Provider>
   );

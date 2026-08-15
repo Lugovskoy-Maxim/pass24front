@@ -34,7 +34,9 @@ export function formatOfficeShort(parts: OfficeDisplayParts): string {
   const office = (parts.office || '').trim();
   if (!office) return '—';
   const floor = (parts.floor || '').trim();
-  return floor ? `${prefix} ${office} · ${floor} ${floorSuffix}` : `${prefix} ${office}`;
+  return floor
+    ? `${prefix} ${office} · ${floor} ${floorSuffix}`
+    : `${prefix} ${office}`;
 }
 
 /** Полная строка назначения: «оф. 401 · 3 эт. · Добрынинский» */

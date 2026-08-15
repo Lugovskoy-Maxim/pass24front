@@ -43,7 +43,9 @@ async function bootstrap() {
         const messages = errors.flatMap((e) => {
           if (e.constraints) return Object.values(e.constraints);
           if (e.children?.length) {
-            return e.children.flatMap((c) => (c.constraints ? Object.values(c.constraints) : []));
+            return e.children.flatMap((c) =>
+              c.constraints ? Object.values(c.constraints) : [],
+            );
           }
           return [];
         });

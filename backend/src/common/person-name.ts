@@ -13,7 +13,9 @@ export function buildFullName(parts: PersonNameParts): string {
     .join(' ');
 }
 
-export function splitFullName(fullName?: string): Required<Pick<PersonNameParts, 'lastName' | 'firstName' | 'middleName'>> {
+export function splitFullName(
+  fullName?: string,
+): Required<Pick<PersonNameParts, 'lastName' | 'firstName' | 'middleName'>> {
   if (!fullName?.trim()) {
     return { lastName: '', firstName: '', middleName: '' };
   }
@@ -34,15 +36,21 @@ export function resolvePersonName(dto: PersonNameParts): {
   const lastName = dto.lastName?.trim() || '';
   const firstName = dto.firstName?.trim() || '';
   const middleName = dto.middleName?.trim() || '';
-  const fullName = buildFullName({ lastName, firstName, middleName, fullName: dto.fullName });
+  const fullName = buildFullName({
+    lastName,
+    firstName,
+    middleName,
+    fullName: dto.fullName,
+  });
 
   if (!fullName) {
     throw new Error('FULL_NAME_REQUIRED');
   }
 
-  const resolved = lastName || firstName
-    ? { lastName, firstName, middleName, fullName }
-    : { ...splitFullName(fullName), fullName };
+  const resolved =
+    lastName || firstName
+      ? { lastName, firstName, middleName, fullName }
+      : { ...splitFullName(fullName), fullName };
 
   return resolved;
 }

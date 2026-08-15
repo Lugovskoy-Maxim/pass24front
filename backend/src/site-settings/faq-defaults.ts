@@ -9,7 +9,9 @@ export interface FaqItem {
   answer: string;
 }
 
-export type NormalizedFaqItem = Required<Pick<FaqItem, 'id' | 'question' | 'answer'>>;
+export type NormalizedFaqItem = Required<
+  Pick<FaqItem, 'id' | 'question' | 'answer'>
+>;
 
 export const DEFAULT_FAQ_ITEMS: FaqItem[] = [
   {
@@ -79,10 +81,16 @@ export function normalizeFaqItems(raw: unknown): NormalizedFaqItem[] {
   for (let i = 0; i < Math.min(raw.length, MAX_FAQ_ITEMS); i += 1) {
     const row = raw[i];
     if (!row || typeof row !== 'object') continue;
-    const question = String((row as FaqItem).question ?? '').trim().slice(0, MAX_QUESTION);
-    const answer = String((row as FaqItem).answer ?? '').trim().slice(0, MAX_ANSWER);
+    const question = String((row as FaqItem).question ?? '')
+      .trim()
+      .slice(0, MAX_QUESTION);
+    const answer = String((row as FaqItem).answer ?? '')
+      .trim()
+      .slice(0, MAX_ANSWER);
     if (!question || !answer) continue;
-    const idRaw = String((row as FaqItem).id ?? '').trim().slice(0, 64);
+    const idRaw = String((row as FaqItem).id ?? '')
+      .trim()
+      .slice(0, 64);
     const id = idRaw || `faq-${i + 1}`;
     result.push({ id, question, answer });
   }

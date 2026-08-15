@@ -8,7 +8,12 @@ import { FormEvent, useEffect, useState } from 'react';
 import { useParams, useRouter } from 'next/navigation';
 import { Mail } from 'lucide-react';
 import { api, getErrorMessage } from '@/lib/api';
-import { FormErrorBanner, FormField, FormInput, PasswordInput } from '@/components/FormField';
+import {
+  FormErrorBanner,
+  FormField,
+  FormInput,
+  PasswordInput,
+} from '@/components/FormField';
 import { AppVersion } from '@/components/AppVersion';
 import { SiteBrand } from '@/components/SiteBrand';
 import { ThemeToggle } from '@/components/ThemeToggle';
@@ -35,7 +40,10 @@ export default function InviteAcceptPage() {
   } | null>(null);
   const [password, setPassword] = useState('');
   const [passwordConfirm, setPasswordConfirm] = useState('');
-  const [fieldError, setFieldError] = useState<{ password?: string; passwordConfirm?: string }>({});
+  const [fieldError, setFieldError] = useState<{
+    password?: string;
+    passwordConfirm?: string;
+  }>({});
 
   useEffect(() => {
     if (!token) {
@@ -44,7 +52,8 @@ export default function InviteAcceptPage() {
       return;
     }
     setLoading(true);
-    api.getInviteInfo(token)
+    api
+      .getInviteInfo(token)
       .then((data) => {
         setInfo(data);
         setError('');
@@ -59,9 +68,11 @@ export default function InviteAcceptPage() {
   const handleSubmit = async (e: FormEvent) => {
     e.preventDefault();
     const errors: { password?: string; passwordConfirm?: string } = {};
-    if (!password || password.length < 6) errors.password = 'Минимум 6 символов';
+    if (!password || password.length < 6)
+      errors.password = 'Минимум 6 символов';
     if (!passwordConfirm) errors.passwordConfirm = 'Повторите пароль';
-    else if (passwordConfirm !== password) errors.passwordConfirm = 'Пароли не совпадают';
+    else if (passwordConfirm !== password)
+      errors.passwordConfirm = 'Пароли не совпадают';
     setFieldError(errors);
     if (errors.password || errors.passwordConfirm) return;
 
@@ -101,19 +112,28 @@ export default function InviteAcceptPage() {
         </div>
 
         <div className="card p-6 space-y-4">
-          <h1 className="text-lg font-semibold text-[var(--text)]">Приглашение в систему</h1>
+          <h1 className="text-lg font-semibold text-[var(--text)]">
+            Приглашение в систему
+          </h1>
 
           {loading && (
-            <p className="text-sm text-[var(--muted)] animate-pulse">Проверка ссылки…</p>
+            <p className="text-sm text-[var(--muted)] animate-pulse">
+              Проверка ссылки…
+            </p>
           )}
 
           {!loading && error && !info && (
             <div className="space-y-3">
               <FormErrorBanner message={error} />
               <p className="text-sm text-[var(--muted)]">
-                Попросите руководителя компании отправить приглашение снова (ссылка действует 72 часа).
+                Попросите руководителя компании отправить приглашение снова
+                (ссылка действует 72 часа).
               </p>
-              <button type="button" className="btn btn-secondary w-full" onClick={() => router.push('/login')}>
+              <button
+                type="button"
+                className="btn btn-secondary w-full"
+                onClick={() => router.push('/login')}
+              >
                 На страницу входа
               </button>
             </div>
@@ -124,12 +144,16 @@ export default function InviteAcceptPage() {
               <div className="text-sm text-[var(--muted)] space-y-1">
                 {info.full_name && (
                   <p>
-                    Здравствуйте, <span className="font-medium text-[var(--text)]">{info.full_name}</span>
+                    Здравствуйте,{' '}
+                    <span className="font-medium text-[var(--text)]">
+                      {info.full_name}
+                    </span>
                   </p>
                 )}
                 {info.company && (
                   <p>
-                    Компания: <span className="text-[var(--text)]">{info.company}</span>
+                    Компания:{' '}
+                    <span className="text-[var(--text)]">{info.company}</span>
                   </p>
                 )}
                 {info.email && (
@@ -138,10 +162,18 @@ export default function InviteAcceptPage() {
                     {info.email}
                   </p>
                 )}
-                <p className="text-xs pt-1">Задайте пароль для входа в систему пропусков.</p>
+                <p className="text-xs pt-1">
+                  Задайте пароль для входа в систему пропусков.
+                </p>
               </div>
 
-              <FormField id="invitePassword" label="Пароль" required error={fieldError.password} hint="Минимум 6 символов">
+              <FormField
+                id="invitePassword"
+                label="Пароль"
+                required
+                error={fieldError.password}
+                hint="Минимум 6 символов"
+              >
                 <PasswordInput
                   id="invitePassword"
                   value={password}
@@ -153,13 +185,21 @@ export default function InviteAcceptPage() {
                   autoComplete="new-password"
                 />
               </FormField>
-              <FormField id="invitePasswordConfirm" label="Повторите пароль" required error={fieldError.passwordConfirm}>
+              <FormField
+                id="invitePasswordConfirm"
+                label="Повторите пароль"
+                required
+                error={fieldError.passwordConfirm}
+              >
                 <PasswordInput
                   id="invitePasswordConfirm"
                   value={passwordConfirm}
                   onChange={(e) => {
                     setPasswordConfirm(e.target.value);
-                    setFieldError((p) => ({ ...p, passwordConfirm: undefined }));
+                    setFieldError((p) => ({
+                      ...p,
+                      passwordConfirm: undefined,
+                    }));
                   }}
                   invalid={!!fieldError.passwordConfirm}
                   autoComplete="new-password"
@@ -168,7 +208,11 @@ export default function InviteAcceptPage() {
 
               <FormErrorBanner message={error} />
 
-              <button type="submit" className="btn btn-primary w-full" disabled={submitting}>
+              <button
+                type="submit"
+                className="btn btn-primary w-full"
+                disabled={submitting}
+              >
                 {submitting ? 'Сохранение…' : 'Активировать и войти'}
               </button>
             </form>

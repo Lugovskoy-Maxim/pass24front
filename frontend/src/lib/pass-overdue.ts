@@ -23,7 +23,10 @@ function getLocalMinutes(now: Date): number {
   return now.getHours() * 60 + now.getMinutes();
 }
 
-export function getGuestOverdueKind(pass: GuestOverduePass, now = new Date()): GuestOverdueKind | null {
+export function getGuestOverdueKind(
+  pass: GuestOverduePass,
+  now = new Date(),
+): GuestOverdueKind | null {
   if (pass.status !== 'active') return null;
 
   const today = getLocalDateString(now);
@@ -38,19 +41,32 @@ export function getGuestOverdueKind(pass: GuestOverduePass, now = new Date()): G
   return null;
 }
 
-export function isGuestStillInside(pass: GuestOverduePass, now = new Date()): boolean {
+export function isGuestStillInside(
+  pass: GuestOverduePass,
+  now = new Date(),
+): boolean {
   return getGuestOverdueKind(pass, now) !== null;
 }
 
-export function getOverdueBadgeLabel(kind: GuestOverdueKind, labels: UiLabels): string {
+export function getOverdueBadgeLabel(
+  kind: GuestOverdueKind,
+  labels: UiLabels,
+): string {
   return kind === 'past_end_time'
     ? labels.reception.overdueEndTimeBadge
     : labels.reception.overdueInsideBadge;
 }
 
-export function getOverdueCardMessage(kind: GuestOverdueKind, pass: GuestOverduePass, labels: UiLabels): string {
+export function getOverdueCardMessage(
+  kind: GuestOverdueKind,
+  pass: GuestOverduePass,
+  labels: UiLabels,
+): string {
   if (kind === 'past_end_time' && pass.visitTimeTo) {
-    return labels.reception.overdueEndTimeCard.replace('{time}', pass.visitTimeTo);
+    return labels.reception.overdueEndTimeCard.replace(
+      '{time}',
+      pass.visitTimeTo,
+    );
   }
   return labels.reception.overdueInsideCard;
 }
@@ -59,10 +75,19 @@ export function getOverdueBannerText(
   passes: GuestOverduePass[],
   labels: UiLabels,
   now = new Date(),
-): { message: string; count: number; hasPastDate: boolean; hasPastEndTime: boolean } {
+): {
+  message: string;
+  count: number;
+  hasPastDate: boolean;
+  hasPastEndTime: boolean;
+} {
   const overdue = passes.filter((p) => getGuestOverdueKind(p, now));
-  const hasPastDate = overdue.some((p) => getGuestOverdueKind(p, now) === 'past_date');
-  const hasPastEndTime = overdue.some((p) => getGuestOverdueKind(p, now) === 'past_end_time');
+  const hasPastDate = overdue.some(
+    (p) => getGuestOverdueKind(p, now) === 'past_date',
+  );
+  const hasPastEndTime = overdue.some(
+    (p) => getGuestOverdueKind(p, now) === 'past_end_time',
+  );
 
   let message: string = labels.reception.overdueInsideBanner;
   if (hasPastEndTime && !hasPastDate) {

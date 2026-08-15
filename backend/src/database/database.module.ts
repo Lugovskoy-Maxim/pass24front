@@ -39,8 +39,12 @@ const APP_FEATURES = [
     MongooseModule.forRootAsync({
       imports: [ConfigModule],
       useFactory: (configService: ConfigService) => {
-        const uri = configService.get<string>('MONGODB_URI') || 'mongodb://localhost:27017/pass24';
-        console.log(`🔌 Connecting to MongoDB at: ${uri.replace(/:[^:]*@/, ':****@')}`);
+        const uri =
+          configService.get<string>('MONGODB_URI') ||
+          'mongodb://localhost:27017/pass24';
+        console.log(
+          `🔌 Connecting to MongoDB at: ${uri.replace(/:[^:]*@/, ':****@')}`,
+        );
         return {
           uri,
           serverSelectionTimeoutMS: 5000,
@@ -62,7 +66,9 @@ export class DatabaseModule {
     return MongooseModule.forFeature(APP_FEATURES);
   }
 
-  static forFeatureOnly(models: { name: string; schema: any }[]): DynamicModule {
+  static forFeatureOnly(
+    models: { name: string; schema: any }[],
+  ): DynamicModule {
     return MongooseModule.forFeature(models);
   }
 }

@@ -5,8 +5,22 @@
  * Контент: FAQ + инструкции из GET /config (админка → Базовые настройки).
  * Стили: globals.css `.help-faq*`. На mobile — выше bottom nav.
  */
-import { useCallback, useEffect, useId, useMemo, useRef, useState } from 'react';
-import { BookOpen, CircleHelp, ChevronDown, Mail, Phone, X } from 'lucide-react';
+import {
+  useCallback,
+  useEffect,
+  useId,
+  useMemo,
+  useRef,
+  useState,
+} from 'react';
+import {
+  BookOpen,
+  CircleHelp,
+  ChevronDown,
+  Mail,
+  Phone,
+  X,
+} from 'lucide-react';
 import { useConfig } from '@/hooks/useConfig';
 import { resolveFaqItems, resolveGuideSections } from '@/lib/help-faq-content';
 
@@ -21,7 +35,10 @@ export function HelpFaq() {
   const triggerRef = useRef<HTMLButtonElement>(null);
   const titleId = useId();
   const config = useConfig();
-  const faqItems = useMemo(() => resolveFaqItems(config?.faqItems), [config?.faqItems]);
+  const faqItems = useMemo(
+    () => resolveFaqItems(config?.faqItems),
+    [config?.faqItems],
+  );
   const guideSections = useMemo(
     () => resolveGuideSections(config?.helpGuideSections),
     [config?.helpGuideSections],
@@ -57,7 +74,11 @@ export function HelpFaq() {
 
   useEffect(() => {
     if (open) {
-      panelRef.current?.querySelector<HTMLElement>('button, [href], input, [tabindex]:not([tabindex="-1"])')?.focus();
+      panelRef.current
+        ?.querySelector<HTMLElement>(
+          'button, [href], input, [tabindex]:not([tabindex="-1"])',
+        )
+        ?.focus();
     }
   }, [open]);
 
@@ -66,9 +87,11 @@ export function HelpFaq() {
       setExpandedGuide(null);
       return;
     }
-    setExpandedGuide((prev) => (
-      prev && guideSections.some((s) => s.id === prev) ? prev : guideSections[0].id
-    ));
+    setExpandedGuide((prev) =>
+      prev && guideSections.some((s) => s.id === prev)
+        ? prev
+        : guideSections[0].id,
+    );
   }, [guideSections]);
 
   const toggleGuide = (id: string) => {
@@ -82,11 +105,7 @@ export function HelpFaq() {
   return (
     <div className={`help-faq ${open ? 'help-faq--open' : ''}`}>
       {open && (
-        <div
-          className="help-faq__backdrop"
-          aria-hidden
-          onClick={close}
-        />
+        <div className="help-faq__backdrop" aria-hidden onClick={close} />
       )}
 
       <div
@@ -114,7 +133,11 @@ export function HelpFaq() {
           </button>
         </div>
 
-        <div className="help-faq__tabs" role="tablist" aria-label="Разделы помощи">
+        <div
+          className="help-faq__tabs"
+          role="tablist"
+          aria-label="Разделы помощи"
+        >
           <button
             type="button"
             role="tab"
@@ -142,8 +165,13 @@ export function HelpFaq() {
             <ul className="help-faq__list">
               {faqItems.length === 0 ? (
                 <li className="help-faq__item">
-                  <div className="help-faq__item-body" style={{ padding: '0.75rem' }}>
-                    <p>Раздел вопросов пока пуст. Обратитесь к администратору.</p>
+                  <div
+                    className="help-faq__item-body"
+                    style={{ padding: '0.75rem' }}
+                  >
+                    <p>
+                      Раздел вопросов пока пуст. Обратитесь к администратору.
+                    </p>
                   </div>
                 </li>
               ) : (
@@ -179,8 +207,13 @@ export function HelpFaq() {
             <ul className="help-faq__list">
               {guideSections.length === 0 ? (
                 <li className="help-faq__item">
-                  <div className="help-faq__item-body" style={{ padding: '0.75rem' }}>
-                    <p>Инструкции пока не заполнены. Обратитесь к администратору.</p>
+                  <div
+                    className="help-faq__item-body"
+                    style={{ padding: '0.75rem' }}
+                  >
+                    <p>
+                      Инструкции пока не заполнены. Обратитесь к администратору.
+                    </p>
                   </div>
                 </li>
               ) : (
@@ -224,16 +257,24 @@ export function HelpFaq() {
 
         {(config?.sitePhone || config?.siteEmail) && (
           <div className="help-faq__footer">
-            <p className="help-faq__footer-label">Нужна помощь администратора?</p>
+            <p className="help-faq__footer-label">
+              Нужна помощь администратора?
+            </p>
             <div className="help-faq__contacts">
               {config.sitePhone && (
-                <a href={`tel:${config.sitePhone}`} className="help-faq__contact">
+                <a
+                  href={`tel:${config.sitePhone}`}
+                  className="help-faq__contact"
+                >
                   <Phone className="w-3.5 h-3.5" />
                   {config.sitePhone}
                 </a>
               )}
               {config.siteEmail && (
-                <a href={`mailto:${config.siteEmail}`} className="help-faq__contact">
+                <a
+                  href={`mailto:${config.siteEmail}`}
+                  className="help-faq__contact"
+                >
                   <Mail className="w-3.5 h-3.5" />
                   {config.siteEmail}
                 </a>

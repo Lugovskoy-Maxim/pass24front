@@ -8,13 +8,36 @@ import { VisitDatePicker } from '@/components/VisitDatePicker';
 import { useAuth } from '@/lib/auth';
 import { useConfig } from '@/hooks/useConfig';
 import { useToast } from '@/components/Toast';
-import { api, PassTemplate, PassType, TYPE_LABELS, getErrorMessage } from '@/lib/api';
-import { FormErrorBanner, FormField, FormInput, FormSelect, FormTextarea } from '@/components/FormField';
-import { FieldErrors, hasFieldErrors, validateNewPassForm } from '@/lib/form-validation';
-import { getBookableVisitDates, parseClosedWeekdays } from '@/lib/bookable-visit-dates';
+import {
+  api,
+  PassTemplate,
+  PassType,
+  TYPE_LABELS,
+  getErrorMessage,
+} from '@/lib/api';
+import {
+  FormErrorBanner,
+  FormField,
+  FormInput,
+  FormSelect,
+  FormTextarea,
+} from '@/components/FormField';
+import {
+  FieldErrors,
+  hasFieldErrors,
+  validateNewPassForm,
+} from '@/lib/form-validation';
+import {
+  getBookableVisitDates,
+  parseClosedWeekdays,
+} from '@/lib/bookable-visit-dates';
 import { getLocalDateString } from '@/lib/local-date';
 import { getVisitorNameLabel } from '@/lib/person-name';
-import { canOrderPasses, hasPermission, isTenantCompanyUser } from '@/lib/permissions';
+import {
+  canOrderPasses,
+  hasPermission,
+  isTenantCompanyUser,
+} from '@/lib/permissions';
 import { getUiLabels } from '@/lib/ui-labels';
 
 function NewPassForm() {
@@ -34,9 +57,12 @@ function NewPassForm() {
   const [visitorPhone, setVisitorPhone] = useState('');
   const [propertyId, setPropertyId] = useState('');
   const enabledTypes = (Object.keys(TYPE_LABELS) as PassType[]).filter(
-    (key) => !user?.enabledPassTypes?.length || user.enabledPassTypes.includes(key),
+    (key) =>
+      !user?.enabledPassTypes?.length || user.enabledPassTypes.includes(key),
   );
-  const [passType, setPassType] = useState<PassType>(enabledTypes[0] || 'visitor');
+  const [passType, setPassType] = useState<PassType>(
+    enabledTypes[0] || 'visitor',
+  );
   const [vehiclePlate, setVehiclePlate] = useState('');
   const [vehicleModel, setVehicleModel] = useState('');
   const todayLocal = getLocalDateString();
@@ -47,14 +73,18 @@ function NewPassForm() {
   const [comment, setComment] = useState('');
   const [sendEmail, setSendEmail] = useState(false);
   const [recipientEmail, setRecipientEmail] = useState('');
-  const [selectedTemplateId, setSelectedTemplateId] = useState<string | null>(null);
+  const [selectedTemplateId, setSelectedTemplateId] = useState<string | null>(
+    null,
+  );
 
   const tenantOffices = user?.offices || [];
   const tenantCompanyUser = isTenantCompanyUser(user);
   const canUseTemplates = hasPermission(user, 'passes.templates');
 
   const bcHoursById = useMemo(() => {
-    const configById = new Map(config?.businessCenters?.map((bc) => [bc.id, bc]) || []);
+    const configById = new Map(
+      config?.businessCenters?.map((bc) => [bc.id, bc]) || [],
+    );
     const map = new Map<string, { name: string; from: string; to: string }>();
     tenantOffices.forEach((o) => {
       if (!o.propertyId || map.has(o.propertyId)) return;
@@ -67,7 +97,11 @@ function NewPassForm() {
     });
     config?.businessCenters?.forEach((bc) => {
       if (!map.has(bc.id)) {
-        map.set(bc.id, { name: bc.name, from: bc.workingHoursFrom, to: bc.workingHoursTo });
+        map.set(bc.id, {
+          name: bc.name,
+          from: bc.workingHoursFrom,
+          to: bc.workingHoursTo,
+        });
       }
     });
     return map;
@@ -75,9 +109,10 @@ function NewPassForm() {
 
   const officeSelectOptions = useMemo(() => {
     return tenantOffices.map((o) => {
-      const bcName = o.businessCenterName
-        || bcHoursById.get(o.propertyId)?.name
-        || 'Бизнес-центр';
+      const bcName =
+        o.businessCenterName ||
+        bcHoursById.get(o.propertyId)?.name ||
+        'Бизнес-центр';
       return {
         id: o.id,
         label: `оф. ${o.number} — ${bcName}`,
@@ -85,19 +120,28 @@ function NewPassForm() {
     });
   }, [tenantOffices, bcHoursById]);
 
-  const selectedBcId = propertyId
-    || (officeId ? tenantOffices.find((o) => o.id === officeId)?.propertyId : undefined)
-    || config?.businessCenters?.[0]?.id;
+  const selectedBcId =
+    propertyId ||
+    (officeId
+      ? tenantOffices.find((o) => o.id === officeId)?.propertyId
+      : undefined) ||
+    config?.businessCenters?.[0]?.id;
 
-  const selectedOffice = officeId ? tenantOffices.find((o) => o.id === officeId) : undefined;
+  const selectedOffice = officeId
+    ? tenantOffices.find((o) => o.id === officeId)
+    : undefined;
   const selectedOfficeHours = selectedOffice?.propertyId
     ? bcHoursById.get(selectedOffice.propertyId)
     : undefined;
 
   const closedWeekdays = useMemo(() => {
     if (selectedBcId) {
-      const fromOffice = tenantOffices.find((o) => o.propertyId === selectedBcId)?.closedWeekdays;
-      const fromConfig = config?.businessCenters?.find((bc) => bc.id === selectedBcId)?.closedWeekdays;
+      const fromOffice = tenantOffices.find(
+        (o) => o.propertyId === selectedBcId,
+      )?.closedWeekdays;
+      const fromConfig = config?.businessCenters?.find(
+        (bc) => bc.id === selectedBcId,
+      )?.closedWeekdays;
       return parseClosedWeekdays(fromOffice ?? fromConfig);
     }
     return parseClosedWeekdays();
@@ -150,7 +194,8 @@ function NewPassForm() {
     setSelectedTemplateId(template.id);
     setVisitorName(template.visitorName);
     setVisitorPhone(template.visitorPhone || '');
-    if (enabledTypes.includes(template.passType)) setPassType(template.passType);
+    if (enabledTypes.includes(template.passType))
+      setPassType(template.passType);
     setVehiclePlate(template.vehiclePlate || '');
     setVehicleModel(template.vehicleModel || '');
     setComment(template.comment || '');
@@ -169,7 +214,8 @@ function NewPassForm() {
 
   useEffect(() => {
     if (!templateId) return;
-    api.getPassTemplate(templateId)
+    api
+      .getPassTemplate(templateId)
       .then(({ template }) => applyTemplate(template))
       .catch((err) => toast(getErrorMessage(err, 'Шаблон не найден'), 'error'));
   }, [templateId, tenantOffices, enabledTypes]);
@@ -212,8 +258,12 @@ function NewPassForm() {
         visitorPhone: visitorPhone.trim() || undefined,
         companyName: user?.company || undefined,
         passType,
-        vehiclePlate: passType === 'parking' ? vehiclePlate.trim().toUpperCase() : undefined,
-        vehicleModel: passType === 'parking' ? vehicleModel.trim() || undefined : undefined,
+        vehiclePlate:
+          passType === 'parking'
+            ? vehiclePlate.trim().toUpperCase()
+            : undefined,
+        vehicleModel:
+          passType === 'parking' ? vehicleModel.trim() || undefined : undefined,
         visitDate,
         officeId: officeId || undefined,
         office: office.trim() || undefined,
@@ -222,7 +272,12 @@ function NewPassForm() {
         sendEmail: sendEmail || undefined,
         recipientEmail: sendEmail ? recipientEmail.trim() : undefined,
       });
-      toast(emailSent ? 'Заявка отправлена, пропуск выслан на почту' : 'Заявка отправлена', 'success');
+      toast(
+        emailSent
+          ? 'Заявка отправлена, пропуск выслан на почту'
+          : 'Заявка отправлена',
+        'success',
+      );
       window.location.assign(`/ticket/${encodeURIComponent(pass.passNumber)}`);
       return;
     } catch (err) {
@@ -235,7 +290,8 @@ function NewPassForm() {
   };
 
   if (user && !canOrderPasses(user)) {
-    const companyNoOffices = isTenantCompanyUser(user) && (user.offices?.length ?? 0) === 0;
+    const companyNoOffices =
+      isTenantCompanyUser(user) && (user.offices?.length ?? 0) === 0;
     return (
       <ProtectedLayout permissions={['passes.create']}>
         <h1 className="page-title mb-2">Заказ пропуска</h1>
@@ -245,7 +301,13 @@ function NewPassForm() {
               ? 'Заказ пропусков недоступен: у компании нет закреплённых офисов. Обратитесь к администратору бизнес-центра.'
               : 'Заказ пропусков недоступен: офис не назначен. Дождитесь подтверждения регистрации и назначения офиса администратором.'}
           </p>
-          <button type="button" className="btn btn-secondary" onClick={() => router.back()}>Назад</button>
+          <button
+            type="button"
+            className="btn btn-secondary"
+            onClick={() => router.back()}
+          >
+            Назад
+          </button>
         </div>
       </ProtectedLayout>
     );
@@ -254,7 +316,9 @@ function NewPassForm() {
   return (
     <ProtectedLayout permissions={['passes.create']}>
       <h1 className="page-title mb-2">
-        {selectedTemplateId || templateId ? 'Заказ по шаблону' : 'Заказ пропуска'}
+        {selectedTemplateId || templateId
+          ? 'Заказ по шаблону'
+          : 'Заказ пропуска'}
       </h1>
       {canUseTemplates && (
         <PassTemplatesPicker
@@ -263,34 +327,52 @@ function NewPassForm() {
           onSelect={applyTemplate}
         />
       )}
-      <form onSubmit={handleSubmit} className="card p-6 max-w-xl space-y-5" noValidate>
+      <form
+        onSubmit={handleSubmit}
+        className="card p-6 max-w-xl space-y-5"
+        noValidate
+      >
         {enabledTypes.length > 1 && (
           <div>
             <label className="label">Тип пропуска</label>
             <div className="grid grid-cols-2 sm:grid-cols-4 gap-2">
               {(Object.entries(TYPE_LABELS) as [PassType, string][])
-                .filter(([key]) => !user?.enabledPassTypes?.length || user.enabledPassTypes.includes(key))
+                .filter(
+                  ([key]) =>
+                    !user?.enabledPassTypes?.length ||
+                    user.enabledPassTypes.includes(key),
+                )
                 .map(([key, label]) => (
-                <button
-                  key={key}
-                  type="button"
-                  className={`py-2 px-3 text-sm rounded-lg border transition-colors ${
-                    passType === key ? 'border-[var(--status-approved-border)] bg-[var(--status-approved-soft)] text-[var(--status-approved)] font-medium' : 'border-[var(--border)] hover:bg-[var(--surface-muted)]'
-                  }`}
-                  onClick={() => setPassType(key)}
-                >
-                  {label}
-                </button>
-              ))}
+                  <button
+                    key={key}
+                    type="button"
+                    className={`py-2 px-3 text-sm rounded-lg border transition-colors ${
+                      passType === key
+                        ? 'border-[var(--status-approved-border)] bg-[var(--status-approved-soft)] text-[var(--status-approved)] font-medium'
+                        : 'border-[var(--border)] hover:bg-[var(--surface-muted)]'
+                    }`}
+                    onClick={() => setPassType(key)}
+                  >
+                    {label}
+                  </button>
+                ))}
             </div>
           </div>
         )}
 
-        <FormField id="visitorName" label={getVisitorNameLabel(passType)} required error={fieldErrors.visitorName}>
+        <FormField
+          id="visitorName"
+          label={getVisitorNameLabel(passType)}
+          required
+          error={fieldErrors.visitorName}
+        >
           <FormInput
             id="visitorName"
             value={visitorName}
-            onChange={(e) => { setVisitorName(e.target.value); clearFieldError('visitorName'); }}
+            onChange={(e) => {
+              setVisitorName(e.target.value);
+              clearFieldError('visitorName');
+            }}
             invalid={!!fieldErrors.visitorName}
           />
         </FormField>
@@ -307,18 +389,30 @@ function NewPassForm() {
 
         {passType === 'parking' && (
           <div className="form-grid-2">
-            <FormField id="vehiclePlate" label="Гос. номер" required error={fieldErrors.vehiclePlate}>
+            <FormField
+              id="vehiclePlate"
+              label="Гос. номер"
+              required
+              error={fieldErrors.vehiclePlate}
+            >
               <FormInput
                 id="vehiclePlate"
                 mono
                 value={vehiclePlate}
-                onChange={(e) => { setVehiclePlate(e.target.value); clearFieldError('vehiclePlate'); }}
+                onChange={(e) => {
+                  setVehiclePlate(e.target.value);
+                  clearFieldError('vehiclePlate');
+                }}
                 invalid={!!fieldErrors.vehiclePlate}
                 placeholder={ph.vehiclePlate}
               />
             </FormField>
             <FormField id="vehicleModel" label="Марка / модель">
-              <FormInput id="vehicleModel" value={vehicleModel} onChange={(e) => setVehicleModel(e.target.value)} />
+              <FormInput
+                id="vehicleModel"
+                value={vehicleModel}
+                onChange={(e) => setVehicleModel(e.target.value)}
+              />
             </FormField>
           </div>
         )}
@@ -347,7 +441,11 @@ function NewPassForm() {
             label="Офис (куда)"
             required
             error={fieldErrors.officeId}
-            hint={officeSelectOptions.length > 1 ? 'Офис и бизнес-центр в одном списке' : undefined}
+            hint={
+              officeSelectOptions.length > 1
+                ? 'Офис и бизнес-центр в одном списке'
+                : undefined
+            }
           >
             <FormSelect
               id="officeId"
@@ -360,21 +458,32 @@ function NewPassForm() {
             >
               <option value="">Выберите офис</option>
               {officeSelectOptions.map((o) => (
-                <option key={o.id} value={o.id}>{o.label}</option>
+                <option key={o.id} value={o.id}>
+                  {o.label}
+                </option>
               ))}
             </FormSelect>
             {selectedOfficeHours && (
               <p className="text-xs text-[var(--muted)] mt-2">
-                Рабочие часы {selectedOfficeHours.name}: {selectedOfficeHours.from}–{selectedOfficeHours.to}
+                Рабочие часы {selectedOfficeHours.name}:{' '}
+                {selectedOfficeHours.from}–{selectedOfficeHours.to}
               </p>
             )}
           </FormField>
         ) : (
-          <FormField id="office" label="Офис (куда)" required error={fieldErrors.office}>
+          <FormField
+            id="office"
+            label="Офис (куда)"
+            required
+            error={fieldErrors.office}
+          >
             <FormInput
               id="office"
               value={office}
-              onChange={(e) => { setOffice(e.target.value); clearFieldError('office'); }}
+              onChange={(e) => {
+                setOffice(e.target.value);
+                clearFieldError('office');
+              }}
               invalid={!!fieldErrors.office}
               placeholder={ph.officeNumber}
             />
@@ -398,7 +507,9 @@ function NewPassForm() {
               checked={sendEmail}
               onChange={(e) => setSendEmail(e.target.checked)}
             />
-            <span className="text-sm font-medium">Отправить пропуск на email</span>
+            <span className="text-sm font-medium">
+              Отправить пропуск на email
+            </span>
           </label>
           {sendEmail && (
             <FormField
@@ -412,7 +523,10 @@ function NewPassForm() {
                 id="recipientEmail"
                 type="email"
                 value={recipientEmail}
-                onChange={(e) => { setRecipientEmail(e.target.value); clearFieldError('recipientEmail'); }}
+                onChange={(e) => {
+                  setRecipientEmail(e.target.value);
+                  clearFieldError('recipientEmail');
+                }}
                 invalid={!!fieldErrors.recipientEmail}
                 placeholder={ph.guestEmail}
               />
@@ -423,8 +537,16 @@ function NewPassForm() {
         <FormErrorBanner message={formError} />
 
         <div className="flex gap-3">
-          <button type="submit" className="btn btn-primary" disabled={loading}>{loading ? 'Отправка...' : 'Отправить заявку'}</button>
-          <button type="button" className="btn btn-secondary" onClick={() => router.back()}>Отмена</button>
+          <button type="submit" className="btn btn-primary" disabled={loading}>
+            {loading ? 'Отправка...' : 'Отправить заявку'}
+          </button>
+          <button
+            type="button"
+            className="btn btn-secondary"
+            onClick={() => router.back()}
+          >
+            Отмена
+          </button>
         </div>
       </form>
     </ProtectedLayout>
@@ -433,7 +555,13 @@ function NewPassForm() {
 
 export default function NewPassPage() {
   return (
-    <Suspense fallback={<ProtectedLayout permissions={['passes.create']}><div className="animate-pulse text-[var(--muted)]">Загрузка...</div></ProtectedLayout>}>
+    <Suspense
+      fallback={
+        <ProtectedLayout permissions={['passes.create']}>
+          <div className="animate-pulse text-[var(--muted)]">Загрузка...</div>
+        </ProtectedLayout>
+      }
+    >
       <NewPassForm />
     </Suspense>
   );

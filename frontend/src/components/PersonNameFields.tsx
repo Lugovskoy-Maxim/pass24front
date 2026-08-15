@@ -31,10 +31,17 @@ export function PersonNameFields({
   return (
     <div className={`space-y-2 ${className}`}>
       {labels.sectionTitle && (
-        <p className="text-sm font-medium text-[var(--text)]">{labels.sectionTitle}</p>
+        <p className="text-sm font-medium text-[var(--text)]">
+          {labels.sectionTitle}
+        </p>
       )}
       <div className="person-name-fields__grid form-grid-3">
-        <FormField id="person-lastName" label={labels.lastName} required={required} error={errors?.lastName}>
+        <FormField
+          id="person-lastName"
+          label={labels.lastName}
+          required={required}
+          error={errors?.lastName}
+        >
           <FormInput
             id="person-lastName"
             value={value.lastName}
@@ -43,7 +50,12 @@ export function PersonNameFields({
             autoComplete="family-name"
           />
         </FormField>
-        <FormField id="person-firstName" label={labels.firstName} required={required} error={errors?.firstName}>
+        <FormField
+          id="person-firstName"
+          label={labels.firstName}
+          required={required}
+          error={errors?.firstName}
+        >
           <FormInput
             id="person-firstName"
             value={value.firstName}

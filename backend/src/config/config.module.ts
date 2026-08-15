@@ -5,7 +5,11 @@ import { AppConfigService } from './app-config.service';
 import { ConfigController } from './config.controller';
 
 @Module({
-  imports: [DatabaseModule.forFeatureOnly([{ name: Property.name, schema: PropertySchema }])],
+  imports: [
+    DatabaseModule.forFeatureOnly([
+      { name: Property.name, schema: PropertySchema },
+    ]),
+  ],
   controllers: [ConfigController],
   providers: [AppConfigService],
 })

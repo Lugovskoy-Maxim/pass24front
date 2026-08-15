@@ -8,14 +8,22 @@ export class AccessConfig {
   @Prop({ required: true, unique: true, default: 'default' })
   key: string;
 
-  @Prop({ type: [String], default: ['visitor', 'parking', 'delivery', 'contractor'] })
+  @Prop({
+    type: [String],
+    default: ['visitor', 'parking', 'delivery', 'contractor'],
+  })
   enabledPassTypes: string[];
 
   @Prop({
     type: Object,
     default: {
       tenant: ['passes.create', 'passes.templates', 'passes.view_own'],
-      security: ['passes.view_all', 'passes.approve', 'passes.reception', 'passes.lookup'],
+      security: [
+        'passes.view_all',
+        'passes.approve',
+        'passes.reception',
+        'passes.lookup',
+      ],
       bc_admin: [
         'passes.view_all',
         'passes.approve',

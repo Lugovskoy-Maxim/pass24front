@@ -1,12 +1,46 @@
 'use client';
 
-import { useEffect, useMemo, useRef, useState, FormEvent, ChangeEvent } from 'react';
-import { Plus, Pencil, Check, X, Link2, Search, Building2, Filter, Users, Trash2, LayoutGrid, Table2, Download, Upload } from 'lucide-react';
+import {
+  useEffect,
+  useMemo,
+  useRef,
+  useState,
+  FormEvent,
+  ChangeEvent,
+} from 'react';
+import {
+  Plus,
+  Pencil,
+  Check,
+  X,
+  Link2,
+  Search,
+  Building2,
+  Filter,
+  Users,
+  Trash2,
+  LayoutGrid,
+  Table2,
+  Download,
+  Upload,
+} from 'lucide-react';
 import { AdminLayout } from '@/components/AdminLayout';
 import { useToast } from '@/components/Toast';
 import { useDebounce } from '@/hooks/useDebounce';
-import { api, Office, AdminUser, BusinessCenter, BcPassSettings, DEFAULT_BC_PASS_SETTINGS, getErrorMessage } from '@/lib/api';
-import { parseClosedWeekdays, serializeClosedWeekdays, WEEKDAY_OPTIONS } from '@/lib/bookable-visit-dates';
+import {
+  api,
+  Office,
+  AdminUser,
+  BusinessCenter,
+  BcPassSettings,
+  DEFAULT_BC_PASS_SETTINGS,
+  getErrorMessage,
+} from '@/lib/api';
+import {
+  parseClosedWeekdays,
+  serializeClosedWeekdays,
+  WEEKDAY_OPTIONS,
+} from '@/lib/bookable-visit-dates';
 import { PageError } from '@/components/PageError';
 import { useConfig } from '@/hooks/useConfig';
 import { getUiLabels } from '@/lib/ui-labels';
@@ -31,7 +65,9 @@ const OFFICE_VIEW_STORAGE_KEY = 'pass24-offices-view';
 
 function getInitialOfficeView(): OfficeViewMode {
   if (typeof window === 'undefined') return 'table';
-  return window.localStorage.getItem(OFFICE_VIEW_STORAGE_KEY) === 'cards' ? 'cards' : 'table';
+  return window.localStorage.getItem(OFFICE_VIEW_STORAGE_KEY) === 'cards'
+    ? 'cards'
+    : 'table';
 }
 
 export default function AdminOfficesPage() {
@@ -53,7 +89,9 @@ export default function AdminOfficesPage() {
   const [showBcForm, setShowBcForm] = useState(false);
   const [bcName, setBcName] = useState('');
   const [bcAddress, setBcAddress] = useState('');
-  const [bcPassSettings, setBcPassSettings] = useState<BcPassSettings>(DEFAULT_BC_PASS_SETTINGS);
+  const [bcPassSettings, setBcPassSettings] = useState<BcPassSettings>(
+    DEFAULT_BC_PASS_SETTINGS,
+  );
 
   const [propertyId, setPropertyId] = useState('');
   const [number, setNumber] = useState('');
@@ -62,12 +100,18 @@ export default function AdminOfficesPage() {
   const [company, setCompany] = useState('');
   const [tenantId, setTenantId] = useState('');
   const [tenantSearch, setTenantSearch] = useState('');
-  const [officeFilters, setOfficeFilters] = useState<OfficeFilters>(EMPTY_OFFICE_FILTERS);
-  const [appliedOfficeFilters, setAppliedOfficeFilters] = useState<OfficeFilters>(EMPTY_OFFICE_FILTERS);
+  const [officeFilters, setOfficeFilters] =
+    useState<OfficeFilters>(EMPTY_OFFICE_FILTERS);
+  const [appliedOfficeFilters, setAppliedOfficeFilters] =
+    useState<OfficeFilters>(EMPTY_OFFICE_FILTERS);
   const [officeView, setOfficeView] = useState<OfficeViewMode>('table');
   const [exporting, setExporting] = useState(false);
   const [importing, setImporting] = useState(false);
-  const [importResult, setImportResult] = useState<{ created: number; skipped: number; errors: string[] } | null>(null);
+  const [importResult, setImportResult] = useState<{
+    created: number;
+    skipped: number;
+    errors: string[];
+  } | null>(null);
   const importInputRef = useRef<HTMLInputElement>(null);
   const debouncedOfficeSearch = useDebounce(officeFilters.search);
 
@@ -106,7 +150,9 @@ export default function AdminOfficesPage() {
       .finally(() => setLoading(false));
   };
 
-  useEffect(() => { load(); }, []);
+  useEffect(() => {
+    load();
+  }, []);
 
   const resetForm = () => {
     setNumber('');
@@ -168,7 +214,11 @@ export default function AdminOfficesPage() {
         name: bcName.trim(),
         address: bcAddress.trim(),
       });
-      setBusinessCenters((prev) => [...prev, businessCenter].sort((a, b) => a.name.localeCompare(b.name, 'ru')));
+      setBusinessCenters((prev) =>
+        [...prev, businessCenter].sort((a, b) =>
+          a.name.localeCompare(b.name, 'ru'),
+        ),
+      );
       setPropertyId(businessCenter.id);
       resetBcForm();
       toast('Бизнес-центр создан', 'success');
@@ -181,10 +231,17 @@ export default function AdminOfficesPage() {
 
   const handleDeleteBc = async (bc: BusinessCenter) => {
     if (bc.officesCount > 0) {
-      toast(`Нельзя удалить БЦ «${bc.name}»: в нём ${bc.officesCount} офис(ов). Сначала удалите офисы.`, 'error');
+      toast(
+        `Нельзя удалить БЦ «${bc.name}»: в нём ${bc.officesCount} офис(ов). Сначала удалите офисы.`,
+        'error',
+      );
       return;
     }
-    if (!window.confirm(`Удалить бизнес-центр «${bc.name}»? Это действие нельзя отменить.`)) {
+    if (
+      !window.confirm(
+        `Удалить бизнес-центр «${bc.name}»? Это действие нельзя отменить.`,
+      )
+    ) {
       return;
     }
 
@@ -211,15 +268,24 @@ export default function AdminOfficesPage() {
     if (!editingBcId || !bcName.trim()) return;
     setSaving(true);
     try {
-      const { businessCenter } = await api.admin.updateBusinessCenter(editingBcId, {
-        name: bcName.trim(),
-        address: bcAddress.trim() || undefined,
-        passSettings: bcPassSettings,
-      });
-      setBusinessCenters((prev) => prev.map((bc) => (bc.id === editingBcId ? businessCenter : bc)));
-      setOffices((prev) => prev.map((o) => (
-        o.propertyId === editingBcId ? { ...o, businessCenterName: businessCenter.name } : o
-      )));
+      const { businessCenter } = await api.admin.updateBusinessCenter(
+        editingBcId,
+        {
+          name: bcName.trim(),
+          address: bcAddress.trim() || undefined,
+          passSettings: bcPassSettings,
+        },
+      );
+      setBusinessCenters((prev) =>
+        prev.map((bc) => (bc.id === editingBcId ? businessCenter : bc)),
+      );
+      setOffices((prev) =>
+        prev.map((o) =>
+          o.propertyId === editingBcId
+            ? { ...o, businessCenterName: businessCenter.name }
+            : o,
+        ),
+      );
       resetBcForm();
       toast('Бизнес-центр обновлён', 'success');
     } catch (err) {
@@ -250,7 +316,9 @@ export default function AdminOfficesPage() {
     setTenantSearch('');
     // Прокрутка к панели привязки
     window.setTimeout(() => {
-      document.getElementById('office-binding-panel')?.scrollIntoView({ behavior: 'smooth', block: 'nearest' });
+      document
+        .getElementById('office-binding-panel')
+        ?.scrollIntoView({ behavior: 'smooth', block: 'nearest' });
     }, 50);
   };
 
@@ -336,9 +404,11 @@ export default function AdminOfficesPage() {
     const tenantNote = office.tenantName
       ? `\nАрендатор «${office.tenantName}» будет отвязан.`
       : '';
-    if (!window.confirm(
-      `Удалить ${label}?${tenantNote}\n\nНельзя удалить, если есть пропуска или шаблоны по этому офису.\nДействие нельзя отменить.`,
-    )) {
+    if (
+      !window.confirm(
+        `Удалить ${label}?${tenantNote}\n\nНельзя удалить, если есть пропуска или шаблоны по этому офису.\nДействие нельзя отменить.`,
+      )
+    ) {
       return;
     }
 
@@ -360,27 +430,45 @@ export default function AdminOfficesPage() {
   const toggleActive = async (office: Office) => {
     try {
       await api.admin.updateOffice(office.id, { isActive: !office.isActive });
-      toast(office.isActive ? 'Офис деактивирован' : 'Офис активирован', 'success');
+      toast(
+        office.isActive ? 'Офис деактивирован' : 'Офис активирован',
+        'success',
+      );
       load();
     } catch (err) {
       toast(getErrorMessage(err, 'Не удалось выполнить действие'), 'error');
     }
   };
 
-  const activeOfficeFilters = useMemo(() => ({
-    ...appliedOfficeFilters,
-    search: debouncedOfficeSearch,
-  }), [appliedOfficeFilters, debouncedOfficeSearch]);
+  const activeOfficeFilters = useMemo(
+    () => ({
+      ...appliedOfficeFilters,
+      search: debouncedOfficeSearch,
+    }),
+    [appliedOfficeFilters, debouncedOfficeSearch],
+  );
 
   const filteredOffices = useMemo(() => {
     const q = activeOfficeFilters.search.trim().toLowerCase();
     return offices.filter((office) => {
-      if (activeOfficeFilters.propertyId && office.propertyId !== activeOfficeFilters.propertyId) return false;
-      if (activeOfficeFilters.floor && office.floor !== activeOfficeFilters.floor) return false;
-      if (activeOfficeFilters.status === 'active' && !office.isActive) return false;
-      if (activeOfficeFilters.status === 'inactive' && office.isActive) return false;
-      if (activeOfficeFilters.binding === 'assigned' && !office.tenantId) return false;
-      if (activeOfficeFilters.binding === 'free' && office.tenantId) return false;
+      if (
+        activeOfficeFilters.propertyId &&
+        office.propertyId !== activeOfficeFilters.propertyId
+      )
+        return false;
+      if (
+        activeOfficeFilters.floor &&
+        office.floor !== activeOfficeFilters.floor
+      )
+        return false;
+      if (activeOfficeFilters.status === 'active' && !office.isActive)
+        return false;
+      if (activeOfficeFilters.status === 'inactive' && office.isActive)
+        return false;
+      if (activeOfficeFilters.binding === 'assigned' && !office.tenantId)
+        return false;
+      if (activeOfficeFilters.binding === 'free' && office.tenantId)
+        return false;
       if (!q) return true;
       const haystack = [
         office.number,
@@ -388,34 +476,53 @@ export default function AdminOfficesPage() {
         office.company,
         office.tenantName,
         office.businessCenterName,
-      ].filter(Boolean).join(' ').toLowerCase();
+      ]
+        .filter(Boolean)
+        .join(' ')
+        .toLowerCase();
       return haystack.includes(q);
     });
   }, [offices, activeOfficeFilters]);
 
-  const officeStats = useMemo(() => ({
-    total: offices.length,
-    active: offices.filter((o) => o.isActive).length,
-    assigned: offices.filter((o) => o.tenantId).length,
-    shown: filteredOffices.length,
-  }), [offices, filteredOffices]);
+  const officeStats = useMemo(
+    () => ({
+      total: offices.length,
+      active: offices.filter((o) => o.isActive).length,
+      assigned: offices.filter((o) => o.tenantId).length,
+      shown: filteredOffices.length,
+    }),
+    [offices, filteredOffices],
+  );
 
-  const floors = useMemo(() => (
-    [...new Set(offices.map((o) => o.floor).filter((f): f is string => !!f))].sort((a, b) => a.localeCompare(b, 'ru', { numeric: true }))
-  ), [offices]);
+  const floors = useMemo(
+    () =>
+      [
+        ...new Set(offices.map((o) => o.floor).filter((f): f is string => !!f)),
+      ].sort((a, b) => a.localeCompare(b, 'ru', { numeric: true })),
+    [offices],
+  );
 
-  const showBcColumn = businessCenters.length > 1 && !activeOfficeFilters.propertyId;
+  const showBcColumn =
+    businessCenters.length > 1 && !activeOfficeFilters.propertyId;
 
-  const sortedOffices = useMemo(() => (
-    [...filteredOffices].sort((a, b) => {
-      const bcCmp = (a.businessCenterName || '').localeCompare(b.businessCenterName || '', 'ru');
-      if (bcCmp !== 0) return bcCmp;
-      return a.number.localeCompare(b.number, 'ru', { numeric: true });
-    })
-  ), [filteredOffices]);
+  const sortedOffices = useMemo(
+    () =>
+      [...filteredOffices].sort((a, b) => {
+        const bcCmp = (a.businessCenterName || '').localeCompare(
+          b.businessCenterName || '',
+          'ru',
+        );
+        if (bcCmp !== 0) return bcCmp;
+        return a.number.localeCompare(b.number, 'ru', { numeric: true });
+      }),
+    [filteredOffices],
+  );
 
   const officesByBc = useMemo(() => {
-    const map = new Map<string, { bc: BusinessCenter | null; items: Office[] }>();
+    const map = new Map<
+      string,
+      { bc: BusinessCenter | null; items: Office[] }
+    >();
     for (const office of filteredOffices) {
       const key = office.propertyId || 'unknown';
       if (!map.has(key)) {
@@ -426,7 +533,9 @@ export default function AdminOfficesPage() {
       }
       map.get(key)!.items.push(office);
     }
-    return [...map.values()].sort((a, b) => (a.bc?.name || '').localeCompare(b.bc?.name || '', 'ru'));
+    return [...map.values()].sort((a, b) =>
+      (a.bc?.name || '').localeCompare(b.bc?.name || '', 'ru'),
+    );
   }, [filteredOffices, businessCenters]);
 
   const hasOfficeFilters = !!(
@@ -437,7 +546,8 @@ export default function AdminOfficesPage() {
     activeOfficeFilters.search.trim()
   );
 
-  const applyOfficeFilters = () => setAppliedOfficeFilters({ ...officeFilters });
+  const applyOfficeFilters = () =>
+    setAppliedOfficeFilters({ ...officeFilters });
 
   const handleExportOffices = async () => {
     setExporting(true);
@@ -492,12 +602,15 @@ export default function AdminOfficesPage() {
     const q = tenantSearch.trim().toLowerCase();
     if (!q) return tenants;
     return tenants.filter((t) => {
-      const hay = `${t.fullName} ${t.company || ''} ${t.email || ''}`.toLowerCase();
+      const hay =
+        `${t.fullName} ${t.company || ''} ${t.email || ''}`.toLowerCase();
       return hay.includes(q);
     });
   }, [tenants, tenantSearch]);
 
-  const selectedTenant = tenantId ? tenants.find((t) => t.id === tenantId) : undefined;
+  const selectedTenant = tenantId
+    ? tenants.find((t) => t.id === tenantId)
+    : undefined;
 
   /** Компактный select для формы создания/редактирования офиса */
   const BindingSelectCompact = () => (
@@ -510,7 +623,9 @@ export default function AdminOfficesPage() {
         >
           <option value="">Не назначен</option>
           {tenants.map((t) => (
-            <option key={t.id} value={t.id}>{tenantLabel(t)}</option>
+            <option key={t.id} value={t.id}>
+              {tenantLabel(t)}
+            </option>
           ))}
         </select>
       </div>
@@ -531,7 +646,8 @@ export default function AdminOfficesPage() {
   return (
     <AdminLayout title="Реестр офисов">
       <p className="text-[var(--muted)] -mt-4 mb-6">
-        Бизнес-центры, офисы и параметры пропускного режима для каждого БЦ. Привязка арендатора к офису — только администратором.
+        Бизнес-центры, офисы и параметры пропускного режима для каждого БЦ.
+        Привязка арендатора к офису — только администратором.
       </p>
 
       {loadError && (
@@ -548,7 +664,11 @@ export default function AdminOfficesPage() {
         <div className="flex items-center justify-between gap-3 mb-4">
           <h2 className="font-semibold">Бизнес-центры</h2>
           {!showBcForm && !editingBcId && (
-            <button type="button" className="btn btn-primary text-sm" onClick={startBcCreate}>
+            <button
+              type="button"
+              className="btn btn-primary text-sm"
+              onClick={startBcCreate}
+            >
               <Plus className="w-4 h-4" />
               Добавить БЦ
             </button>
@@ -562,21 +682,46 @@ export default function AdminOfficesPage() {
         )}
 
         {showBcForm && (
-          <form onSubmit={handleCreateBc} className="border border-[var(--border)] rounded-lg p-4 mb-4 space-y-3 max-w-lg">
+          <form
+            onSubmit={handleCreateBc}
+            className="border border-[var(--border)] rounded-lg p-4 mb-4 space-y-3 max-w-lg"
+          >
             <h3 className="font-medium text-sm">Новый бизнес-центр</h3>
             <div>
               <label className="label">Название БЦ *</label>
-              <input className="input" value={bcName} onChange={(e) => setBcName(e.target.value)} required placeholder={ph.businessCenterName} />
+              <input
+                className="input"
+                value={bcName}
+                onChange={(e) => setBcName(e.target.value)}
+                required
+                placeholder={ph.businessCenterName}
+              />
             </div>
             <div>
               <label className="label">Адрес *</label>
-              <input className="input" value={bcAddress} onChange={(e) => setBcAddress(e.target.value)} required placeholder={ph.businessCenterAddress} />
+              <input
+                className="input"
+                value={bcAddress}
+                onChange={(e) => setBcAddress(e.target.value)}
+                required
+                placeholder={ph.businessCenterAddress}
+              />
             </div>
             <div className="flex gap-2">
-              <button type="submit" className="btn btn-primary text-sm" disabled={saving}>
+              <button
+                type="submit"
+                className="btn btn-primary text-sm"
+                disabled={saving}
+              >
                 {saving ? 'Создание...' : 'Создать БЦ'}
               </button>
-              <button type="button" className="btn btn-secondary text-sm" onClick={resetBcForm}>Отмена</button>
+              <button
+                type="button"
+                className="btn btn-secondary text-sm"
+                onClick={resetBcForm}
+              >
+                Отмена
+              </button>
             </div>
           </form>
         )}
@@ -584,32 +729,49 @@ export default function AdminOfficesPage() {
         {businessCenters.length > 0 && (
           <div className="space-y-3">
             {businessCenters.map((bc) => (
-              <div key={bc.id} className="border border-[var(--border)] rounded-lg p-4">
+              <div
+                key={bc.id}
+                className="border border-[var(--border)] rounded-lg p-4"
+              >
                 {editingBcId === bc.id ? (
                   <div className="space-y-4">
                     <div>
                       <label className="label">Название БЦ *</label>
-                      <input className="input" value={bcName} onChange={(e) => setBcName(e.target.value)} required />
+                      <input
+                        className="input"
+                        value={bcName}
+                        onChange={(e) => setBcName(e.target.value)}
+                        required
+                      />
                     </div>
                     <div>
                       <label className="label">Адрес</label>
-                      <input className="input" value={bcAddress} onChange={(e) => setBcAddress(e.target.value)} />
+                      <input
+                        className="input"
+                        value={bcAddress}
+                        onChange={(e) => setBcAddress(e.target.value)}
+                      />
                       <p className="text-xs text-[var(--muted)] mt-1">
-                        Показывается на странице пропуска и используется для кнопки «Построить маршрут»
+                        Показывается на странице пропуска и используется для
+                        кнопки «Построить маршрут»
                       </p>
                     </div>
 
                     <div className="border-t border-[var(--border)] pt-4 space-y-3">
-                      <h4 className="text-sm font-medium">Параметры пропускного режима</h4>
+                      <h4 className="text-sm font-medium">
+                        Параметры пропускного режима
+                      </h4>
                       <div>
                         <label className="label">Карты для маршрута</label>
                         <select
                           className="input"
                           value={bcPassSettings.route_maps_provider || 'yandex'}
-                          onChange={(e) => setBcPassSettings({
-                            ...bcPassSettings,
-                            route_maps_provider: e.target.value,
-                          })}
+                          onChange={(e) =>
+                            setBcPassSettings({
+                              ...bcPassSettings,
+                              route_maps_provider: e.target.value,
+                            })
+                          }
                         >
                           <option value="yandex">Яндекс.Карты</option>
                           <option value="google">Google Maps</option>
@@ -623,7 +785,12 @@ export default function AdminOfficesPage() {
                         <input
                           className="input"
                           value={bcPassSettings.reception_floor}
-                          onChange={(e) => setBcPassSettings({ ...bcPassSettings, reception_floor: e.target.value })}
+                          onChange={(e) =>
+                            setBcPassSettings({
+                              ...bcPassSettings,
+                              reception_floor: e.target.value,
+                            })
+                          }
                           placeholder="1"
                         />
                       </div>
@@ -631,35 +798,49 @@ export default function AdminOfficesPage() {
                         <input
                           type="checkbox"
                           checked={bcPassSettings.require_checkout === 'true'}
-                          onChange={(e) => setBcPassSettings({
-                            ...bcPassSettings,
-                            require_checkout: e.target.checked ? 'true' : 'false',
-                          })}
+                          onChange={(e) =>
+                            setBcPassSettings({
+                              ...bcPassSettings,
+                              require_checkout: e.target.checked
+                                ? 'true'
+                                : 'false',
+                            })
+                          }
                         />
                         Требовать подтверждение выхода гостя
                       </label>
                       <p className="text-xs text-[var(--muted)] -mt-1">
-                        Если выключено — ресепшн только фиксирует приход по пропуску, без этапа «выход»
+                        Если выключено — ресепшн только фиксирует приход по
+                        пропуску, без этапа «выход»
                       </p>
                       <label className="flex items-center gap-2 text-sm">
                         <input
                           type="checkbox"
-                          checked={bcPassSettings.auto_approve_delivery === 'true'}
-                          onChange={(e) => setBcPassSettings({
-                            ...bcPassSettings,
-                            auto_approve_delivery: e.target.checked ? 'true' : 'false',
-                          })}
+                          checked={
+                            bcPassSettings.auto_approve_delivery === 'true'
+                          }
+                          onChange={(e) =>
+                            setBcPassSettings({
+                              ...bcPassSettings,
+                              auto_approve_delivery: e.target.checked
+                                ? 'true'
+                                : 'false',
+                            })
+                          }
                         />
                         Автоодобрение пропусков на доставку
                       </label>
                       <div>
                         <label className="label">Выходные дни</label>
                         <p className="text-xs text-[var(--muted)] mb-2">
-                          Не учитываются при выборе даты заказа пропуска. По умолчанию выходных нет.
+                          Не учитываются при выборе даты заказа пропуска. По
+                          умолчанию выходных нет.
                         </p>
                         <div className="flex flex-wrap gap-2">
                           {WEEKDAY_OPTIONS.map((day) => {
-                            const active = parseClosedWeekdays(bcPassSettings.closed_weekdays).includes(day.value);
+                            const active = parseClosedWeekdays(
+                              bcPassSettings.closed_weekdays,
+                            ).includes(day.value);
                             return (
                               <button
                                 key={day.value}
@@ -684,7 +865,12 @@ export default function AdminOfficesPage() {
                             className="input"
                             type="time"
                             value={bcPassSettings.working_hours_from}
-                            onChange={(e) => setBcPassSettings({ ...bcPassSettings, working_hours_from: e.target.value })}
+                            onChange={(e) =>
+                              setBcPassSettings({
+                                ...bcPassSettings,
+                                working_hours_from: e.target.value,
+                              })
+                            }
                           />
                         </div>
                         <div>
@@ -693,7 +879,12 @@ export default function AdminOfficesPage() {
                             className="input"
                             type="time"
                             value={bcPassSettings.working_hours_to}
-                            onChange={(e) => setBcPassSettings({ ...bcPassSettings, working_hours_to: e.target.value })}
+                            onChange={(e) =>
+                              setBcPassSettings({
+                                ...bcPassSettings,
+                                working_hours_to: e.target.value,
+                              })
+                            }
                           />
                         </div>
                       </div>
@@ -703,42 +894,76 @@ export default function AdminOfficesPage() {
                           <input
                             className="input"
                             value={bcPassSettings.contact_phone}
-                            onChange={(e) => setBcPassSettings({ ...bcPassSettings, contact_phone: e.target.value })}
+                            onChange={(e) =>
+                              setBcPassSettings({
+                                ...bcPassSettings,
+                                contact_phone: e.target.value,
+                              })
+                            }
                           />
                         </div>
                         <div>
-                          <label className="label">Email управляющей компании</label>
+                          <label className="label">
+                            Email управляющей компании
+                          </label>
                           <input
                             className="input"
                             type="email"
                             value={bcPassSettings.contact_email}
-                            onChange={(e) => setBcPassSettings({ ...bcPassSettings, contact_email: e.target.value })}
+                            onChange={(e) =>
+                              setBcPassSettings({
+                                ...bcPassSettings,
+                                contact_email: e.target.value,
+                              })
+                            }
                           />
                         </div>
                       </div>
                     </div>
 
                     <div className="flex gap-2">
-                      <button type="button" className="btn btn-primary text-sm" disabled={saving} onClick={saveBcEdit}>
+                      <button
+                        type="button"
+                        className="btn btn-primary text-sm"
+                        disabled={saving}
+                        onClick={saveBcEdit}
+                      >
                         {saving ? 'Сохранение...' : 'Сохранить'}
                       </button>
-                      <button type="button" className="btn btn-secondary text-sm" onClick={resetBcForm}>Отмена</button>
+                      <button
+                        type="button"
+                        className="btn btn-secondary text-sm"
+                        onClick={resetBcForm}
+                      >
+                        Отмена
+                      </button>
                     </div>
                   </div>
                 ) : (
                   <div className="flex items-start justify-between gap-3">
                     <div>
                       <div className="font-medium">{bc.name}</div>
-                      <div className="text-sm text-[var(--muted)]">{bc.address}</div>
+                      <div className="text-sm text-[var(--muted)]">
+                        {bc.address}
+                      </div>
                       <div className="text-xs text-[var(--muted)] mt-1">
                         {bc.officesCount} офисов
                         {bc.passSettings && (
-                          <> · ресепшн {bc.passSettings.reception_floor} эт. · {bc.passSettings.working_hours_from}–{bc.passSettings.working_hours_to}</>
+                          <>
+                            {' '}
+                            · ресепшн {bc.passSettings.reception_floor} эт. ·{' '}
+                            {bc.passSettings.working_hours_from}–
+                            {bc.passSettings.working_hours_to}
+                          </>
                         )}
                       </div>
                     </div>
                     <div className="flex items-center gap-2 shrink-0">
-                      <button type="button" className="btn btn-secondary text-sm" onClick={() => startBcEdit(bc)}>
+                      <button
+                        type="button"
+                        className="btn btn-secondary text-sm"
+                        onClick={() => startBcEdit(bc)}
+                      >
                         <Pencil className="w-4 h-4" />
                         Изменить
                       </button>
@@ -746,7 +971,11 @@ export default function AdminOfficesPage() {
                         type="button"
                         className="btn btn-danger text-sm"
                         disabled={deletingBcId === bc.id || bc.officesCount > 0}
-                        title={bc.officesCount > 0 ? `Сначала удалите ${bc.officesCount} офис(ов)` : 'Удалить БЦ'}
+                        title={
+                          bc.officesCount > 0
+                            ? `Сначала удалите ${bc.officesCount} офис(ов)`
+                            : 'Удалить БЦ'
+                        }
                         onClick={() => handleDeleteBc(bc)}
                       >
                         <Trash2 className="w-4 h-4" />
@@ -769,7 +998,8 @@ export default function AdminOfficesPage() {
               Реестр офисов
             </h2>
             <p className="text-sm text-[var(--muted)] mt-1">
-              {officeStats.shown} из {officeStats.total} · активных {officeStats.active} · с арендатором {officeStats.assigned}
+              {officeStats.shown} из {officeStats.total} · активных{' '}
+              {officeStats.active} · с арендатором {officeStats.assigned}
             </p>
           </div>
           <div className="flex flex-wrap items-center gap-2">
@@ -777,7 +1007,9 @@ export default function AdminOfficesPage() {
               <button
                 type="button"
                 className={`inline-flex items-center gap-1.5 px-2.5 py-1.5 text-xs rounded-md transition-colors ${
-                  officeView === 'table' ? 'bg-[var(--surface)] shadow-sm font-medium' : 'text-[var(--muted)] hover:text-[var(--text)]'
+                  officeView === 'table'
+                    ? 'bg-[var(--surface)] shadow-sm font-medium'
+                    : 'text-[var(--muted)] hover:text-[var(--text)]'
                 }`}
                 onClick={() => setOfficeViewMode('table')}
                 title="Таблица"
@@ -788,7 +1020,9 @@ export default function AdminOfficesPage() {
               <button
                 type="button"
                 className={`inline-flex items-center gap-1.5 px-2.5 py-1.5 text-xs rounded-md transition-colors ${
-                  officeView === 'cards' ? 'bg-[var(--surface)] shadow-sm font-medium' : 'text-[var(--muted)] hover:text-[var(--text)]'
+                  officeView === 'cards'
+                    ? 'bg-[var(--surface)] shadow-sm font-medium'
+                    : 'text-[var(--muted)] hover:text-[var(--text)]'
                 }`}
                 onClick={() => setOfficeViewMode('cards')}
                 title="Карточки"
@@ -823,7 +1057,10 @@ export default function AdminOfficesPage() {
               onChange={(e) => void handleImportFile(e)}
             />
             {!showForm && !editingId && businessCenters.length > 0 && (
-              <button className="btn btn-primary text-sm" onClick={() => setShowForm(true)}>
+              <button
+                className="btn btn-primary text-sm"
+                onClick={() => setShowForm(true)}
+              >
                 <Plus className="w-4 h-4" />
                 Добавить офис
               </button>
@@ -834,14 +1071,22 @@ export default function AdminOfficesPage() {
         {importResult && (
           <div className="rounded-lg border border-[var(--border)] bg-[var(--surface-muted)] px-4 py-3 text-sm space-y-2">
             <div>
-              Импорт завершён: <span className="font-medium text-emerald-700">добавлено {importResult.created}</span>
+              Импорт завершён:{' '}
+              <span className="font-medium text-emerald-700">
+                добавлено {importResult.created}
+              </span>
               {importResult.skipped > 0 && (
-                <>, пропущено (уже есть) <span className="font-medium">{importResult.skipped}</span></>
+                <>
+                  , пропущено (уже есть){' '}
+                  <span className="font-medium">{importResult.skipped}</span>
+                </>
               )}
             </div>
             {importResult.errors.length > 0 && (
               <div>
-                <div className="text-[var(--muted)] mb-1">Ошибки ({importResult.errors.length}):</div>
+                <div className="text-[var(--muted)] mb-1">
+                  Ошибки ({importResult.errors.length}):
+                </div>
                 <ul className="list-disc pl-5 space-y-0.5 text-red-600 max-h-32 overflow-y-auto">
                   {importResult.errors.map((err) => (
                     <li key={err}>{err}</li>
@@ -850,7 +1095,8 @@ export default function AdminOfficesPage() {
               </div>
             )}
             <p className="text-xs text-[var(--muted)]">
-              Формат: БЦ;Номер офиса;Этаж;Площадь;Компания;Email арендатора;Активен (да/нет). БЦ должен существовать в системе.
+              Формат: БЦ;Номер офиса;Этаж;Площадь;Компания;Email
+              арендатора;Активен (да/нет). БЦ должен существовать в системе.
             </p>
           </div>
         )}
@@ -862,15 +1108,21 @@ export default function AdminOfficesPage() {
           </div>
           <div className="card px-3 py-2 office-stat--active">
             <div className="text-xs text-[var(--muted)]">Активные</div>
-            <div className="text-lg font-semibold office-stat__value">{officeStats.active}</div>
+            <div className="text-lg font-semibold office-stat__value">
+              {officeStats.active}
+            </div>
           </div>
           <div className="card px-3 py-2 office-stat--assigned">
             <div className="text-xs text-[var(--muted)]">С арендатором</div>
-            <div className="text-lg font-semibold office-stat__value">{officeStats.assigned}</div>
+            <div className="text-lg font-semibold office-stat__value">
+              {officeStats.assigned}
+            </div>
           </div>
           <div className="card px-3 py-2 office-stat--free">
             <div className="text-xs text-[var(--muted)]">Свободные</div>
-            <div className="text-lg font-semibold office-stat__value">{officeStats.total - officeStats.assigned}</div>
+            <div className="text-lg font-semibold office-stat__value">
+              {officeStats.total - officeStats.assigned}
+            </div>
           </div>
         </div>
 
@@ -884,7 +1136,10 @@ export default function AdminOfficesPage() {
               onChange={(e) => {
                 const next = { ...officeFilters, search: e.target.value };
                 setOfficeFilters(next);
-                setAppliedOfficeFilters((prev) => ({ ...prev, search: e.target.value }));
+                setAppliedOfficeFilters((prev) => ({
+                  ...prev,
+                  search: e.target.value,
+                }));
               }}
             />
           </div>
@@ -892,11 +1147,18 @@ export default function AdminOfficesPage() {
             <select
               className="input"
               value={officeFilters.propertyId}
-              onChange={(e) => setOfficeFilters({ ...officeFilters, propertyId: e.target.value })}
+              onChange={(e) =>
+                setOfficeFilters({
+                  ...officeFilters,
+                  propertyId: e.target.value,
+                })
+              }
             >
               <option value="">Все БЦ</option>
               {businessCenters.map((bc) => (
-                <option key={bc.id} value={bc.id}>{bc.name}</option>
+                <option key={bc.id} value={bc.id}>
+                  {bc.name}
+                </option>
               ))}
             </select>
           </div>
@@ -904,11 +1166,15 @@ export default function AdminOfficesPage() {
             <select
               className="input"
               value={officeFilters.floor}
-              onChange={(e) => setOfficeFilters({ ...officeFilters, floor: e.target.value })}
+              onChange={(e) =>
+                setOfficeFilters({ ...officeFilters, floor: e.target.value })
+              }
             >
               <option value="">Все этажи</option>
               {floors.map((floor) => (
-                <option key={floor} value={floor}>{floor} эт.</option>
+                <option key={floor} value={floor}>
+                  {floor} эт.
+                </option>
               ))}
             </select>
           </div>
@@ -916,7 +1182,12 @@ export default function AdminOfficesPage() {
             <select
               className="input"
               value={officeFilters.binding}
-              onChange={(e) => setOfficeFilters({ ...officeFilters, binding: e.target.value as OfficeFilters['binding'] })}
+              onChange={(e) =>
+                setOfficeFilters({
+                  ...officeFilters,
+                  binding: e.target.value as OfficeFilters['binding'],
+                })
+              }
             >
               <option value="">Все офисы</option>
               <option value="assigned">С арендатором</option>
@@ -927,7 +1198,12 @@ export default function AdminOfficesPage() {
             <select
               className="input"
               value={officeFilters.status}
-              onChange={(e) => setOfficeFilters({ ...officeFilters, status: e.target.value as OfficeFilters['status'] })}
+              onChange={(e) =>
+                setOfficeFilters({
+                  ...officeFilters,
+                  status: e.target.value as OfficeFilters['status'],
+                })
+              }
             >
               <option value="">Любой статус</option>
               <option value="active">Активные</option>
@@ -937,12 +1213,20 @@ export default function AdminOfficesPage() {
         </div>
 
         <div className="flex flex-wrap items-center gap-2">
-          <button type="button" className="btn btn-primary text-sm" onClick={applyOfficeFilters}>
+          <button
+            type="button"
+            className="btn btn-primary text-sm"
+            onClick={applyOfficeFilters}
+          >
             <Filter className="w-4 h-4" />
             Применить
           </button>
           {hasOfficeFilters && (
-            <button type="button" className="btn btn-secondary text-sm" onClick={resetOfficeFilters}>
+            <button
+              type="button"
+              className="btn btn-secondary text-sm"
+              onClick={resetOfficeFilters}
+            >
               <X className="w-4 h-4" />
               Сбросить
             </button>
@@ -959,15 +1243,26 @@ export default function AdminOfficesPage() {
             <div>
               <div className="flex items-center gap-2 text-[var(--primary)] mb-1">
                 <Link2 className="w-5 h-5" />
-                <h3 className="font-semibold text-[var(--text)]">Привязка арендатора</h3>
+                <h3 className="font-semibold text-[var(--text)]">
+                  Привязка арендатора
+                </h3>
               </div>
               <p className="text-sm text-[var(--muted)]">
-                Офис <span className="font-mono font-semibold text-[var(--text)]">{bindingOffice.number}</span>
-                {bindingOffice.businessCenterName ? ` · ${bindingOffice.businessCenterName}` : ''}
+                Офис{' '}
+                <span className="font-mono font-semibold text-[var(--text)]">
+                  {bindingOffice.number}
+                </span>
+                {bindingOffice.businessCenterName
+                  ? ` · ${bindingOffice.businessCenterName}`
+                  : ''}
                 {bindingOffice.floor ? ` · ${bindingOffice.floor} эт.` : ''}
               </p>
             </div>
-            <button type="button" className="btn btn-secondary text-sm shrink-0" onClick={resetForm}>
+            <button
+              type="button"
+              className="btn btn-secondary text-sm shrink-0"
+              onClick={resetForm}
+            >
               <X className="w-4 h-4" />
               Закрыть
             </button>
@@ -976,10 +1271,16 @@ export default function AdminOfficesPage() {
           {bindingOffice.tenantId && (
             <div className="rounded-lg border border-[var(--border)] bg-[var(--surface-muted)] p-3 mb-4 flex flex-col sm:flex-row sm:items-center justify-between gap-2">
               <div className="text-sm">
-                <div className="text-xs text-[var(--muted)] mb-0.5">Сейчас привязан</div>
-                <div className="font-medium">{bindingOffice.tenantName || 'Арендатор'}</div>
+                <div className="text-xs text-[var(--muted)] mb-0.5">
+                  Сейчас привязан
+                </div>
+                <div className="font-medium">
+                  {bindingOffice.tenantName || 'Арендатор'}
+                </div>
                 {bindingOffice.company && (
-                  <div className="text-xs text-[var(--muted)]">{bindingOffice.company}</div>
+                  <div className="text-xs text-[var(--muted)]">
+                    {bindingOffice.company}
+                  </div>
                 )}
               </div>
               <button
@@ -997,7 +1298,9 @@ export default function AdminOfficesPage() {
 
           <div className="space-y-3">
             <div>
-              <label className="label">Выберите арендатора (владельца компании)</label>
+              <label className="label">
+                Выберите арендатора (владельца компании)
+              </label>
               <div className="relative mb-2">
                 <Search className="absolute left-3 top-1/2 -translate-y-1/2 w-4 h-4 text-[var(--muted)]" />
                 <input
@@ -1008,7 +1311,9 @@ export default function AdminOfficesPage() {
                 />
               </div>
               <div className="border border-[var(--border)] rounded-lg max-h-56 overflow-y-auto divide-y divide-[var(--border)] bg-[var(--surface)]">
-                <label className={`flex items-start gap-3 p-3 cursor-pointer hover:bg-[var(--surface-muted)] ${!tenantId ? 'bg-[var(--status-approved-soft)]' : ''}`}>
+                <label
+                  className={`flex items-start gap-3 p-3 cursor-pointer hover:bg-[var(--surface-muted)] ${!tenantId ? 'bg-[var(--status-approved-soft)]' : ''}`}
+                >
                   <input
                     type="radio"
                     name="office-tenant"
@@ -1018,12 +1323,16 @@ export default function AdminOfficesPage() {
                   />
                   <span className="text-sm">
                     <span className="font-medium">Не назначен</span>
-                    <span className="block text-xs text-[var(--muted)]">Офис свободен, пропуска компании недоступны</span>
+                    <span className="block text-xs text-[var(--muted)]">
+                      Офис свободен, пропуска компании недоступны
+                    </span>
                   </span>
                 </label>
                 {filteredTenantsForBinding.length === 0 ? (
                   <div className="p-4 text-sm text-[var(--muted)] text-center">
-                    {tenants.length === 0 ? 'Нет активных арендаторов' : 'Никого не найдено'}
+                    {tenants.length === 0
+                      ? 'Нет активных арендаторов'
+                      : 'Никого не найдено'}
                   </div>
                 ) : (
                   filteredTenantsForBinding.map((t) => {
@@ -1032,7 +1341,9 @@ export default function AdminOfficesPage() {
                       <label
                         key={t.id}
                         className={`flex items-start gap-3 p-3 cursor-pointer hover:bg-[var(--surface-muted)] ${
-                          tenantId === t.id ? 'bg-[var(--status-approved-soft)]' : ''
+                          tenantId === t.id
+                            ? 'bg-[var(--status-approved-soft)]'
+                            : ''
                         }`}
                       >
                         <input
@@ -1045,11 +1356,15 @@ export default function AdminOfficesPage() {
                         <span className="text-sm min-w-0">
                           <span className="font-medium">{t.fullName}</span>
                           {t.company && (
-                            <span className="block text-xs text-[var(--muted)] truncate">{t.company}</span>
+                            <span className="block text-xs text-[var(--muted)] truncate">
+                              {t.company}
+                            </span>
                           )}
                           <span className="block text-xs text-[var(--muted)] truncate">
                             {t.email}
-                            {officesCount > 0 ? ` · уже ${officesCount} оф.` : ''}
+                            {officesCount > 0
+                              ? ` · уже ${officesCount} оф.`
+                              : ''}
                           </span>
                         </span>
                       </label>
@@ -1069,7 +1384,8 @@ export default function AdminOfficesPage() {
                   placeholder={selectedTenant?.company || ph.company}
                 />
                 <p className="text-xs text-[var(--muted)] mt-1">
-                  Подставляется из профиля арендатора; можно изменить только для этого офиса.
+                  Подставляется из профиля арендатора; можно изменить только для
+                  этого офиса.
                 </p>
               </div>
             )}
@@ -1084,7 +1400,11 @@ export default function AdminOfficesPage() {
             >
               {saving ? 'Сохранение...' : 'Сохранить привязку'}
             </button>
-            <button type="button" className="btn btn-secondary" onClick={resetForm}>
+            <button
+              type="button"
+              className="btn btn-secondary"
+              onClick={resetForm}
+            >
               Отмена
             </button>
           </div>
@@ -1092,15 +1412,35 @@ export default function AdminOfficesPage() {
       )}
 
       {(showForm || editingId) && (
-        <form onSubmit={editingId ? (e) => { e.preventDefault(); handleUpdate(editingId); } : handleCreate} className="card p-5 mb-6 space-y-4 max-w-lg">
-          <h3 className="font-semibold">{editingId ? 'Редактирование офиса' : 'Новый офис'}</h3>
+        <form
+          onSubmit={
+            editingId
+              ? (e) => {
+                  e.preventDefault();
+                  handleUpdate(editingId);
+                }
+              : handleCreate
+          }
+          className="card p-5 mb-6 space-y-4 max-w-lg"
+        >
+          <h3 className="font-semibold">
+            {editingId ? 'Редактирование офиса' : 'Новый офис'}
+          </h3>
           <div>
             <label className="label">Бизнес-центр *</label>
             <div className="select-wrap">
-              <select className="input" value={propertyId} onChange={(e) => setPropertyId(e.target.value)} required disabled={!!editingId}>
+              <select
+                className="input"
+                value={propertyId}
+                onChange={(e) => setPropertyId(e.target.value)}
+                required
+                disabled={!!editingId}
+              >
                 <option value="">Выберите БЦ</option>
                 {businessCenters.map((bc) => (
-                  <option key={bc.id} value={bc.id}>{bc.name}</option>
+                  <option key={bc.id} value={bc.id}>
+                    {bc.name}
+                  </option>
                 ))}
               </select>
             </div>
@@ -1108,16 +1448,35 @@ export default function AdminOfficesPage() {
           <div className="grid grid-cols-2 gap-3">
             <div>
               <label className="label">Номер офиса *</label>
-              <input className="input" value={number} onChange={(e) => setNumber(e.target.value)} required disabled={!!editingId} placeholder={ph.officeNumberShort} />
+              <input
+                className="input"
+                value={number}
+                onChange={(e) => setNumber(e.target.value)}
+                required
+                disabled={!!editingId}
+                placeholder={ph.officeNumberShort}
+              />
             </div>
             <div>
               <label className="label">Этаж</label>
-              <input className="input" value={floor} onChange={(e) => setFloor(e.target.value)} placeholder={ph.officeFloor} disabled={!!editingId} />
+              <input
+                className="input"
+                value={floor}
+                onChange={(e) => setFloor(e.target.value)}
+                placeholder={ph.officeFloor}
+                disabled={!!editingId}
+              />
             </div>
           </div>
           <div>
             <label className="label">Площадь, м²</label>
-            <input className="input" type="number" min={0} value={areaSqm} onChange={(e) => setAreaSqm(e.target.value)} />
+            <input
+              className="input"
+              type="number"
+              min={0}
+              value={areaSqm}
+              onChange={(e) => setAreaSqm(e.target.value)}
+            />
           </div>
 
           <div className="border border-[var(--border)] rounded-lg p-4 bg-[var(--surface-muted)]">
@@ -1132,7 +1491,13 @@ export default function AdminOfficesPage() {
             <button type="submit" className="btn btn-primary" disabled={saving}>
               {saving ? 'Сохранение...' : editingId ? 'Сохранить' : 'Добавить'}
             </button>
-            <button type="button" className="btn btn-secondary" onClick={resetForm}>Отмена</button>
+            <button
+              type="button"
+              className="btn btn-secondary"
+              onClick={resetForm}
+            >
+              Отмена
+            </button>
           </div>
         </form>
       )}
@@ -1140,13 +1505,21 @@ export default function AdminOfficesPage() {
       {loading ? (
         <div className="animate-pulse text-[var(--muted)]">Загрузка...</div>
       ) : offices.length === 0 ? (
-        <div className="card p-8 text-center text-[var(--muted)]">Офисов пока нет</div>
+        <div className="card p-8 text-center text-[var(--muted)]">
+          Офисов пока нет
+        </div>
       ) : filteredOffices.length === 0 ? (
         <div className="card p-8 text-center text-[var(--muted)]">
           По выбранным фильтрам офисов не найдено
           {hasOfficeFilters && (
             <div className="mt-3">
-              <button type="button" className="btn btn-secondary text-sm" onClick={resetOfficeFilters}>Сбросить фильтры</button>
+              <button
+                type="button"
+                className="btn btn-secondary text-sm"
+                onClick={resetOfficeFilters}
+              >
+                Сбросить фильтры
+              </button>
             </div>
           )}
         </div>
@@ -1155,11 +1528,19 @@ export default function AdminOfficesPage() {
           <table className="w-full text-sm min-w-[920px]">
             <thead className="surface-muted text-[var(--muted)]">
               <tr>
-                {showBcColumn && <th className="text-left p-3 font-medium">Бизнес-центр</th>}
+                {showBcColumn && (
+                  <th className="text-left p-3 font-medium">Бизнес-центр</th>
+                )}
                 <th className="text-left p-3 font-medium">Офис</th>
-                <th className="text-left p-3 font-medium hidden sm:table-cell">Этаж</th>
-                <th className="text-left p-3 font-medium hidden md:table-cell">Компания</th>
-                <th className="text-left p-3 font-medium hidden lg:table-cell">Площадь</th>
+                <th className="text-left p-3 font-medium hidden sm:table-cell">
+                  Этаж
+                </th>
+                <th className="text-left p-3 font-medium hidden md:table-cell">
+                  Компания
+                </th>
+                <th className="text-left p-3 font-medium hidden lg:table-cell">
+                  Площадь
+                </th>
                 <th className="text-left p-3 font-medium">Арендатор</th>
                 <th className="text-left p-3 font-medium">Статус</th>
                 <th className="p-3 w-28 text-right font-medium">Действия</th>
@@ -1175,11 +1556,15 @@ export default function AdminOfficesPage() {
                 >
                   {showBcColumn && (
                     <td className="p-3 text-[var(--muted)] max-w-[10rem]">
-                      <span className="line-clamp-2">{office.businessCenterName || '—'}</span>
+                      <span className="line-clamp-2">
+                        {office.businessCenterName || '—'}
+                      </span>
                     </td>
                   )}
                   <td className="p-3">
-                    <div className="font-mono font-semibold">{office.number}</div>
+                    <div className="font-mono font-semibold">
+                      {office.number}
+                    </div>
                     <div className="text-xs text-[var(--muted)] sm:hidden">
                       {office.floor ? `${office.floor} эт.` : '—'}
                       {office.company ? ` · ${office.company}` : ''}
@@ -1189,7 +1574,9 @@ export default function AdminOfficesPage() {
                     {office.floor ? `${office.floor} эт.` : '—'}
                   </td>
                   <td className="p-3 hidden md:table-cell max-w-[12rem]">
-                    <span className="line-clamp-2">{office.company || '—'}</span>
+                    <span className="line-clamp-2">
+                      {office.company || '—'}
+                    </span>
                   </td>
                   <td className="p-3 hidden lg:table-cell text-[var(--muted)] whitespace-nowrap">
                     {office.areaSqm ? `${office.areaSqm} м²` : '—'}
@@ -1197,14 +1584,24 @@ export default function AdminOfficesPage() {
                   <td className="p-3 min-w-[10rem]">
                     <div>
                       {bindingOfficeId === office.id ? (
-                        <span className="text-xs font-medium text-[var(--primary)]">Редактируется выше ↑</span>
+                        <span className="text-xs font-medium text-[var(--primary)]">
+                          Редактируется выше ↑
+                        </span>
                       ) : (
                         <>
-                          <div className={office.tenantName ? 'font-medium' : 'text-[var(--muted)]'}>
+                          <div
+                            className={
+                              office.tenantName
+                                ? 'font-medium'
+                                : 'text-[var(--muted)]'
+                            }
+                          >
                             {office.tenantName || 'Не назначен'}
                           </div>
                           {office.company && office.tenantName && (
-                            <div className="text-[11px] text-[var(--muted)] line-clamp-1">{office.company}</div>
+                            <div className="text-[11px] text-[var(--muted)] line-clamp-1">
+                              {office.company}
+                            </div>
                           )}
                           <button
                             type="button"
@@ -1219,9 +1616,13 @@ export default function AdminOfficesPage() {
                     </div>
                   </td>
                   <td className="p-3 whitespace-nowrap">
-                    <span className={`text-xs px-2 py-0.5 rounded-full ${
-                      office.isActive ? 'bg-emerald-50 text-emerald-700' : 'bg-[var(--border)] text-[var(--muted)]'
-                    }`}>
+                    <span
+                      className={`text-xs px-2 py-0.5 rounded-full ${
+                        office.isActive
+                          ? 'bg-emerald-50 text-emerald-700'
+                          : 'bg-[var(--border)] text-[var(--muted)]'
+                      }`}
+                    >
                       {office.isActive ? 'Активен' : 'Неактивен'}
                     </span>
                   </td>
@@ -1230,7 +1631,11 @@ export default function AdminOfficesPage() {
                       <button
                         type="button"
                         className="p-1.5 rounded-md border border-[var(--border)] hover:bg-[var(--surface-muted)] text-[var(--primary)]"
-                        title={office.tenantId ? 'Сменить арендатора' : 'Назначить арендатора'}
+                        title={
+                          office.tenantId
+                            ? 'Сменить арендатора'
+                            : 'Назначить арендатора'
+                        }
                         onClick={() => startBinding(office)}
                       >
                         <Link2 className="w-4 h-4" />
@@ -1246,10 +1651,16 @@ export default function AdminOfficesPage() {
                       <button
                         type="button"
                         className="p-1.5 rounded-md border border-[var(--border)] hover:bg-[var(--surface-muted)]"
-                        title={office.isActive ? 'Деактивировать' : 'Активировать'}
+                        title={
+                          office.isActive ? 'Деактивировать' : 'Активировать'
+                        }
                         onClick={() => toggleActive(office)}
                       >
-                        {office.isActive ? <X className="w-4 h-4 text-red-500" /> : <Check className="w-4 h-4 text-emerald-600" />}
+                        {office.isActive ? (
+                          <X className="w-4 h-4 text-red-500" />
+                        ) : (
+                          <Check className="w-4 h-4 text-emerald-600" />
+                        )}
                       </button>
                       <button
                         type="button"
@@ -1273,8 +1684,12 @@ export default function AdminOfficesPage() {
             <section key={bc?.id || items[0]?.propertyId} className="card p-5">
               <div className="flex items-start justify-between gap-3 mb-4 pb-3 border-b border-[var(--border)]">
                 <div>
-                  <h3 className="font-semibold">{bc?.name || items[0]?.businessCenterName || 'Без БЦ'}</h3>
-                  {bc?.address && <p className="text-sm text-[var(--muted)]">{bc.address}</p>}
+                  <h3 className="font-semibold">
+                    {bc?.name || items[0]?.businessCenterName || 'Без БЦ'}
+                  </h3>
+                  {bc?.address && (
+                    <p className="text-sm text-[var(--muted)]">{bc.address}</p>
+                  )}
                 </div>
                 <span className="text-xs px-2.5 py-1 rounded-full surface-muted text-[var(--muted)]">
                   {items.length} оф.
@@ -1283,19 +1698,24 @@ export default function AdminOfficesPage() {
 
               <div className="grid sm:grid-cols-2 xl:grid-cols-3 gap-3">
                 {items
-                  .sort((a, b) => a.number.localeCompare(b.number, 'ru', { numeric: true }))
+                  .sort((a, b) =>
+                    a.number.localeCompare(b.number, 'ru', { numeric: true }),
+                  )
                   .map((office) => (
                     <article
                       key={office.id}
                       className={`rounded-xl border p-4 transition-shadow hover:shadow-sm ${
-                        office.isActive ? 'border-[var(--border)] bg-[var(--surface)]' : 'border-[var(--border)] bg-[var(--surface-muted)] opacity-70'
+                        office.isActive
+                          ? 'border-[var(--border)] bg-[var(--surface)]'
+                          : 'border-[var(--border)] bg-[var(--surface-muted)] opacity-70'
                       }`}
                     >
                       <div className="flex items-start justify-between gap-2 mb-3">
                         <div className="min-w-0 flex-1">
                           <div
                             className={
-                              office.number.trim().length > 6 || /\s/.test(office.number)
+                              office.number.trim().length > 6 ||
+                              /\s/.test(office.number)
                                 ? 'text-base sm:text-lg font-bold leading-snug break-words'
                                 : 'text-2xl font-bold font-mono leading-none'
                             }
@@ -1304,12 +1724,18 @@ export default function AdminOfficesPage() {
                             {office.number}
                           </div>
                           {office.floor && (
-                            <div className="text-sm text-[var(--muted)] mt-1">{office.floor} этаж</div>
+                            <div className="text-sm text-[var(--muted)] mt-1">
+                              {office.floor} этаж
+                            </div>
                           )}
                         </div>
-                        <span className={`text-[11px] px-2 py-0.5 rounded-full shrink-0 ${
-                          office.isActive ? 'bg-emerald-50 text-emerald-700' : 'bg-[var(--border)] text-[var(--muted)]'
-                        }`}>
+                        <span
+                          className={`text-[11px] px-2 py-0.5 rounded-full shrink-0 ${
+                            office.isActive
+                              ? 'bg-emerald-50 text-emerald-700'
+                              : 'bg-[var(--border)] text-[var(--muted)]'
+                          }`}
+                        >
                           {office.isActive ? 'Активен' : 'Неактивен'}
                         </span>
                       </div>
@@ -1317,7 +1743,9 @@ export default function AdminOfficesPage() {
                       <div className="space-y-1.5 text-sm mb-4">
                         <div className="flex justify-between gap-2">
                           <span className="text-[var(--muted)]">Компания</span>
-                          <span className="text-right font-medium">{office.company || '—'}</span>
+                          <span className="text-right font-medium">
+                            {office.company || '—'}
+                          </span>
                         </div>
                         {office.areaSqm ? (
                           <div className="flex justify-between gap-2">
@@ -1336,11 +1764,19 @@ export default function AdminOfficesPage() {
                             </span>
                           ) : (
                             <div className="text-right">
-                              <div className={office.tenantName ? 'font-medium' : 'text-[var(--muted)]'}>
+                              <div
+                                className={
+                                  office.tenantName
+                                    ? 'font-medium'
+                                    : 'text-[var(--muted)]'
+                                }
+                              >
                                 {office.tenantName || 'Не назначен'}
                               </div>
                               {office.company && office.tenantName && (
-                                <div className="text-[11px] text-[var(--muted)]">{office.company}</div>
+                                <div className="text-[11px] text-[var(--muted)]">
+                                  {office.company}
+                                </div>
                               )}
                             </div>
                           )}
@@ -1367,10 +1803,16 @@ export default function AdminOfficesPage() {
                         <button
                           type="button"
                           className="p-2 rounded-md border border-[var(--border)] hover:bg-[var(--surface-muted)]"
-                          title={office.isActive ? 'Деактивировать' : 'Активировать'}
+                          title={
+                            office.isActive ? 'Деактивировать' : 'Активировать'
+                          }
                           onClick={() => toggleActive(office)}
                         >
-                          {office.isActive ? <X className="w-4 h-4 text-red-500" /> : <Check className="w-4 h-4 text-emerald-600" />}
+                          {office.isActive ? (
+                            <X className="w-4 h-4 text-red-500" />
+                          ) : (
+                            <Check className="w-4 h-4 text-emerald-600" />
+                          )}
                         </button>
                         <button
                           type="button"

@@ -2,7 +2,14 @@ import { Injectable, Logger } from '@nestjs/common';
 import { InjectModel } from '@nestjs/mongoose';
 import * as bcrypt from 'bcryptjs';
 import { Model, Types } from 'mongoose';
-import { Office, OfficeDocument, Property, PropertyDocument, User, UserDocument } from '../schemas';
+import {
+  Office,
+  OfficeDocument,
+  Property,
+  PropertyDocument,
+  User,
+  UserDocument,
+} from '../schemas';
 import { PropertyType } from '../schemas/enums';
 import { AUTH_CONNECTION } from './auth-database.constants';
 import { DEV_TEST_ACCOUNTS } from './dev-test-accounts';
@@ -20,7 +27,8 @@ export class TestDataSeedService {
   private readonly logger = new Logger(TestDataSeedService.name);
 
   constructor(
-    @InjectModel(User.name, AUTH_CONNECTION) private userModel: Model<UserDocument>,
+    @InjectModel(User.name, AUTH_CONNECTION)
+    private userModel: Model<UserDocument>,
     @InjectModel(Property.name) private propertyModel: Model<PropertyDocument>,
     @InjectModel(Office.name) private officeModel: Model<OfficeDocument>,
   ) {}
@@ -35,8 +43,16 @@ export class TestDataSeedService {
     };
 
     const bcData = [
-      { name: 'БЦ Добрынинский', address: 'Москва, Партийный пер. 1/57, стр. 3', code: 'dobryninsky' },
-      { name: 'БЦ Добрынинский-2', address: 'Москва, Партийный пер. 1/57, стр. 3', code: 'dobryninsky-2' },
+      {
+        name: 'БЦ Добрынинский',
+        address: 'Москва, Партийный пер. 1/57, стр. 3',
+        code: 'dobryninsky',
+      },
+      {
+        name: 'БЦ Добрынинский-2',
+        address: 'Москва, Партийный пер. 1/57, стр. 3',
+        code: 'dobryninsky-2',
+      },
     ];
 
     const bcMap = new Map<string, PropertyDocument>();
@@ -58,8 +74,12 @@ export class TestDataSeedService {
 
     const propertyIds = [...bcMap.values()].map((property) => property._id);
 
-    const tenantAccount = DEV_TEST_ACCOUNTS.find((account) => account.role === 'tenant')!;
-    let tenantUser = await this.userModel.findOne({ email: tenantAccount.email });
+    const tenantAccount = DEV_TEST_ACCOUNTS.find(
+      (account) => account.role === 'tenant',
+    )!;
+    let tenantUser = await this.userModel.findOne({
+      email: tenantAccount.email,
+    });
     if (!tenantUser) {
       tenantUser = await this.userModel.create({
         email: tenantAccount.email,
@@ -77,8 +97,20 @@ export class TestDataSeedService {
     }
 
     const tenantOffices = [
-      { bc: 'dobryninsky', number: '401', floor: '4', areaSqm: 85, company: tenantAccount.company },
-      { bc: 'dobryninsky-2', number: '1201', floor: '12', areaSqm: 120, company: tenantAccount.company },
+      {
+        bc: 'dobryninsky',
+        number: '401',
+        floor: '4',
+        areaSqm: 85,
+        company: tenantAccount.company,
+      },
+      {
+        bc: 'dobryninsky-2',
+        number: '1201',
+        floor: '12',
+        areaSqm: 120,
+        company: tenantAccount.company,
+      },
     ];
 
     for (const officeSpec of tenantOffices) {
@@ -144,13 +176,19 @@ export class TestDataSeedService {
     const offices = await this.officeModel
       .find({ tenantId: new Types.ObjectId(tenantId), isActive: true })
       .lean();
-    const propertyIds = [...new Set(offices.map((office) => office.property.toString()))];
+    const propertyIds = [
+      ...new Set(offices.map((office) => office.property.toString())),
+    ];
     const primary = offices[0];
 
     await this.userModel.findByIdAndUpdate(tenantId, {
       properties: propertyIds.map((id) => new Types.ObjectId(id)),
       ...(primary
-        ? { office: primary.number, floor: primary.floor, company: primary.company }
+        ? {
+            office: primary.number,
+            floor: primary.floor,
+            company: primary.company,
+          }
         : {}),
     });
   }

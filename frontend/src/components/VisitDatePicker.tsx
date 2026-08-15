@@ -9,11 +9,17 @@ interface VisitDatePickerProps {
   invalid?: boolean;
 }
 
-export function VisitDatePicker({ value, bookableDates, onChange, invalid }: VisitDatePickerProps) {
+export function VisitDatePicker({
+  value,
+  bookableDates,
+  onChange,
+  invalid,
+}: VisitDatePickerProps) {
   if (!bookableDates.length) {
     return (
       <p className="text-sm text-[var(--muted)]">
-        Нет доступных дат для заказа. Проверьте настройки выходных дней бизнес-центра.
+        Нет доступных дат для заказа. Проверьте настройки выходных дней
+        бизнес-центра.
       </p>
     );
   }
@@ -40,8 +46,12 @@ export function VisitDatePicker({ value, bookableDates, onChange, invalid }: Vis
               selected
                 ? 'border-[var(--status-approved-border)] bg-[var(--status-approved-soft)]'
                 : 'border-[var(--border)] bg-[var(--surface)] hover:bg-[var(--surface-muted)]',
-              invalid && !selected ? 'border-[var(--status-rejected-border)]' : '',
-            ].filter(Boolean).join(' ')}
+              invalid && !selected
+                ? 'border-[var(--status-rejected-border)]'
+                : '',
+            ]
+              .filter(Boolean)
+              .join(' ')}
           >
             <div className="text-[10px] sm:text-[11px] uppercase tracking-wide text-[var(--muted)] truncate">
               {chip.month}

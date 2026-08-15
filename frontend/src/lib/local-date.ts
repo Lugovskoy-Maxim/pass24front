@@ -14,10 +14,15 @@ export function isValidVisitDateString(value: string): boolean {
   if (!DATE_RE.test(value)) return false;
   const [y, m, d] = value.split('-').map(Number);
   const dt = new Date(y, m - 1, d);
-  return dt.getFullYear() === y && dt.getMonth() === m - 1 && dt.getDate() === d;
+  return (
+    dt.getFullYear() === y && dt.getMonth() === m - 1 && dt.getDate() === d
+  );
 }
 
-export function isPastVisitDate(value: string, today = getLocalDateString()): boolean {
+export function isPastVisitDate(
+  value: string,
+  today = getLocalDateString(),
+): boolean {
   if (!isValidVisitDateString(value)) return true;
   return value < today;
 }
@@ -29,14 +34,20 @@ export function addDays(dateStr: string, days: number): string {
   return getLocalDateString(dt);
 }
 
-export function getMaxVisitDate(maxDaysAhead = 1, today = getLocalDateString()): string {
+export function getMaxVisitDate(
+  maxDaysAhead = 1,
+  today = getLocalDateString(),
+): string {
   return addDays(today, maxDaysAhead);
 }
 
 /**
  * Дата для карточек: «сегодня, 27 июля», «завтра, 28 июля (вт)», «3 августа (пн)».
  */
-export function formatVisitDateLabel(dateStr: string, today = getLocalDateString()): string {
+export function formatVisitDateLabel(
+  dateStr: string,
+  today = getLocalDateString(),
+): string {
   if (!dateStr || !isValidVisitDateString(dateStr)) return dateStr || '';
   const [y, m, d] = dateStr.split('-').map(Number);
   const dt = new Date(y, m - 1, d);
@@ -57,7 +68,10 @@ export function formatVisitDateLabel(dateStr: string, today = getLocalDateString
 }
 
 /** «10:00–12:00» / «с 10:00» */
-export function formatVisitTimeWindow(from?: string, to?: string): string | null {
+export function formatVisitTimeWindow(
+  from?: string,
+  to?: string,
+): string | null {
   if (!from?.trim()) return null;
   const f = from.trim();
   const t = to?.trim();
@@ -72,7 +86,8 @@ export function validateVisitDate(
 ): string | undefined {
   if (!value?.trim()) return 'Укажите дату визита';
   if (!isValidVisitDateString(value)) return 'Некорректная дата';
-  if (isPastVisitDate(value, today)) return 'Нельзя заказать пропуск на прошедшую дату';
+  if (isPastVisitDate(value, today))
+    return 'Нельзя заказать пропуск на прошедшую дату';
   if (value > getMaxVisitDate(maxDaysAhead, today)) {
     return maxDaysAhead === 1
       ? 'Можно заказать пропуск только на сегодня или завтра'

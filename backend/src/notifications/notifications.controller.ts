@@ -1,4 +1,13 @@
-import { Body, Controller, Delete, Get, Headers, Post, Req, UseGuards } from '@nestjs/common';
+import {
+  Body,
+  Controller,
+  Delete,
+  Get,
+  Headers,
+  Post,
+  Req,
+  UseGuards,
+} from '@nestjs/common';
 import { AuthGuard } from '@nestjs/passport';
 import { RemovePushSubscriptionDto } from './dto/remove-push-subscription.dto';
 import { SavePushSubscriptionDto } from './dto/save-push-subscription.dto';
@@ -16,7 +25,11 @@ export class NotificationsController {
 
   @UseGuards(AuthGuard('jwt'))
   @Post('subscriptions')
-  subscribe(@Req() req: any, @Body() dto: SavePushSubscriptionDto, @Headers('user-agent') userAgent?: string) {
+  subscribe(
+    @Req() req: any,
+    @Body() dto: SavePushSubscriptionDto,
+    @Headers('user-agent') userAgent?: string,
+  ) {
     return this.notifications.saveSubscription(req.user.userId, dto, userAgent);
   }
 

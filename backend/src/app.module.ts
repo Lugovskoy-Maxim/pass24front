@@ -31,10 +31,14 @@ import { NotificationsModule } from './notifications/notifications.module';
       envFilePath: '.env',
       validate: (env: Record<string, string>) => {
         if (!env.MONGODB_URI) {
-          console.warn('⚠️  MONGODB_URI not set — using default or will fail at runtime');
+          console.warn(
+            '⚠️  MONGODB_URI not set — using default or will fail at runtime',
+          );
         }
         if (!env.MONGODB_AUTH_URI) {
-          console.log('ℹ️  MONGODB_AUTH_URI not set — using pass24_auth on the same MongoDB host');
+          console.log(
+            'ℹ️  MONGODB_AUTH_URI not set — using pass24_auth on the same MongoDB host',
+          );
         }
         return env;
       },

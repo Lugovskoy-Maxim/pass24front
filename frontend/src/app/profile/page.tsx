@@ -5,12 +5,32 @@
  * управление сотрудниками (owner only): add / toggle isActive / hard delete.
  * Сотрудник всегда создаётся как tenant_employee — без выбора роли.
  */
-import { ChangeEvent, FormEvent, useCallback, useEffect, useState } from 'react';
-import { Building2, CheckCircle2, Clock, Mail, Phone, Shield, User as UserIcon, UserPlus, Users } from 'lucide-react';
+import {
+  ChangeEvent,
+  FormEvent,
+  useCallback,
+  useEffect,
+  useState,
+} from 'react';
+import {
+  Building2,
+  CheckCircle2,
+  Clock,
+  Mail,
+  Phone,
+  Shield,
+  User as UserIcon,
+  UserPlus,
+  Users,
+} from 'lucide-react';
 import { ProtectedLayout } from '@/components/ProtectedLayout';
 import { PersonNameFields } from '@/components/PersonNameFields';
 import { FormField, FormInput } from '@/components/FormField';
-import { FieldErrors, hasFieldErrors, validateProfileForm } from '@/lib/form-validation';
+import {
+  FieldErrors,
+  hasFieldErrors,
+  validateProfileForm,
+} from '@/lib/form-validation';
 import { useToast } from '@/components/Toast';
 import { useAuth } from '@/lib/auth';
 import {
@@ -67,7 +87,11 @@ export default function ProfilePage() {
   const { toast } = useToast();
   const config = useConfig();
   const ph = getUiLabels(config).placeholders;
-  const [nameParts, setNameParts] = useState<PersonNameParts>({ lastName: '', firstName: '', middleName: '' });
+  const [nameParts, setNameParts] = useState<PersonNameParts>({
+    lastName: '',
+    firstName: '',
+    middleName: '',
+  });
   const [phone, setPhone] = useState('');
   const [company, setCompany] = useState('');
   const [saving, setSaving] = useState(false);
@@ -76,16 +100,28 @@ export default function ProfilePage() {
   const [employees, setEmployees] = useState<TenantEmployee[]>([]);
   const [employeesLoading, setEmployeesLoading] = useState(false);
   const [employeeSaving, setEmployeeSaving] = useState(false);
-  const [removingEmployeeId, setRemovingEmployeeId] = useState<string | null>(null);
-  const [togglingEmployeeId, setTogglingEmployeeId] = useState<string | null>(null);
-  const [employeeNameParts, setEmployeeNameParts] = useState<PersonNameParts>({ lastName: '', firstName: '', middleName: '' });
+  const [removingEmployeeId, setRemovingEmployeeId] = useState<string | null>(
+    null,
+  );
+  const [togglingEmployeeId, setTogglingEmployeeId] = useState<string | null>(
+    null,
+  );
+  const [employeeNameParts, setEmployeeNameParts] = useState<PersonNameParts>({
+    lastName: '',
+    firstName: '',
+    middleName: '',
+  });
   const [employeeEmail, setEmployeeEmail] = useState('');
   const [employeePhone, setEmployeePhone] = useState('');
-  const [emailVerifyStep, setEmailVerifyStep] = useState<'idle' | 'code'>('idle');
+  const [emailVerifyStep, setEmailVerifyStep] = useState<'idle' | 'code'>(
+    'idle',
+  );
   const [emailVerifyCode, setEmailVerifyCode] = useState('');
   const [emailVerifyLoading, setEmailVerifyLoading] = useState(false);
   const [emailVerifyResendIn, setEmailVerifyResendIn] = useState(0);
-  const [resendingInviteId, setResendingInviteId] = useState<string | null>(null);
+  const [resendingInviteId, setResendingInviteId] = useState<string | null>(
+    null,
+  );
   const [logoSaving, setLogoSaving] = useState(false);
 
   const tenantOwner = isTenantOwner(user);
@@ -115,42 +151,60 @@ export default function ProfilePage() {
     setCompany((pending?.company ?? user.company) || '');
   }, [user, pending]);
 
-  const loadEmployees = useCallback((options?: { silent?: boolean }) => {
-    if (!tenantOwner) return Promise.resolve();
-    const silent = options?.silent;
-    if (!silent) setEmployeesLoading(true);
-    return api.getTenantEmployees()
-      .then(({ employees: list }) => {
-        setEmployees(list);
-      })
-      .catch(() => setEmployees([]))
-      .finally(() => {
-        if (!silent) setEmployeesLoading(false);
-      });
-  }, [tenantOwner]);
+  const loadEmployees = useCallback(
+    (options?: { silent?: boolean }) => {
+      if (!tenantOwner) return Promise.resolve();
+      const silent = options?.silent;
+      if (!silent) setEmployeesLoading(true);
+      return api
+        .getTenantEmployees()
+        .then(({ employees: list }) => {
+          setEmployees(list);
+        })
+        .catch(() => setEmployees([]))
+        .finally(() => {
+          if (!silent) setEmployeesLoading(false);
+        });
+    },
+    [tenantOwner],
+  );
 
   useEffect(() => {
     void loadEmployees();
   }, [loadEmployees]);
 
-  useAutoRefresh(() => loadEmployees({ silent: true }), { enabled: tenantOwner && !employeeSaving });
+  useAutoRefresh(() => loadEmployees({ silent: true }), {
+    enabled: tenantOwner && !employeeSaving,
+  });
 
   useEffect(() => {
     if (emailVerifyResendIn <= 0) return;
-    const timer = window.setTimeout(() => setEmailVerifyResendIn((prev) => prev - 1), 1000);
+    const timer = window.setTimeout(
+      () => setEmailVerifyResendIn((prev) => prev - 1),
+      1000,
+    );
     return () => window.clearTimeout(timer);
   }, [emailVerifyResendIn]);
 
   // Нельзя return null до ProtectedLayout — иначе не сработает редирект на /login
   if (!user) {
-    return <ProtectedLayout><div className="animate-pulse text-[var(--muted)]">Загрузка…</div></ProtectedLayout>;
+    return (
+      <ProtectedLayout>
+        <div className="animate-pulse text-[var(--muted)]">Загрузка…</div>
+      </ProtectedLayout>
+    );
   }
 
   const needsEmailVerification = !!user.email && !user.email_verified;
 
-  const currentName = user.last_name || user.first_name
-    ? { lastName: user.last_name || '', firstName: user.first_name || '', middleName: user.middle_name || '' }
-    : splitFullName(user.full_name);
+  const currentName =
+    user.last_name || user.first_name
+      ? {
+          lastName: user.last_name || '',
+          firstName: user.first_name || '',
+          middleName: user.middle_name || '',
+        }
+      : splitFullName(user.full_name);
 
   const clearFieldError = (field: string) => {
     setFieldErrors((prev) => {
@@ -230,7 +284,10 @@ export default function ProfilePage() {
   const handleAddEmployee = async (e: FormEvent) => {
     e.preventDefault();
     if (employees.length >= MAX_TENANT_EMPLOYEES) {
-      toast(`В компании можно добавить не более ${MAX_TENANT_EMPLOYEES} сотрудников`, 'error');
+      toast(
+        `В компании можно добавить не более ${MAX_TENANT_EMPLOYEES} сотрудников`,
+        'error',
+      );
       return;
     }
     const errors = validateProfileForm(employeeNameParts);
@@ -263,7 +320,9 @@ export default function ProfilePage() {
     setResendingInviteId(id);
     try {
       const { employee, message } = await api.resendTenantEmployeeInvite(id);
-      setEmployees((prev) => prev.map((e) => (e.id === id ? { ...e, ...employee } : e)));
+      setEmployees((prev) =>
+        prev.map((e) => (e.id === id ? { ...e, ...employee } : e)),
+      );
       toast(message, 'success');
     } catch (err) {
       toast(getErrorMessage(err, 'Не удалось отправить приглашение'), 'error');
@@ -275,8 +334,13 @@ export default function ProfilePage() {
   const handleToggleEmployee = async (id: string, isActive: boolean) => {
     setTogglingEmployeeId(id);
     try {
-      const { employee, message } = await api.setTenantEmployeeActive(id, isActive);
-      setEmployees((prev) => prev.map((e) => (e.id === id ? { ...e, ...employee } : e)));
+      const { employee, message } = await api.setTenantEmployeeActive(
+        id,
+        isActive,
+      );
+      setEmployees((prev) =>
+        prev.map((e) => (e.id === id ? { ...e, ...employee } : e)),
+      );
       toast(message, 'success');
     } catch (err) {
       toast(getErrorMessage(err, 'Не удалось выполнить действие'), 'error');
@@ -372,9 +436,12 @@ export default function ProfilePage() {
             <div className="flex items-start gap-3">
               <Clock className="w-5 h-5 text-amber-700 shrink-0 mt-0.5" />
               <div className="text-sm">
-                <p className="font-medium text-amber-900">Ожидает подтверждения администратора</p>
+                <p className="font-medium text-amber-900">
+                  Ожидает подтверждения администратора
+                </p>
                 <p className="text-amber-800 mt-1">
-                  Заявка от {new Date(pending.requested_at).toLocaleString('ru-RU')}
+                  Заявка от{' '}
+                  {new Date(pending.requested_at).toLocaleString('ru-RU')}
                 </p>
                 <p className="text-amber-800 mt-2">
                   Запрошено: <strong>{pending.full_name}</strong>
@@ -397,39 +464,76 @@ export default function ProfilePage() {
         <div className="card p-6 space-y-4 mb-6">
           {tenantCompanyUser && (
             <div className="flex items-center gap-4 pb-4 border-b border-[var(--border)]">
-              <div className={`w-20 h-20 overflow-hidden flex items-center justify-center shrink-0 ${user.company_logo ? '' : 'rounded-xl border border-dashed border-[var(--border)] bg-[var(--surface-muted)]'}`}>
+              <div
+                className={`w-20 h-20 overflow-hidden flex items-center justify-center shrink-0 ${user.company_logo ? '' : 'rounded-xl border border-dashed border-[var(--border)] bg-[var(--surface-muted)]'}`}
+              >
                 {user.company_logo ? (
                   // eslint-disable-next-line @next/next/no-img-element
-                  <img src={user.company_logo} alt={user.company || 'Логотип'} className="w-full h-full object-contain" />
+                  <img
+                    src={user.company_logo}
+                    alt={user.company || 'Логотип'}
+                    className="w-full h-full object-contain"
+                  />
                 ) : (
                   <Building2 className="w-8 h-8 text-[var(--muted)]" />
                 )}
               </div>
               <div className="min-w-0 flex-1">
-                <div className="text-xs text-[var(--muted)]">Логотип компании</div>
-                <div className="font-medium truncate">{user.company || 'Без названия'}</div>
+                <div className="text-xs text-[var(--muted)]">
+                  Логотип компании
+                </div>
+                <div className="font-medium truncate">
+                  {user.company || 'Без названия'}
+                </div>
                 {tenantOwner && (
                   <div className="flex flex-wrap gap-2 mt-2">
-                    <label className={`btn btn-secondary text-xs cursor-pointer ${logoSaving ? 'opacity-60 pointer-events-none' : ''}`}>
-                      {logoSaving ? 'Сохранение…' : user.company_logo ? 'Заменить' : 'Загрузить'}
-                      <input type="file" accept="image/*" className="sr-only" disabled={logoSaving} onChange={handleCompanyLogoUpload} />
+                    <label
+                      className={`btn btn-secondary text-xs cursor-pointer ${logoSaving ? 'opacity-60 pointer-events-none' : ''}`}
+                    >
+                      {logoSaving
+                        ? 'Сохранение…'
+                        : user.company_logo
+                          ? 'Заменить'
+                          : 'Загрузить'}
+                      <input
+                        type="file"
+                        accept="image/*"
+                        className="sr-only"
+                        disabled={logoSaving}
+                        onChange={handleCompanyLogoUpload}
+                      />
                     </label>
                     {user.company_logo ? (
-                      <button type="button" className="btn btn-secondary text-xs" disabled={logoSaving} onClick={() => void handleRemoveCompanyLogo()}>
+                      <button
+                        type="button"
+                        className="btn btn-secondary text-xs"
+                        disabled={logoSaving}
+                        onClick={() => void handleRemoveCompanyLogo()}
+                      >
                         Убрать
                       </button>
                     ) : null}
                   </div>
                 )}
                 {tenantOwner && (
-                  <p className="text-[11px] text-[var(--muted)] mt-1">До 80 КБ. Показывается на пропусках вашей компании</p>
+                  <p className="text-[11px] text-[var(--muted)] mt-1">
+                    До 80 КБ. Показывается на пропусках вашей компании
+                  </p>
                 )}
               </div>
             </div>
           )}
-          <ProfileInfoRow icon={UserIcon} label="ФИО" value={buildFullName(currentName)} />
+          <ProfileInfoRow
+            icon={UserIcon}
+            label="ФИО"
+            value={buildFullName(currentName)}
+          />
           {(user.email || user.username) && (
-            <ProfileInfoRow icon={Mail} label={user.email ? 'Email' : 'Логин'} value={user.email || user.username || ''} />
+            <ProfileInfoRow
+              icon={Mail}
+              label={user.email ? 'Email' : 'Логин'}
+              value={user.email || user.username || ''}
+            />
           )}
           {user.email && (
             <div className="flex items-start gap-3 text-sm">
@@ -437,20 +541,44 @@ export default function ProfilePage() {
                 className={`w-4 h-4 shrink-0 mt-0.5 ${user.email_verified ? 'text-[var(--status-active)]' : 'text-[var(--muted)]'}`}
               />
               <div className="min-w-0">
-                <div className="text-xs text-[var(--muted)]">Почта подтверждена</div>
-                <div className={`font-medium ${user.email_verified ? 'text-[var(--status-active)]' : ''}`}>
+                <div className="text-xs text-[var(--muted)]">
+                  Почта подтверждена
+                </div>
+                <div
+                  className={`font-medium ${user.email_verified ? 'text-[var(--status-active)]' : ''}`}
+                >
                   {user.email_verified ? 'Да' : 'Нет'}
                 </div>
               </div>
             </div>
           )}
-          <ProfileInfoRow icon={Shield} label="Роль" value={getUserRoleLabel(user)} />
-          {user.company && <ProfileInfoRow icon={Building2} label="Компания" value={user.company} />}
-          {user.phone && <ProfileInfoRow icon={Phone} label="Телефон" value={user.phone} />}
+          <ProfileInfoRow
+            icon={Shield}
+            label="Роль"
+            value={getUserRoleLabel(user)}
+          />
+          {user.company && (
+            <ProfileInfoRow
+              icon={Building2}
+              label="Компания"
+              value={user.company}
+            />
+          )}
+          {user.phone && (
+            <ProfileInfoRow icon={Phone} label="Телефон" value={user.phone} />
+          )}
           {user.offices?.length ? (
-            <ProfileInfoRow icon={Building2} label="Офисы" value={formatTenantOffices(user.offices)} />
+            <ProfileInfoRow
+              icon={Building2}
+              label="Офисы"
+              value={formatTenantOffices(user.offices)}
+            />
           ) : user.office ? (
-            <ProfileInfoRow icon={Building2} label="Офис" value={`оф. ${user.office}${user.floor ? `, ${user.floor} эт.` : ''}`} />
+            <ProfileInfoRow
+              icon={Building2}
+              label="Офис"
+              value={`оф. ${user.office}${user.floor ? `, ${user.floor} эт.` : ''}`}
+            />
           ) : null}
         </div>
 
@@ -461,8 +589,8 @@ export default function ProfilePage() {
               <div className="min-w-0">
                 <p className="font-medium text-amber-950">Подтвердите email</p>
                 <p className="text-sm text-amber-900/85 mt-1">
-                  Адрес <strong className="break-all">{user.email}</strong> ещё не подтверждён.
-                  Мы отправим 6-значный код на эту почту.
+                  Адрес <strong className="break-all">{user.email}</strong> ещё
+                  не подтверждён. Мы отправим 6-значный код на эту почту.
                 </p>
               </div>
             </div>
@@ -481,23 +609,36 @@ export default function ProfilePage() {
                     : 'Подтвердить почту'}
               </button>
             ) : (
-              <form onSubmit={handleConfirmEmailCode} className="space-y-3" noValidate>
+              <form
+                onSubmit={handleConfirmEmailCode}
+                className="space-y-3"
+                noValidate
+              >
                 <FormField id="emailVerifyCode" label="Код из письма" required>
                   <FormInput
                     id="emailVerifyCode"
                     inputMode="numeric"
                     autoComplete="one-time-code"
                     value={emailVerifyCode}
-                    onChange={(e) => setEmailVerifyCode(e.target.value.replace(/\D/g, '').slice(0, 6))}
+                    onChange={(e) =>
+                      setEmailVerifyCode(
+                        e.target.value.replace(/\D/g, '').slice(0, 6),
+                      )
+                    }
                     placeholder={ph.verificationCode}
                     className="tracking-[0.3em] text-center text-lg font-mono max-w-[12rem]"
                   />
                 </FormField>
                 <p className="text-xs text-[var(--muted)]">
-                  Код действует 15 минут. Проверьте папку «Спам», если письма нет.
+                  Код действует 15 минут. Проверьте папку «Спам», если письма
+                  нет.
                 </p>
                 <div className="flex flex-wrap gap-2">
-                  <button type="submit" className="btn btn-primary text-sm" disabled={emailVerifyLoading}>
+                  <button
+                    type="submit"
+                    className="btn btn-primary text-sm"
+                    disabled={emailVerifyLoading}
+                  >
                     {emailVerifyLoading ? 'Проверка...' : 'Подтвердить код'}
                   </button>
                   <button
@@ -528,7 +669,11 @@ export default function ProfilePage() {
         )}
 
         {tenantOwner ? (
-          <form onSubmit={handleSubmit} className="card p-6 space-y-5" noValidate>
+          <form
+            onSubmit={handleSubmit}
+            className="card p-6 space-y-5"
+            noValidate
+          >
             <div>
               <h2 className="font-semibold mb-1">Запросить изменения</h2>
               <p className="text-sm text-[var(--muted)]">
@@ -546,24 +691,42 @@ export default function ProfilePage() {
 
             <div className="form-grid-2">
               <FormField id="phone" label="Телефон">
-                <FormInput id="phone" type="tel" value={phone} onChange={(e) => setPhone(e.target.value)} placeholder={ph.phone} />
+                <FormInput
+                  id="phone"
+                  type="tel"
+                  value={phone}
+                  onChange={(e) => setPhone(e.target.value)}
+                  placeholder={ph.phone}
+                />
               </FormField>
               <FormField id="company" label="Компания">
-                <FormInput id="company" value={company} onChange={(e) => setCompany(e.target.value)} placeholder={ph.company} />
+                <FormInput
+                  id="company"
+                  value={company}
+                  onChange={(e) => setCompany(e.target.value)}
+                  placeholder={ph.company}
+                />
               </FormField>
             </div>
 
             <button type="submit" className="btn btn-primary" disabled={saving}>
-              {saving ? 'Отправка...' : pending ? 'Обновить заявку' : 'Отправить на подтверждение'}
+              {saving
+                ? 'Отправка...'
+                : pending
+                  ? 'Обновить заявку'
+                  : 'Отправить на подтверждение'}
             </button>
           </form>
         ) : tenantEmployee ? (
           <div className="card p-5 text-sm text-[var(--muted)]">
-            Изменение профиля недоступно для сотрудников компании. Обратитесь к владельцу аккаунта арендатора.
+            Изменение профиля недоступно для сотрудников компании. Обратитесь к
+            владельцу аккаунта арендатора.
           </div>
         ) : !tenantCompanyUser ? (
           <div className="card p-5 text-sm text-[var(--muted)]">
-            Редактирование профиля доступно арендаторам. Сотрудники БЦ и администраторы могут изменить данные через раздел «Пользователи» в админке.
+            Редактирование профиля доступно арендаторам. Сотрудники БЦ и
+            администраторы могут изменить данные через раздел «Пользователи» в
+            админке.
           </div>
         ) : null}
 
@@ -574,23 +737,26 @@ export default function ProfilePage() {
               <div>
                 <h2 className="font-semibold">Сотрудники компании</h2>
                 <p className="text-sm text-[var(--muted)] mt-1">
-                  Укажите email — сотруднику придёт ссылка (72 часа), он сам задаст пароль.
-                  Сотрудники видят все пропуска {user.company || 'компании'}.
-                  Максимум {MAX_TENANT_EMPLOYEES} сотрудника ({employees.length}/{MAX_TENANT_EMPLOYEES}).
+                  Укажите email — сотруднику придёт ссылка (72 часа), он сам
+                  задаст пароль. Сотрудники видят все пропуска{' '}
+                  {user.company || 'компании'}. Максимум {MAX_TENANT_EMPLOYEES}{' '}
+                  сотрудника ({employees.length}/{MAX_TENANT_EMPLOYEES}).
                 </p>
               </div>
             </div>
 
             {employeesLoading ? (
-              <p className="text-sm text-[var(--muted)] animate-pulse">Загрузка...</p>
+              <p className="text-sm text-[var(--muted)] animate-pulse">
+                Загрузка...
+              </p>
             ) : employees.length > 0 ? (
               <ul className="divide-y divide-[var(--border)] border border-[var(--border)] rounded-lg">
                 {employees.map((employee) => {
                   const pending = !!employee.invite_pending;
                   const busy =
-                    removingEmployeeId === employee.id
-                    || togglingEmployeeId === employee.id
-                    || resendingInviteId === employee.id;
+                    removingEmployeeId === employee.id ||
+                    togglingEmployeeId === employee.id ||
+                    resendingInviteId === employee.id;
                   const statusLabel = pending
                     ? 'ожидает'
                     : employee.is_active
@@ -602,17 +768,26 @@ export default function ProfilePage() {
                       ? 'bg-emerald-50 text-emerald-700'
                       : 'bg-slate-100 text-slate-600';
                   return (
-                    <li key={employee.id} className="flex flex-col sm:flex-row sm:items-center justify-between gap-3 px-4 py-3 text-sm">
+                    <li
+                      key={employee.id}
+                      className="flex flex-col sm:flex-row sm:items-center justify-between gap-3 px-4 py-3 text-sm"
+                    >
                       <div className="min-w-0">
                         <div className="font-medium flex flex-wrap items-center gap-2">
                           {employee.full_name}
-                          <span className={`text-[10px] px-1.5 py-0.5 rounded-full ${statusClass}`}>
+                          <span
+                            className={`text-[10px] px-1.5 py-0.5 rounded-full ${statusClass}`}
+                          >
                             {statusLabel}
                           </span>
                         </div>
-                        <div className="text-[var(--muted)] truncate">{employee.email}</div>
+                        <div className="text-[var(--muted)] truncate">
+                          {employee.email}
+                        </div>
                         {employee.role_label && (
-                          <div className="text-xs text-[var(--muted)] mt-0.5">{employee.role_label}</div>
+                          <div className="text-xs text-[var(--muted)] mt-0.5">
+                            {employee.role_label}
+                          </div>
                         )}
                         {pending && (
                           <div className="text-xs text-amber-800/90 mt-1">
@@ -628,7 +803,9 @@ export default function ProfilePage() {
                             disabled={busy}
                             onClick={() => void handleResendInvite(employee.id)}
                           >
-                            {resendingInviteId === employee.id ? 'Отправка…' : 'Отправить снова'}
+                            {resendingInviteId === employee.id
+                              ? 'Отправка…'
+                              : 'Отправить снова'}
                           </button>
                         )}
                         {!pending && (
@@ -636,7 +813,12 @@ export default function ProfilePage() {
                             type="button"
                             className="btn btn-secondary text-xs"
                             disabled={busy}
-                            onClick={() => void handleToggleEmployee(employee.id, !employee.is_active)}
+                            onClick={() =>
+                              void handleToggleEmployee(
+                                employee.id,
+                                !employee.is_active,
+                              )
+                            }
                           >
                             {togglingEmployeeId === employee.id
                               ? 'Сохранение...'
@@ -649,9 +831,16 @@ export default function ProfilePage() {
                           type="button"
                           className="btn btn-danger text-xs"
                           disabled={busy}
-                          onClick={() => void handleRemoveEmployee(employee.id, employee.full_name)}
+                          onClick={() =>
+                            void handleRemoveEmployee(
+                              employee.id,
+                              employee.full_name,
+                            )
+                          }
                         >
-                          {removingEmployeeId === employee.id ? 'Удаление...' : 'Удалить'}
+                          {removingEmployeeId === employee.id
+                            ? 'Удаление...'
+                            : 'Удалить'}
                         </button>
                       </div>
                     </li>
@@ -659,16 +848,22 @@ export default function ProfilePage() {
                 })}
               </ul>
             ) : (
-              <p className="text-sm text-[var(--muted)]">Пока нет добавленных сотрудников</p>
+              <p className="text-sm text-[var(--muted)]">
+                Пока нет добавленных сотрудников
+              </p>
             )}
 
             {employees.length >= MAX_TENANT_EMPLOYEES ? (
               <div className="border-t border-[var(--border)] pt-5 text-sm text-[var(--muted)]">
-                Достигнут лимит: не более {MAX_TENANT_EMPLOYEES} сотрудников в компании.
-                Чтобы добавить нового, удалите одного из текущих.
+                Достигнут лимит: не более {MAX_TENANT_EMPLOYEES} сотрудников в
+                компании. Чтобы добавить нового, удалите одного из текущих.
               </div>
             ) : (
-              <form onSubmit={handleAddEmployee} className="border-t border-[var(--border)] pt-5 space-y-4" noValidate>
+              <form
+                onSubmit={handleAddEmployee}
+                className="border-t border-[var(--border)] pt-5 space-y-4"
+                noValidate
+              >
                 <div className="flex items-center gap-2 text-sm font-medium">
                   <UserPlus className="w-4 h-4" />
                   Пригласить сотрудника
@@ -681,12 +876,21 @@ export default function ProfilePage() {
                   onClearError={clearFieldError}
                 />
                 <div className="form-grid-2">
-                  <FormField id="employeeEmail" label="Email" required error={fieldErrors.email} hint="На этот адрес уйдёт ссылка">
+                  <FormField
+                    id="employeeEmail"
+                    label="Email"
+                    required
+                    error={fieldErrors.email}
+                    hint="На этот адрес уйдёт ссылка"
+                  >
                     <FormInput
                       id="employeeEmail"
                       type="email"
                       value={employeeEmail}
-                      onChange={(e) => { setEmployeeEmail(e.target.value); clearFieldError('email'); }}
+                      onChange={(e) => {
+                        setEmployeeEmail(e.target.value);
+                        clearFieldError('email');
+                      }}
                       invalid={!!fieldErrors.email}
                       placeholder={ph.employeeEmail}
                     />
@@ -701,7 +905,11 @@ export default function ProfilePage() {
                     />
                   </FormField>
                 </div>
-                <button type="submit" className="btn btn-primary" disabled={employeeSaving}>
+                <button
+                  type="submit"
+                  className="btn btn-primary"
+                  disabled={employeeSaving}
+                >
                   {employeeSaving ? 'Отправка…' : 'Отправить приглашение'}
                 </button>
               </form>

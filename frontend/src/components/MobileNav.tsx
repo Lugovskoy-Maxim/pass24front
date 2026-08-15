@@ -9,7 +9,13 @@ import { usePathname } from 'next/navigation';
 import { List, Plus, ClipboardList, User, Settings } from 'lucide-react';
 import { useAuth } from '@/lib/auth';
 import { useConfig } from '@/hooks/useConfig';
-import { canOrderPasses, canUseReception, canViewPasses, getHomePath, hasPermission } from '@/lib/permissions';
+import {
+  canOrderPasses,
+  canUseReception,
+  canViewPasses,
+  getHomePath,
+  hasPermission,
+} from '@/lib/permissions';
 import { getUiLabels } from '@/lib/ui-labels';
 
 export function MobileNav() {
@@ -23,20 +29,45 @@ export function MobileNav() {
   const homePath = getHomePath(user);
 
   const items = [
-    { href: '/passes', label: L.nav.passes, icon: List, show: canViewPasses(user) },
-    { href: '/passes/new', label: L.nav.orderPass, icon: Plus, show: canOrderPasses(user), accent: true },
-    { href: '/control', label: L.nav.reception, icon: ClipboardList, show: canUseReception(user) },
+    {
+      href: '/passes',
+      label: L.nav.passes,
+      icon: List,
+      show: canViewPasses(user),
+    },
+    {
+      href: '/passes/new',
+      label: L.nav.orderPass,
+      icon: Plus,
+      show: canOrderPasses(user),
+      accent: true,
+    },
+    {
+      href: '/control',
+      label: L.nav.reception,
+      icon: ClipboardList,
+      show: canUseReception(user),
+    },
     { href: '/profile', label: L.nav.profile, icon: User, show: true },
-    { href: '/admin', label: L.nav.admin, icon: Settings, show: hasPermission(user, 'admin.panel') },
-  ].filter((i) => i.show).slice(0, 5);
+    {
+      href: '/admin',
+      label: L.nav.admin,
+      icon: Settings,
+      show: hasPermission(user, 'admin.panel'),
+    },
+  ]
+    .filter((i) => i.show)
+    .slice(0, 5);
 
   return (
     <nav className="mobile-nav" aria-label="Основное меню">
       {items.map(({ href, label, icon: Icon, accent }) => {
         const active =
-          pathname === href
-          || (href !== '/admin' && href !== homePath && pathname.startsWith(href))
-          || (href === '/admin' && pathname.startsWith('/admin'));
+          pathname === href ||
+          (href !== '/admin' &&
+            href !== homePath &&
+            pathname.startsWith(href)) ||
+          (href === '/admin' && pathname.startsWith('/admin'));
         return (
           <Link
             key={href}

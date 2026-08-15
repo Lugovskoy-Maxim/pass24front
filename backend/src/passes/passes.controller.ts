@@ -1,4 +1,16 @@
-import { Body, Controller, Get, HttpCode, Param, Patch, Post, Query, Req, Res, UseGuards } from '@nestjs/common';
+import {
+  Body,
+  Controller,
+  Get,
+  HttpCode,
+  Param,
+  Patch,
+  Post,
+  Query,
+  Req,
+  Res,
+  UseGuards,
+} from '@nestjs/common';
 import type { Response } from 'express';
 import { AuthGuard } from '@nestjs/passport';
 import { RequirePermissions } from '../auth/permissions.decorator';
@@ -19,7 +31,14 @@ export class PassesController {
   @Get()
   @RequirePermissions('passes.view_own', 'passes.view_all', 'admin.panel')
   findAll(
-    @Query() query: { status?: string; date?: string; search?: string; limit?: string; offset?: string },
+    @Query()
+    query: {
+      status?: string;
+      date?: string;
+      search?: string;
+      limit?: string;
+      offset?: string;
+    },
     @Req() req: any,
   ) {
     return this.passesService.findAll(query, req.user);
@@ -73,11 +92,16 @@ export class PassesController {
 
   @Get('export')
   @RequirePermissions('passes.view_own', 'passes.view_all', 'admin.panel')
-  async exportPasses(@Query() query: PassExportQueryDto, @Req() req: any, @Res() res: Response) {
+  async exportPasses(
+    @Query() query: PassExportQueryDto,
+    @Req() req: any,
+    @Res() res: Response,
+  ) {
     const csv = await this.passesService.exportCsv(query, req.user);
-    const datePart = query.dateFrom && query.dateTo
-      ? `${query.dateFrom}_${query.dateTo}`
-      : query.date || new Date().toISOString().slice(0, 10);
+    const datePart =
+      query.dateFrom && query.dateTo
+        ? `${query.dateFrom}_${query.dateTo}`
+        : query.date || new Date().toISOString().slice(0, 10);
     const filename = `passes-${datePart}.csv`;
     res.setHeader('Content-Type', 'text/csv; charset=utf-8');
     res.setHeader('Content-Disposition', `attachment; filename="${filename}"`);
@@ -104,20 +128,32 @@ export class PassesController {
 
   @Patch(':id/status')
   @RequirePermissions('passes.approve', 'passes.create', 'passes.reception')
-  updateStatus(@Param('id') id: string, @Body() dto: UpdateStatusDto, @Req() req: any) {
+  updateStatus(
+    @Param('id') id: string,
+    @Body() dto: UpdateStatusDto,
+    @Req() req: any,
+  ) {
     return this.passesService.updateStatus(id, dto, req.user);
   }
 
   @Patch(':id/visitor-data')
   @RequirePermissions('passes.reception', 'passes.approve', 'admin.panel')
-  updateVisitorData(@Param('id') id: string, @Body() dto: UpdatePassVisitorDto, @Req() req: any) {
+  updateVisitorData(
+    @Param('id') id: string,
+    @Body() dto: UpdatePassVisitorDto,
+    @Req() req: any,
+  ) {
     return this.passesService.updateVisitorData(id, dto, req.user);
   }
 
   @Post(':id/send-email')
   @HttpCode(200)
   @RequirePermissions('passes.create', 'passes.view_own', 'passes.view_all')
-  sendEmail(@Param('id') id: string, @Body() dto: SendPassEmailDto, @Req() req: any) {
+  sendEmail(
+    @Param('id') id: string,
+    @Body() dto: SendPassEmailDto,
+    @Req() req: any,
+  ) {
     return this.passesService.sendPassEmail(id, dto.email, req.user);
   }
 

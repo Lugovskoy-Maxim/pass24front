@@ -7,9 +7,7 @@ export function PwaRegistrar() {
     if (!('serviceWorker' in navigator)) return;
     if (process.env.NODE_ENV !== 'production') return;
 
-    navigator.serviceWorker
-      .register('/sw.js', { scope: '/' })
-      .catch(() => {});
+    navigator.serviceWorker.register('/sw.js', { scope: '/' }).catch(() => {});
   }, []);
 
   return null;

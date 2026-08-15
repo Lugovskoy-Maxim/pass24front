@@ -3,11 +3,26 @@
 import { useCallback, useEffect, useState } from 'react';
 import { useAutoRefresh } from '@/hooks/useAutoRefresh';
 import Link from 'next/link';
-import { Users, FileText, Building2, Sparkles, List, ScrollText, Clock, AlertCircle } from 'lucide-react';
+import {
+  Users,
+  FileText,
+  Building2,
+  Sparkles,
+  List,
+  ScrollText,
+  Clock,
+  AlertCircle,
+} from 'lucide-react';
 import { AdminLayout } from '@/components/AdminLayout';
 import { useToast } from '@/components/Toast';
 import { useConfig } from '@/hooks/useConfig';
-import { api, AdminDashboard, AUDIT_LABELS, formatAuditEntity, getErrorMessage } from '@/lib/api';
+import {
+  api,
+  AdminDashboard,
+  AUDIT_LABELS,
+  formatAuditEntity,
+  getErrorMessage,
+} from '@/lib/api';
 import { PageError } from '@/components/PageError';
 import { getUiLabels } from '@/lib/ui-labels';
 import { CardSkeleton } from '@/components/ui/Skeleton';
@@ -26,7 +41,8 @@ export default function AdminDashboardPage() {
       setError('');
       setErrorCause(null);
     }
-    return api.admin.dashboard()
+    return api.admin
+      .dashboard()
       .then(setData)
       .catch((e) => {
         if (!options?.silent) {
@@ -36,7 +52,9 @@ export default function AdminDashboardPage() {
       });
   }, []);
 
-  useEffect(() => { load(); }, [load]);
+  useEffect(() => {
+    load();
+  }, [load]);
 
   useAutoRefresh(() => load({ silent: true }));
 
@@ -56,7 +74,12 @@ export default function AdminDashboardPage() {
   if (error) {
     return (
       <AdminLayout title="Обзор БЦ">
-        <PageError message={error} error={errorCause} onRetry={load} retryLabel={labels.buttons.retry} />
+        <PageError
+          message={error}
+          error={errorCause}
+          onRetry={load}
+          retryLabel={labels.buttons.retry}
+        />
       </AdminLayout>
     );
   }
@@ -82,7 +105,11 @@ export default function AdminDashboardPage() {
             ? 'Бизнес-центры создаются в разделе «Офисы»'
             : businessCenterNames.join(' · ')}
         </p>
-        <button className="btn btn-secondary text-sm" onClick={handleSeed} disabled={seeding}>
+        <button
+          className="btn btn-secondary text-sm"
+          onClick={handleSeed}
+          disabled={seeding}
+        >
           <Sparkles className="w-4 h-4" />
           {seeding ? 'Создание...' : 'Создать тестовые БЦ и арендаторов'}
         </button>
@@ -125,17 +152,23 @@ export default function AdminDashboardPage() {
       <div className="grid grid-cols-2 lg:grid-cols-3 gap-4 mb-8">
         <div className="card p-4 stat-card">
           <Users className="w-5 h-5 text-[var(--primary)] mb-2" />
-          <div className="text-2xl font-bold tabular-nums">{stats.users.total}</div>
+          <div className="text-2xl font-bold tabular-nums">
+            {stats.users.total}
+          </div>
           <div className="text-sm text-[var(--muted)]">Пользователей</div>
         </div>
         <div className="card p-4 stat-card">
           <FileText className="w-5 h-5 text-[var(--accent)] mb-2" />
-          <div className="text-2xl font-bold tabular-nums">{stats.passes.total}</div>
+          <div className="text-2xl font-bold tabular-nums">
+            {stats.passes.total}
+          </div>
           <div className="text-sm text-[var(--muted)]">Всего пропусков</div>
         </div>
         <div className="card p-4 stat-card col-span-2 lg:col-span-1">
           <Building2 className="w-5 h-5 text-emerald-600 mb-2" />
-          <div className="text-2xl font-bold tabular-nums">{stats.businessCenters}</div>
+          <div className="text-2xl font-bold tabular-nums">
+            {stats.businessCenters}
+          </div>
           <div className="text-sm text-[var(--muted)]">Бизнес-центров</div>
         </div>
       </div>
@@ -143,23 +176,41 @@ export default function AdminDashboardPage() {
       <div className="card p-5">
         <div className="flex items-center justify-between mb-4">
           <h2 className="font-semibold">Последние действия пользователей</h2>
-          <Link href="/admin/audit" className="text-sm text-[var(--primary)] hover:underline">{labels.buttons.fullAudit}</Link>
+          <Link
+            href="/admin/audit"
+            className="text-sm text-[var(--primary)] hover:underline"
+          >
+            {labels.buttons.fullAudit}
+          </Link>
         </div>
         {recentActivity.length === 0 ? (
           <p className="text-sm text-[var(--muted)]">Действий пока нет</p>
         ) : (
           <div className="space-y-1">
             {recentActivity.map((entry) => (
-              <div key={entry.id} className="flex items-center justify-between text-sm py-2.5 border-b border-[var(--border)] last:border-0 hover:bg-[var(--surface-muted)] -mx-2 px-2 rounded transition-colors">
+              <div
+                key={entry.id}
+                className="flex items-center justify-between text-sm py-2.5 border-b border-[var(--border)] last:border-0 hover:bg-[var(--surface-muted)] -mx-2 px-2 rounded transition-colors"
+              >
                 <div className="min-w-0">
-                  <span className="font-medium">{AUDIT_LABELS[entry.action] || entry.action}</span>
-                  <span className="text-[var(--muted)]"> · {entry.userName || 'Система'}</span>
+                  <span className="font-medium">
+                    {AUDIT_LABELS[entry.action] || entry.action}
+                  </span>
+                  <span className="text-[var(--muted)]">
+                    {' '}
+                    · {entry.userName || 'Система'}
+                  </span>
                   <span className="text-[var(--muted)] text-xs block sm:inline sm:ml-1">
                     — {formatAuditEntity(entry)}
                   </span>
                 </div>
                 <span className="text-xs text-[var(--muted)] shrink-0 ml-2 tabular-nums">
-                  {new Date(entry.createdAt).toLocaleString('ru-RU', { day: '2-digit', month: '2-digit', hour: '2-digit', minute: '2-digit' })}
+                  {new Date(entry.createdAt).toLocaleString('ru-RU', {
+                    day: '2-digit',
+                    month: '2-digit',
+                    hour: '2-digit',
+                    minute: '2-digit',
+                  })}
                 </span>
               </div>
             ))}
