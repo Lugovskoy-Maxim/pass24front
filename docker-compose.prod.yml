@@ -2,17 +2,6 @@
 #   docker compose -f docker-compose.yml -f docker-compose.prod.yml --env-file .env up -d --build
 
 services:
-  mongo:
-    # Серверы без AVX (старые Xeon/VM) — MongoDB 5+ падает с Illegal instruction
-    image: mongo:4.4
-    healthcheck:
-      test: echo 'db.runCommand("ping").ok' | mongo localhost:27017/test --quiet
-      interval: 10s
-      timeout: 5s
-      retries: 5
-      start_period: 60s
-
-
   mailpit:
     ports:
       - "127.0.0.1:8025:8025"
