@@ -34,13 +34,12 @@ export function Header() {
   const { user, logout } = useAuth();
   const config = useConfig();
   const pathname = usePathname();
-
-  if (!user) return null;
-
   const L = getUiLabels(config);
   const { theme } = useTheme();
-  const showOverdueAlerts = canSeeOverdueAlerts(user);
+  const showOverdueAlerts = user ? canSeeOverdueAlerts(user) : false;
   const { passes: overduePasses } = useOverdueGuests(showOverdueAlerts);
+
+  if (!user) return null;
 
   const onControlPage = pathname === '/control';
   const showHeaderOverdueBanner =

@@ -154,7 +154,7 @@ export class AdminService {
       role: undefined,
     });
 
-    let [users, total, counts] = await Promise.all([
+    const [initialUsers, initialTotal, counts] = await Promise.all([
       this.userModel.find(filter).sort({ createdAt: -1 }).lean(),
       this.userModel.countDocuments(filter),
       Promise.all([
@@ -162,6 +162,8 @@ export class AdminService {
         this.userModel.countDocuments(staffCountFilter),
       ]).then(([tenants, staff]) => ({ tenants, staff })),
     ]);
+    let users = initialUsers;
+    let total = initialTotal;
 
     // Поиск по сотрудникам компании: подтянуть владельцев, у которых сотрудник совпал
     if (params.category === 'tenants' && params.search?.trim()) {
@@ -868,7 +870,7 @@ export class AdminService {
     const { buildOfficeCsv } = await import('../common/office-csv.js');
     const tenantIds = offices
       .filter((o) => o.tenantId)
-      .map((o) => new Types.ObjectId(o.tenantId!));
+      .map((o) => new Types.ObjectId(o.tenantId));
     const tenants = tenantIds.length
       ? await this.userModel.find({ _id: { $in: tenantIds } }).lean()
       : [];
@@ -947,7 +949,7 @@ export class AdminService {
           );
           continue;
         }
-        tenantId = tenant._id as Types.ObjectId;
+        tenantId = tenant._id;
       }
 
       const office = await this.officeModel.create({

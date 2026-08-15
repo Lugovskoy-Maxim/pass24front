@@ -1,10 +1,4 @@
-import {
-  IsNotEmpty,
-  IsOptional,
-  IsString,
-  MinLength,
-  ValidateIf,
-} from 'class-validator';
+import { IsNotEmpty, IsString, MinLength, ValidateIf } from 'class-validator';
 
 export class LoginDto {
   @ValidateIf((o) => !o.email)

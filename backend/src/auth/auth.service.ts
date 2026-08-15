@@ -123,7 +123,7 @@ export class AuthService {
         'Укажите номер телефона в формате +79XXXXXXXXX',
       );
     }
-    let siteSettings = await this.siteSettingsService.get();
+    const siteSettings = await this.siteSettingsService.get();
     // Email (основной или доп. при SMS): зона .ru + список запрещённых доменов из админки
     if (
       email &&
@@ -185,10 +185,8 @@ export class AuthService {
 
     const pendingData: Record<string, unknown> = {
       verificationChannel: channel,
-      expiresAt: reuseMobileSession ? existingPending!.expiresAt : expiresAt,
-      lastCodeSentAt: reuseMobileSession
-        ? existingPending!.lastCodeSentAt
-        : now,
+      expiresAt: reuseMobileSession ? existingPending.expiresAt : expiresAt,
+      lastCodeSentAt: reuseMobileSession ? existingPending.lastCodeSentAt : now,
       password: passwordHash,
       fullName: personName.fullName,
       lastName: personName.lastName,
@@ -204,9 +202,9 @@ export class AuthService {
       if (reuseMobileSession) {
         // Форма могла быть закрыта или сброшена. Возвращаем действующую серверную
         // сессию, обновляя регистрационные данные, но не отправляя второй push.
-        pendingData.mobileIdRequestId = existingPending!.mobileIdRequestId;
-        if (existingPending!.mobileIdAuthType) {
-          pendingData.mobileIdAuthType = existingPending!.mobileIdAuthType;
+        pendingData.mobileIdRequestId = existingPending.mobileIdRequestId;
+        if (existingPending.mobileIdAuthType) {
+          pendingData.mobileIdAuthType = existingPending.mobileIdAuthType;
         }
       } else {
         // Mobile ID: код генерирует SMS Aero (SIM-PUSH → SMS OTP)

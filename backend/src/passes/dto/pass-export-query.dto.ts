@@ -2,16 +2,6 @@ import { IsIn, IsInt, IsOptional, IsString, Max, Min } from 'class-validator';
 import { Type } from 'class-transformer';
 
 const PASS_TYPES = ['visitor', 'parking', 'delivery', 'contractor'] as const;
-const PASS_STATUSES = [
-  'pending',
-  'approved',
-  'rejected',
-  'active',
-  'completed',
-  'expired',
-  'cancelled',
-] as const;
-
 export class PassExportQueryDto {
   @IsOptional()
   @IsString()

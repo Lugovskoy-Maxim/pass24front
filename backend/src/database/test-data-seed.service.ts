@@ -126,19 +126,19 @@ export class TestDataSeedService {
           floor: officeSpec.floor,
           areaSqm: officeSpec.areaSqm,
           company: officeSpec.company,
-          tenantId: tenantUser!._id,
+          tenantId: tenantUser._id,
           isActive: true,
         });
         result.offices++;
         result.skipped = false;
       } else if (!exists.tenantId) {
-        exists.tenantId = tenantUser!._id;
+        exists.tenantId = tenantUser._id;
         exists.company = officeSpec.company;
         await exists.save();
       }
     }
 
-    await this.syncTenantProperties(tenantUser!._id.toString());
+    await this.syncTenantProperties(tenantUser._id.toString());
 
     for (const account of DEV_TEST_ACCOUNTS) {
       if (account.role === 'tenant') continue;

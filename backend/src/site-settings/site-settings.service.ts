@@ -202,9 +202,7 @@ export class SiteSettingsService implements OnModuleInit {
       );
     }
     if (data.uiLabels !== undefined) {
-      update.uiLabels = deepMergeUiLabels(
-        data.uiLabels as Record<string, unknown>,
-      );
+      update.uiLabels = deepMergeUiLabels(data.uiLabels);
     }
     if (data.smsRegistrationEnabled !== undefined) {
       update.smsRegistrationEnabled = !!data.smsRegistrationEnabled;
@@ -308,17 +306,14 @@ export class SiteSettingsService implements OnModuleInit {
       blockedEmailDomains: resolveBlockedEmailDomains(
         // undefined field → defaults; explicit [] stays empty
         Array.isArray(doc?.blockedEmailDomains)
-          ? doc!.blockedEmailDomains
+          ? doc.blockedEmailDomains
           : undefined,
       ),
       registrationNotifyEmails: this.normalizeEmailList(
         doc?.registrationNotifyEmails || [],
       ),
       registrationNotifyUserIds: Array.isArray(doc?.registrationNotifyUserIds)
-        ? doc!.registrationNotifyUserIds
-            .map(String)
-            .filter(Boolean)
-            .slice(0, 50)
+        ? doc.registrationNotifyUserIds.map(String).filter(Boolean).slice(0, 50)
         : [],
       faqItems: normalizeFaqItems(
         doc?.faqItems?.length ? doc.faqItems : DEFAULT_FAQ_ITEMS,

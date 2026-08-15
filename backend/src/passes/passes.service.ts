@@ -23,12 +23,7 @@ import {
   UserDocument,
 } from '../schemas';
 import { PropertyType } from '../schemas/enums';
-import {
-  deriveVisitPurpose,
-  normalizePassport,
-  normalizePersonName,
-  normalizePhone,
-} from '../common/pass-helpers';
+import { deriveVisitPurpose, normalizePhone } from '../common/pass-helpers';
 import {
   resolveTenantOwnerId,
   tenantOwnerObjectId,
@@ -190,7 +185,7 @@ export class PassesService implements OnModuleInit {
       .select('_id')
       .lean();
 
-    return team.map((member) => member._id as Types.ObjectId);
+    return team.map((member) => member._id);
   }
 
   /**
@@ -1375,7 +1370,11 @@ export class PassesService implements OnModuleInit {
         address?: string;
         settings?: Record<string, any>;
       } | null,
-    ) => {
+    ): {
+      name?: string;
+      address?: string;
+      routeMapsProvider: 'yandex' | 'google';
+    } | null => {
       if (!property) return null;
       const maps = String(
         property.settings?.route_maps_provider || 'yandex',
@@ -1383,9 +1382,7 @@ export class PassesService implements OnModuleInit {
       return {
         name: property.name,
         address: property.address || undefined,
-        routeMapsProvider: (maps === 'google' ? 'google' : 'yandex') as
-          | 'yandex'
-          | 'google',
+        routeMapsProvider: maps === 'google' ? 'google' : 'yandex',
       };
     };
 

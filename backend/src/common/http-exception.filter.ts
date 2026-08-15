@@ -110,8 +110,7 @@ export class AllExceptionsFilter implements ExceptionFilter {
         message = body;
       } else if (body && typeof body === 'object') {
         const obj = body as { message?: unknown; error?: string };
-        if (obj.message !== undefined)
-          message = normalizeMessage(obj.message) as string | string[];
+        if (obj.message !== undefined) message = normalizeMessage(obj.message);
         if (obj.error) errorName = obj.error;
       }
 
