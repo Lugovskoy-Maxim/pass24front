@@ -30,6 +30,7 @@ import {
 } from 'lucide-react';
 import { useAuth } from '@/lib/auth';
 import { AdminLayout } from '@/components/AdminLayout';
+import { SettingsNav } from '@/components/SettingsNav';
 import { IconPickerField } from '@/components/IconPickerField';
 import { SiteBrand } from '@/components/SiteBrand';
 import { SelectWrap } from '@/components/FormField';
@@ -485,7 +486,8 @@ export default function AdminSiteSettingsPage() {
 
   return (
     <AdminLayout title="Базовые настройки">
-      <p className="text-[var(--muted)] -mt-4 mb-6">
+      <SettingsNav />
+      <p className="text-[var(--muted)] -mt-2 mb-6">
         Бренд портала меняется без пересборки: сохраните настройки — изменения
         появятся сразу у всех пользователей
       </p>

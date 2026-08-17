@@ -24,8 +24,10 @@ import {
   ChevronDown,
   ChevronRight,
   User,
+  Fingerprint,
 } from 'lucide-react';
 import { AdminLayout } from '@/components/AdminLayout';
+import { AdminModal } from '@/components/AdminModal';
 import {
   api,
   AdminUser,
@@ -55,10 +57,19 @@ import {
 } from '@/lib/person-name';
 import { useConfig } from '@/hooks/useConfig';
 import { getUiLabels } from '@/lib/ui-labels';
+import {
+  identityStatusLabel,
+  legalFormLabel,
+  profileTypeLabel,
+} from '@/lib/pass-identity';
 
 const EMPTY: CreateUserData = {
   email: '',
   password: '',
+  username: '',
+  displayName: '',
+  emailVerified: true,
+  privateDataComplete: false,
   role: 'tenant',
   phone: '',
   company: '',
@@ -67,6 +78,10 @@ const EMPTY: CreateUserData = {
   floor: '',
   officeIds: [],
   propertyIds: [],
+  profileType: 'individual',
+  legalForm: null,
+  companyShortName: '',
+  employeeLimit: null,
 };
 
 const MAX_COMPANY_LOGO_BYTES = 80 * 1024;
@@ -119,6 +134,7 @@ function AdminUsersPageContent() {
   const [propertyIds, setPropertyIds] = useState<string[]>([]);
   const [officePickerSearch, setOfficePickerSearch] = useState('');
   const [isActive, setIsActive] = useState(true);
+  const [isBlocked, setIsBlocked] = useState(false);
   const [deletingUserId, setDeletingUserId] = useState<string | null>(null);
   const [expandedOwners, setExpandedOwners] = useState<Record<string, boolean>>(
     {},
@@ -346,6 +362,7 @@ function AdminUsersPageContent() {
     setPropertyIds([]);
     setOfficePickerSearch('');
     setIsActive(true);
+    setIsBlocked(false);
     setShowForm(true);
     setError('');
   };
@@ -357,12 +374,20 @@ function AdminUsersPageContent() {
     setForm({
       email: u.email,
       password: '',
+      username: u.username || '',
+      displayName: u.displayName || '',
+      emailVerified: u.emailVerified !== false,
+      privateDataComplete: !!u.privateDataComplete,
       role: formRole,
       phone: u.phone || '',
       company: u.company || '',
       companyLogo: u.companyLogo || '',
       office: u.office || '',
       floor: u.floor || '',
+      profileType: (u.profileType as CreateUserData['profileType']) || 'individual',
+      legalForm: u.legalForm ?? null,
+      companyShortName: u.companyShortName || '',
+      employeeLimit: u.employeeLimit ?? null,
     });
     setNameParts(
       u.lastName || u.firstName
@@ -379,13 +404,9 @@ function AdminUsersPageContent() {
     );
     setOfficePickerSearch('');
     setIsActive(u.isActive && !u.invitePending);
+    setIsBlocked(!!u.isBlocked);
     setShowForm(true);
     setError('');
-    window.setTimeout(() => {
-      document
-        .getElementById('admin-user-form')
-        ?.scrollIntoView({ behavior: 'smooth', block: 'nearest' });
-    }, 50);
   };
 
   const toggleOffice = (id: string) => {
@@ -483,9 +504,21 @@ function AdminUsersPageContent() {
   const statusBadge = (u: AdminUser) => {
     const base =
       'inline-flex items-center text-xs px-2 py-0.5 rounded-full leading-tight whitespace-nowrap';
+    if (u.isBlocked) {
+      return (
+        <span className={`${base} bg-red-100 text-red-800`}>Заблокирован</span>
+      );
+    }
     if (u.invitePending) {
       return (
         <span className={`${base} bg-sky-50 text-sky-800`}>Приглашение</span>
+      );
+    }
+    if (u.identityStatus && u.identityStatus !== 'active' && !u.isActive) {
+      return (
+        <span className={`${base} bg-amber-50 text-amber-800`}>
+          {identityStatusLabel(u.identityStatus)}
+        </span>
       );
     }
     if (u.isActive) {
@@ -537,6 +570,10 @@ function AdminUsersPageContent() {
         firstName: nameParts.firstName.trim(),
         middleName: nameParts.middleName.trim() || undefined,
         fullName: buildFullName(nameParts),
+        username: form.username?.trim() || '',
+        displayName: form.displayName?.trim() || undefined,
+        emailVerified: form.emailVerified !== false,
+        privateDataComplete: !!form.privateDataComplete,
         phone: form.phone || undefined,
         company: form.company || undefined,
         companyLogo:
@@ -561,6 +598,24 @@ function AdminUsersPageContent() {
           form.role === 'security' || form.role === 'bc_admin'
             ? propertyIds
             : undefined,
+        profileType:
+          form.role === 'tenant' && !isCompanyEmployee
+            ? form.profileType || 'individual'
+            : undefined,
+        legalForm:
+          form.role === 'tenant' && !isCompanyEmployee
+            ? form.profileType === 'company'
+              ? form.legalForm || 'ooo'
+              : null
+            : undefined,
+        companyShortName:
+          form.role === 'tenant' && !isCompanyEmployee
+            ? form.companyShortName || ''
+            : undefined,
+        employeeLimit:
+          form.role === 'tenant' && !isCompanyEmployee
+            ? form.employeeLimit
+            : undefined,
       };
       if (editId) {
         // Сотрудник компании: роль не отправляем (бэкенд её не меняет)
@@ -568,6 +623,7 @@ function AdminUsersPageContent() {
           ...base,
           ...(isCompanyEmployee ? {} : { role: form.role }),
           isActive,
+          isBlocked,
           ...(form.password ? { password: form.password } : {}),
         });
       } else {
@@ -596,8 +652,8 @@ function AdminUsersPageContent() {
   return (
     <AdminLayout title="Пользователи">
       <p className="text-[var(--muted)] -mt-4 mb-6">
-        Арендаторы и их сотрудники компании · сотрудники БЦ (ресепшн, админы) —
-        к бизнес-центрам
+        Учётные записи живут в Pass. Арендаторы и сотрудники компании · охрана
+        и админы БЦ
       </p>
 
       {loadError && (
@@ -637,7 +693,7 @@ function AdminUsersPageContent() {
             <Search className="absolute left-3 top-1/2 -translate-y-1/2 w-4 h-4 text-[var(--muted)]" />
             <input
               className="input input--icon-left"
-              placeholder={ph.userSearch}
+              placeholder={ph.userSearch || 'ФИО, email, телефон, компания, usr_…'}
               value={filters.search}
               onChange={(e) =>
                 setFilters((prev) => ({ ...prev, search: e.target.value }))
@@ -863,6 +919,12 @@ function AdminUsersPageContent() {
                 <div className="text-[var(--muted)] mt-1">
                   {(request.company || u.company) &&
                     `Компания: ${u.company || '—'} → ${request.company || '—'} · `}
+                  {(request.company_short_name || u.companyShortName) &&
+                    `Кратко: ${u.companyShortName || '—'} → ${request.company_short_name || '—'} · `}
+                  {(request.profile_type || u.profileType) &&
+                    `Тип: ${profileTypeLabel(u.profileType)} → ${profileTypeLabel(request.profile_type)} · `}
+                  {(request.legal_form || u.legalForm) &&
+                    `Форма: ${legalFormLabel(u.legalForm)} → ${legalFormLabel(request.legal_form)} · `}
                   {(request.phone || u.phone) &&
                     `Тел.: ${u.phone || '—'} → ${request.phone || '—'} · `}
                   {new Date(request.requested_at).toLocaleString('ru-RU')}
@@ -893,21 +955,25 @@ function AdminUsersPageContent() {
         </div>
       )}
 
-      {showForm && (
+      <AdminModal
+        open={showForm}
+        wide
+        title={
+          editId
+            ? users
+                .flatMap((x) => x.employees || [])
+                .some((e) => e.id === editId)
+              ? 'Редактирование сотрудника компании'
+              : 'Редактирование пользователя'
+            : 'Новый пользователь'
+        }
+        onClose={() => setShowForm(false)}
+      >
         <form
           id="admin-user-form"
           onSubmit={handleSubmit}
-          className="card p-5 mb-6 space-y-4"
+          className="space-y-4"
         >
-          <h2 className="font-semibold">
-            {editId
-              ? users
-                  .flatMap((x) => x.employees || [])
-                  .some((e) => e.id === editId)
-                ? 'Редактирование сотрудника компании'
-                : 'Редактирование'
-              : 'Новый пользователь'}
-          </h2>
           <div className="grid sm:grid-cols-2 gap-3">
             <div>
               <label className="label">Email *</label>
@@ -931,6 +997,29 @@ function AdminUsersPageContent() {
                 onChange={(e) => setForm({ ...form, password: e.target.value })}
                 required={!editId}
                 minLength={6}
+              />
+            </div>
+            <div>
+              <label className="label">Логин (username)</label>
+              <input
+                className="input"
+                value={form.username || ''}
+                onChange={(e) =>
+                  setForm({ ...form, username: e.target.value })
+                }
+                placeholder="необязательно"
+                autoComplete="off"
+              />
+            </div>
+            <div>
+              <label className="label">Отображаемое имя</label>
+              <input
+                className="input"
+                value={form.displayName || ''}
+                onChange={(e) =>
+                  setForm({ ...form, displayName: e.target.value })
+                }
+                placeholder="по умолчанию ФИО"
               />
             </div>
             <div className="sm:col-span-2">
@@ -1004,6 +1093,86 @@ function AdminUsersPageContent() {
                 onChange={(e) => setForm({ ...form, phone: e.target.value })}
               />
             </div>
+            {form.role === 'tenant' &&
+              !users
+                .flatMap((x) => x.employees || [])
+                .some((e) => e.id === editId) && (
+                <>
+                  <div>
+                    <label className="label">Тип профиля</label>
+                    <div className="select-wrap">
+                      <select
+                        className="input"
+                        value={form.profileType || 'individual'}
+                        onChange={(e) =>
+                          setForm({
+                            ...form,
+                            profileType: e.target.value as 'individual' | 'company',
+                            legalForm:
+                              e.target.value === 'company'
+                                ? form.legalForm || 'ooo'
+                                : null,
+                          })
+                        }
+                      >
+                        <option value="individual">Физлицо</option>
+                        <option value="company">Компания</option>
+                      </select>
+                    </div>
+                  </div>
+                  {form.profileType === 'company' && (
+                    <div>
+                      <label className="label">Правовая форма</label>
+                      <div className="select-wrap">
+                        <select
+                          className="input"
+                          value={form.legalForm || 'ooo'}
+                          onChange={(e) =>
+                            setForm({
+                              ...form,
+                              legalForm: e.target.value as 'ip' | 'ooo',
+                            })
+                          }
+                        >
+                          <option value="ooo">ООО</option>
+                          <option value="ip">ИП</option>
+                        </select>
+                      </div>
+                    </div>
+                  )}
+                  <div>
+                    <label className="label">Краткое название</label>
+                    <input
+                      className="input"
+                      value={form.companyShortName || ''}
+                      onChange={(e) =>
+                        setForm({ ...form, companyShortName: e.target.value })
+                      }
+                      placeholder="для документов и снимков"
+                    />
+                  </div>
+                  <div>
+                    <label className="label">Лимит сотрудников</label>
+                    <input
+                      className="input"
+                      type="number"
+                      min={0}
+                      max={200}
+                      value={form.employeeLimit ?? ''}
+                      onChange={(e) =>
+                        setForm({
+                          ...form,
+                          employeeLimit:
+                            e.target.value === ''
+                              ? null
+                              : Number(e.target.value),
+                        })
+                      }
+                      placeholder="по умолчанию 3"
+                    />
+                  </div>
+                </>
+              )}
             {form.role === 'tenant' &&
               !users
                 .flatMap((x) => x.employees || [])
@@ -1281,16 +1450,93 @@ function AdminUsersPageContent() {
             </div>
           )}
 
-          {editId && (
+          <div className="flex flex-col sm:flex-row flex-wrap gap-3">
             <label className="flex items-center gap-2 text-sm">
               <input
                 type="checkbox"
-                checked={isActive}
-                onChange={(e) => setIsActive(e.target.checked)}
+                checked={form.emailVerified !== false}
+                onChange={(e) =>
+                  setForm({ ...form, emailVerified: e.target.checked })
+                }
               />
-              Активен
+              Email подтверждён
             </label>
-          )}
+            <label className="flex items-center gap-2 text-sm">
+              <input
+                type="checkbox"
+                checked={!!form.privateDataComplete}
+                onChange={(e) =>
+                  setForm({ ...form, privateDataComplete: e.target.checked })
+                }
+              />
+              Анкета полная
+            </label>
+            {editId && (
+              <>
+                <label className="flex items-center gap-2 text-sm">
+                  <input
+                    type="checkbox"
+                    checked={isActive}
+                    onChange={(e) => setIsActive(e.target.checked)}
+                  />
+                  Активен
+                </label>
+                <label className="flex items-center gap-2 text-sm">
+                  <input
+                    type="checkbox"
+                    checked={isBlocked}
+                    onChange={(e) => setIsBlocked(e.target.checked)}
+                  />
+                  Заблокирован (отзыв сессий Pass, +authVersion)
+                </label>
+              </>
+            )}
+          </div>
+          {editId &&
+            (() => {
+              const current =
+                users.find((x) => x.id === editId) ||
+                users
+                  .flatMap((x) => x.employees || [])
+                  .find((e) => e.id === editId);
+              if (!current) return null;
+              return (
+                <div className="rounded-lg border border-[var(--border)] bg-[var(--surface-muted)] p-3 text-xs text-[var(--muted)] space-y-1">
+                  <div className="flex items-center gap-2 font-medium text-sm text-[var(--text)]">
+                    <Fingerprint className="w-4 h-4 text-[var(--primary)]" />
+                    Pass
+                  </div>
+                  <div className="font-mono break-all">
+                    {current.passSubject || 'subject появится после сохранения'}
+                  </div>
+                  <div>
+                    {identityStatusLabel(current.identityStatus)} · v
+                    {current.authVersion ?? 1}
+                    {current.privateDataComplete ? ' · анкета полная' : ''}
+                    {current.privateDataRevision != null
+                      ? ` · rev ${current.privateDataRevision}`
+                      : ''}
+                  </div>
+                  {current.lastLoginAt && (
+                    <div>
+                      Вход:{' '}
+                      {new Date(current.lastLoginAt).toLocaleString('ru-RU')}
+                    </div>
+                  )}
+                  {current.invitePending && (
+                    <div>
+                      Приглашение не принято
+                      {current.inviteExpiresAt
+                        ? ` до ${new Date(current.inviteExpiresAt).toLocaleString('ru-RU')}`
+                        : ''}
+                    </div>
+                  )}
+                  {current.parentTenantName && (
+                    <div>Владелец: {current.parentTenantName}</div>
+                  )}
+                </div>
+              );
+            })()}
           {error && <div className="text-sm text-red-600">{error}</div>}
           <div className="flex gap-2">
             <button type="submit" className="btn btn-primary" disabled={saving}>
@@ -1305,7 +1551,7 @@ function AdminUsersPageContent() {
             </button>
           </div>
         </form>
-      )}
+      </AdminModal>
 
       <div className="card overflow-hidden">
         <div className="overflow-x-auto">
@@ -1413,6 +1659,14 @@ function AdminUsersPageContent() {
                                     Владелец
                                   </span>
                                 )}
+                                {category === 'tenants' && u.profileType && (
+                                  <span className="text-[10px] px-1.5 py-0.5 rounded-full bg-indigo-50 text-indigo-800 font-normal leading-none">
+                                    {profileTypeLabel(u.profileType)}
+                                    {u.profileType === 'company' && u.legalForm
+                                      ? ` · ${legalFormLabel(u.legalForm)}`
+                                      : ''}
+                                  </span>
+                                )}
                                 {u.profileChangeRequest && (
                                   <span className="text-[10px] px-1.5 py-0.5 rounded-full bg-amber-100 text-amber-800 leading-none">
                                     на модерации
@@ -1475,8 +1729,13 @@ function AdminUsersPageContent() {
                               className="truncate"
                               title={u.company || undefined}
                             >
-                              {u.company || '—'}
+                              {u.companyShortName || u.company || '—'}
                             </div>
+                            {u.companyShortName && u.company && (
+                              <div className="text-[10px] truncate leading-none mt-0.5">
+                                {u.company}
+                              </div>
+                            )}
                           </td>
                         ) : (
                           <td className="p-3 align-middle">

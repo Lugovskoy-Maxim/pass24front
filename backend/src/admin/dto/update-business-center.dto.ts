@@ -18,6 +18,11 @@ export class UpdateBusinessCenterDto {
   @IsString()
   address?: string;
 
+  /** Ключ сайта, напр. tf-business-center:12. Пусто — снять привязку. */
+  @IsOptional()
+  @IsString()
+  code?: string;
+
   @IsOptional()
   @ValidateNested()
   @Type(() => BusinessCenterPassSettingsDto)

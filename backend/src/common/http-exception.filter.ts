@@ -12,7 +12,12 @@ import {
   HttpStatus,
   Logger,
 } from '@nestjs/common';
-import type { Response } from 'express';
+import type { Request, Response } from 'express';
+import {
+  OAuthException,
+  ProblemException,
+} from '../integrations/mstyle-v2/mstyle-v2.problem';
+import { Ids } from '../integrations/mstyle-v2/mstyle-v2.ids';
 
 const VALIDATION_RU: Array<[RegExp, string]> = [
   [/must be an email/i, 'Некорректный email'],
@@ -91,6 +96,23 @@ export class AllExceptionsFilter implements ExceptionFilter {
   catch(exception: unknown, host: ArgumentsHost) {
     const ctx = host.switchToHttp();
     const res = ctx.getResponse<Response>();
+    const req = ctx.getRequest<Request>();
+    const requestId =
+      String(req?.headers?.['x-request-id'] || '').trim() || Ids.request();
+
+    if (exception instanceof OAuthException) {
+      return res.status(exception.getStatus()).json(exception.toBody());
+    }
+    if (exception instanceof ProblemException) {
+      if (exception.retryAfter) {
+        res.setHeader('Retry-After', String(exception.retryAfter));
+      }
+      res.setHeader('Cache-Control', 'no-store');
+      res.setHeader('Content-Type', 'application/problem+json; charset=utf-8');
+      return res
+        .status(exception.getStatus())
+        .json(exception.toBody(requestId));
+    }
 
     if (isMongoDuplicate(exception)) {
       return res.status(HttpStatus.CONFLICT).json({

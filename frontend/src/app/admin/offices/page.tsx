@@ -25,6 +25,7 @@ import {
   Upload,
 } from 'lucide-react';
 import { AdminLayout } from '@/components/AdminLayout';
+import { AdminModal } from '@/components/AdminModal';
 import { useToast } from '@/components/Toast';
 import { useDebounce } from '@/hooks/useDebounce';
 import {
@@ -89,6 +90,7 @@ export default function AdminOfficesPage() {
   const [showBcForm, setShowBcForm] = useState(false);
   const [bcName, setBcName] = useState('');
   const [bcAddress, setBcAddress] = useState('');
+  const [bcCode, setBcCode] = useState('');
   const [bcPassSettings, setBcPassSettings] = useState<BcPassSettings>(
     DEFAULT_BC_PASS_SETTINGS,
   );
@@ -99,6 +101,8 @@ export default function AdminOfficesPage() {
   const [areaSqm, setAreaSqm] = useState('');
   const [company, setCompany] = useState('');
   const [tenantId, setTenantId] = useState('');
+  const [officeActive, setOfficeActive] = useState(true);
+  const [externalId, setExternalId] = useState('');
   const [tenantSearch, setTenantSearch] = useState('');
   const [officeFilters, setOfficeFilters] =
     useState<OfficeFilters>(EMPTY_OFFICE_FILTERS);
@@ -160,6 +164,8 @@ export default function AdminOfficesPage() {
     setAreaSqm('');
     setCompany('');
     setTenantId('');
+    setOfficeActive(true);
+    setExternalId('');
     setTenantSearch('');
     setShowForm(false);
     setEditingId(null);
@@ -172,6 +178,7 @@ export default function AdminOfficesPage() {
     setEditingBcId(null);
     setBcName('');
     setBcAddress('');
+    setBcCode('');
     setBcPassSettings(DEFAULT_BC_PASS_SETTINGS);
   };
 
@@ -198,6 +205,7 @@ export default function AdminOfficesPage() {
     setEditingBcId(bc.id);
     setBcName(bc.name);
     setBcAddress(bc.address || '');
+    setBcCode(bc.code || '');
     setBcPassSettings({ ...DEFAULT_BC_PASS_SETTINGS, ...bc.passSettings });
     setShowBcForm(false);
     setShowForm(false);
@@ -213,6 +221,7 @@ export default function AdminOfficesPage() {
       const { businessCenter } = await api.admin.createBusinessCenter({
         name: bcName.trim(),
         address: bcAddress.trim(),
+        code: bcCode.trim() || undefined,
       });
       setBusinessCenters((prev) =>
         [...prev, businessCenter].sort((a, b) =>
@@ -273,6 +282,7 @@ export default function AdminOfficesPage() {
         {
           name: bcName.trim(),
           address: bcAddress.trim() || undefined,
+          code: bcCode.trim(),
           passSettings: bcPassSettings,
         },
       );
@@ -304,6 +314,8 @@ export default function AdminOfficesPage() {
     setAreaSqm(office.areaSqm?.toString() || '');
     setCompany(office.company || '');
     setTenantId(office.tenantId || '');
+    setOfficeActive(office.isActive);
+    setExternalId(office.externalId || '');
     setShowForm(false);
   };
 
@@ -353,6 +365,8 @@ export default function AdminOfficesPage() {
         areaSqm: areaSqm ? parseFloat(areaSqm) : undefined,
         company: company.trim() || undefined,
         tenantId: tenantId || undefined,
+        isActive: officeActive,
+        externalId: externalId.trim() || undefined,
       });
       toast('Офис добавлен', 'success');
       resetForm();
@@ -385,9 +399,14 @@ export default function AdminOfficesPage() {
     setSaving(true);
     try {
       await api.admin.updateOffice(id, {
+        propertyId,
+        number: number.trim(),
+        floor: floor.trim(),
         company: company.trim() || undefined,
         tenantId: tenantId || '',
         areaSqm: areaSqm ? parseFloat(areaSqm) : undefined,
+        isActive: officeActive,
+        externalId: externalId.trim(),
       });
       toast('Офис обновлён', 'success');
       resetForm();
@@ -707,6 +726,19 @@ export default function AdminOfficesPage() {
                 placeholder={ph.businessCenterAddress}
               />
             </div>
+            <div>
+              <label className="label">Код сайта</label>
+              <input
+                className="input"
+                value={bcCode}
+                onChange={(e) => setBcCode(e.target.value)}
+                placeholder="tf-business-center:12"
+              />
+              <p className="text-xs text-[var(--muted)] mt-1">
+                Ключ таксономии WordPress. Если задан, синк MySQL не создаст
+                второй БЦ.
+              </p>
+            </div>
             <div className="flex gap-2">
               <button
                 type="submit"
@@ -754,6 +786,19 @@ export default function AdminOfficesPage() {
                       <p className="text-xs text-[var(--muted)] mt-1">
                         Показывается на странице пропуска и используется для
                         кнопки «Построить маршрут»
+                      </p>
+                    </div>
+                    <div>
+                      <label className="label">Код сайта</label>
+                      <input
+                        className="input"
+                        value={bcCode}
+                        onChange={(e) => setBcCode(e.target.value)}
+                        placeholder="tf-business-center:12"
+                      />
+                      <p className="text-xs text-[var(--muted)] mt-1">
+                        Тот же ключ, что у таксономии БЦ на сайте. Пусто —
+                        снять привязку.
                       </p>
                     </div>
 
@@ -946,6 +991,11 @@ export default function AdminOfficesPage() {
                       <div className="text-sm text-[var(--muted)]">
                         {bc.address}
                       </div>
+                      {bc.code && (
+                        <div className="text-xs font-mono text-[var(--muted)] mt-0.5">
+                          {bc.code}
+                        </div>
+                      )}
                       <div className="text-xs text-[var(--muted)] mt-1">
                         {bc.officesCount} офисов
                         {bc.passSettings && (
@@ -1056,10 +1106,13 @@ export default function AdminOfficesPage() {
               className="hidden"
               onChange={(e) => void handleImportFile(e)}
             />
-            {!showForm && !editingId && businessCenters.length > 0 && (
+            {businessCenters.length > 0 && (
               <button
                 className="btn btn-primary text-sm"
-                onClick={() => setShowForm(true)}
+                onClick={() => {
+                  resetForm();
+                  setShowForm(true);
+                }}
               >
                 <Plus className="w-4 h-4" />
                 Добавить офис
@@ -1411,7 +1464,11 @@ export default function AdminOfficesPage() {
         </div>
       )}
 
-      {(showForm || editingId) && (
+      <AdminModal
+        open={showForm || !!editingId}
+        title={editingId ? 'Редактирование офиса' : 'Новый офис'}
+        onClose={resetForm}
+      >
         <form
           onSubmit={
             editingId
@@ -1421,11 +1478,8 @@ export default function AdminOfficesPage() {
                 }
               : handleCreate
           }
-          className="card p-5 mb-6 space-y-4 max-w-lg"
+          className="space-y-4"
         >
-          <h3 className="font-semibold">
-            {editingId ? 'Редактирование офиса' : 'Новый офис'}
-          </h3>
           <div>
             <label className="label">Бизнес-центр *</label>
             <div className="select-wrap">
@@ -1434,7 +1488,6 @@ export default function AdminOfficesPage() {
                 value={propertyId}
                 onChange={(e) => setPropertyId(e.target.value)}
                 required
-                disabled={!!editingId}
               >
                 <option value="">Выберите БЦ</option>
                 {businessCenters.map((bc) => (
@@ -1453,7 +1506,6 @@ export default function AdminOfficesPage() {
                 value={number}
                 onChange={(e) => setNumber(e.target.value)}
                 required
-                disabled={!!editingId}
                 placeholder={ph.officeNumberShort}
               />
             </div>
@@ -1464,20 +1516,38 @@ export default function AdminOfficesPage() {
                 value={floor}
                 onChange={(e) => setFloor(e.target.value)}
                 placeholder={ph.officeFloor}
-                disabled={!!editingId}
               />
             </div>
           </div>
-          <div>
-            <label className="label">Площадь, м²</label>
-            <input
-              className="input"
-              type="number"
-              min={0}
-              value={areaSqm}
-              onChange={(e) => setAreaSqm(e.target.value)}
-            />
+          <div className="grid grid-cols-2 gap-3">
+            <div>
+              <label className="label">Площадь, м²</label>
+              <input
+                className="input"
+                type="number"
+                min={0}
+                value={areaSqm}
+                onChange={(e) => setAreaSqm(e.target.value)}
+              />
+            </div>
+            <div>
+              <label className="label">externalId</label>
+              <input
+                className="input"
+                value={externalId}
+                onChange={(e) => setExternalId(e.target.value)}
+                placeholder="tf-room:107"
+              />
+            </div>
           </div>
+          <label className="flex items-center gap-2 text-sm">
+            <input
+              type="checkbox"
+              checked={officeActive}
+              onChange={(e) => setOfficeActive(e.target.checked)}
+            />
+            Активен
+          </label>
 
           <div className="border border-[var(--border)] rounded-lg p-4 bg-[var(--surface-muted)]">
             <div className="flex items-center gap-2 mb-3">
@@ -1500,7 +1570,7 @@ export default function AdminOfficesPage() {
             </button>
           </div>
         </form>
-      )}
+      </AdminModal>
 
       {loading ? (
         <div className="animate-pulse text-[var(--muted)]">Загрузка...</div>

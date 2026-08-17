@@ -49,7 +49,14 @@ import { ConfirmEmailVerifyDto } from './dto/confirm-email-verify.dto';
 import { ConfirmPasswordResetDto } from './dto/confirm-password-reset.dto';
 import { ConfirmRegistrationDto } from './dto/confirm-registration.dto';
 import { CreateTenantEmployeeDto } from './dto/create-tenant-employee.dto';
-import { MAX_TENANT_EMPLOYEES } from '../common/tenant-limits';
+import {
+  applyUserIdentityDefaults,
+  defaultProfileType,
+  deriveIdentityStatus,
+  identityView,
+  normalizeLegalForm,
+  resolveEmployeeLimit,
+} from '../common/pass-identity';
 import { LoginDto } from './dto/login.dto';
 import { RegisterDto } from './dto/register.dto';
 import { RequestPasswordResetDto } from './dto/request-password-reset.dto';
@@ -369,6 +376,14 @@ export class AuthService {
 
     let user: UserDocument;
     try {
+      const identitySeed = applyUserIdentityDefaults({
+        fullName: pending.fullName,
+        company: pending.company,
+        isActive: false,
+        isBlocked: false,
+        invitePending: false,
+        role: 'tenant',
+      });
       user = await this.userModel.create({
         email: pending.email || undefined,
         phone: pending.phone || undefined,
@@ -381,6 +396,13 @@ export class AuthService {
         password: pending.password,
         isActive: false,
         emailVerified,
+        passSubject: identitySeed.passSubject,
+        identityStatus: identitySeed.identityStatus,
+        authVersion: 1,
+        displayName: pending.fullName,
+        profileType: identitySeed.profileType,
+        legalForm: identitySeed.legalForm,
+        privateDataComplete: false,
       } as any);
     } catch (err) {
       await this.pendingModel.deleteOne(pendingFilter);
@@ -697,6 +719,7 @@ export class AuthService {
           password: passwordHash,
           ...(user.email ? { emailVerified: true } : {}),
         },
+        $inc: { authVersion: 1 },
         $unset: {
           passwordResetCodeHash: 1,
           passwordResetExpiresAt: 1,
@@ -743,6 +766,7 @@ export class AuthService {
       { _id: user._id, passwordResetTokenHash: tokenHash },
       {
         $set: { password: passwordHash },
+        $inc: { authVersion: 1 },
         $unset: {
           passwordResetTokenHash: 1,
           passwordResetMobileIdRequestId: 1,
@@ -1003,17 +1027,42 @@ export class AuthService {
           }
         : splitFullName(user.fullName);
 
+    const requestedType = dto.profileType || defaultProfileType(user);
     const requested = {
       lastName: personName.lastName,
       firstName: personName.firstName,
       middleName: personName.middleName,
       phone: dto.phone?.trim() || '',
       company: dto.company?.trim() || '',
+      companyShortName:
+        dto.companyShortName !== undefined
+          ? dto.companyShortName.trim()
+          : user.companyShortName || '',
+      profileType: requestedType,
+      legalForm: normalizeLegalForm(
+        requestedType,
+        dto.legalForm ?? user.legalForm,
+      ),
+      employeeLimit:
+        dto.employeeLimit !== undefined
+          ? dto.employeeLimit
+          : (user.employeeLimit ?? null),
     };
 
     if (
       profileFieldsEqual(
-        { ...current, phone: user.phone || '', company: user.company || '' },
+        {
+          ...current,
+          phone: user.phone || '',
+          company: user.company || '',
+          companyShortName: user.companyShortName || '',
+          profileType: defaultProfileType(user),
+          legalForm: normalizeLegalForm(
+            defaultProfileType(user),
+            user.legalForm,
+          ),
+          employeeLimit: user.employeeLimit ?? null,
+        },
         requested,
       )
     ) {
@@ -1029,6 +1078,10 @@ export class AuthService {
       fullName: personName.fullName,
       phone: requested.phone || undefined,
       company: requested.company || undefined,
+      companyShortName: requested.companyShortName || undefined,
+      profileType: requested.profileType,
+      legalForm: requested.legalForm,
+      employeeLimit: requested.employeeLimit,
       requestedAt: new Date(),
     };
     user.markModified('profileChangeRequest');
@@ -1149,9 +1202,10 @@ export class AuthService {
     const employeesCount = await this.userModel.countDocuments({
       parentTenantId: owner._id,
     });
-    if (employeesCount >= MAX_TENANT_EMPLOYEES) {
+    const employeeLimit = resolveEmployeeLimit(owner);
+    if (employeesCount >= employeeLimit) {
       throw new BadRequestException(
-        `В компании можно добавить не более ${MAX_TENANT_EMPLOYEES} сотрудников`,
+        `В компании можно добавить не более ${employeeLimit} сотрудников`,
       );
     }
 
@@ -1184,6 +1238,17 @@ export class AuthService {
       10,
     );
 
+    const identitySeed = applyUserIdentityDefaults({
+      fullName: personName.fullName,
+      company: owner.company,
+      profileType: owner.profileType,
+      legalForm: owner.legalForm,
+      isActive: false,
+      isBlocked: false,
+      invitePending: true,
+      parentTenantId: owner._id,
+      role: employeeRole,
+    });
     const employee = await this.userModel.create({
       email,
       fullName: personName.fullName,
@@ -1201,6 +1266,13 @@ export class AuthService {
       inviteExpiresAt: expiresAt,
       inviteLastSentAt: new Date(),
       emailVerified: false,
+      passSubject: identitySeed.passSubject,
+      identityStatus: identitySeed.identityStatus,
+      authVersion: 1,
+      displayName: personName.fullName,
+      profileType: identitySeed.profileType,
+      legalForm: identitySeed.legalForm,
+      privateDataComplete: false,
     } as any);
 
     await this.mailService.sendEmployeeInvite({
@@ -1324,6 +1396,7 @@ export class AuthService {
           isActive: true,
           invitePending: false,
           emailVerified: true,
+          identityStatus: 'active',
         },
         $unset: {
           inviteTokenHash: 1,
@@ -1375,6 +1448,8 @@ export class AuthService {
     }
 
     employee.isActive = !!isActive;
+    if (!isActive) employee.authVersion = (employee.authVersion || 1) + 1;
+    employee.identityStatus = deriveIdentityStatus(employee);
     await employee.save();
 
     await this.auditService.log({
@@ -1461,6 +1536,8 @@ export class AuthService {
       role,
       role_label: roleLabel,
       created_at: e.createdAt,
+      pass_subject: e.passSubject || null,
+      identity_status: deriveIdentityStatus(e),
     };
   }
 
@@ -1658,6 +1735,8 @@ export class AuthService {
       (p: { toString: () => string }) => p.toString(),
     );
 
+    const view = identityView(user);
+
     let companyLogo = user.companyLogo || undefined;
     let company = user.company;
     if (user.parentTenantId) {
@@ -1694,9 +1773,21 @@ export class AuthService {
       parent_tenant_id: user.parentTenantId?.toString(),
       is_tenant_owner: user.role === 'tenant' && !user.parentTenantId,
       is_active: user.isActive !== false,
+      is_blocked: !!user.isBlocked,
       profile_change_request: mapProfileChangeRequest(
         user.profileChangeRequest,
       ),
+      pass_subject: view.passSubject,
+      identity_status: view.identityStatus,
+      auth_version: view.authVersion,
+      display_name: view.displayName,
+      profile_type: view.profileType,
+      legal_form: view.legalForm,
+      company_short_name: view.companyShortName,
+      employee_limit: view.employeeLimit,
+      employee_limit_effective: view.employeeLimitEffective,
+      private_data_complete: view.privateDataComplete,
+      private_data_revision: view.privateDataRevision,
     };
   }
 

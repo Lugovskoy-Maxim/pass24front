@@ -91,6 +91,41 @@ export class User {
   @Prop({ trim: true })
   companyLogo?: string;
 
+  /** Неизменяемый subject Pass (`usr_…`). Не равен JWT `sub`. */
+  @Prop({ unique: true, sparse: true, trim: true })
+  passSubject?: string;
+
+  @Prop({
+    type: String,
+    enum: ['invited', 'active', 'blocked', 'disabled', 'deleted'],
+  })
+  identityStatus?: string;
+
+  @Prop({ default: 1 })
+  authVersion: number;
+
+  @Prop({ trim: true })
+  displayName?: string;
+
+  @Prop({ type: String, enum: ['individual', 'company'] })
+  profileType?: string;
+
+  @Prop({ type: String, enum: ['ip', 'ooo'], default: null })
+  legalForm?: string | null;
+
+  @Prop({ trim: true })
+  companyShortName?: string;
+
+  /** null = системный лимит MAX_TENANT_EMPLOYEES */
+  @Prop({ type: Number, default: null })
+  employeeLimit?: number | null;
+
+  @Prop({ default: false })
+  privateDataComplete: boolean;
+
+  @Prop({ type: Number, default: null })
+  privateDataRevision?: number | null;
+
   // сюда можно класть externalId и прочее для синка
   @Prop({ type: Object, default: {} })
   meta: Record<string, any>;
@@ -131,6 +166,10 @@ export class User {
     fullName?: string;
     phone?: string;
     company?: string;
+    companyShortName?: string;
+    profileType?: string;
+    legalForm?: string | null;
+    employeeLimit?: number | null;
     requestedAt?: Date;
   } | null;
 }
@@ -142,3 +181,11 @@ UserSchema.index({ properties: 1 });
 UserSchema.index({ role: 1, isActive: 1 });
 UserSchema.index({ fullName: 'text' });
 UserSchema.index({ parentTenantId: 1 });
+UserSchema.index({ passSubject: 1 }, { unique: true, sparse: true });
+UserSchema.index({ identityStatus: 1 });
+UserSchema.index({ profileType: 1 });
+UserSchema.index({ 'meta.externalId': 1 }, { unique: true, sparse: true });
+UserSchema.index(
+  { 'meta.residentProfileExternalId': 1 },
+  { unique: true, sparse: true },
+);

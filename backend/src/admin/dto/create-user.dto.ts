@@ -1,13 +1,19 @@
 import {
   IsArray,
+  IsBoolean,
   IsEmail,
   IsIn,
+  IsInt,
   IsMongoId,
   IsNotEmpty,
   IsOptional,
   IsString,
+  Max,
+  Min,
   MinLength,
+  ValidateIf,
 } from 'class-validator';
+import { Type } from 'class-transformer';
 
 export class CreateUserDto {
   @IsEmail()
@@ -32,6 +38,22 @@ export class CreateUserDto {
   @IsOptional()
   @IsString()
   middleName?: string;
+
+  @IsOptional()
+  @IsString()
+  username?: string;
+
+  @IsOptional()
+  @IsString()
+  displayName?: string;
+
+  @IsOptional()
+  @IsBoolean()
+  emailVerified?: boolean;
+
+  @IsOptional()
+  @IsBoolean()
+  privateDataComplete?: boolean;
 
   @IsOptional()
   @IsString()
@@ -66,4 +88,33 @@ export class CreateUserDto {
   @IsArray()
   @IsMongoId({ each: true })
   propertyIds?: string[];
+
+  @IsOptional()
+  @IsIn(['individual', 'company'])
+  profileType?: 'individual' | 'company';
+
+  @IsOptional()
+  @ValidateIf((_, v) => v !== null && v !== undefined && v !== '')
+  @IsIn(['ip', 'ooo'])
+  legalForm?: 'ip' | 'ooo' | null;
+
+  @IsOptional()
+  @IsString()
+  companyShortName?: string;
+
+  @IsOptional()
+  @ValidateIf((_, v) => v !== null && v !== undefined)
+  @Type(() => Number)
+  @IsInt()
+  @Min(0)
+  @Max(200)
+  employeeLimit?: number | null;
+
+  @IsOptional()
+  @IsBoolean()
+  isActive?: boolean;
+
+  @IsOptional()
+  @IsBoolean()
+  isBlocked?: boolean;
 }

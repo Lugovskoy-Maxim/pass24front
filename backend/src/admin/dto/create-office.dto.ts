@@ -1,4 +1,5 @@
 import {
+  IsBoolean,
   IsMongoId,
   IsNotEmpty,
   IsNumber,
@@ -31,4 +32,12 @@ export class CreateOfficeDto {
   @IsOptional()
   @IsMongoId()
   tenantId?: string;
+
+  @IsOptional()
+  @IsBoolean()
+  isActive?: boolean;
+
+  @IsOptional()
+  @IsString()
+  externalId?: string;
 }

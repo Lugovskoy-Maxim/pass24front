@@ -30,11 +30,25 @@ import { CreateBusinessCenterDto } from './dto/create-business-center.dto';
 import { CreateOfficeDto } from './dto/create-office.dto';
 import { ImportOfficesDto } from './dto/import-offices.dto';
 import { CreateUserDto } from './dto/create-user.dto';
+import { UpdateUserDto } from './dto/update-user.dto';
 import { UpdateAccessConfigDto } from './dto/update-access-config.dto';
 import { UpdateBusinessCenterDto } from './dto/update-business-center.dto';
 
 import { UpdateSiteSettingsDto } from './dto/update-site-settings.dto';
 import { SiteSettingsService } from '../site-settings/site-settings.service';
+import { SiteSourceService } from '../site-source/site-source.service';
+import {
+  ConfirmLinksDto,
+  ConfirmSuggestedDto,
+  PushOfficeDto,
+  TicketMessageDto,
+  UnlinkDto,
+  UpdateSiteSourceDto,
+} from '../site-source/site-source.dto';
+import {
+  MSTYLE_V2_CATALOG,
+  mstyleCatalogMeta,
+} from '../integrations/mstyle-v2/mstyle-v2.catalog';
 
 @Controller('admin')
 @UseGuards(AuthGuard('jwt'), PermissionsGuard)
@@ -45,6 +59,7 @@ export class AdminController {
     private readonly accessConfigService: AccessConfigService,
     private readonly auditService: AuditService,
     private readonly siteSettingsService: SiteSettingsService,
+    private readonly siteSourceService: SiteSourceService,
   ) {}
 
   @Get('dashboard')
@@ -113,7 +128,7 @@ export class AdminController {
   @RequireAllPermissions('admin.users')
   updateUser(
     @Param('id') id: string,
-    @Body() dto: Partial<CreateUserDto & { isActive: boolean }>,
+    @Body() dto: UpdateUserDto,
     @Req() req: any,
   ) {
     return this.adminService.updateUser(id, dto, req.user);
@@ -263,6 +278,151 @@ export class AdminController {
       userId: query.userId,
       search: query.search,
     };
+  }
+
+  @Get('site-source')
+  @RequireAllPermissions('admin.settings')
+  getSiteSource() {
+    return this.siteSourceService.getPublicConfig();
+  }
+
+  @Patch('site-source')
+  @RequireAllPermissions('admin.settings')
+  async updateSiteSource(@Body() dto: UpdateSiteSourceDto, @Req() req: any) {
+    const settings = await this.siteSourceService.saveConfig(dto);
+    await this.auditService.log({
+      action: 'site_source.update',
+      entityType: 'app_settings',
+      actor: req.user,
+      details: { host: settings.host, database: settings.database },
+    });
+    return { settings };
+  }
+
+  @Post('site-source/test')
+  @RequireAllPermissions('admin.settings')
+  testSiteSource() {
+    return this.siteSourceService.testConnection();
+  }
+
+  @Post('site-source/offices/import')
+  @RequireAllPermissions('admin.settings')
+  importSiteOffices(@Req() req: any) {
+    return this.siteSourceService.importOffices().then(async (result) => {
+      await this.auditService.log({
+        action: 'site_source.offices_import',
+        entityType: 'office',
+        actor: req.user,
+        details: result,
+      });
+      return result;
+    });
+  }
+
+  @Get('site-source/links')
+  @RequireAllPermissions('admin.settings')
+  listSiteLinks() {
+    return this.siteSourceService.listLinks();
+  }
+
+  @Post('site-source/links/confirm')
+  @RequireAllPermissions('admin.settings')
+  confirmSiteLinks(@Body() dto: ConfirmLinksDto, @Req() req: any) {
+    return this.siteSourceService.confirmLinks(dto).then(async (result) => {
+      await this.auditService.log({
+        action: 'site_source.links_confirm',
+        entityType: 'app_settings',
+        actor: req.user,
+        details: result,
+      });
+      return result;
+    });
+  }
+
+  @Post('site-source/links/confirm-suggested')
+  @RequireAllPermissions('admin.settings')
+  confirmSuggestedLinks(@Body() dto: ConfirmSuggestedDto, @Req() req: any) {
+    return this.siteSourceService.confirmSuggested(dto).then(async (result) => {
+      await this.auditService.log({
+        action: 'site_source.links_suggested',
+        entityType: 'app_settings',
+        actor: req.user,
+        details: result,
+      });
+      return result;
+    });
+  }
+
+  @Post('site-source/links/unlink')
+  @RequireAllPermissions('admin.settings')
+  unlinkSite(@Body() dto: UnlinkDto) {
+    return this.siteSourceService.unlink(dto);
+  }
+
+  @Post('site-source/offices/sync-linked')
+  @RequireAllPermissions('admin.settings')
+  syncLinkedOffices(@Req() req: any) {
+    return this.siteSourceService.syncLinked().then(async (result) => {
+      await this.auditService.log({
+        action: 'site_source.sync_linked',
+        entityType: 'office',
+        actor: req.user,
+        details: result,
+      });
+      return result;
+    });
+  }
+
+  @Post('site-source/offices/:id/push')
+  @RequireAllPermissions('admin.settings')
+  pushOffice(
+    @Param('id') id: string,
+    @Body() dto: PushOfficeDto,
+    @Req() req: any,
+  ) {
+    return this.siteSourceService.pushOffice(id, dto).then(async (result) => {
+      await this.auditService.log({
+        action: 'site_source.office_push',
+        entityType: 'office',
+        entityId: id,
+        actor: req.user,
+        details: result,
+      });
+      return result;
+    });
+  }
+
+  @Get('site-source/check')
+  @RequireAllPermissions('admin.settings')
+  checkSiteSource() {
+    return this.siteSourceService.checkSource();
+  }
+
+  @Get('site-source/tickets')
+  @RequireAllPermissions('admin.settings')
+  listSiteTickets() {
+    return this.siteSourceService.listTickets();
+  }
+
+  @Get('site-source/tickets/:id')
+  @RequireAllPermissions('admin.settings')
+  getSiteTicket(@Param('id') id: string) {
+    return this.siteSourceService.getTicket(id);
+  }
+
+  @Post('site-source/tickets/:id/messages')
+  @RequireAllPermissions('admin.settings')
+  addSiteTicketMessage(
+    @Param('id') id: string,
+    @Body() dto: TicketMessageDto,
+  ) {
+    return this.siteSourceService.addTicketMessage(id, dto.body);
+  }
+
+  @Get('integration/catalog')
+  @RequireAllPermissions('admin.settings')
+  integrationCatalog() {
+    return { meta: mstyleCatalogMeta(), endpoints: MSTYLE_V2_CATALOG };
   }
 
   @Get('site-settings')

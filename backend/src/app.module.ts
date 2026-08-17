@@ -23,6 +23,7 @@ import { MailModule } from './mail/mail.module';
 import { SmsModule } from './sms/sms.module';
 import { SiteSettingsModule } from './site-settings/site-settings.module';
 import { NotificationsModule } from './notifications/notifications.module';
+import { MstyleV2Module } from './integrations/mstyle-v2/mstyle-v2.module';
 
 @Module({
   imports: [
@@ -54,6 +55,7 @@ import { NotificationsModule } from './notifications/notifications.module';
     PassesModule,
     AppConfigModule, // публичный GET /config
     AdminModule,
+    MstyleV2Module,
   ],
   controllers: [AppController],
   providers: [AppService],

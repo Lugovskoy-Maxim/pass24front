@@ -2391,6 +2391,54 @@ a.pass-detail__chip:hover,
   backdrop-filter: blur(2px);
 }
 
+.admin-modal {
+  position: fixed;
+  inset: 0;
+  z-index: 110;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  padding: 1rem;
+  background: rgb(15 23 42 / 0.45);
+  backdrop-filter: blur(2px);
+}
+
+.admin-modal__panel {
+  width: 100%;
+  max-width: 36rem;
+  max-height: min(90dvh, 52rem);
+  display: flex;
+  flex-direction: column;
+  border: 1px solid var(--border);
+  border-radius: var(--radius);
+  background: var(--surface);
+  box-shadow: 0 16px 40px rgb(15 23 42 / 0.18);
+  overflow: hidden;
+}
+
+.admin-modal__panel--wide {
+  max-width: 44rem;
+}
+
+.admin-modal__header {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 0.75rem;
+  padding: 1rem 1.25rem;
+  border-bottom: 1px solid var(--border);
+  background: var(--surface-muted);
+  flex-shrink: 0;
+}
+
+.admin-modal__body {
+  overflow-y: auto;
+  overflow-x: hidden;
+  padding: 1.25rem;
+  -webkit-overflow-scrolling: touch;
+  overscroll-behavior: contain;
+}
+
 .share-modal__panel {
   width: 100%;
   max-width: 24rem;

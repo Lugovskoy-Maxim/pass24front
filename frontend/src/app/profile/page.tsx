@@ -22,6 +22,7 @@ import {
   User as UserIcon,
   UserPlus,
   Users,
+  Fingerprint,
 } from 'lucide-react';
 import { ProtectedLayout } from '@/components/ProtectedLayout';
 import { PersonNameFields } from '@/components/PersonNameFields';
@@ -39,7 +40,11 @@ import {
   getErrorMessage,
   TenantEmployee,
 } from '@/lib/api';
-import { MAX_TENANT_EMPLOYEES } from '@/lib/bookable-visit-dates';
+import {
+  identityStatusLabel,
+  legalFormLabel,
+  profileTypeLabel,
+} from '@/lib/pass-identity';
 import {
   getUserRoleLabel,
   isTenantCompanyUser,
@@ -94,6 +99,12 @@ export default function ProfilePage() {
   });
   const [phone, setPhone] = useState('');
   const [company, setCompany] = useState('');
+  const [companyShortName, setCompanyShortName] = useState('');
+  const [profileType, setProfileType] = useState<'individual' | 'company'>(
+    'individual',
+  );
+  const [legalForm, setLegalForm] = useState<'ip' | 'ooo' | null>(null);
+  const [employeeLimit, setEmployeeLimit] = useState<number | null>(null);
   const [saving, setSaving] = useState(false);
   const [cancelling, setCancelling] = useState(false);
   const [fieldErrors, setFieldErrors] = useState<FieldErrors>({});
@@ -128,6 +139,7 @@ export default function ProfilePage() {
   const tenantEmployee = isTenantEmployee(user);
   const tenantCompanyUser = isTenantCompanyUser(user);
   const pending = user?.profile_change_request;
+  const employeeCap = user?.employee_limit_effective ?? 3;
 
   useEffect(() => {
     if (!user) return;
@@ -149,6 +161,23 @@ export default function ProfilePage() {
     );
     setPhone((pending?.phone ?? user.phone) || '');
     setCompany((pending?.company ?? user.company) || '');
+    setCompanyShortName(
+      (pending?.company_short_name ?? user.company_short_name) || '',
+    );
+    setProfileType(
+      ((pending?.profile_type || user.profile_type) as
+        | 'individual'
+        | 'company') || (user.company ? 'company' : 'individual'),
+    );
+    setLegalForm(
+      ((pending?.legal_form ?? user.legal_form) as 'ip' | 'ooo' | null) ??
+        null,
+    );
+    setEmployeeLimit(
+      pending?.employee_limit !== undefined
+        ? pending.employee_limit
+        : (user.employee_limit ?? null),
+    );
   }, [user, pending]);
 
   const loadEmployees = useCallback(
@@ -228,6 +257,10 @@ export default function ProfilePage() {
         middleName: nameParts.middleName.trim() || undefined,
         phone: phone.trim() || undefined,
         company: company.trim() || undefined,
+        companyShortName: companyShortName.trim() || undefined,
+        profileType,
+        legalForm: profileType === 'company' ? legalForm || 'ooo' : null,
+        employeeLimit,
       });
       await refreshUser();
       toast('Изменения отправлены на подтверждение администратору', 'success');
@@ -283,9 +316,9 @@ export default function ProfilePage() {
 
   const handleAddEmployee = async (e: FormEvent) => {
     e.preventDefault();
-    if (employees.length >= MAX_TENANT_EMPLOYEES) {
+    if (employees.length >= employeeCap) {
       toast(
-        `В компании можно добавить не более ${MAX_TENANT_EMPLOYEES} сотрудников`,
+        `В компании можно добавить не более ${employeeCap} сотрудников`,
         'error',
       );
       return;
@@ -557,11 +590,26 @@ export default function ProfilePage() {
             label="Роль"
             value={getUserRoleLabel(user)}
           />
+          {(user.profile_type || user.company) && (
+            <ProfileInfoRow
+              icon={Building2}
+              label="Тип профиля"
+              value={`${profileTypeLabel(user.profile_type)}${
+                user.profile_type === 'company' && user.legal_form
+                  ? ` · ${legalFormLabel(user.legal_form)}`
+                  : ''
+              }`}
+            />
+          )}
           {user.company && (
             <ProfileInfoRow
               icon={Building2}
               label="Компания"
-              value={user.company}
+              value={
+                user.company_short_name
+                  ? `${user.company} (${user.company_short_name})`
+                  : user.company
+              }
             />
           )}
           {user.phone && (
@@ -580,6 +628,31 @@ export default function ProfilePage() {
               value={`оф. ${user.office}${user.floor ? `, ${user.floor} эт.` : ''}`}
             />
           ) : null}
+          {user.pass_subject && (
+            <ProfileInfoRow
+              icon={Fingerprint}
+              label="Идентификатор Pass"
+              value={user.pass_subject}
+            />
+          )}
+          {user.identity_status && (
+            <ProfileInfoRow
+              icon={Shield}
+              label="Статус учётки Pass"
+              value={`${identityStatusLabel(user.identity_status)} · authVersion ${user.auth_version ?? 1}`}
+            />
+          )}
+          {tenantOwner && (
+            <ProfileInfoRow
+              icon={CheckCircle2}
+              label="Анкета (ПДн)"
+              value={
+                user.private_data_complete
+                  ? `полная${user.private_data_revision != null ? ` · rev ${user.private_data_revision}` : ''}`
+                  : 'неполная'
+              }
+            />
+          )}
         </div>
 
         {needsEmailVerification && (
@@ -707,6 +780,59 @@ export default function ProfilePage() {
                   placeholder={ph.company}
                 />
               </FormField>
+              <FormField id="profileType" label="Тип профиля">
+                <select
+                  id="profileType"
+                  className="input"
+                  value={profileType}
+                  onChange={(e) => {
+                    const next = e.target.value as 'individual' | 'company';
+                    setProfileType(next);
+                    setLegalForm(next === 'company' ? legalForm || 'ooo' : null);
+                  }}
+                >
+                  <option value="individual">Физлицо</option>
+                  <option value="company">Компания</option>
+                </select>
+              </FormField>
+              {profileType === 'company' && (
+                <FormField id="legalForm" label="Правовая форма">
+                  <select
+                    id="legalForm"
+                    className="input"
+                    value={legalForm || 'ooo'}
+                    onChange={(e) =>
+                      setLegalForm(e.target.value as 'ip' | 'ooo')
+                    }
+                  >
+                    <option value="ooo">ООО</option>
+                    <option value="ip">ИП</option>
+                  </select>
+                </FormField>
+              )}
+              <FormField id="companyShortName" label="Краткое название">
+                <FormInput
+                  id="companyShortName"
+                  value={companyShortName}
+                  onChange={(e) => setCompanyShortName(e.target.value)}
+                  placeholder="для документов"
+                />
+              </FormField>
+              <FormField id="employeeLimit" label="Лимит сотрудников">
+                <FormInput
+                  id="employeeLimit"
+                  type="number"
+                  min={0}
+                  max={200}
+                  value={employeeLimit ?? ''}
+                  onChange={(e) =>
+                    setEmployeeLimit(
+                      e.target.value === '' ? null : Number(e.target.value),
+                    )
+                  }
+                  placeholder={`по умолчанию ${employeeCap}`}
+                />
+              </FormField>
             </div>
 
             <button type="submit" className="btn btn-primary" disabled={saving}>
@@ -739,8 +865,8 @@ export default function ProfilePage() {
                 <p className="text-sm text-[var(--muted)] mt-1">
                   Укажите email — сотруднику придёт ссылка (72 часа), он сам
                   задаст пароль. Сотрудники видят все пропуска{' '}
-                  {user.company || 'компании'}. Максимум {MAX_TENANT_EMPLOYEES}{' '}
-                  сотрудника ({employees.length}/{MAX_TENANT_EMPLOYEES}).
+                  {user.company || 'компании'}. Максимум {employeeCap}{' '}
+                  сотрудника ({employees.length}/{employeeCap}).
                 </p>
               </div>
             </div>
@@ -853,9 +979,9 @@ export default function ProfilePage() {
               </p>
             )}
 
-            {employees.length >= MAX_TENANT_EMPLOYEES ? (
+            {employees.length >= employeeCap ? (
               <div className="border-t border-[var(--border)] pt-5 text-sm text-[var(--muted)]">
-                Достигнут лимит: не более {MAX_TENANT_EMPLOYEES} сотрудников в
+                Достигнут лимит: не более {employeeCap} сотрудников в
                 компании. Чтобы добавить нового, удалите одного из текущих.
               </div>
             ) : (

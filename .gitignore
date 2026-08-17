@@ -5,6 +5,8 @@ node_modules/
 .DS_Store
 pass365/
 backend/dist
+backend/backups/
+frontend/tsconfig.tsbuildinfo
 
 # MongoDB runtime data (Docker bind mount) — never commit collections/WiredTiger files
 data/*

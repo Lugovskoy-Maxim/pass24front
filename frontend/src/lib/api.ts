@@ -67,6 +67,10 @@ export interface ProfileChangeRequest {
   full_name: string;
   phone?: string;
   company?: string;
+  company_short_name?: string;
+  profile_type?: string;
+  legal_form?: string | null;
+  employee_limit?: number | null;
   requested_at: string;
 }
 
@@ -95,7 +99,19 @@ export interface User {
   parent_tenant_id?: string;
   is_tenant_owner?: boolean;
   is_active?: boolean;
+  is_blocked?: boolean;
   role_label?: string;
+  pass_subject?: string | null;
+  identity_status?: string;
+  auth_version?: number;
+  display_name?: string;
+  profile_type?: 'individual' | 'company' | string;
+  legal_form?: 'ip' | 'ooo' | null;
+  company_short_name?: string | null;
+  employee_limit?: number | null;
+  employee_limit_effective?: number;
+  private_data_complete?: boolean;
+  private_data_revision?: number | null;
 }
 
 export interface TenantEmployee {
@@ -113,6 +129,8 @@ export interface TenantEmployee {
   role: string;
   role_label: string;
   created_at: string;
+  pass_subject?: string | null;
+  identity_status?: string;
 }
 
 export interface EmployeeRole {
@@ -454,6 +472,10 @@ export const api = {
     middleName?: string;
     phone?: string;
     company?: string;
+    companyShortName?: string;
+    profileType?: 'individual' | 'company';
+    legalForm?: 'ip' | 'ooo' | null;
+    employeeLimit?: number | null;
   }) =>
     request<{ user: User }>('/auth/profile', {
       method: 'PATCH',
@@ -881,7 +903,7 @@ export const api = {
 
     updateUser: (
       id: string,
-      data: Partial<CreateUserData & { isActive: boolean }>,
+      data: Partial<CreateUserData & { isActive: boolean; isBlocked?: boolean }>,
     ) =>
       request<{ user: AdminUser }>(`/admin/users/${id}`, {
         method: 'PATCH',
@@ -942,6 +964,7 @@ export const api = {
       data: {
         name?: string;
         address?: string;
+        code?: string;
         passSettings?: Partial<BcPassSettings>;
       },
     ) =>
@@ -1019,6 +1042,157 @@ export const api = {
       }
       await downloadFileResponse(res, `audit-${datePart}.csv`);
     },
+
+    getSiteSource: () => request<SiteMysqlSettings>('/admin/site-source'),
+
+    updateSiteSource: (data: Partial<SiteMysqlSettings> & { password?: string }) =>
+      request<{ settings: SiteMysqlSettings }>('/admin/site-source', {
+        method: 'PATCH',
+        body: JSON.stringify(data),
+      }),
+
+    testSiteSource: () =>
+      request<{
+        ok: boolean;
+        database?: string;
+        tables: number;
+        tableNames: string[];
+      }>('/admin/site-source/test', { method: 'POST' }),
+
+    importSiteOffices: () =>
+      request<{
+        source: string;
+        created: number;
+        updated: number;
+        linked: number;
+        merged: number;
+        total: number;
+      }>('/admin/site-source/offices/import', { method: 'POST' }),
+
+    getSiteLinks: () =>
+      request<{
+        properties: SiteLinkRow[];
+        offices: SiteOfficeLinkRow[];
+        passProperties: Array<{
+          id: string;
+          name: string;
+          code?: string;
+          officesCount: number;
+        }>;
+        passOffices: Array<{
+          id: string;
+          number: string;
+          propertyId?: string;
+          externalId?: string;
+          company?: string;
+        }>;
+        pendingChanges: boolean;
+        lastCheckedAt?: string;
+        lastChangedAt?: string;
+        note?: string;
+      }>('/admin/site-source/links'),
+
+    confirmSiteLinks: (data: {
+      properties?: Array<{ sourceCode: string; targetId: string }>;
+      offices?: Array<{ externalId: string; targetId: string }>;
+    }) =>
+      request<{ properties: number; offices: number }>(
+        '/admin/site-source/links/confirm',
+        { method: 'POST', body: JSON.stringify(data) },
+      ),
+
+    confirmSuggestedLinks: (data?: { properties?: boolean; offices?: boolean }) =>
+      request<{ properties: number; offices: number }>(
+        '/admin/site-source/links/confirm-suggested',
+        { method: 'POST', body: JSON.stringify(data || {}) },
+      ),
+
+    unlinkSite: (data: { propertyId?: string; officeId?: string }) =>
+      request<{ ok: boolean }>('/admin/site-source/links/unlink', {
+        method: 'POST',
+        body: JSON.stringify(data),
+      }),
+
+    syncLinkedOffices: () =>
+      request<{ updated: number; skipped: number; total: number }>(
+        '/admin/site-source/offices/sync-linked',
+        { method: 'POST' },
+      ),
+
+    pushOfficeToMysql: (
+      id: string,
+      data?: {
+        number?: string;
+        floor?: string;
+        areaSqm?: number;
+        company?: string;
+        availability?: string;
+      },
+    ) =>
+      request<{ ok: boolean; externalId?: string; postId?: string }>(
+        `/admin/site-source/offices/${id}/push`,
+        { method: 'POST', body: JSON.stringify(data || {}) },
+      ),
+
+    checkSiteSource: () =>
+      request<{
+        fingerprint: string;
+        changed: boolean;
+        pendingChanges: boolean;
+        lastCheckedAt?: string;
+        lastChangedAt?: string;
+        rooms: { n: number; maxId: number; maxMod: string };
+        tickets: { n: number; maxId: number };
+        autoApplied: boolean;
+      }>('/admin/site-source/check'),
+
+    getSiteTickets: () =>
+      request<{
+        stub: boolean;
+        note?: string;
+        table?: string;
+        fields?: string[];
+        items: Array<{
+          id?: unknown;
+          status?: unknown;
+          title?: unknown;
+          office?: unknown;
+          created?: unknown;
+          raw: Record<string, unknown>;
+        }>;
+      }>('/admin/site-source/tickets'),
+
+    getSiteTicket: (id: string) =>
+      request<{
+        ticket: { id?: unknown; raw: Record<string, unknown> };
+        messages: Record<string, unknown>[];
+        stub: boolean;
+        note?: string;
+      }>(`/admin/site-source/tickets/${encodeURIComponent(id)}`),
+
+    addSiteTicketMessage: (id: string, body: string) =>
+      request<{
+        stub: boolean;
+        stored: boolean;
+        note?: string;
+        draft?: unknown;
+      }>(`/admin/site-source/tickets/${encodeURIComponent(id)}/messages`, {
+        method: 'POST',
+        body: JSON.stringify({ body }),
+      }),
+
+    getIntegrationCatalog: () =>
+      request<{
+        meta: {
+          title: string;
+          privateBase: string;
+          tokenUrl: string;
+          schemaVersion: string;
+          count: number;
+          groups: string[];
+        };
+        endpoints: IntegrationEndpoint[];
+      }>('/admin/integration/catalog'),
 
     getSiteSettings: () =>
       request<{ settings: SiteSettings }>('/admin/site-settings'),
@@ -1098,6 +1272,80 @@ export interface HelpGuideSection {
   title: string;
   steps?: string[];
   paragraphs?: string[];
+}
+
+export interface SiteLinkRow {
+  sourceCode: string;
+  sourceName: string;
+  status: 'linked' | 'suggested' | 'unmatched';
+  linkedId?: string;
+  linkedName?: string;
+  suggestedId?: string;
+  suggestedName?: string;
+}
+
+export interface SiteOfficeLinkRow {
+  externalId: string;
+  number: string;
+  floor?: string;
+  areaSqm?: number;
+  company?: string;
+  propertyName?: string;
+  propertyCode?: string;
+  status: 'linked' | 'suggested' | 'unmatched';
+  linkedId?: string;
+  linkedNumber?: string;
+  suggestedId?: string;
+  suggestedNumber?: string;
+}
+
+export interface IntegrationEndpoint {
+  id: string;
+  group: string;
+  milestone: 'M0' | 'M1' | 'M2';
+  title: string;
+  method: 'GET' | 'POST' | 'PATCH';
+  path: string;
+  headers: Record<string, string>;
+  request?: unknown;
+  requestForm?: string;
+  success: { status: number; label: string; body: unknown; contentType?: string };
+  errors: Array<{
+    status: number;
+    label: string;
+    body: unknown;
+    contentType?: string;
+  }>;
+}
+
+export interface SiteMysqlSettings {
+  enabled: boolean;
+  host: string;
+  port: number;
+  database: string;
+  user: string;
+  hasPassword: boolean;
+  writeEnabled?: boolean;
+  autoSyncEnabled?: boolean;
+  autoSyncIntervalSec?: number;
+  autoApply?: boolean;
+  lastCheckedAt?: string;
+  lastChangedAt?: string;
+  pendingChanges?: boolean;
+  tablePrefix: string;
+  roomPostType: string;
+  roomNumberMeta: string;
+  floorMeta: string;
+  areaMeta: string;
+  badgeMeta: string;
+  availabilityMeta: string;
+  officeFormatMeta: string;
+  companyMeta: string;
+  businessCenterTaxonomy: string;
+  roomTypeTaxonomy: string;
+  serviceRequestsTable: string;
+  serviceRequestMessagesTable: string;
+  servicesTable: string;
 }
 
 export interface SiteSettings {
@@ -1221,6 +1469,7 @@ export interface Office {
   tenantId?: string;
   tenantName?: string;
   isActive: boolean;
+  externalId?: string;
   createdAt: string;
 }
 
@@ -1231,6 +1480,8 @@ export interface CreateOfficeData {
   areaSqm?: number;
   company?: string;
   tenantId?: string;
+  isActive?: boolean;
+  externalId?: string;
 }
 
 export interface DailyReport {
@@ -1269,7 +1520,9 @@ export interface UserFilters {
 export interface AdminUser {
   id: string;
   email: string;
+  username?: string;
   emailVerified?: boolean;
+  lastLoginAt?: string;
   fullName: string;
   lastName?: string;
   firstName?: string;
@@ -1298,11 +1551,27 @@ export interface AdminUser {
   /** Сотрудники компании (только у владельца на вкладке «Арендаторы») */
   employees?: AdminUser[];
   employeesCount?: number;
+  isBlocked?: boolean;
+  passSubject?: string | null;
+  identityStatus?: string;
+  authVersion?: number;
+  displayName?: string;
+  profileType?: 'individual' | 'company' | string;
+  legalForm?: 'ip' | 'ooo' | null;
+  companyShortName?: string | null;
+  employeeLimit?: number | null;
+  employeeLimitEffective?: number;
+  privateDataComplete?: boolean;
+  privateDataRevision?: number | null;
 }
 
 export interface CreateUserData {
   email: string;
   password: string;
+  username?: string;
+  displayName?: string;
+  emailVerified?: boolean;
+  privateDataComplete?: boolean;
   fullName?: string;
   lastName?: string;
   firstName?: string;
@@ -1315,6 +1584,10 @@ export interface CreateUserData {
   floor?: string;
   officeIds?: string[];
   propertyIds?: string[];
+  profileType?: 'individual' | 'company';
+  legalForm?: 'ip' | 'ooo' | null;
+  companyShortName?: string;
+  employeeLimit?: number | null;
 }
 
 export function formatTenantOffices(offices?: TenantOffice[]): string {
@@ -1443,6 +1716,8 @@ export interface BusinessCenter {
   id: string;
   name: string;
   address?: string;
+  /** Ключ сайта: tf-business-center:12 */
+  code?: string;
   officesCount: number;
   totalAreaSqm?: number;
   isActive: boolean;

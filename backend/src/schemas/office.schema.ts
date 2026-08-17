@@ -30,6 +30,10 @@ export class Office {
 
   @Prop({ default: true })
   isActive: boolean;
+
+  /** Ключ с сайта, напр. tf-room:107 */
+  @Prop({ unique: true, sparse: true, trim: true })
+  externalId?: string;
 }
 
 export const OfficeSchema = SchemaFactory.createForClass(Office);

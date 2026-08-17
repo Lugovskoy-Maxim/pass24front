@@ -15,7 +15,9 @@ import {
   Shield,
   DoorOpen,
   KeyRound,
-  Globe,
+  Settings,
+  Database,
+  Webhook,
   PanelLeftClose,
   PanelLeftOpen,
 } from 'lucide-react';
@@ -47,9 +49,23 @@ const NAV = [
   },
   { href: '/admin/audit', label: 'Журнал действий', icon: ScrollText },
   {
-    href: '/admin/site',
-    label: 'Базовые настройки',
-    icon: Globe,
+    href: '/admin/settings',
+    label: 'Настройки',
+    icon: Settings,
+    permission: 'admin.settings',
+    also: ['/admin/site'],
+  },
+  {
+    href: '/admin/mysql',
+    label: 'MySQL',
+    icon: Database,
+    permission: 'admin.settings',
+    also: ['/admin/mysql/links', '/admin/mysql/tickets'],
+  },
+  {
+    href: '/admin/integration',
+    label: 'API Mstyle',
+    icon: Webhook,
     permission: 'admin.settings',
   },
 ];
@@ -137,10 +153,11 @@ export function AdminLayout({
               </span>
             </div>
             <nav className="flex gap-1.5 overflow-x-auto [scrollbar-width:none] [&::-webkit-scrollbar]:hidden lg:block lg:space-y-1 lg:overflow-visible">
-              {links.map(({ href, label, icon: Icon, exact }) => {
+              {links.map(({ href, label, icon: Icon, exact, also }) => {
                 const active = exact
                   ? pathname === href
-                  : pathname.startsWith(href);
+                  : pathname.startsWith(href) ||
+                    (also || []).some((path) => pathname.startsWith(path));
                 const showBadge =
                   href === '/admin/users' && registrationPending > 0;
                 return (

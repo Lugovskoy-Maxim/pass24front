@@ -122,6 +122,44 @@ export class AppSettings {
     steps: string[];
     paragraphs: string[];
   }>;
+
+  /** Read-only MySQL сайта (офисы / заявки). Пароль — encrypted blob. */
+  @Prop({ type: Object, default: {} })
+  siteMysql?: {
+    enabled?: boolean;
+    host?: string;
+    port?: number;
+    database?: string;
+    user?: string;
+    passwordEnc?: {
+      keyVersion: number;
+      iv: string;
+      tag: string;
+      ciphertext: string;
+    };
+    tablePrefix?: string;
+    roomPostType?: string;
+    roomNumberMeta?: string;
+    floorMeta?: string;
+    areaMeta?: string;
+    badgeMeta?: string;
+    availabilityMeta?: string;
+    officeFormatMeta?: string;
+    companyMeta?: string;
+    businessCenterTaxonomy?: string;
+    roomTypeTaxonomy?: string;
+    serviceRequestsTable?: string;
+    serviceRequestMessagesTable?: string;
+    servicesTable?: string;
+    writeEnabled?: boolean;
+    autoSyncEnabled?: boolean;
+    autoSyncIntervalSec?: number;
+    autoApply?: boolean;
+    lastFingerprint?: string;
+    lastCheckedAt?: string;
+    lastChangedAt?: string;
+    pendingChanges?: boolean;
+  };
 }
 
 export const AppSettingsSchema = SchemaFactory.createForClass(AppSettings);

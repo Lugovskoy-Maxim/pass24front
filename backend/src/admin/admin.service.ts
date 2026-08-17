@@ -6,6 +6,14 @@ import {
 } from '@nestjs/common';
 import { resolvePersonName, splitFullName } from '../common/person-name';
 import { mapProfileChangeRequest } from '../common/profile-change';
+import {
+  applyUserIdentityDefaults,
+  defaultProfileType,
+  deriveIdentityStatus,
+  identityView,
+  normalizeLegalForm,
+  shouldBumpAuthVersion,
+} from '../common/pass-identity';
 import { InjectModel } from '@nestjs/mongoose';
 import * as bcrypt from 'bcryptjs';
 import { Model, Types } from 'mongoose';
@@ -28,6 +36,8 @@ import { PropertyType } from '../schemas/enums';
 import { CreateBusinessCenterDto } from './dto/create-business-center.dto';
 import { CreateOfficeDto } from './dto/create-office.dto';
 import { CreateUserDto } from './dto/create-user.dto';
+import { UpdateUserDto } from './dto/update-user.dto';
+import { MstyleIdentityService } from '../integrations/mstyle-v2/mstyle-v2.identities';
 import { UpdateBusinessCenterDto } from './dto/update-business-center.dto';
 import { BusinessCenterPassSettingsDto } from './dto/business-center-pass-settings.dto';
 import { TestDataSeedService } from '../database/test-data-seed.service';
@@ -60,7 +70,17 @@ export class AdminService {
     private auditService: AuditService,
     private passesService: PassesService,
     private testDataSeedService: TestDataSeedService,
+    private identities: MstyleIdentityService,
   ) {}
+
+  private async syncResidentRecord(user: UserDocument) {
+    if (user.role !== 'tenant' && !user.parentTenantId) return;
+    try {
+      await this.identities.ensureFromUser(user);
+    } catch {
+      /* User — источник; закрытый API подтянет при следующем входе */
+    }
+  }
 
   async assertRolesDeletable(roles: string[]) {
     for (const role of roles) {
@@ -174,7 +194,15 @@ export class AdminService {
       const matchingEmployees = await this.userModel
         .find({
           parentTenantId: { $exists: true, $ne: null },
-          $or: [{ fullName: rx }, { email: rx }, { company: rx }],
+          $or: [
+            { fullName: rx },
+            { displayName: rx },
+            { username: rx },
+            { email: rx },
+            { company: rx },
+            { phone: rx },
+            { passSubject: rx },
+          ],
         })
         .select('parentTenantId')
         .lean();
@@ -335,9 +363,14 @@ export class AdminService {
       );
       filter.$or = [
         { fullName: rx },
+        { displayName: rx },
+        { username: rx },
         { email: rx },
         { company: rx },
+        { companyShortName: rx },
         { office: rx },
+        { phone: rx },
+        { passSubject: rx },
       ];
     }
 
@@ -385,8 +418,22 @@ export class AdminService {
     } catch {
       throw new BadRequestException('Укажите фамилию и имя');
     }
+    const username = await this.ensureUniqueUsername(dto.username);
+    const identitySeed = applyUserIdentityDefaults({
+      fullName: personName.fullName,
+      company: dto.company,
+      profileType: dto.profileType,
+      legalForm: dto.legalForm,
+      companyShortName: dto.companyShortName,
+      employeeLimit: dto.employeeLimit ?? null,
+      isActive: true,
+      isBlocked: false,
+      invitePending: false,
+      role: dto.role,
+    });
     const user = await this.userModel.create({
       email,
+      username,
       fullName: personName.fullName,
       lastName: personName.lastName,
       firstName: personName.firstName,
@@ -402,7 +449,16 @@ export class AdminService {
       floor: dto.floor,
       password: hashed,
       isActive: true,
-      emailVerified: true,
+      emailVerified: dto.emailVerified ?? true,
+      passSubject: identitySeed.passSubject,
+      identityStatus: identitySeed.identityStatus,
+      authVersion: identitySeed.authVersion,
+      displayName: dto.displayName?.trim() || personName.fullName,
+      profileType: identitySeed.profileType,
+      legalForm: identitySeed.legalForm,
+      companyShortName: dto.companyShortName?.trim() || undefined,
+      employeeLimit: dto.employeeLimit ?? null,
+      privateDataComplete: dto.privateDataComplete ?? false,
     } as any);
 
     if (dto.role === 'tenant' && dto.officeIds !== undefined) {
@@ -418,6 +474,8 @@ export class AdminService {
 
     const offices = await this.getTenantOffices(user._id.toString());
     const businessCenters = await this.getUserBusinessCenters(user);
+
+    await this.syncResidentRecord(user);
 
     await this.auditService.log({
       action: 'user.create',
@@ -460,7 +518,11 @@ export class AdminService {
     }
 
     user.isActive = true;
+    user.identityStatus = deriveIdentityStatus(user);
+    if (!user.passSubject)
+      user.passSubject = applyUserIdentityDefaults({}).passSubject;
     await user.save();
+    await this.syncResidentRecord(user);
 
     await this.auditService.log({
       action: 'user.registration_approved',
@@ -544,9 +606,20 @@ export class AdminService {
     user.fullName = req.fullName;
     if (req.phone !== undefined) user.phone = req.phone;
     if (req.company !== undefined) user.company = req.company;
+    if (req.companyShortName !== undefined)
+      user.companyShortName = req.companyShortName;
+    if (req.profileType !== undefined) user.profileType = req.profileType;
+    if (req.legalForm !== undefined) user.legalForm = req.legalForm;
+    if (req.employeeLimit !== undefined) user.employeeLimit = req.employeeLimit;
+    user.displayName = user.fullName;
+    const approvedType = defaultProfileType(user);
+    user.profileType = approvedType;
+    user.legalForm = normalizeLegalForm(approvedType, user.legalForm);
+    user.identityStatus = deriveIdentityStatus(user);
     user.profileChangeRequest = null;
     user.markModified('profileChangeRequest');
     await user.save();
+    await this.syncResidentRecord(user);
 
     await this.auditService.log({
       action: 'profile.change_approved',
@@ -584,11 +657,7 @@ export class AdminService {
     return { user: this.mapUser(user.toObject(), 0, offices, []) };
   }
 
-  async updateUser(
-    id: string,
-    dto: Partial<CreateUserDto & { isActive: boolean }>,
-    actor?: AuditActor,
-  ) {
+  async updateUser(id: string, dto: UpdateUserDto, actor?: AuditActor) {
     const user = await this.userModel.findById(id);
     if (!user) throw new NotFoundException('Пользователь не найден');
 
@@ -615,8 +684,30 @@ export class AdminService {
         throw new BadRequestException('Укажите фамилию и имя');
       }
     }
+    const beforeIdentity = {
+      isBlocked: user.isBlocked,
+      isActive: user.isActive,
+      parentTenantId: user.parentTenantId,
+    };
+    if (dto.username !== undefined) {
+      user.username = await this.ensureUniqueUsername(dto.username, id);
+      if (!user.username) user.set('username', undefined);
+    }
+    if (dto.emailVerified !== undefined) user.emailVerified = dto.emailVerified;
+    if (dto.privateDataComplete !== undefined) {
+      user.privateDataComplete = dto.privateDataComplete;
+    }
     if (dto.phone !== undefined) user.phone = dto.phone;
     if (dto.company !== undefined) user.company = dto.company;
+    if (dto.profileType !== undefined) user.profileType = dto.profileType;
+    if (dto.legalForm !== undefined) user.legalForm = dto.legalForm;
+    if (dto.companyShortName !== undefined) {
+      user.companyShortName = dto.companyShortName?.trim() || undefined;
+    }
+    if (dto.employeeLimit !== undefined) {
+      user.employeeLimit = dto.employeeLimit;
+    }
+    if (dto.isBlocked !== undefined) user.isBlocked = dto.isBlocked;
     if (dto.companyLogo !== undefined && !user.parentTenantId) {
       const logo = dto.companyLogo?.trim() || '';
       if (logo) user.companyLogo = logo;
@@ -637,7 +728,30 @@ export class AdminService {
       }
       user.isActive = dto.isActive;
     }
-    if (dto.password) user.password = await bcrypt.hash(dto.password, 10);
+    if (dto.password) {
+      user.password = await bcrypt.hash(dto.password, 10);
+      user.authVersion = (user.authVersion || 1) + 1;
+    }
+    const nextType = defaultProfileType(user);
+    user.profileType = nextType;
+    user.legalForm = normalizeLegalForm(nextType, user.legalForm);
+    user.displayName =
+      (dto.displayName !== undefined
+        ? dto.displayName.trim()
+        : user.displayName) || user.fullName;
+    if (!user.passSubject) {
+      user.passSubject = applyUserIdentityDefaults({}).passSubject;
+    }
+    if (
+      shouldBumpAuthVersion(beforeIdentity, {
+        isBlocked: user.isBlocked,
+        isActive: user.isActive,
+        parentTenantId: user.parentTenantId,
+      })
+    ) {
+      user.authVersion = (user.authVersion || 1) + 1;
+    }
+    user.identityStatus = deriveIdentityStatus(user);
 
     if (!user.parentTenantId) {
       if (dto.role && dto.role !== 'tenant' && prevRole === 'tenant') {
@@ -662,6 +776,13 @@ export class AdminService {
     }
 
     await user.save();
+    if (dto.username !== undefined && !user.username) {
+      await this.userModel.updateOne(
+        { _id: user._id },
+        { $unset: { username: 1 } },
+      );
+    }
+    await this.syncResidentRecord(user);
 
     if (
       dto.officeIds !== undefined &&
@@ -706,6 +827,23 @@ export class AdminService {
 
     if (dto.name?.trim()) property.name = dto.name.trim();
     if (dto.address?.trim()) property.address = dto.address.trim();
+    if (dto.code !== undefined) {
+      const code = dto.code.trim();
+      if (!code) {
+        property.set('code', undefined);
+      } else {
+        const clash = await this.propertyModel.findOne({
+          code,
+          _id: { $ne: property._id },
+        });
+        if (clash) {
+          throw new ConflictException(
+            `Код «${code}» уже занят БЦ «${clash.name}»`,
+          );
+        }
+        property.code = code;
+      }
+    }
     if (dto.passSettings) {
       property.settings = this.mergeBcPassSettings(
         property.settings,
@@ -714,6 +852,12 @@ export class AdminService {
       property.markModified('settings');
     }
     await property.save();
+    if (dto.code !== undefined && !dto.code.trim()) {
+      await this.propertyModel.updateOne(
+        { _id: property._id },
+        { $unset: { code: 1 } },
+      );
+    }
 
     const stats = await this.officeModel.aggregate([
       { $match: { property: property._id, isActive: true } },
@@ -739,6 +883,7 @@ export class AdminService {
         id: property._id.toString(),
         name: property.name,
         address: property.address,
+        code: property.code || undefined,
         officesCount: stats[0]?.count || 0,
         totalAreaSqm: stats[0]?.totalAreaSqm || 0,
         isActive: property.isActive,
@@ -780,6 +925,7 @@ export class AdminService {
           id: p._id.toString(),
           name: p.name,
           address: p.address,
+          code: p.code || undefined,
           officesCount: stats?.count || 0,
           totalAreaSqm: stats?.totalAreaSqm || 0,
           isActive: p.isActive,
@@ -834,10 +980,17 @@ export class AdminService {
   }
 
   async createBusinessCenter(dto: CreateBusinessCenterDto, actor?: AuditActor) {
+    const code = dto.code?.trim() || undefined;
+    if (code) {
+      const clash = await this.propertyModel.findOne({ code });
+      if (clash) {
+        throw new ConflictException(`Код «${code}» уже занят БЦ «${clash.name}»`);
+      }
+    }
     const property = await this.propertyModel.create({
       name: dto.name.trim(),
       address: dto.address.trim(),
-      code: dto.code?.trim(),
+      code,
       type: PropertyType.BUSINESS_CENTER,
       isActive: true,
       settings: {},
@@ -857,6 +1010,7 @@ export class AdminService {
         id: property._id.toString(),
         name: property.name,
         address: property.address,
+        code: property.code || undefined,
         officesCount: 0,
         isActive: true,
         createdAt: (property as any).createdAt,
@@ -1027,7 +1181,8 @@ export class AdminService {
       areaSqm: dto.areaSqm,
       company: dto.company?.trim(),
       tenantId: dto.tenantId ? new Types.ObjectId(dto.tenantId) : undefined,
-      isActive: true,
+      isActive: dto.isActive !== false,
+      externalId: dto.externalId?.trim() || undefined,
     });
 
     if (dto.tenantId) {
@@ -1069,6 +1224,39 @@ export class AdminService {
 
     const prevTenantId = office.tenantId?.toString();
 
+    const nextPropertyId = dto.propertyId || office.property.toString();
+    const nextNumber =
+      dto.number !== undefined ? dto.number.trim() : office.number;
+    if (dto.number !== undefined || dto.propertyId !== undefined) {
+      const clash = await this.officeModel.findOne({
+        property: nextPropertyId,
+        number: nextNumber,
+        _id: { $ne: office._id },
+      });
+      if (clash) {
+        throw new ConflictException('Офис с таким номером уже есть в этом БЦ');
+      }
+    }
+    if (dto.propertyId !== undefined) {
+      const property = await this.propertyModel.findById(dto.propertyId);
+      if (!property) throw new NotFoundException('Бизнес-центр не найден');
+      office.property = new Types.ObjectId(dto.propertyId);
+    }
+    if (dto.number !== undefined) office.number = nextNumber;
+    if (dto.floor !== undefined) office.floor = dto.floor.trim() || undefined;
+    if (dto.externalId !== undefined) {
+      const ext = dto.externalId.trim();
+      if (ext) {
+        const clash = await this.officeModel.findOne({
+          externalId: ext,
+          _id: { $ne: office._id },
+        });
+        if (clash) throw new ConflictException('externalId уже занят');
+        office.externalId = ext;
+      } else {
+        office.set('externalId', undefined);
+      }
+    }
     if (dto.company !== undefined) office.company = dto.company?.trim();
     if (dto.areaSqm !== undefined) office.areaSqm = dto.areaSqm;
     if (dto.isActive !== undefined) office.isActive = dto.isActive;
@@ -1096,6 +1284,12 @@ export class AdminService {
       await this.officeModel.updateOne(
         { _id: office._id },
         { $unset: { tenantId: 1 } },
+      );
+    }
+    if (dto.externalId !== undefined && !dto.externalId.trim()) {
+      await this.officeModel.updateOne(
+        { _id: office._id },
+        { $unset: { externalId: 1 } },
       );
     }
 
@@ -1361,8 +1555,23 @@ export class AdminService {
       tenantId: office.tenantId?.toString(),
       tenantName: tenant?.fullName,
       isActive: office.isActive,
+      externalId: office.externalId,
       createdAt: office.createdAt,
     };
+  }
+
+  private async ensureUniqueUsername(
+    raw?: string,
+    exceptId?: string,
+  ): Promise<string | undefined> {
+    const username = raw?.trim().toLowerCase() || undefined;
+    if (!username) return undefined;
+    const clash = await this.userModel.findOne({
+      username,
+      ...(exceptId ? { _id: { $ne: exceptId } } : {}),
+    });
+    if (clash) throw new ConflictException('Логин уже занят');
+    return username;
   }
 
   private async getUserBusinessCenters(user: any) {
@@ -1397,7 +1606,9 @@ export class AdminService {
     return {
       id: user._id.toString(),
       email: user.email,
+      username: user.username || undefined,
       emailVerified: !!user.emailVerified,
+      lastLoginAt: user.lastLoginAt || undefined,
       fullName: user.fullName,
       lastName: nameParts.lastName,
       firstName: nameParts.firstName,
@@ -1424,6 +1635,8 @@ export class AdminService {
       profileChangeRequest: mapProfileChangeRequest(user.profileChangeRequest),
       employees: extra?.employees,
       employeesCount: extra?.employees?.length ?? undefined,
+      isBlocked: !!user.isBlocked,
+      ...identityView(user),
     };
   }
 

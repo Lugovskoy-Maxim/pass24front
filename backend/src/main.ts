@@ -27,9 +27,19 @@ async function bootstrap() {
     ],
     credentials: true,
     methods: 'GET,HEAD,PUT,PATCH,POST,DELETE,OPTIONS',
-    allowedHeaders: 'Content-Type, Accept, Authorization',
+    allowedHeaders:
+      'Content-Type, Accept, Authorization, X-Request-ID, Idempotency-Key, If-Match, If-None-Match',
     // Нужно для скачивания CSV (Content-Disposition)
-    exposedHeaders: 'Content-Disposition, Content-Type, Content-Length',
+    exposedHeaders:
+      'Content-Disposition, Content-Type, Content-Length, ETag, Retry-After, X-Request-ID',
+  });
+
+  const http = app.getHttpAdapter().getInstance();
+  http.use((req: { url?: string }, _res: unknown, next: () => void) => {
+    if (req.url?.includes('password:verify')) {
+      req.url = req.url.replace(/password:verify/g, 'password-verify');
+    }
+    next();
   });
 
   app.useGlobalFilters(new AllExceptionsFilter());

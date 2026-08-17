@@ -1,4 +1,13 @@
-import { IsOptional, IsString } from 'class-validator';
+import {
+  IsIn,
+  IsInt,
+  IsOptional,
+  IsString,
+  Max,
+  Min,
+  ValidateIf,
+} from 'class-validator';
+import { Type } from 'class-transformer';
 
 export class UpdateProfileDto {
   @IsOptional()
@@ -20,4 +29,25 @@ export class UpdateProfileDto {
   @IsOptional()
   @IsString()
   company?: string;
+
+  @IsOptional()
+  @IsString()
+  companyShortName?: string;
+
+  @IsOptional()
+  @IsIn(['individual', 'company'])
+  profileType?: 'individual' | 'company';
+
+  @IsOptional()
+  @ValidateIf((_, v) => v !== null && v !== undefined && v !== '')
+  @IsIn(['ip', 'ooo'])
+  legalForm?: 'ip' | 'ooo' | null;
+
+  @IsOptional()
+  @ValidateIf((_, v) => v !== null && v !== undefined)
+  @Type(() => Number)
+  @IsInt()
+  @Min(0)
+  @Max(200)
+  employeeLimit?: number | null;
 }
