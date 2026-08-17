@@ -33,10 +33,15 @@ import {
   validateProfileForm,
 } from '@/lib/form-validation';
 import { useToast } from '@/components/Toast';
+import {
+  OfficeSiteStatusNote,
+  OfficeStatusFlags,
+} from '@/components/OfficeStatusFlags';
 import { useAuth } from '@/lib/auth';
 import {
   api,
   formatTenantOffices,
+  officeDisplayName,
   getErrorMessage,
   TenantEmployee,
 } from '@/lib/api';
@@ -616,11 +621,27 @@ export default function ProfilePage() {
             <ProfileInfoRow icon={Phone} label="Телефон" value={user.phone} />
           )}
           {user.offices?.length ? (
-            <ProfileInfoRow
-              icon={Building2}
-              label="Офисы"
-              value={formatTenantOffices(user.offices)}
-            />
+            <div className="space-y-2">
+              <ProfileInfoRow
+                icon={Building2}
+                label="Офисы"
+                value={formatTenantOffices(user.offices)}
+              />
+              {user.offices.map((office) => (
+                <div
+                  key={office.id}
+                  className={`text-sm px-3 py-2 rounded ${
+                    office.paymentStatus && office.paymentStatus !== 'paid'
+                      ? 'theme-alert-subtle border'
+                      : 'bg-[var(--surface-muted)]'
+                  }`}
+                >
+                  {officeDisplayName(office)}
+                  <OfficeStatusFlags office={office} />
+                </div>
+              ))}
+              <OfficeSiteStatusNote />
+            </div>
           ) : user.office ? (
             <ProfileInfoRow
               icon={Building2}

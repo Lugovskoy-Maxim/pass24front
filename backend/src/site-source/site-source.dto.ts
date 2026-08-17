@@ -88,6 +88,11 @@ export class UpdateSiteSourceDto {
   @IsOptional()
   @IsString()
   @MaxLength(120)
+  roomStatusMeta?: string;
+
+  @IsOptional()
+  @IsString()
+  @MaxLength(120)
   businessCenterTaxonomy?: string;
 
   @IsOptional()

@@ -10,8 +10,7 @@ export default function AdminSettingsPage() {
     <AdminLayout title="Настройки">
       <SettingsNav />
       <p className="text-[var(--muted)] -mt-2 mb-6">
-        Сайт и бренд — /admin/site. Подключение MySQL, поля и обновление
-        офисов — отдельная админка /admin/mysql.
+        Сайт, подключение к WordPress и связи с уже существующими БЦ и офисами.
       </p>
       <div className="grid sm:grid-cols-2 gap-4">
         <Link href="/admin/site" className="card p-5 hover:bg-[var(--surface-muted)]">

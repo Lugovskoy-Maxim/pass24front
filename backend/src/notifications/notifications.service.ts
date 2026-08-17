@@ -144,8 +144,111 @@ export class NotificationsService implements OnModuleInit {
     return { subscribed: false };
   }
 
+  private async pushToTenant(
+    tenantId: string,
+    message: {
+      title: string;
+      body: string;
+      tag: string;
+      url: string;
+      extra?: Record<string, unknown>;
+      topic?: string;
+    },
+  ) {
+    if (!this.enabled) return;
+    const recipients = await this.userModel
+      .find({
+        $or: [
+          { _id: new Types.ObjectId(tenantId) },
+          { parentTenantId: new Types.ObjectId(tenantId) },
+        ],
+        isActive: true,
+        isBlocked: { $ne: true },
+      })
+      .select('_id')
+      .lean();
+    const recipientIds = recipients.map((recipient) => recipient._id);
+    if (!recipientIds.length) return;
+    const subscriptions = await this.subscriptionModel
+      .find({ userId: { $in: recipientIds } })
+      .select('+p256dh +auth')
+      .lean();
+    const payload = JSON.stringify({
+      title: message.title,
+      body: message.body,
+      tag: message.tag,
+      url: message.url,
+      ...message.extra,
+    });
+    await Promise.allSettled(
+      subscriptions.map(async (subscription) => {
+        for (let attempt = 0; attempt < 2; attempt += 1) {
+          try {
+            await webPush.sendNotification(
+              {
+                endpoint: subscription.endpoint,
+                keys: {
+                  p256dh: subscription.p256dh,
+                  auth: subscription.auth,
+                },
+              },
+              payload,
+              {
+                TTL: 3600,
+                urgency: 'high',
+                timeout: 5000,
+                topic: (message.topic || message.tag).slice(-32),
+              },
+            );
+            return;
+          } catch (error: any) {
+            if ([404, 410].includes(error?.statusCode)) {
+              await this.subscriptionModel.deleteOne({
+                _id: subscription._id,
+              });
+              return;
+            }
+            const transient =
+              error?.statusCode === 408 ||
+              error?.statusCode === 429 ||
+              error?.statusCode >= 500;
+            if (attempt === 0 && transient) {
+              await new Promise((resolve) => setTimeout(resolve, 1000));
+              continue;
+            }
+            this.logger.warn(
+              `Web Push delivery failed: ${error?.statusCode || error?.message || error}`,
+            );
+            return;
+          }
+        }
+      }),
+    );
+  }
+
   private hashRenewalToken(token: string) {
     return createHash('sha256').update(token).digest('hex');
+  }
+
+  async notifyOfficeStatus(input: {
+    tenantId: string;
+    officeLabel: string;
+    paymentStatus: string;
+    paidUntil?: string;
+  }): Promise<void> {
+    const label =
+      input.paymentStatus === 'overdue'
+        ? 'Просрочена оплата офиса'
+        : 'Офис не оплачен';
+    const until = input.paidUntil
+      ? ` до ${input.paidUntil}`
+      : '';
+    await this.pushToTenant(input.tenantId, {
+      title: label,
+      body: `${input.officeLabel}${until}`,
+      tag: `office-pay-${input.tenantId}-${input.paymentStatus}`,
+      url: '/profile',
+    });
   }
 
   async notifyGuestArrival(pass: GuestArrival): Promise<void> {
@@ -160,73 +263,14 @@ export class NotificationsService implements OnModuleInit {
         return;
 
       const ownerId = creator.parentTenantId || creator._id;
-      const recipients = await this.userModel
-        .find({
-          $or: [{ _id: ownerId }, { parentTenantId: ownerId }],
-          isActive: true,
-          isBlocked: { $ne: true },
-        })
-        .select('_id')
-        .lean();
-      const recipientIds = recipients.map((recipient) => recipient._id);
-      if (!recipientIds.length) return;
-      const subscriptions = await this.subscriptionModel
-        .find({ userId: { $in: recipientIds } })
-        .select('+p256dh +auth')
-        .lean();
-
-      const payload = JSON.stringify({
+      await this.pushToTenant(ownerId.toString(), {
         title: 'Ваш гость пришёл',
         body: `${pass.visitorName} · офис ${pass.office}${pass.businessCenterName ? ` · ${pass.businessCenterName}` : ''}`,
         tag: `guest-arrival-${pass.id}`,
         url: `/passes?id=${encodeURIComponent(pass.id)}`,
-        passNumber: pass.passNumber,
+        extra: { passNumber: pass.passNumber },
+        topic: pass.id.slice(-32),
       });
-
-      await Promise.allSettled(
-        subscriptions.map(async (subscription) => {
-          for (let attempt = 0; attempt < 2; attempt += 1) {
-            try {
-              await webPush.sendNotification(
-                {
-                  endpoint: subscription.endpoint,
-                  keys: {
-                    p256dh: subscription.p256dh,
-                    auth: subscription.auth,
-                  },
-                },
-                payload,
-                {
-                  TTL: 3600,
-                  urgency: 'high',
-                  timeout: 5000,
-                  topic: pass.id.slice(-32),
-                },
-              );
-              return;
-            } catch (error: any) {
-              if ([404, 410].includes(error?.statusCode)) {
-                await this.subscriptionModel.deleteOne({
-                  _id: subscription._id,
-                });
-                return;
-              }
-              const transient =
-                error?.statusCode === 408 ||
-                error?.statusCode === 429 ||
-                error?.statusCode >= 500;
-              if (attempt === 0 && transient) {
-                await new Promise((resolve) => setTimeout(resolve, 1000));
-                continue;
-              }
-              this.logger.warn(
-                `Web Push delivery failed: ${error?.statusCode || error?.message || error}`,
-              );
-              return;
-            }
-          }
-        }),
-      );
     } catch (error: any) {
       this.logger.error(
         `Guest arrival notification failed for ${pass.id}: ${error?.message || error}`,

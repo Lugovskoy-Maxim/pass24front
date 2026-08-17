@@ -27,6 +27,7 @@ import {
 } from '../schemas/pass-template.schema';
 import { Property, PropertyDocument } from '../schemas/property.schema';
 import { PropertyType } from '../schemas/enums';
+import { NotificationsService } from '../notifications/notifications.service';
 
 const SETTINGS_KEY = 'global';
 const DEFAULT_PREFIX = 'wps_';
@@ -41,6 +42,7 @@ export type SiteMysqlMapping = {
   availabilityMeta: string;
   officeFormatMeta: string;
   companyMeta: string;
+  roomStatusMeta: string;
   businessCenterTaxonomy: string;
   roomTypeTaxonomy: string;
   serviceRequestsTable: string;
@@ -58,6 +60,7 @@ const DEFAULT_MAPPING: SiteMysqlMapping = {
   availabilityMeta: 'tf_room_availability_status',
   officeFormatMeta: 'tf_room_office_format',
   companyMeta: '',
+  roomStatusMeta: 'room_status',
   businessCenterTaxonomy: 'tf_business_center',
   roomTypeTaxonomy: 'tf_room_type',
   serviceRequestsTable: 'tf_service_requests',
@@ -75,10 +78,15 @@ type SourceOfficeItem = {
   floor?: string;
   areaSqm?: number;
   company?: string;
+  title?: string;
   propertyCode?: string;
   propertyName?: string;
   officeFormat?: string;
   availability?: string;
+  busyUntil?: string;
+  roomStatus?: string;
+  paymentStatus?: string;
+  paidUntil?: string;
   isActive?: boolean;
 };
 
@@ -158,6 +166,7 @@ export class SiteSourceService implements OnModuleInit, OnModuleDestroy {
     @InjectModel(Pass.name) private readonly passes: Model<PassDocument>,
     @InjectModel(PassTemplate.name)
     private readonly templates: Model<PassTemplateDocument>,
+    private readonly notifications: NotificationsService,
   ) {}
 
   onModuleInit() {
@@ -326,8 +335,12 @@ export class SiteSourceService implements OnModuleInit, OnModuleDestroy {
 
   async listLinks(): Promise<SiteLinksResult> {
     const cfg = await this.getPublicConfig();
+    await this.collapseDuplicateCenters();
     const passProperties = await this.properties
-      .find({ type: PropertyType.BUSINESS_CENTER })
+      .find({
+        type: PropertyType.BUSINESS_CENTER,
+        isActive: { $ne: false },
+      })
       .sort({ name: 1 })
       .lean();
     const passOffices = await this.offices.find().sort({ number: 1 }).lean();
@@ -439,9 +452,22 @@ export class SiteSourceService implements OnModuleInit, OnModuleDestroy {
     for (const item of input.properties || []) {
       const property = await this.properties.findById(item.targetId);
       if (!property) throw new NotFoundException('БЦ не найден');
-      await this.stampPropertyCode(property, item.sourceCode);
+      const previous = await this.properties.findOne({
+        code: item.sourceCode,
+        _id: { $ne: property._id },
+      });
+      await this.stampPropertyCode(property, item.sourceCode, true);
+      if (previous) await this.absorbProperty(previous, property);
       properties += 1;
     }
+    await this.collapseDuplicateCenters();
+    const preview =
+      input.offices?.length || input.properties?.length
+        ? await this.previewOffices().catch(() => null)
+        : null;
+    const sourceByExt = new Map(
+      (preview?.items || []).map((row) => [row.externalId, row]),
+    );
     for (const item of input.offices || []) {
       const office = await this.offices.findById(item.targetId);
       if (!office) throw new NotFoundException('Офис не найден');
@@ -451,7 +477,9 @@ export class SiteSourceService implements OnModuleInit, OnModuleDestroy {
         );
       }
       office.externalId = item.externalId;
-      await office.save();
+      const source = sourceByExt.get(item.externalId);
+      if (source) await this.applySourceToOffice(office, source);
+      else await office.save();
       offices += 1;
     }
     return { properties, offices };
@@ -519,12 +547,7 @@ export class SiteSourceService implements OnModuleInit, OnModuleDestroy {
         });
         if (property) office.property = property._id as any;
       }
-      office.number = item.number;
-      if (item.floor) office.floor = item.floor;
-      if (item.areaSqm != null) office.areaSqm = item.areaSqm;
-      if (item.company) office.company = item.company;
-      office.isActive = item.isActive !== false;
-      await office.save();
+      await this.applySourceToOffice(office, item);
       updated += 1;
     }
     await this.markPending(false);
@@ -848,18 +871,7 @@ export class SiteSourceService implements OnModuleInit, OnModuleDestroy {
     const mapping = await this.currentMapping();
     const posts = `${prefix}posts`;
     const postmeta = `${prefix}postmeta`;
-    const items: Array<{
-      externalId: string;
-      number: string;
-      floor?: string;
-      areaSqm?: number;
-      company?: string;
-      propertyCode?: string;
-      propertyName?: string;
-      officeFormat?: string;
-      availability?: string;
-      isActive?: boolean;
-    }> = [];
+    const items: SourceOfficeItem[] = [];
 
     if (!tables.includes(posts)) {
       return { name: 'not_found', prefix, mapping, items };
@@ -872,6 +884,12 @@ export class SiteSourceService implements OnModuleInit, OnModuleDestroy {
       500,
     );
     const ids = rows.map((r) => r.ID);
+    const financeByRoom = await this.loadRoomFinance(
+      conn,
+      tables,
+      prefix,
+      ids.map(String),
+    );
     const metaKeys = [
       mapping.roomNumberMeta,
       mapping.floorMeta,
@@ -880,6 +898,8 @@ export class SiteSourceService implements OnModuleInit, OnModuleDestroy {
       mapping.availabilityMeta,
       mapping.officeFormatMeta,
       mapping.companyMeta,
+      mapping.roomStatusMeta,
+      'room_busy_until',
     ].filter(Boolean);
     const meta = tables.includes(postmeta)
       ? await this.loadMeta(conn, ident(postmeta), ids, metaKeys)
@@ -917,9 +937,11 @@ export class SiteSourceService implements OnModuleInit, OnModuleDestroy {
       const companyFromMeta = mapping.companyMeta
         ? str(m[mapping.companyMeta])
         : undefined;
+      const finance = financeByRoom.get(id);
       items.push({
         externalId: `${mapping.roomPostType}:${id}`,
         number,
+        title: str(row.post_title) || number,
         floor: str(m[mapping.floorMeta]),
         areaSqm: area,
         company:
@@ -930,6 +952,10 @@ export class SiteSourceService implements OnModuleInit, OnModuleDestroy {
         propertyName: bcInfo?.name,
         officeFormat: str(m[mapping.officeFormatMeta]),
         availability: str(m[mapping.availabilityMeta]),
+        busyUntil: normalizeBusyUntil(m.room_busy_until),
+        roomStatus: str(m[mapping.roomStatusMeta]),
+        paymentStatus: finance?.paymentStatus,
+        paidUntil: finance?.paidUntil,
         isActive: row.post_status === 'publish',
       });
     }
@@ -945,13 +971,17 @@ export class SiteSourceService implements OnModuleInit, OnModuleDestroy {
   private async ensureProperty(item: SourceOfficeItem) {
     let property = await this.findProperty(item);
     if (property) {
+      if (property.isActive === false) {
+        property.isActive = true;
+        await property.save();
+      }
       const previous = item.propertyCode
         ? await this.properties.findOne({
             code: item.propertyCode,
             _id: { $ne: property._id },
           })
         : null;
-      await this.stampPropertyCode(property, item.propertyCode);
+      await this.stampPropertyCode(property, item.propertyCode, true);
       const absorbed = previous
         ? await this.absorbProperty(previous, property)
         : 0;
@@ -1016,6 +1046,7 @@ export class SiteSourceService implements OnModuleInit, OnModuleDestroy {
   private async stampPropertyCode(
     property: PropertyDocument,
     rawCode?: string,
+    force = false,
   ) {
     const code = rawCode?.trim();
     if (!code || property.code === code) return;
@@ -1028,7 +1059,7 @@ export class SiteSourceService implements OnModuleInit, OnModuleDestroy {
         this.offices.countDocuments({ property: holder._id }),
         this.offices.countDocuments({ property: property._id }),
       ]);
-      if (holderCount > mine) return;
+      if (!force && holderCount > mine) return;
       holder.set('code', undefined);
       await holder.save();
       await this.properties.updateOne(
@@ -1076,11 +1107,18 @@ export class SiteSourceService implements OnModuleInit, OnModuleDestroy {
       return this.offices.create({
         property: property._id,
         number: item.number,
+        title: item.title || item.number,
         floor: item.floor || undefined,
         areaSqm: item.areaSqm,
         company: item.company || undefined,
         isActive: item.isActive !== false,
         externalId: item.externalId,
+        availability: item.availability,
+        officeFormat: item.officeFormat,
+        busyUntil: item.busyUntil,
+        roomStatus: item.roomStatus,
+        paymentStatus: item.paymentStatus,
+        paidUntil: item.paidUntil,
       });
     }
 
@@ -1099,13 +1137,8 @@ export class SiteSourceService implements OnModuleInit, OnModuleDestroy {
       }
     }
 
-    office.number = item.number;
-    if (item.floor) office.floor = item.floor;
-    if (item.areaSqm != null) office.areaSqm = item.areaSqm;
-    if (item.company) office.company = item.company;
     if (item.externalId && !office.externalId) office.externalId = item.externalId;
-    office.isActive = item.isActive !== false;
-    await office.save();
+    await this.applySourceToOffice(office, item);
     return office;
   }
 
@@ -1131,6 +1164,7 @@ export class SiteSourceService implements OnModuleInit, OnModuleDestroy {
         merged += 1;
       }
     }
+    from.isActive = false;
     from.set('code', undefined);
     await from.save();
     await this.properties.updateOne(
@@ -1138,6 +1172,253 @@ export class SiteSourceService implements OnModuleInit, OnModuleDestroy {
       { $unset: { code: 1 } },
     );
     return merged;
+  }
+
+  private async applySourceToOffice(
+    office: OfficeDocument,
+    item: SourceOfficeItem,
+  ) {
+    const prevPayment = office.paymentStatus;
+    if (item.number) office.number = item.number;
+    if (item.title) office.title = item.title;
+    if (item.floor) office.floor = item.floor;
+    if (item.areaSqm != null) office.areaSqm = item.areaSqm;
+    if (item.company) office.company = item.company;
+    if (item.availability !== undefined) office.availability = item.availability;
+    if (item.officeFormat !== undefined)
+      office.officeFormat = item.officeFormat;
+    if (item.busyUntil !== undefined) office.busyUntil = item.busyUntil;
+    if (item.roomStatus !== undefined) office.roomStatus = item.roomStatus;
+    if (item.paymentStatus !== undefined)
+      office.paymentStatus = item.paymentStatus;
+    if (item.paidUntil !== undefined) office.paidUntil = item.paidUntil;
+    office.isActive = item.isActive !== false;
+    const nextPayment = office.paymentStatus;
+    const alert =
+      nextPayment === 'unpaid' || nextPayment === 'overdue';
+    if (office.tenantId && alert && office.lastNotifiedPayment !== nextPayment) {
+      await this.notifications.notifyOfficeStatus({
+        tenantId: office.tenantId.toString(),
+        officeLabel: office.title || office.number,
+        paymentStatus: nextPayment || 'unpaid',
+        paidUntil: office.paidUntil,
+      });
+      office.lastNotifiedPayment = nextPayment;
+    }
+    if (!alert && prevPayment && prevPayment !== nextPayment) {
+      office.lastNotifiedPayment = undefined;
+    }
+    await office.save();
+  }
+
+  private async loadRoomFinance(
+    conn: mysql.Connection,
+    tables: string[],
+    prefix: string,
+    roomIds: string[],
+  ) {
+    const out = new Map<
+      string,
+      { paymentStatus?: string; paidUntil?: string }
+    >();
+    if (!roomIds.length) return out;
+
+    const profiles = `${prefix}tf_client_profiles`;
+    if (tables.includes(profiles)) {
+      const sample = await this.sampleTable(conn, profiles, 200);
+      for (const row of sample) {
+        let data: any = {};
+        try {
+          data = JSON.parse(String(row.data_json || '{}'));
+        } catch {
+          continue;
+        }
+        const policy = data.office_rent_policy || {};
+        const rooms: Array<{ room_id?: number }> = data.resident_offices || [];
+        const paidUntil = String(policy.paid_until || '').trim();
+        let paymentStatus: string | undefined;
+        if (paidUntil) {
+          paymentStatus =
+            new Date(paidUntil).getTime() < Date.now() ? 'overdue' : 'paid';
+        } else if (policy.enabled) {
+          paymentStatus = 'unpaid';
+        }
+        if (!paymentStatus) continue;
+        for (const room of rooms) {
+          const id = room?.room_id != null ? String(room.room_id) : '';
+          if (id && roomIds.includes(id) && !out.has(id)) {
+            out.set(id, { paymentStatus, paidUntil: paidUntil || undefined });
+          }
+        }
+      }
+    }
+
+    const bookings = `${prefix}tf_bookings`;
+    if (tables.includes(bookings)) {
+      const cols = await this.tableColumns(conn, bookings);
+      if (cols.includes('room_id') && cols.includes('payment_status')) {
+        const [rows] = await conn.query(
+          `SELECT room_id, payment_status FROM ${ident(bookings)}
+           WHERE room_id IN (${roomIds.map(() => '?').join(',')})
+           AND payment_status IN ('unpaid','overdue','paid')
+           ORDER BY id DESC`,
+          roomIds,
+        );
+        for (const row of rows as Array<{
+          room_id: number;
+          payment_status: string;
+        }>) {
+          const id = String(row.room_id);
+          if (!out.has(id) && row.payment_status) {
+            out.set(id, { paymentStatus: row.payment_status });
+          }
+        }
+      }
+    }
+    return out;
+  }
+
+  private collapsing: Promise<{ hidden: number }> | null = null;
+
+  async collapseDuplicateCenters() {
+    if (this.collapsing) return this.collapsing;
+    this.collapsing = this.reconcileFromSite().finally(() => {
+      this.collapsing = null;
+    });
+    return this.collapsing;
+  }
+
+  private async reconcileFromSite() {
+    const cfg = await this.getPublicConfig();
+    if (cfg.enabled && cfg.host) {
+      try {
+        await this.ensureMissingFromSite();
+      } catch (err) {
+        this.logger.warn(
+          `reconcile MySQL: ${err instanceof Error ? err.message : err}`,
+        );
+      }
+    }
+    return this.runCollapseDuplicates();
+  }
+
+  private async ensureMissingFromSite() {
+    const preview = await this.previewOffices();
+    const byCode = new Map<string, SourceOfficeItem>();
+    for (const item of preview.items) {
+      if (item.propertyCode && !byCode.has(item.propertyCode)) {
+        byCode.set(item.propertyCode, item);
+      }
+    }
+    for (const item of byCode.values()) {
+      await this.ensureProperty(item);
+    }
+    for (const item of preview.items) {
+      const { property } = await this.ensureProperty(item);
+      const existing = await this.findOffice(item, property);
+      if (!existing) {
+        await this.offices.create({
+          property: property._id,
+          number: item.number,
+          title: item.title || item.number,
+          floor: item.floor || undefined,
+          areaSqm: item.areaSqm,
+          company: item.company || undefined,
+          isActive: item.isActive !== false,
+          externalId: item.externalId,
+          availability: item.availability,
+          officeFormat: item.officeFormat,
+          busyUntil: item.busyUntil,
+          roomStatus: item.roomStatus,
+          paymentStatus: item.paymentStatus,
+          paidUntil: item.paidUntil,
+        });
+        continue;
+      }
+      if (existing.property.toString() !== property._id.toString()) {
+        const clash = await this.offices.findOne({
+          property: property._id,
+          number: item.number,
+          _id: { $ne: existing._id },
+        });
+        if (clash) {
+          await this.mergeOfficeDocs(clash, existing);
+          await this.retireOffice(existing, clash);
+        } else {
+          existing.property = property._id as any;
+          await this.applySourceToOffice(existing, item);
+        }
+      }
+    }
+  }
+
+  private async runCollapseDuplicates() {
+    const centers = await this.properties
+      .find({
+        type: PropertyType.BUSINESS_CENTER,
+        isActive: { $ne: false },
+      })
+      .exec();
+    const groups = new Map<string, PropertyDocument[]>();
+    for (const center of centers) {
+      const key = normName(center.name);
+      if (!key) continue;
+      const list = groups.get(key) || [];
+      list.push(center);
+      groups.set(key, list);
+    }
+    let hidden = 0;
+    for (const group of groups.values()) {
+      if (group.length < 2) continue;
+      const counts = await Promise.all(
+        group.map((center) =>
+          this.offices.countDocuments({ property: center._id }),
+        ),
+      );
+      let winnerIndex = 0;
+      for (let i = 1; i < group.length; i += 1) {
+        if (counts[i] > counts[winnerIndex]) winnerIndex = i;
+      }
+      const siteIndex = group.findIndex((center) =>
+        isSiteBusinessCenterCode(center.code),
+      );
+      const winner =
+        siteIndex >= 0 && counts[siteIndex] >= counts[winnerIndex]
+          ? group[siteIndex]
+          : group[winnerIndex];
+      const siteCode =
+        group.find((center) => isSiteBusinessCenterCode(center.code))?.code ||
+        group.find((center) => center.code)?.code;
+      if (siteCode) await this.stampPropertyCode(winner, siteCode, true);
+      for (const loser of group) {
+        if (loser._id.toString() === winner._id.toString()) continue;
+        if (
+          loser.address &&
+          loser.address !== loser.name &&
+          (!winner.address || winner.address === winner.name)
+        ) {
+          winner.address = loser.address;
+        }
+        if (/^бц\s/i.test(loser.name) && !/^бц\s/i.test(winner.name)) {
+          winner.name = loser.name;
+        }
+        await winner.save();
+        await this.absorbProperty(loser, winner);
+        hidden += 1;
+      }
+    }
+    for (const center of centers) {
+      if (center.isActive === false) continue;
+      const count = await this.offices.countDocuments({
+        property: center._id,
+      });
+      if (count === 0 && !center.code) {
+        center.isActive = false;
+        await center.save();
+        hidden += 1;
+      }
+    }
+    return { hidden };
   }
 
   private async mergeOfficeDocs(keep: OfficeDocument, drop: OfficeDocument) {
@@ -1409,6 +1690,17 @@ export class SiteSourceService implements OnModuleInit, OnModuleDestroy {
   }
 }
 
+function normalizeBusyUntil(raw?: string) {
+  const value = String(raw || '').trim();
+  if (!value) return undefined;
+  const compact = value.replace(/-/g, '');
+  if (/^\d{8}$/.test(compact)) {
+    return `${compact.slice(0, 4)}-${compact.slice(4, 6)}-${compact.slice(6, 8)}`;
+  }
+  if (/^\d{4}-\d{2}-\d{2}/.test(value)) return value.slice(0, 10);
+  return value;
+}
+
 function sourcePostId(externalId: string) {
   const match = String(externalId).match(/:(\d+)$/);
   return match?.[1];
@@ -1421,12 +1713,22 @@ function pick(row: Record<string, unknown>, keys: string[]) {
   return undefined;
 }
 
-function normName(value?: string) {
+function isSiteBusinessCenterCode(code?: string) {
+  return /tf[_-]?business[_-]?center/i.test(String(code || ''));
+}
+
+export function normalizeBusinessCenterName(value?: string) {
   return String(value || '')
     .trim()
     .toLowerCase()
     .replace(/ё/g, 'е')
-    .replace(/\s+/g, ' ');
+    .replace(/^(бц|бизнес[-\s]?центр|business\s*center|bc)\s+/i, '')
+    .replace(/[\s_]+/g, ' ')
+    .trim();
+}
+
+function normName(value?: string) {
+  return normalizeBusinessCenterName(value);
 }
 
 function ident(name: string) {

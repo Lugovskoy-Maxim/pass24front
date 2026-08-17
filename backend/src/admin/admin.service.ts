@@ -42,6 +42,10 @@ import { UpdateBusinessCenterDto } from './dto/update-business-center.dto';
 import { BusinessCenterPassSettingsDto } from './dto/business-center-pass-settings.dto';
 import { TestDataSeedService } from '../database/test-data-seed.service';
 import {
+  normalizeBusinessCenterName,
+  SiteSourceService,
+} from '../site-source/site-source.service';
+import {
   BUILTIN_EMPLOYEE_ROLES,
   SYSTEM_ROLES,
 } from '../access/access.constants';
@@ -71,6 +75,7 @@ export class AdminService {
     private passesService: PassesService,
     private testDataSeedService: TestDataSeedService,
     private identities: MstyleIdentityService,
+    private siteSource: SiteSourceService,
   ) {}
 
   private async syncResidentRecord(user: UserDocument) {
@@ -690,8 +695,13 @@ export class AdminService {
       parentTenantId: user.parentTenantId,
     };
     if (dto.username !== undefined) {
-      user.username = await this.ensureUniqueUsername(dto.username, id);
-      if (!user.username) user.set('username', undefined);
+      const next = dto.username.trim().toLowerCase();
+      const current = (user.username || '').trim().toLowerCase();
+      if (!next) {
+        user.set('username', undefined);
+      } else if (next !== current) {
+        user.username = await this.ensureUniqueUsername(dto.username, id);
+      }
     }
     if (dto.emailVerified !== undefined) user.emailVerified = dto.emailVerified;
     if (dto.privateDataComplete !== undefined) {
@@ -894,8 +904,10 @@ export class AdminService {
   }
 
   async getBusinessCenters(actor?: any) {
+    await this.siteSource.collapseDuplicateCenters();
     const filter: Record<string, unknown> = {
       type: PropertyType.BUSINESS_CENTER,
+      isActive: { $ne: false },
     };
     const scope = await this.getActorPropertyIds(actor);
     if (scope?.length)
@@ -917,9 +929,36 @@ export class AdminService {
       },
     ]);
     const statsMap = new Map(officeStats.map((s) => [s._id.toString(), s]));
+    const seenCodes = new Set<string>();
+    const seenNames = new Set<string>();
+    const ranked = [...properties].sort((a, b) => {
+      const aSite = /tf[_-]?business[_-]?center/i.test(String(a.code || ''))
+        ? 1
+        : 0;
+      const bSite = /tf[_-]?business[_-]?center/i.test(String(b.code || ''))
+        ? 1
+        : 0;
+      if (bSite !== aSite) return bSite - aSite;
+      return (
+        (statsMap.get(b._id.toString())?.count || 0) -
+        (statsMap.get(a._id.toString())?.count || 0)
+      );
+    });
+    const unique = ranked.filter((p) => {
+      if (p.code) {
+        if (seenCodes.has(p.code)) return false;
+        seenCodes.add(p.code);
+      }
+      const name = normalizeBusinessCenterName(p.name);
+      if (name) {
+        if (seenNames.has(name)) return false;
+        seenNames.add(name);
+      }
+      return true;
+    });
 
     return {
-      businessCenters: properties.map((p) => {
+      businessCenters: unique.map((p) => {
         const stats = statsMap.get(p._id.toString());
         return {
           id: p._id.toString(),
@@ -1139,6 +1178,7 @@ export class AdminService {
   }
 
   async getOffices() {
+    await this.siteSource.collapseDuplicateCenters();
     const offices = await this.officeModel
       .find()
       .sort({ createdAt: -1 })
@@ -1155,11 +1195,19 @@ export class AdminService {
       this.userModel.find({ _id: { $in: tenantIds } }).lean(),
     ]);
 
+    const hidden = new Set(
+      properties
+        .filter((p) => p.isActive === false)
+        .map((p) => p._id.toString()),
+    );
     const propertyMap = new Map(properties.map((p) => [p._id.toString(), p]));
     const tenantMap = new Map(tenants.map((t) => [t._id.toString(), t]));
+    const visible = offices.filter(
+      (o) => !hidden.has(o.property?.toString()),
+    );
 
     return {
-      offices: offices.map((o) => this.mapOffice(o, propertyMap, tenantMap)),
+      offices: visible.map((o) => this.mapOffice(o, propertyMap, tenantMap)),
     };
   }
 
@@ -1549,9 +1597,16 @@ export class AdminService {
       propertyId: office.property?.toString(),
       businessCenterName: property?.name,
       number: office.number,
+      title: office.title || undefined,
       floor: office.floor || undefined,
       areaSqm: office.areaSqm,
       company: office.company,
+      availability: office.availability || undefined,
+      officeFormat: office.officeFormat || undefined,
+      busyUntil: office.busyUntil || undefined,
+      roomStatus: office.roomStatus || undefined,
+      paymentStatus: office.paymentStatus || undefined,
+      paidUntil: office.paidUntil || undefined,
       tenantId: office.tenantId?.toString(),
       tenantName: tenant?.fullName,
       isActive: office.isActive,
@@ -1568,7 +1623,7 @@ export class AdminService {
     if (!username) return undefined;
     const clash = await this.userModel.findOne({
       username,
-      ...(exceptId ? { _id: { $ne: exceptId } } : {}),
+      ...(exceptId ? { _id: { $ne: new Types.ObjectId(exceptId) } } : {}),
     });
     if (clash) throw new ConflictException('Логин уже занят');
     return username;

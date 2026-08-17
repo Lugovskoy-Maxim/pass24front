@@ -41,8 +41,15 @@ export interface TenantOffice {
   propertyId: string;
   businessCenterName?: string;
   number: string;
+  title?: string;
   floor: string;
   company?: string;
+  availability?: string;
+  officeFormat?: string;
+  busyUntil?: string;
+  roomStatus?: string;
+  paymentStatus?: string;
+  paidUntil?: string;
   workingHoursFrom?: string;
   workingHoursTo?: string;
   closedWeekdays?: number[];
@@ -1341,6 +1348,7 @@ export interface SiteMysqlSettings {
   availabilityMeta: string;
   officeFormatMeta: string;
   companyMeta: string;
+  roomStatusMeta: string;
   businessCenterTaxonomy: string;
   roomTypeTaxonomy: string;
   serviceRequestsTable: string;
@@ -1463,9 +1471,16 @@ export interface Office {
   propertyId: string;
   businessCenterName?: string;
   number: string;
+  title?: string;
   floor?: string;
   areaSqm?: number;
   company?: string;
+  availability?: string;
+  officeFormat?: string;
+  busyUntil?: string;
+  roomStatus?: string;
+  paymentStatus?: string;
+  paidUntil?: string;
   tenantId?: string;
   tenantName?: string;
   isActive: boolean;
@@ -1590,14 +1605,56 @@ export interface CreateUserData {
   employeeLimit?: number | null;
 }
 
+export function officeDisplayName(office: {
+  title?: string;
+  number: string;
+}): string {
+  const title = office.title?.trim();
+  if (title && title !== office.number) return title;
+  return `оф. ${office.number}`;
+}
+
 export function formatTenantOffices(offices?: TenantOffice[]): string {
   if (!offices?.length) return '';
   return offices
-    .map(
-      (o) =>
-        `${o.businessCenterName ? `${o.businessCenterName}: ` : ''}оф. ${o.number}${o.floor ? ` (${o.floor} эт.)` : ''}`,
-    )
+    .map((o) => {
+      const name = officeDisplayName(o);
+      return `${o.businessCenterName ? `${o.businessCenterName}: ` : ''}${name}${o.floor ? ` (${o.floor} эт.)` : ''}`;
+    })
     .join(' · ');
+}
+
+export function officePaymentLabel(status?: string | null): string {
+  if (status === 'overdue') return 'Просрочена оплата';
+  if (status === 'unpaid') return 'Не оплачен';
+  if (status === 'paid') return 'Оплачен';
+  return '';
+}
+
+export function officeAvailabilityLabel(status?: string | null): string {
+  if (status === 'busy') return 'Занят на сайте';
+  if (status === 'free') return 'Свободен на сайте';
+  return '';
+}
+
+export function officeRoomStatusLabel(status?: string | null): string {
+  if (status === 'leased') return 'В аренде';
+  if (status === 'available') return 'К аренде';
+  return status || '';
+}
+
+export function officeFormatLabel(format?: string | null): string {
+  if (format === 'vip') return 'VIP';
+  if (format === 'design') return 'Дизайн';
+  if (format === 'standard') return 'Стандарт';
+  return format || '';
+}
+
+export function formatOfficeDate(raw?: string | null): string {
+  if (!raw) return '';
+  const match = String(raw).match(/^(\d{4})-(\d{2})-(\d{2})/);
+  if (!match) return raw;
+  return `${match[3]}.${match[2]}.${match[1]}`;
 }
 
 export interface PassTemplate {

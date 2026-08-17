@@ -34,6 +34,37 @@ export class Office {
   /** Ключ с сайта, напр. tf-room:107 */
   @Prop({ unique: true, sparse: true, trim: true })
   externalId?: string;
+
+  /** Название с сайта (post_title). */
+  @Prop({ trim: true })
+  title?: string;
+
+  /** busy | free — витрина сайта */
+  @Prop({ trim: true })
+  availability?: string;
+
+  /** leased | available */
+  @Prop({ trim: true })
+  roomStatus?: string;
+
+  /** standard | vip | design */
+  @Prop({ trim: true })
+  officeFormat?: string;
+
+  /** Дата «занят до» с сайта, YYYY-MM-DD */
+  @Prop({ trim: true })
+  busyUntil?: string;
+
+  /** paid | unpaid | overdue */
+  @Prop({ trim: true })
+  paymentStatus?: string;
+
+  @Prop({ trim: true })
+  paidUntil?: string;
+
+  /** Чтобы не слать одно и то же уведомление каждый синк. */
+  @Prop({ trim: true })
+  lastNotifiedPayment?: string;
 }
 
 export const OfficeSchema = SchemaFactory.createForClass(Office);

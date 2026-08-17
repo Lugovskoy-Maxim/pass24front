@@ -22,6 +22,7 @@ export default function MysqlLinksPage() {
   const [busy, setBusy] = useState(false);
   const [propertyPick, setPropertyPick] = useState<Record<string, string>>({});
   const [officePick, setOfficePick] = useState<Record<string, string>>({});
+  const [tab, setTab] = useState<'bc' | 'offices'>('bc');
 
   const load = () => {
     setError('');
@@ -201,12 +202,11 @@ export default function MysqlLinksPage() {
   }
 
   return (
-    <AdminLayout title="Связи MySQL">
+    <AdminLayout title="Связи">
       <SettingsNav />
       <p className="text-[var(--muted)] -mt-2 mb-6">
-        Сначала подтвердите автоматические совпадения или укажите пару вручную.
-        Потом обновляйте только связанные. Создание дублей на этой странице
-        выключено.
+        Одна запись сайта = один БЦ или офис в Pass. Сначала подтвердите пару,
+        потом обновите данные.
       </p>
 
       {loading || !data ? (
@@ -218,207 +218,237 @@ export default function MysqlLinksPage() {
               {data.note}
             </p>
           )}
-          <div className="card p-5 mb-6 flex flex-wrap gap-2 items-center">
-            <button
-              type="button"
-              className="btn btn-primary"
-              disabled={busy || (suggested.properties === 0 && suggested.offices === 0)}
-              onClick={() => void confirmAuto()}
-            >
-              Подтвердить авто ({suggested.properties} БЦ / {suggested.offices} оф.)
-            </button>
-            <button
-              type="button"
-              className="btn btn-secondary"
-              disabled={busy}
-              onClick={() => void confirmManual()}
-            >
-              Связать выбранные вручную
-            </button>
-            <button
-              type="button"
-              className="btn btn-primary"
-              disabled={busy}
-              onClick={() => void sync()}
-            >
-              Обновить связанные из MySQL
-            </button>
-            <button
-              type="button"
-              className="btn btn-secondary"
-              disabled={busy}
-              onClick={() => void check()}
-            >
-              Проверить БД
-            </button>
-            <button
-              type="button"
-              className="btn btn-secondary"
-              disabled={busy}
-              onClick={() => void createMissing()}
-            >
-              Создать несвязанные
-            </button>
-            {data.pendingChanges && (
-              <span className="text-sm text-amber-700">Есть изменения в MySQL</span>
-            )}
-            {data.lastCheckedAt && (
-              <span className="text-xs text-[var(--muted)]">
-                проверка {new Date(data.lastCheckedAt).toLocaleString('ru-RU')}
-              </span>
-            )}
+
+          <div className="card p-4 mb-4 space-y-3">
+            <div className="flex flex-wrap gap-2">
+              <button
+                type="button"
+                className="btn btn-primary"
+                disabled={
+                  busy ||
+                  (suggested.properties === 0 && suggested.offices === 0)
+                }
+                onClick={() => void confirmAuto()}
+              >
+                Подтвердить авто
+                {suggested.properties + suggested.offices > 0
+                  ? ` (${suggested.properties + suggested.offices})`
+                  : ''}
+              </button>
+              <button
+                type="button"
+                className="btn btn-secondary"
+                disabled={busy}
+                onClick={() => void confirmManual()}
+              >
+                Связать выбранные
+              </button>
+              <button
+                type="button"
+                className="btn btn-primary"
+                disabled={busy}
+                onClick={() => void sync()}
+              >
+                Обновить данные
+              </button>
+            </div>
+            <div className="flex flex-wrap items-center gap-2 text-xs text-[var(--muted)]">
+              <button
+                type="button"
+                className="btn btn-secondary text-xs"
+                disabled={busy}
+                onClick={() => void check()}
+              >
+                Проверить MySQL
+              </button>
+              <button
+                type="button"
+                className="btn btn-secondary text-xs"
+                disabled={busy}
+                onClick={() => void createMissing()}
+              >
+                Создать недостающие
+              </button>
+              {data.pendingChanges && (
+                <span className="text-amber-700">есть изменения</span>
+              )}
+              {data.lastCheckedAt && (
+                <span>
+                  {new Date(data.lastCheckedAt).toLocaleString('ru-RU')}
+                </span>
+              )}
+            </div>
           </div>
 
-          <section className="card p-5 mb-6 space-y-3">
-            <h2 className="font-semibold">Бизнес-центры</h2>
-            <div className="overflow-x-auto">
-              <table className="w-full text-sm min-w-[720px]">
-                <thead className="text-[var(--muted)]">
-                  <tr>
-                    <th className="text-left p-2">Сайт</th>
-                    <th className="text-left p-2">Статус</th>
-                    <th className="text-left p-2">Pass</th>
-                    <th className="p-2" />
-                  </tr>
-                </thead>
-                <tbody>
-                  {data.properties.map((row) => (
-                    <tr key={row.sourceCode} className="border-t border-[var(--border)]">
-                      <td className="p-2">
-                        <div className="font-medium">{row.sourceName}</div>
-                        <div className="font-mono text-xs text-[var(--muted)]">
-                          {row.sourceCode}
-                        </div>
-                      </td>
-                      <td className="p-2">{statusLabel(row.status)}</td>
-                      <td className="p-2">
-                        {row.status === 'linked' ? (
-                          row.linkedName
-                        ) : (
-                          <select
-                            className="input"
-                            value={propertyPick[row.sourceCode] || ''}
-                            onChange={(e) =>
-                              setPropertyPick((prev) => ({
-                                ...prev,
-                                [row.sourceCode]: e.target.value,
-                              }))
-                            }
-                          >
-                            <option value="">— выбрать БЦ —</option>
-                            {data.passProperties.map((bc) => (
-                              <option key={bc.id} value={bc.id}>
-                                {bc.name}
-                                {bc.code ? ` (${bc.code})` : ''}
-                              </option>
-                            ))}
-                          </select>
-                        )}
-                      </td>
-                      <td className="p-2 text-right">
-                        {row.linkedId && (
-                          <button
-                            type="button"
-                            className="btn btn-secondary text-xs"
-                            disabled={busy}
-                            onClick={() => void unlinkProperty(row.linkedId!)}
-                          >
-                            Снять
-                          </button>
-                        )}
-                      </td>
-                    </tr>
-                  ))}
-                </tbody>
-              </table>
-            </div>
-          </section>
+          <div className="flex gap-2 mb-4">
+            <button
+              type="button"
+              className={`btn text-sm ${tab === 'bc' ? 'btn-primary' : 'btn-secondary'}`}
+              onClick={() => setTab('bc')}
+            >
+              БЦ ({data.properties.length})
+            </button>
+            <button
+              type="button"
+              className={`btn text-sm ${tab === 'offices' ? 'btn-primary' : 'btn-secondary'}`}
+              onClick={() => setTab('offices')}
+            >
+              Офисы ({data.offices.length})
+            </button>
+          </div>
 
-          <section className="card p-5 space-y-3">
-            <h2 className="font-semibold">Офисы</h2>
-            <div className="overflow-x-auto">
-              <table className="w-full text-sm min-w-[860px]">
-                <thead className="text-[var(--muted)]">
-                  <tr>
-                    <th className="text-left p-2">Сайт</th>
-                    <th className="text-left p-2">Статус</th>
-                    <th className="text-left p-2">Pass</th>
-                    <th className="p-2" />
-                  </tr>
-                </thead>
-                <tbody>
-                  {data.offices.map((row) => (
-                    <tr key={row.externalId} className="border-t border-[var(--border)]">
-                      <td className="p-2">
-                        <div className="font-medium">
-                          {row.number}
-                          {row.floor ? ` эт.${row.floor}` : ''}
+          {tab === 'bc' ? (
+            <section className="space-y-2">
+              {data.properties.length === 0 ? (
+                <div className="card p-6 text-sm text-[var(--muted)]">
+                  Нет БЦ с сайта. Проверьте подключение.
+                </div>
+              ) : (
+                data.properties.map((row) => (
+                  <div
+                    key={row.sourceCode}
+                    className="card p-4 flex flex-col sm:flex-row sm:items-center gap-3"
+                  >
+                    <div className="min-w-0 flex-1">
+                      <div className="font-medium">{row.sourceName}</div>
+                      <div className="font-mono text-xs text-[var(--muted)]">
+                        {row.sourceCode}
+                      </div>
+                    </div>
+                    <StatusChip status={row.status} />
+                    <div className="sm:w-72">
+                      {row.status === 'linked' ? (
+                        <div className="text-sm">
+                          {row.linkedName}
+                          <div className="text-xs text-[var(--muted)]">
+                            в реестре офисов одна запись
+                          </div>
                         </div>
-                        <div className="text-xs text-[var(--muted)]">
-                          {row.propertyName || '—'} · {row.externalId}
-                        </div>
-                      </td>
-                      <td className="p-2">{statusLabel(row.status)}</td>
-                      <td className="p-2">
-                        {row.status === 'linked' ? (
-                          `оф. ${row.linkedNumber}`
-                        ) : (
-                          <select
-                            className="input"
-                            value={officePick[row.externalId] || ''}
-                            onChange={(e) =>
-                              setOfficePick((prev) => ({
-                                ...prev,
-                                [row.externalId]: e.target.value,
-                              }))
-                            }
-                          >
-                            <option value="">— выбрать офис —</option>
-                            {data.passOffices.map((office) => (
-                              <option key={office.id} value={office.id}>
-                                {office.number}
-                                {office.externalId ? ` (${office.externalId})` : ''}
-                              </option>
-                            ))}
-                          </select>
-                        )}
-                      </td>
-                      <td className="p-2 text-right whitespace-nowrap">
-                        {row.linkedId && (
-                          <>
-                            <button
-                              type="button"
-                              className="btn btn-secondary text-xs mr-1"
-                              disabled={busy}
-                              onClick={() => void push(row.linkedId!)}
-                            >
-                              В MySQL
-                            </button>
-                            <button
-                              type="button"
-                              className="btn btn-secondary text-xs"
-                              disabled={busy}
-                              onClick={() => void unlinkOffice(row.linkedId!)}
-                            >
-                              Снять
-                            </button>
-                          </>
-                        )}
-                      </td>
-                    </tr>
-                  ))}
-                </tbody>
-              </table>
-            </div>
-          </section>
+                      ) : (
+                        <select
+                          className="input"
+                          value={propertyPick[row.sourceCode] || ''}
+                          onChange={(e) =>
+                            setPropertyPick((prev) => ({
+                              ...prev,
+                              [row.sourceCode]: e.target.value,
+                            }))
+                          }
+                        >
+                          <option value="">Выбрать БЦ в Pass</option>
+                          {data.passProperties.map((bc) => (
+                            <option key={bc.id} value={bc.id}>
+                              {bc.name}
+                            </option>
+                          ))}
+                        </select>
+                      )}
+                    </div>
+                    {row.linkedId && (
+                      <button
+                        type="button"
+                        className="btn btn-secondary text-xs"
+                        disabled={busy}
+                        onClick={() => void unlinkProperty(row.linkedId!)}
+                      >
+                        Снять
+                      </button>
+                    )}
+                  </div>
+                ))
+              )}
+            </section>
+          ) : (
+            <section className="space-y-2">
+              {data.offices.length === 0 ? (
+                <div className="card p-6 text-sm text-[var(--muted)]">
+                  Нет офисов с сайта.
+                </div>
+              ) : (
+                data.offices.map((row) => (
+                  <div
+                    key={row.externalId}
+                    className="card p-4 flex flex-col sm:flex-row sm:items-center gap-3"
+                  >
+                    <div className="min-w-0 flex-1">
+                      <div className="font-medium">
+                        {row.number}
+                        {row.floor ? ` · ${row.floor} эт.` : ''}
+                      </div>
+                      <div className="text-xs text-[var(--muted)]">
+                        {row.propertyName || 'без БЦ'}
+                      </div>
+                    </div>
+                    <StatusChip status={row.status} />
+                    <div className="sm:w-64">
+                      {row.status === 'linked' ? (
+                        <div className="text-sm">оф. {row.linkedNumber}</div>
+                      ) : (
+                        <select
+                          className="input"
+                          value={officePick[row.externalId] || ''}
+                          onChange={(e) =>
+                            setOfficePick((prev) => ({
+                              ...prev,
+                              [row.externalId]: e.target.value,
+                            }))
+                          }
+                        >
+                          <option value="">Выбрать офис в Pass</option>
+                          {data.passOffices.map((office) => (
+                            <option key={office.id} value={office.id}>
+                              {office.number}
+                              {office.company ? ` · ${office.company}` : ''}
+                            </option>
+                          ))}
+                        </select>
+                      )}
+                    </div>
+                    {row.linkedId && (
+                      <div className="flex gap-1">
+                        <button
+                          type="button"
+                          className="btn btn-secondary text-xs"
+                          disabled={busy}
+                          onClick={() => void push(row.linkedId!)}
+                        >
+                          В сайт
+                        </button>
+                        <button
+                          type="button"
+                          className="btn btn-secondary text-xs"
+                          disabled={busy}
+                          onClick={() => void unlinkOffice(row.linkedId!)}
+                        >
+                          Снять
+                        </button>
+                      </div>
+                    )}
+                  </div>
+                ))
+              )}
+            </section>
+          )}
         </>
       )}
     </AdminLayout>
   );
 }
 
-function statusLabel(status: SiteLinkRow['status'] | SiteOfficeLinkRow['status']) {
-  if (status === 'linked') return 'связан';
-  if (status === 'suggested') return 'авто';
-  return 'нет пары';
+function StatusChip({
+  status,
+}: {
+  status: SiteLinkRow['status'] | SiteOfficeLinkRow['status'];
+}) {
+  const label =
+    status === 'linked' ? 'связан' : status === 'suggested' ? 'авто' : 'нет пары';
+  const cls =
+    status === 'linked'
+      ? 'bg-emerald-50 text-emerald-800'
+      : status === 'suggested'
+        ? 'bg-sky-50 text-sky-800'
+        : 'bg-[var(--surface-muted)] text-[var(--muted)]';
+  return (
+    <span className={`text-xs px-2 py-1 rounded shrink-0 ${cls}`}>{label}</span>
+  );
 }

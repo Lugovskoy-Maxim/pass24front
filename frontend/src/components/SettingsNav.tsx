@@ -7,10 +7,10 @@ import { Database, Globe, Link2, MessageSquare, SlidersHorizontal, Webhook } fro
 const ITEMS = [
   { href: '/admin/settings', label: 'Обзор', exact: true, icon: SlidersHorizontal },
   { href: '/admin/site', label: 'Сайт', icon: Globe },
-  { href: '/admin/mysql', label: 'MySQL', exact: true, icon: Database },
+  { href: '/admin/mysql', label: 'Подключение', exact: true, icon: Database },
   { href: '/admin/mysql/links', label: 'Связи', icon: Link2 },
   { href: '/admin/mysql/tickets', label: 'Заявки', icon: MessageSquare },
-  { href: '/admin/integration', label: 'API Mstyle', icon: Webhook },
+  { href: '/admin/integration', label: 'API', icon: Webhook },
 ];
 
 export function SettingsNav() {

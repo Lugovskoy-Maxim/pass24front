@@ -14,7 +14,11 @@ import {
 import { useAuth } from '@/lib/auth';
 import { useConfig } from '@/hooks/useConfig';
 import { SiteBrand } from '@/components/SiteBrand';
-import { formatTenantOffices } from '@/lib/api';
+import {
+  formatTenantOffices,
+  officeDisplayName,
+  officePaymentLabel,
+} from '@/lib/api';
 import { getUserRoleLabel } from '@/lib/permissions';
 import {
   canOrderPasses,
@@ -44,6 +48,10 @@ export function Header() {
   const onControlPage = pathname === '/control';
   const showHeaderOverdueBanner =
     showOverdueAlerts && overduePasses.length > 0 && !onControlPage;
+  const unpaidOffices = (user.offices || []).filter(
+    (office) =>
+      office.paymentStatus === 'unpaid' || office.paymentStatus === 'overdue',
+  );
 
   const scrollToOverdueSection = () => {
     document
@@ -171,6 +179,19 @@ export function Header() {
           </button>
         </div>
       </div>
+      {unpaidOffices.length > 0 && (
+        <div className="border-t theme-alert">
+          <div className="max-w-6xl mx-auto px-4 py-2 text-sm">
+            {unpaidOffices.map((office) => (
+              <div key={office.id}>
+                {officePaymentLabel(office.paymentStatus)}:{' '}
+                {officeDisplayName(office)}
+                {office.paidUntil ? ` до ${office.paidUntil}` : ''}
+              </div>
+            ))}
+          </div>
+        </div>
+      )}
       {showHeaderOverdueBanner && (
         <div id="overdue-global-alert" className="border-t theme-alert">
           <div className="max-w-6xl mx-auto px-4 py-2">

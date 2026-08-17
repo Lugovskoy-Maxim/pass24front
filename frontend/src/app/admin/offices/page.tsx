@@ -36,7 +36,12 @@ import {
   BcPassSettings,
   DEFAULT_BC_PASS_SETTINGS,
   getErrorMessage,
+  officeDisplayName,
 } from '@/lib/api';
+import {
+  OfficeSiteStatusNote,
+  OfficeStatusFlags,
+} from '@/components/OfficeStatusFlags';
 import {
   parseClosedWeekdays,
   serializeClosedWeekdays,
@@ -987,7 +992,14 @@ export default function AdminOfficesPage() {
                 ) : (
                   <div className="flex items-start justify-between gap-3">
                     <div>
-                      <div className="font-medium">{bc.name}</div>
+                      <div className="flex flex-wrap items-center gap-2">
+                        <div className="font-medium">{bc.name}</div>
+                        {bc.code && (
+                          <span className="text-[10px] uppercase tracking-wide px-1.5 py-0.5 rounded bg-emerald-50 text-emerald-800">
+                            связан
+                          </span>
+                        )}
+                      </div>
                       <div className="text-sm text-[var(--muted)]">
                         {bc.address}
                       </div>
@@ -1606,7 +1618,7 @@ export default function AdminOfficesPage() {
                   Этаж
                 </th>
                 <th className="text-left p-3 font-medium hidden md:table-cell">
-                  Компания
+                  Тип
                 </th>
                 <th className="text-left p-3 font-medium hidden lg:table-cell">
                   Площадь
@@ -1632,9 +1644,15 @@ export default function AdminOfficesPage() {
                     </td>
                   )}
                   <td className="p-3">
-                    <div className="font-mono font-semibold">
-                      {office.number}
+                    <div className="font-semibold">
+                      {officeDisplayName(office)}
                     </div>
+                    {office.title && office.title !== office.number && (
+                      <div className="font-mono text-xs text-[var(--muted)]">
+                        {office.number}
+                      </div>
+                    )}
+                    <OfficeStatusFlags office={office} />
                     <div className="text-xs text-[var(--muted)] sm:hidden">
                       {office.floor ? `${office.floor} эт.` : '—'}
                       {office.company ? ` · ${office.company}` : ''}
@@ -1688,13 +1706,18 @@ export default function AdminOfficesPage() {
                   <td className="p-3 whitespace-nowrap">
                     <span
                       className={`text-xs px-2 py-0.5 rounded-full ${
-                        office.isActive
-                          ? 'bg-emerald-50 text-emerald-700'
-                          : 'bg-[var(--border)] text-[var(--muted)]'
+                        office.externalId
+                          ? 'bg-emerald-50 text-emerald-800'
+                          : 'bg-[var(--surface-muted)] text-[var(--muted)]'
                       }`}
                     >
-                      {office.isActive ? 'Активен' : 'Неактивен'}
+                      {office.externalId ? 'Связан' : 'Не связан'}
                     </span>
+                    {!office.isActive && (
+                      <div className="text-[11px] text-[var(--muted)] mt-0.5">
+                        неактивен
+                      </div>
+                    )}
                   </td>
                   <td className="p-3">
                     <div className="flex items-center justify-end gap-1">
@@ -1747,6 +1770,9 @@ export default function AdminOfficesPage() {
               ))}
             </tbody>
           </table>
+          <div className="px-3 pb-3">
+            <OfficeSiteStatusNote />
+          </div>
         </div>
       ) : (
         <div className="space-y-5">
@@ -1798,21 +1824,22 @@ export default function AdminOfficesPage() {
                               {office.floor} этаж
                             </div>
                           )}
+                          <OfficeStatusFlags office={office} />
                         </div>
                         <span
                           className={`text-[11px] px-2 py-0.5 rounded-full shrink-0 ${
-                            office.isActive
-                              ? 'bg-emerald-50 text-emerald-700'
-                              : 'bg-[var(--border)] text-[var(--muted)]'
+                            office.externalId
+                              ? 'bg-emerald-50 text-emerald-800'
+                              : 'bg-[var(--surface-muted)] text-[var(--muted)]'
                           }`}
                         >
-                          {office.isActive ? 'Активен' : 'Неактивен'}
+                          {office.externalId ? 'Связан' : 'Не связан'}
                         </span>
                       </div>
 
                       <div className="space-y-1.5 text-sm mb-4">
                         <div className="flex justify-between gap-2">
-                          <span className="text-[var(--muted)]">Компания</span>
+                          <span className="text-[var(--muted)]">Тип</span>
                           <span className="text-right font-medium">
                             {office.company || '—'}
                           </span>
@@ -1899,6 +1926,7 @@ export default function AdminOfficesPage() {
               </div>
             </section>
           ))}
+          <OfficeSiteStatusNote />
         </div>
       )}
     </AdminLayout>

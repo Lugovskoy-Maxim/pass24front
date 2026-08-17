@@ -146,6 +146,7 @@ export class AppSettings {
     availabilityMeta?: string;
     officeFormatMeta?: string;
     companyMeta?: string;
+    roomStatusMeta?: string;
     businessCenterTaxonomy?: string;
     roomTypeTaxonomy?: string;
     serviceRequestsTable?: string;

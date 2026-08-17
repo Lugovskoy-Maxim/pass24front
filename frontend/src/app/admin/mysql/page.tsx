@@ -23,6 +23,7 @@ const EMPTY: SiteMysqlSettings = {
   availabilityMeta: 'tf_room_availability_status',
   officeFormatMeta: 'tf_room_office_format',
   companyMeta: '',
+  roomStatusMeta: 'room_status',
   businessCenterTaxonomy: 'tf_business_center',
   roomTypeTaxonomy: 'tf_room_type',
   serviceRequestsTable: 'tf_service_requests',
@@ -64,6 +65,7 @@ const OFFICE_FIELDS: Field[] = [
     hint: 'tf_room_office_format',
   },
   { key: 'companyMeta', label: 'Meta: компания (опц.)' },
+  { key: 'roomStatusMeta', label: 'Meta: аренда', hint: 'room_status' },
   {
     key: 'businessCenterTaxonomy',
     label: 'Таксономия БЦ',
@@ -132,6 +134,7 @@ export default function MysqlAdminPage() {
         availabilityMeta: form.availabilityMeta,
         officeFormatMeta: form.officeFormatMeta,
         companyMeta: form.companyMeta,
+        roomStatusMeta: form.roomStatusMeta,
         businessCenterTaxonomy: form.businessCenterTaxonomy,
         roomTypeTaxonomy: form.roomTypeTaxonomy,
         serviceRequestsTable: form.serviceRequestsTable,
