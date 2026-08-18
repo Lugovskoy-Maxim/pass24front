@@ -109,13 +109,17 @@
 <body>
   <div class="wrap">
     <h1>Проверка API Pass ↔ Mstyle v2</h1>
-    <p class="lead">Введите базовый адрес Pass и нажмите «Подключиться». Дальше выбирайте маршрут и смотрите ответ.</p>
+    <p class="lead">База: <code>https://pass.mstyle.ru</code> или <code>https://pass.mstyle.ru/api</code> — оба варианта соберутся в <code>…/api/oauth2/token</code> и <code>…/api/internal/…</code>. Client ID должен совпадать с <code>MSTYLE_CLIENT_ID</code> в .env.</p>
 
     <div class="card">
       <div class="row">
         <div class="grow">
           <label>Базовый URL</label>
-          <input id="base" value="https://pass.mstyle.ru" />
+          <input id="base" value="https://pass.mstyle.ru" placeholder="https://pass.mstyle.ru или https://pass.mstyle.ru/api" />
+        </div>
+        <div>
+          <label>Client ID</label>
+          <input id="clientId" value="mstyle-backend-staging" />
         </div>
         <button id="connect">Подключиться</button>
         <button class="ghost" id="curl">curl</button>
@@ -170,9 +174,9 @@
 <script>
 const SV = "2.0";
 const CTX = { ipAddress: "192.0.2.10", userAgent: "Mstyle console", locale: "ru-RU" };
-const P = "/api/internal/integrations/mstyle/v2";
+const P = "/internal/integrations/mstyle/v2";
 const EPS = [
-  { id:"A-01", ms:"M0", t:"Сервисный токен", m:"POST", p:"/api/oauth2/token", form:true },
+  { id:"A-01", ms:"M0", t:"Сервисный токен", m:"POST", p:"/oauth2/token", form:true },
   { id:"A-02", ms:"M1", t:"Логин и пароль", m:"POST", p:P+"/auth/residents/password-verify", idem:1, b:{schemaVersion:SV,login:"admin",password:"admin123",context:CTX} },
   { id:"A-03", ms:"M0", t:"Начать вход по коду", m:"POST", p:P+"/auth/residents/code-challenges", idem:1, b:{schemaVersion:SV,identifier:{type:"phone",value:"+79990001234"},channel:"sms",context:CTX} },
   { id:"A-04", ms:"M0", t:"Состояние попытки входа", m:"GET", p:P+"/auth/residents/code-challenges/{challengeId}" },
@@ -236,14 +240,18 @@ const $ = (id) => document.getElementById(id);
 const V = ["subject","profileId","challengeId","membershipId","guestPartyId","snapshotId","changeRequestId","deletionRequestId","documentCode","cursor"];
 let cur = EPS[0], token = "";
 
-function base() {
-  let u = $("base").value.trim() || location.origin;
-  return u.replace(/\/+$/, "");
+function apiRoot() {
+  let u = ($("base").value.trim() || location.origin).replace(/\/+$/, "");
+  if (!/\/api$/i.test(u)) u += "/api";
+  return u;
 }
 function fill(path) {
   return path.replace(/\{(\w+)\}/g, (_, k) => encodeURIComponent(($("v-"+k)||{}).value || "{"+k+"}"));
 }
-function fullUrl(ep) { return base() + fill(ep.p); }
+function fullUrl(ep) {
+  const path = fill(ep.p).replace(/^\/api(?=\/|$)/, "");
+  return apiRoot() + (path.startsWith("/") ? path : "/" + path);
+}
 function rid() { return "req_" + Math.random().toString(36).slice(2,10); }
 function pick(ep) {
   cur = ep;
@@ -289,7 +297,10 @@ async function call(ep) {
   let body;
   if (ep.form) {
     headers["Content-Type"] = "application/x-www-form-urlencoded";
-    body = "grant_type=client_credentials&client_id=mstyle-backend-staging&scope=mstyle.resident.authenticate";
+    const p = new URLSearchParams();
+    p.set("grant_type", "client_credentials");
+    p.set("client_id", $("clientId").value.trim() || "mstyle-backend-staging");
+    body = p.toString();
   } else if (ep.m !== "GET") {
     headers["Content-Type"] = "application/json";
     body = $("body").value || "{}";
@@ -307,6 +318,11 @@ async function call(ep) {
     $("status").textContent = res.status + " " + res.statusText + " · " + ms + " мс";
     $("resp").textContent = typeof data === "string" ? data : JSON.stringify(data, null, 2);
     if (data && typeof data === "object") harvest(data);
+    if (ep.form && !res.ok) {
+      const err = (data && data.error_description) || (data && data.error) || res.statusText;
+      $("conn").innerHTML = '<span class="bad">Не подключились.</span> ' + err +
+        (String(err).toLowerCase().includes("client") ? " Проверьте Client ID = MSTYLE_CLIENT_ID в .env сервера." : "");
+    }
   } catch (e) {
     $("status").className = "bad";
     $("status").textContent = "Нет ответа";
@@ -322,7 +338,7 @@ function copyCurl() {
   if (!ep.form && token) h.push("-H 'Authorization: Bearer "+token+"'");
   if (ep.idem) h.push("-H 'Idempotency-Key: idem_"+Date.now().toString(36)+"'");
   let data = "";
-  if (ep.form) data = " --data 'grant_type=client_credentials&client_id=mstyle-backend-staging&scope=mstyle.resident.authenticate'";
+  if (ep.form) data = " --data 'grant_type=client_credentials&client_id="+($("clientId").value.trim()||"mstyle-backend-staging")+"'";
   else if (ep.m !== "GET") data = " --data '"+$("body").value.replace(/'/g,"'\\''")+"'";
   const cmd = "curl -sS -X "+ep.m+" '"+fullUrl(ep)+"' "+h.join(" ")+data;
   navigator.clipboard.writeText(cmd);
