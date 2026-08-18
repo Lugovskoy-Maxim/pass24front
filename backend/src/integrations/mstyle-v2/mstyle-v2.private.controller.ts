@@ -21,7 +21,7 @@ import { MstyleEventsService } from './mstyle-v2.events';
 import { MstyleGuestsService } from './mstyle-v2.guests.service';
 import { MstyleIdempotencyService } from './mstyle-v2.idempotency';
 import { MstylePrivateDataService } from './mstyle-v2.private-data.service';
-import type {
+import {
   ChangeDecisionDto,
   ChangeRequestDto,
   ClaimGuestDto,

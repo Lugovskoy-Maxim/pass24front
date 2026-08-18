@@ -3,7 +3,7 @@
 <head>
   <meta charset="UTF-8" />
   <meta name="viewport" content="width=device-width, initial-scale=1" />
-  <title>Pass · Mstyle v2 console</title>
+  <title>Pass API console · v1 / v2</title>
   <style>
     :root {
       --bg: #0b0d10;
@@ -12,14 +12,16 @@
       --line: #262b32;
       --text: #d7dde5;
       --dim: #7d8693;
-      --acc: #6ea0ff;
       --ok: #5ecf9a;
       --bad: #f07178;
       --get: #6ea0ff;
       --post: #5ecf9a;
       --patch: #d4b15a;
+      --del: #f07178;
       --mono: ui-monospace, "Cascadia Code", "SF Mono", Menlo, Consolas, monospace;
       --sans: "IBM Plex Sans", "Segoe UI", system-ui, sans-serif;
+      --left: 430px;
+      --list: 200px;
     }
     * { box-sizing: border-box; }
     html, body { height: 100%; margin: 0; }
@@ -31,248 +33,120 @@
     }
     button, input, textarea, select { font: inherit; color: inherit; }
     button { cursor: pointer; }
-    .app {
-      height: 100vh;
-      display: grid;
-      grid-template-rows: 52px 1fr;
-    }
+    .app { height: 100vh; display: grid; grid-template-rows: auto 1fr; }
     header {
-      display: grid;
-      grid-template-columns: auto 1fr auto;
-      gap: 16px;
-      align-items: center;
-      padding: 0 16px;
-      border-bottom: 1px solid var(--line);
-      background: var(--panel);
+      display: flex; flex-wrap: wrap; gap: 8px; align-items: center;
+      padding: 8px 12px; border-bottom: 1px solid var(--line); background: var(--panel);
     }
-    .brand {
-      display: flex;
-      align-items: baseline;
-      gap: 10px;
-      white-space: nowrap;
-    }
-    .brand b { font-size: 13px; letter-spacing: .02em; font-weight: 600; }
-    .brand span { color: var(--dim); font-size: 11px; font-family: var(--mono); }
-    .bar {
-      display: flex;
-      gap: 8px;
-      align-items: center;
-      min-width: 0;
-    }
+    .brand { display: flex; align-items: baseline; gap: 8px; margin-right: 8px; }
+    .brand b { font-size: 13px; letter-spacing: .03em; }
+    .brand span { color: var(--dim); font: 11px var(--mono); }
+    .tabs { display: flex; border: 1px solid var(--line); border-radius: 6px; overflow: hidden; }
+    .tabs button { height: 30px; padding: 0 12px; border: 0; background: transparent; color: var(--dim); }
+    .tabs button.on { background: #1c2430; color: var(--text); }
     .field {
-      display: flex;
-      align-items: center;
-      gap: 8px;
-      min-width: 0;
-      flex: 1;
-      height: 32px;
-      padding: 0 10px;
-      background: var(--bg);
-      border: 1px solid var(--line);
-      border-radius: 6px;
+      display: flex; align-items: center; gap: 6px; height: 30px; padding: 0 8px;
+      background: var(--bg); border: 1px solid var(--line); border-radius: 6px; min-width: 0;
     }
-    .field label {
-      color: var(--dim);
-      font-size: 10px;
-      letter-spacing: .06em;
-      text-transform: uppercase;
-      flex: none;
-    }
-    .field input {
-      flex: 1;
-      min-width: 0;
-      border: 0;
-      background: transparent;
-      outline: none;
-      font-family: var(--mono);
-      font-size: 12px;
-    }
-    .field.cid { flex: 0 0 240px; }
-    .actions { display: flex; gap: 6px; }
+    .field label { color: var(--dim); font-size: 10px; letter-spacing: .06em; text-transform: uppercase; flex: none; }
+    .field input { border: 0; background: transparent; outline: none; font: 12px var(--mono); min-width: 80px; width: 100%; }
+    .field.base { flex: 1; min-width: 180px; }
     .btn {
-      height: 32px;
-      padding: 0 12px;
-      border: 1px solid var(--line);
-      border-radius: 6px;
-      background: var(--elev);
+      height: 30px; padding: 0 10px; border: 1px solid var(--line); border-radius: 6px; background: var(--elev);
     }
-    .btn:hover { border-color: #3a414c; }
     .btn.primary { background: #1c2a44; border-color: #2d4570; color: #cfe0ff; }
     .btn:disabled { opacity: .45; cursor: wait; }
     .work {
       display: grid;
-      grid-template-columns: 420px 1fr;
+      grid-template-columns: var(--left) 6px 1fr;
       min-height: 0;
     }
-    .col {
-      min-width: 0;
-      min-height: 0;
-      display: grid;
-      grid-template-rows: 36px 1fr;
-    }
-    .col.req { border-right: 1px solid var(--line); }
+    .vsplit, .hsplit { background: var(--line); }
+    .vsplit { cursor: col-resize; }
+    .hsplit { cursor: row-resize; }
+    .vsplit:hover, .hsplit:hover, .vsplit.on, .hsplit.on { background: #3d4654; }
+    .col { min-width: 0; min-height: 0; display: flex; flex-direction: column; }
     .col-h {
-      display: flex;
-      align-items: center;
-      justify-content: space-between;
-      padding: 0 12px;
-      border-bottom: 1px solid var(--line);
-      color: var(--dim);
-      font-size: 11px;
-      letter-spacing: .08em;
-      text-transform: uppercase;
+      height: 32px; display: flex; align-items: center; justify-content: space-between;
+      padding: 0 10px; border-bottom: 1px solid var(--line); color: var(--dim);
+      font-size: 10px; letter-spacing: .08em; text-transform: uppercase; flex: none;
     }
-    .req-body {
-      display: grid;
-      grid-template-rows: 168px auto 1fr;
-      min-height: 0;
+    .req-stack { flex: 1; min-height: 0; display: grid; grid-template-rows: var(--list) 6px 1fr; }
+    #list { overflow: auto; }
+    .tools { display: flex; gap: 6px; padding: 6px 8px; border-bottom: 1px solid var(--line); }
+    .tools input, .tools select {
+      background: var(--bg); border: 1px solid var(--line); border-radius: 5px; padding: 5px 7px; font: 12px var(--mono);
     }
-    #list { overflow: auto; border-bottom: 1px solid var(--line); }
+    .tools input { flex: 1; }
     .ep {
-      display: grid;
-      grid-template-columns: 44px 40px minmax(0,1fr) 36px 34px;
-      gap: 6px;
-      align-items: center;
-      padding: 6px 10px;
-      border-bottom: 1px solid #1a1e24;
-      cursor: pointer;
+      display: grid; grid-template-columns: 52px 44px minmax(0,1fr) 28px 32px;
+      gap: 6px; align-items: center; padding: 5px 8px; border-bottom: 1px solid #1a1e24; cursor: pointer;
     }
     .ep:hover { background: #14181d; }
     .ep.on { background: #182030; }
-    .id, .m, .st { font-family: var(--mono); font-size: 11px; }
+    .id, .m, .st { font: 11px var(--mono); }
     .id { color: var(--dim); }
-    .m.GET { color: var(--get); }
-    .m.POST { color: var(--post); }
-    .m.PATCH { color: var(--patch); }
+    .m.GET { color: var(--get); } .m.POST { color: var(--post); }
+    .m.PATCH { color: var(--patch); } .m.DELETE { color: var(--del); }
     .t { overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
     .ms { color: var(--dim); font-size: 10px; }
-    .st.ok { color: var(--ok); }
-    .st.bad { color: var(--bad); }
-    .editor { padding: 10px 12px; display: flex; flex-direction: column; gap: 8px; min-height: 0; }
-    .url {
-      font-family: var(--mono);
-      font-size: 11px;
-      color: var(--dim);
-      word-break: break-all;
-    }
-    .title { font-size: 13px; font-weight: 600; }
+    .st.ok { color: var(--ok); } .st.bad { color: var(--bad); }
+    .editor { min-height: 0; display: flex; flex-direction: column; padding: 8px 10px; gap: 6px; }
+    .url { font: 11px var(--mono); color: var(--dim); word-break: break-all; }
     textarea {
-      flex: 1;
-      min-height: 80px;
-      resize: none;
-      background: var(--bg);
-      border: 1px solid var(--line);
-      border-radius: 6px;
-      padding: 8px;
-      font-family: var(--mono);
-      font-size: 12px;
-      outline: none;
+      flex: 1; min-height: 70px; resize: none; background: var(--bg); border: 1px solid var(--line);
+      border-radius: 5px; padding: 7px; font: 12px var(--mono); outline: none;
     }
-    .ids {
-      display: grid;
-      grid-template-columns: 1fr 1fr;
-      gap: 4px 8px;
-      overflow: auto;
-      max-height: 120px;
-    }
+    .ids { display: grid; grid-template-columns: 1fr 1fr; gap: 4px 8px; overflow: auto; max-height: 110px; }
     .ids label { display: block; color: var(--dim); font-size: 10px; }
     .ids input {
-      width: 100%;
-      background: var(--bg);
-      border: 1px solid var(--line);
-      border-radius: 4px;
-      padding: 4px 6px;
-      font-family: var(--mono);
-      font-size: 11px;
+      width: 100%; background: var(--bg); border: 1px solid var(--line); border-radius: 4px;
+      padding: 3px 6px; font: 11px var(--mono);
     }
     .res { background: #0d0f12; }
-    #log { overflow: auto; padding: 10px; }
-    .item {
-      border: 1px solid var(--line);
-      border-radius: 6px;
-      margin-bottom: 8px;
-      background: var(--panel);
-    }
-    .item .h {
-      display: flex;
-      justify-content: space-between;
-      gap: 10px;
-      padding: 8px 10px;
-      cursor: pointer;
-      border-bottom: 1px solid #1c2128;
-    }
-    .item .h .meta { color: var(--dim); font-family: var(--mono); font-size: 11px; }
-    .item pre {
-      margin: 0;
-      padding: 10px;
-      max-height: 240px;
-      overflow: auto;
-      white-space: pre-wrap;
-      font: 12px/1.45 var(--mono);
-    }
-    .empty {
-      color: var(--dim);
-      padding: 40px 16px;
-      text-align: center;
-      font-size: 12px;
-    }
-    .ok { color: var(--ok); }
-    .bad { color: var(--bad); }
-    .note { font-size: 11px; color: var(--dim); max-width: 360px; text-align: right; }
-    @media (max-width: 860px) {
-      body { overflow: auto; }
-      .app, .work, .col, .req-body { display: block; height: auto; }
-      .req-body #list { height: 220px; }
-    }
+    #log { flex: 1; overflow: auto; padding: 8px; }
+    .item { border: 1px solid var(--line); border-radius: 5px; margin-bottom: 7px; background: var(--panel); }
+    .item .h { display: flex; justify-content: space-between; gap: 8px; padding: 7px 9px; cursor: pointer; border-bottom: 1px solid #1c2128; }
+    .item .meta { color: var(--dim); font: 11px var(--mono); }
+    .item pre { margin: 0; padding: 8px 9px; max-height: 220px; overflow: auto; white-space: pre-wrap; font: 12px/1.4 var(--mono); }
+    .empty { color: var(--dim); padding: 36px 14px; text-align: center; font-size: 12px; }
+    .ok { color: var(--ok); } .bad { color: var(--bad); }
+    .ver { font: 10px var(--mono); color: var(--dim); border: 1px solid var(--line); border-radius: 3px; padding: 0 4px; }
   </style>
 </head>
 <body>
 <div class="app">
   <header>
-    <div class="brand">
-      <b>PASS / MSTYLE</b>
-      <span>private api v2</span>
+    <div class="brand"><b>PASS</b><span>http console</span></div>
+    <div class="tabs">
+      <button type="button" id="tab-v1" class="on">v1 app</button>
+      <button type="button" id="tab-v2">v2 mstyle</button>
     </div>
-    <div class="bar">
-      <div class="field">
-        <label>base</label>
-        <input id="base" value="https://pass.mstyle.ru" spellcheck="false" />
-      </div>
-      <div class="field cid">
-        <label>client</label>
-        <input id="clientId" value="mstyle-backend-staging" spellcheck="false" />
-      </div>
-    </div>
-    <div class="actions">
-      <button class="btn primary" id="connect">Connect + probe</button>
-      <button class="btn" id="send">Send</button>
-      <button class="btn" id="curl">curl</button>
-    </div>
+    <div class="field base"><label>base</label><input id="base" value="https://pass.mstyle.ru" spellcheck="false" /></div>
+    <div class="field" style="width:200px"><label>client</label><input id="clientId" value="mstyle-backend-staging" spellcheck="false" /></div>
+    <div class="field" style="width:150px"><label>login</label><input id="login" value="admin" spellcheck="false" /></div>
+    <div class="field" style="width:140px"><label>pass</label><input id="password" type="password" value="" /></div>
+    <button class="btn primary" id="connect">Connect + probe</button>
+    <button class="btn" id="send">Send</button>
+    <button class="btn" id="curl">curl</button>
   </header>
   <div class="work">
-    <section class="col req">
-      <div class="col-h">
-        <span>Request</span>
-        <span id="count"></span>
-      </div>
-      <div class="req-body">
-        <div>
-          <div style="display:flex;gap:8px;padding:8px 10px;border-bottom:1px solid var(--line)">
-            <input id="q" placeholder="filter routes" style="flex:1;background:var(--bg);border:1px solid var(--line);border-radius:6px;padding:6px 8px;font-family:var(--mono);font-size:12px" />
-            <select id="ms" style="background:var(--bg);border:1px solid var(--line);border-radius:6px;padding:0 8px">
-              <option value="">ALL</option>
-              <option>M0</option><option>M1</option><option>M2</option>
-            </select>
+    <section class="col">
+      <div class="col-h"><span>Request</span><span id="count"></span></div>
+      <div class="req-stack">
+        <div style="min-height:0;display:flex;flex-direction:column">
+          <div class="tools">
+            <input id="q" placeholder="filter" />
+            <select id="grp"><option value="">all groups</option></select>
           </div>
-          <div id="list" style="height:calc(168px - 41px);overflow:auto"></div>
+          <div id="list"></div>
         </div>
-        <div class="editor" style="border-bottom:1px solid var(--line)">
+        <div class="hsplit" id="hsplit" title="высота списка"></div>
+        <div class="editor">
           <div>
-            <div class="title" id="title">A-01 · token</div>
+            <div id="title" style="font-weight:600">—</div>
             <div class="url" id="url"></div>
           </div>
-        </div>
-        <div class="editor">
           <textarea id="body" spellcheck="false"></textarea>
           <details>
             <summary style="color:var(--dim);cursor:pointer;font-size:11px">path params</summary>
@@ -281,85 +155,183 @@
         </div>
       </div>
     </section>
+    <div class="vsplit" id="vsplit" title="ширина колонок"></div>
     <section class="col res">
-      <div class="col-h">
-        <span>Responses</span>
-        <span id="sum" class="note">ожидание connect</span>
-      </div>
-      <div id="log"><div class="empty">Слева маршрут. Connect возьмёт токен и прогонит безопасные GET.</div></div>
+      <div class="col-h"><span>Responses</span><span id="sum">idle</span></div>
+      <div id="log"><div class="empty">v1 — JWT после login. v2 — service token после A-01. Connect прогоняет безопасные чтения выбранной версии.</div></div>
     </section>
   </div>
 </div>
 <script>
-const SV = "2.0";
-const CTX = { ipAddress: "192.0.2.10", userAgent: "pass-console/1", locale: "ru-RU" };
-const P = "/internal/integrations/mstyle/v2";
-const EPS = [
-  { id:"A-01", ms:"M0", t:"token", m:"POST", p:"/oauth2/token", form:true, safe:1 },
-  { id:"A-02", ms:"M1", t:"password verify", m:"POST", p:P+"/auth/residents/password-verify", idem:1, b:{schemaVersion:SV,login:"admin",password:"admin123",context:CTX} },
-  { id:"A-03", ms:"M0", t:"code challenge", m:"POST", p:P+"/auth/residents/code-challenges", idem:1, b:{schemaVersion:SV,identifier:{type:"phone",value:"+79990001234"},channel:"sms",context:CTX} },
-  { id:"A-04", ms:"M0", t:"challenge status", m:"GET", p:P+"/auth/residents/code-challenges/{challengeId}" },
-  { id:"A-05", ms:"M0", t:"resend code", m:"POST", p:P+"/auth/residents/code-challenges/{challengeId}/resend", idem:1 },
-  { id:"A-06", ms:"M0", t:"verify code", m:"POST", p:P+"/auth/residents/code-challenges/{challengeId}/verify", idem:1, b:{schemaVersion:SV,code:"123456",context:CTX} },
-  { id:"R-01", ms:"M0", t:"resident context", m:"GET", p:P+"/residents/{subject}/context", safe:1, need:["subject"] },
-  { id:"R-03", ms:"M2", t:"change feed", m:"GET", p:P+"/changes?after={cursor}&limit=50", safe:1 },
-  { id:"R-04", ms:"M0", t:"profile", m:"GET", p:P+"/resident-profiles/{profileId}", safe:1, need:["profileId"] },
-  { id:"R-05", ms:"M0", t:"patch profile", m:"PATCH", p:P+"/resident-profiles/{profileId}", b:{schemaVersion:SV,companyShortName:"Пример+",expectedRevision:2} },
-  { id:"R-06", ms:"M1", t:"search profiles", m:"POST", p:P+"/resident-profiles/search", safe:1, b:{schemaVersion:SV,query:"",limit:20} },
-  { id:"R-07", ms:"M0", t:"patch identity", m:"PATCH", p:P+"/residents/{subject}/identity", b:{schemaVersion:SV,displayName:"Иванов И. И.",expectedRevision:4} },
-  { id:"R-08", ms:"M1", t:"onboarding", m:"POST", p:P+"/resident-onboarding", b:{schemaVersion:SV,phone:"+79990001234",profileType:"company",legalForm:"ooo",company:"ООО Пример"} },
-  { id:"R-09", ms:"M1", t:"lifecycle", m:"POST", p:P+"/resident-profiles/{profileId}/lifecycle-transitions", b:{schemaVersion:SV,transition:"suspend",reason:"manual"} },
-  { id:"R-10", ms:"M2", t:"deletion request", m:"POST", p:P+"/resident-profiles/{profileId}/deletion-requests", b:{schemaVersion:SV,reason:"client_request"} },
-  { id:"R-11", ms:"M1", t:"change request", m:"POST", p:P+"/resident-profiles/{profileId}/change-requests", b:{schemaVersion:SV,patch:{companyShortName:"Новое"}} },
-  { id:"R-12", ms:"M1", t:"current change", m:"GET", p:P+"/resident-profiles/{profileId}/change-requests/current", safe:1, need:["profileId"] },
-  { id:"R-13", ms:"M1", t:"physical access", m:"GET", p:P+"/resident-profiles/{profileId}/physical-access", safe:1, need:["profileId"] },
-  { id:"R-14", ms:"M1", t:"identity", m:"GET", p:P+"/identities/{subject}", safe:1, need:["subject"] },
-  { id:"R-15", ms:"M1", t:"decide change", m:"POST", p:P+"/resident-profile-change-requests/{changeRequestId}/decisions", b:{schemaVersion:SV,decision:"approve"} },
-  { id:"R-16", ms:"M1", t:"cancel change", m:"POST", p:P+"/resident-profile-change-requests/{changeRequestId}/cancel" },
-  { id:"R-17", ms:"M2", t:"deletion status", m:"GET", p:P+"/deletion-requests/{deletionRequestId}", need:["deletionRequestId"] },
-  { id:"M-01", ms:"M0", t:"memberships", m:"GET", p:P+"/resident-profiles/{profileId}/memberships", safe:1, need:["profileId"] },
-  { id:"M-02", ms:"M0", t:"add member", m:"POST", p:P+"/resident-profiles/{profileId}/memberships", b:{schemaVersion:SV,subject:"usr_01EMPLOYEE",role:"employee"} },
-  { id:"M-03", ms:"M1", t:"patch membership", m:"PATCH", p:P+"/resident-memberships/{membershipId}", b:{schemaVersion:SV,status:"suspended"} },
-  { id:"M-04", ms:"M1", t:"revoke membership", m:"POST", p:P+"/resident-memberships/{membershipId}/revoke" },
-  { id:"M-05", ms:"M1", t:"owner transfer", m:"POST", p:P+"/resident-profiles/{profileId}/owner-transfer", b:{schemaVersion:SV,toSubject:"usr_01NEWOWNER"} },
-  { id:"C-01", ms:"M0", t:"contact challenge", m:"POST", p:P+"/residents/{subject}/contacts/challenges", b:{schemaVersion:SV,type:"phone",value:"+79990001234"} },
-  { id:"C-02", ms:"M0", t:"verify contact", m:"POST", p:P+"/residents/{subject}/contacts/challenges/{challengeId}/verify", b:{schemaVersion:SV,code:"123456"} },
-  { id:"C-03", ms:"M0", t:"assignments", m:"GET", p:P+"/resident-profiles/{profileId}/contact-assignments", safe:1, need:["profileId"] },
-  { id:"C-04", ms:"M0", t:"replace assignments", m:"PATCH", p:P+"/resident-profiles/{profileId}/contact-assignments", b:{schemaVersion:SV,phoneContactId:"cnt_phone",emailContactId:"cnt_email"} },
-  { id:"C-05", ms:"M0", t:"reveal contacts", m:"POST", p:P+"/residents/{subject}/contacts/reveal", safe:1, need:["subject"] },
-  { id:"S-01", ms:"M0", t:"consents", m:"GET", p:P+"/residents/{subject}/consents", safe:1, need:["subject"] },
-  { id:"S-02", ms:"M0", t:"accept consent", m:"POST", p:P+"/residents/{subject}/consents/{documentCode}/accept", b:{schemaVersion:SV,documentVersion:"1.0",documentDigest:"sha256:abc"} },
-  { id:"S-03", ms:"M0", t:"withdraw consent", m:"POST", p:P+"/residents/{subject}/consents/{documentCode}/withdraw" },
-  { id:"P-01", ms:"M0", t:"private-data status", m:"GET", p:P+"/resident-profiles/{profileId}/private-data/status", safe:1, need:["profileId"] },
-  { id:"P-02", ms:"M0", t:"reveal private-data", m:"POST", p:P+"/resident-profiles/{profileId}/private-data/reveal", safe:1, need:["profileId"], b:{schemaVersion:SV,fieldCodes:["inn","ogrn"]} },
-  { id:"P-03", ms:"M0", t:"patch private-data", m:"PATCH", p:P+"/resident-profiles/{profileId}/private-data", b:{schemaVersion:SV,values:{companyFullName:"ООО Пример",inn:"7700000000",ogrn:"1027700000000"}} },
-  { id:"P-04", ms:"M0", t:"snapshot", m:"POST", p:P+"/resident-profiles/{profileId}/private-data/snapshots" },
-  { id:"P-05", ms:"M1", t:"reveal profile contacts", m:"POST", p:P+"/resident-profiles/{profileId}/contacts/reveal", safe:1, need:["profileId"] },
-  { id:"P-06", ms:"M1", t:"reveal snapshot", m:"POST", p:P+"/private-data-snapshots/{snapshotId}/reveal", need:["snapshotId"], b:{schemaVersion:SV,fieldCodes:["inn"]} },
-  { id:"P-07", ms:"M1", t:"reveal snapshot contacts", m:"POST", p:P+"/private-data-snapshots/{snapshotId}/contacts/reveal", need:["snapshotId"] },
-  { id:"P-08", ms:"M0", t:"bind snapshot", m:"POST", p:P+"/private-data-snapshots/{snapshotId}/operation-bindings", b:{schemaVersion:SV,operationType:"pass_issue",operationId:"pass_01J5"} },
-  { id:"G-01", ms:"M0", t:"create guest", m:"POST", p:P+"/guest-parties", b:{schemaVersion:SV,visitorName:"Петров Пётр",visitDate:"2026-08-20"} },
-  { id:"G-02", ms:"M0", t:"guest contact challenge", m:"POST", p:P+"/guest-parties/{guestPartyId}/contact-challenges", b:{schemaVersion:SV,type:"phone",value:"+79990005555"} },
-  { id:"G-03", ms:"M0", t:"verify guest contact", m:"POST", p:P+"/guest-parties/{guestPartyId}/contact-challenges/{challengeId}/verify", b:{schemaVersion:SV,code:"123456"} },
-  { id:"G-04", ms:"M0", t:"guest status", m:"GET", p:P+"/guest-parties/{guestPartyId}/status", safe:1, need:["guestPartyId"] },
-  { id:"G-05", ms:"M1", t:"reveal guest contacts", m:"POST", p:P+"/guest-parties/{guestPartyId}/contacts/reveal", safe:1, need:["guestPartyId"] },
-  { id:"G-06", ms:"M0", t:"guest private-data status", m:"GET", p:P+"/guest-parties/{guestPartyId}/private-data/status", safe:1, need:["guestPartyId"] },
-  { id:"G-07", ms:"M1", t:"reveal guest private-data", m:"POST", p:P+"/guest-parties/{guestPartyId}/private-data/reveal", safe:1, need:["guestPartyId"], b:{schemaVersion:SV,fieldCodes:["lastName","firstName"]} },
-  { id:"G-08", ms:"M0", t:"patch guest private-data", m:"PATCH", p:P+"/guest-parties/{guestPartyId}/private-data", b:{schemaVersion:SV,values:{lastName:"Петров",firstName:"Пётр"}} },
-  { id:"G-09", ms:"M0", t:"guest snapshot", m:"POST", p:P+"/guest-parties/{guestPartyId}/snapshots" },
-  { id:"G-10", ms:"M0", t:"confirm booking", m:"POST", p:P+"/guest-parties/{guestPartyId}/booking-confirmations", b:{schemaVersion:SV,visitDate:"2026-08-20",officeExternalId:"tf-room:107"} },
-  { id:"G-11", ms:"M2", t:"claim guest", m:"POST", p:P+"/guest-parties/{guestPartyId}/claim", b:{schemaVersion:SV,subject:"usr_01J5Q8K2M7N4P6R9T1V3X5Z7AA"} },
-  { id:"G-12", ms:"M1", t:"search guests", m:"POST", p:P+"/guest-parties/search", safe:1, b:{schemaVersion:SV,query:"",limit:20} },
-  { id:"G-13", ms:"M0", t:"guest consents", m:"GET", p:P+"/guest-parties/{guestPartyId}/consents", safe:1, need:["guestPartyId"] },
-  { id:"G-14", ms:"M0", t:"accept guest consent", m:"POST", p:P+"/guest-parties/{guestPartyId}/consents/{documentCode}/accept", b:{schemaVersion:SV,documentVersion:"1.0",documentDigest:"sha256:abc"} },
-  { id:"G-15", ms:"M0", t:"withdraw guest consent", m:"POST", p:P+"/guest-parties/{guestPartyId}/consents/{documentCode}/withdraw" }
-];
-const VARS = ["subject","profileId","challengeId","membershipId","guestPartyId","snapshotId","changeRequestId","deletionRequestId","documentCode","cursor"];
+const SV="2.0", CTX={ipAddress:"192.0.2.10",userAgent:"pass-console/2",locale:"ru-RU"}, P="/internal/integrations/mstyle/v2";
+const V1 = [
+  {id:"H-01",g:"health",t:"root",m:"GET",p:"/",safe:1},
+  {id:"C-00",g:"config",t:"public config",m:"GET",p:"/config",safe:1},
+  {id:"C-01a",g:"config",t:"access config",m:"GET",p:"/config/access",jwt:1,safe:1},
+  {id:"A1-01",g:"auth",t:"login",m:"POST",p:"/auth/login",auth:1,b:{login:"admin",password:"01.03.1986"}},
+  {id:"A1-02",g:"auth",t:"invite info",m:"GET",p:"/auth/invite/{token}"},
+  {id:"A1-03",g:"auth",t:"invite accept",m:"POST",p:"/auth/invite/accept",b:{token:"",password:"secret12"}},
+  {id:"A1-04",g:"auth",t:"dev accounts",m:"GET",p:"/auth/dev-accounts",safe:1},
+  {id:"A1-05",g:"auth",t:"register request-code",m:"POST",p:"/auth/register/request-code",b:{lastName:"Иванов",firstName:"Иван",company:"ООО Тест",email:"dev@example.test",password:"secret12"}},
+  {id:"A1-06",g:"auth",t:"register confirm",m:"POST",p:"/auth/register/confirm",b:{email:"dev@example.test",code:"123456"}},
+  {id:"A1-07",g:"auth",t:"register status",m:"GET",p:"/auth/register/status/{registrationId}"},
+  {id:"A1-08",g:"auth",t:"password-reset request",m:"POST",p:"/auth/password-reset/request",b:{login:"admin"}},
+  {id:"A1-09",g:"auth",t:"password-reset confirm",m:"POST",p:"/auth/password-reset/confirm",b:{token:"",password:"newpass12"}},
+  {id:"A1-10",g:"auth",t:"password-reset status",m:"GET",p:"/auth/password-reset/status/{resetToken}"},
+  {id:"A1-11",g:"auth",t:"me",m:"GET",p:"/auth/me",jwt:1,safe:1},
+  {id:"A1-12",g:"auth",t:"email verify request",m:"POST",p:"/auth/email/verify/request",jwt:1},
+  {id:"A1-13",g:"auth",t:"email verify confirm",m:"POST",p:"/auth/email/verify/confirm",jwt:1,b:{code:"123456"}},
+  {id:"A1-14",g:"auth",t:"patch profile",m:"PATCH",p:"/auth/profile",jwt:1,b:{lastName:"Иванов",firstName:"Иван"}},
+  {id:"A1-15",g:"auth",t:"cancel profile request",m:"DELETE",p:"/auth/profile/request",jwt:1},
+  {id:"A1-16",g:"auth",t:"company logo",m:"PATCH",p:"/auth/company-logo",jwt:1,b:{companyLogo:""}},
+  {id:"A1-17",g:"auth",t:"tenant employees",m:"GET",p:"/auth/tenant/employees",jwt:1,safe:1},
+  {id:"A1-18",g:"auth",t:"add employee",m:"POST",p:"/auth/tenant/employees",jwt:1,b:{fullName:"Сотрудник Тест",email:"emp@example.test"}},
+  {id:"A1-19",g:"auth",t:"resend invite",m:"POST",p:"/auth/tenant/employees/{id}/resend-invite",jwt:1},
+  {id:"A1-20",g:"auth",t:"set employee active",m:"PATCH",p:"/auth/tenant/employees/{id}",jwt:1,b:{isActive:true}},
+  {id:"A1-21",g:"auth",t:"remove employee",m:"DELETE",p:"/auth/tenant/employees/{id}",jwt:1},
+  {id:"A1-22",g:"auth",t:"employee roles",m:"GET",p:"/auth/tenant/employee-roles",jwt:1,safe:1},
+  {id:"P1-01",g:"passes",t:"list",m:"GET",p:"/passes",jwt:1,safe:1},
+  {id:"P1-02",g:"passes",t:"journal",m:"GET",p:"/passes/journal",jwt:1,safe:1},
+  {id:"P1-03",g:"passes",t:"stats",m:"GET",p:"/passes/stats",jwt:1,safe:1},
+  {id:"P1-04",g:"passes",t:"overdue-active",m:"GET",p:"/passes/overdue-active",jwt:1,safe:1},
+  {id:"P1-05",g:"passes",t:"history",m:"GET",p:"/passes/history",jwt:1,safe:1},
+  {id:"P1-06",g:"passes",t:"export-filters",m:"GET",p:"/passes/export-filters",jwt:1,safe:1},
+  {id:"P1-07",g:"passes",t:"report",m:"GET",p:"/passes/report",jwt:1,safe:1},
+  {id:"P1-08",g:"passes",t:"export csv",m:"GET",p:"/passes/export",jwt:1},
+  {id:"P1-09",g:"passes",t:"lookup",m:"GET",p:"/passes/lookup/{passNumber}",jwt:1},
+  {id:"P1-10",g:"passes",t:"get by id",m:"GET",p:"/passes/{id}",jwt:1},
+  {id:"P1-11",g:"passes",t:"create",m:"POST",p:"/passes",jwt:1,b:{visitorName:"Гость Тест",passType:"visitor",visitDate:"2026-08-20"}},
+  {id:"P1-12",g:"passes",t:"patch status",m:"PATCH",p:"/passes/{id}/status",jwt:1,b:{status:"approved"}},
+  {id:"P1-13",g:"passes",t:"visitor-data",m:"PATCH",p:"/passes/{id}/visitor-data",jwt:1,b:{visitorName:"Гость"}},
+  {id:"P1-14",g:"passes",t:"send-email",m:"POST",p:"/passes/{id}/send-email",jwt:1,b:{email:"dev@example.test"}},
+  {id:"P1-15",g:"passes",t:"check-in",m:"POST",p:"/passes/{id}/check-in",jwt:1},
+  {id:"P1-16",g:"passes",t:"check-out",m:"POST",p:"/passes/{id}/check-out",jwt:1},
+  {id:"P1-17",g:"passes",t:"public ticket",m:"GET",p:"/passes/public/{passNumber}",safe:1},
+  {id:"T-01",g:"templates",t:"list",m:"GET",p:"/pass-templates",jwt:1,safe:1},
+  {id:"T-02",g:"templates",t:"create",m:"POST",p:"/pass-templates",jwt:1,b:{name:"Шаблон",visitorName:"Гость",passType:"visitor"}},
+  {id:"T-03",g:"templates",t:"sync-from-passes",m:"POST",p:"/pass-templates/sync-from-passes",jwt:1},
+  {id:"T-04",g:"templates",t:"from-pass",m:"POST",p:"/pass-templates/from-pass/{passId}",jwt:1},
+  {id:"T-05",g:"templates",t:"get",m:"GET",p:"/pass-templates/{id}",jwt:1},
+  {id:"T-06",g:"templates",t:"patch",m:"PATCH",p:"/pass-templates/{id}",jwt:1,b:{name:"Шаблон"}},
+  {id:"T-07",g:"templates",t:"delete",m:"DELETE",p:"/pass-templates/{id}",jwt:1},
+  {id:"N-01",g:"push",t:"config",m:"GET",p:"/notifications/push/config",jwt:1,safe:1},
+  {id:"N-02",g:"push",t:"subscribe",m:"POST",p:"/notifications/push/subscriptions",jwt:1,b:{endpoint:"https://example.test",keys:{p256dh:"x",auth:"y"}}},
+  {id:"N-03",g:"push",t:"unsubscribe",m:"DELETE",p:"/notifications/push/subscriptions",jwt:1,b:{endpoint:"https://example.test"}},
+  {id:"N-04",g:"push",t:"renew",m:"POST",p:"/notifications/push/subscriptions/renew",jwt:1,b:{endpoint:"https://example.test"}},
+  {id:"S-00",g:"sms",t:"mobile-id callback",m:"POST",p:"/sms/mobile-id/callback",b:{}},
+  {id:"AD-01",g:"admin",t:"dashboard",m:"GET",p:"/admin/dashboard",jwt:1,safe:1},
+  {id:"AD-02",g:"admin",t:"seed-test-data",m:"POST",p:"/admin/seed-test-data",jwt:1},
+  {id:"AD-03",g:"admin",t:"access-config",m:"GET",p:"/admin/access-config",jwt:1,safe:1},
+  {id:"AD-04",g:"admin",t:"patch access-config",m:"PATCH",p:"/admin/access-config",jwt:1,b:{}},
+  {id:"AD-05",g:"admin",t:"users",m:"GET",p:"/admin/users",jwt:1,safe:1},
+  {id:"AD-06",g:"admin",t:"create user",m:"POST",p:"/admin/users",jwt:1,b:{email:"new@example.test",password:"secret12",fullName:"Новый",role:"tenant"}},
+  {id:"AD-07",g:"admin",t:"patch user",m:"PATCH",p:"/admin/users/{id}",jwt:1,b:{isActive:true}},
+  {id:"AD-08",g:"admin",t:"delete user",m:"DELETE",p:"/admin/users/{id}",jwt:1},
+  {id:"AD-09",g:"admin",t:"registration-requests",m:"GET",p:"/admin/registration-requests",jwt:1,safe:1},
+  {id:"AD-10",g:"admin",t:"approve registration",m:"POST",p:"/admin/users/{id}/registration/approve",jwt:1},
+  {id:"AD-11",g:"admin",t:"reject registration",m:"POST",p:"/admin/users/{id}/registration/reject",jwt:1},
+  {id:"AD-12",g:"admin",t:"profile-change-requests",m:"GET",p:"/admin/profile-change-requests",jwt:1,safe:1},
+  {id:"AD-13",g:"admin",t:"approve profile-change",m:"POST",p:"/admin/users/{id}/profile-change/approve",jwt:1},
+  {id:"AD-14",g:"admin",t:"reject profile-change",m:"POST",p:"/admin/users/{id}/profile-change/reject",jwt:1},
+  {id:"AD-15",g:"admin",t:"business-centers",m:"GET",p:"/admin/business-centers",jwt:1,safe:1},
+  {id:"AD-16",g:"admin",t:"patch BC",m:"PATCH",p:"/admin/business-centers/{id}",jwt:1,b:{name:"БЦ"}},
+  {id:"AD-17",g:"admin",t:"create BC",m:"POST",p:"/admin/business-centers",jwt:1,b:{name:"БЦ Тест",address:"Москва"}},
+  {id:"AD-18",g:"admin",t:"delete BC",m:"DELETE",p:"/admin/business-centers/{id}",jwt:1},
+  {id:"AD-19",g:"admin",t:"offices",m:"GET",p:"/admin/offices",jwt:1,safe:1},
+  {id:"AD-20",g:"admin",t:"offices export",m:"GET",p:"/admin/offices/export",jwt:1},
+  {id:"AD-21",g:"admin",t:"offices import",m:"POST",p:"/admin/offices/import",jwt:1,b:{csv:""}},
+  {id:"AD-22",g:"admin",t:"create office",m:"POST",p:"/admin/offices",jwt:1,b:{propertyId:"",number:"101"}},
+  {id:"AD-23",g:"admin",t:"patch office",m:"PATCH",p:"/admin/offices/{id}",jwt:1,b:{isActive:true}},
+  {id:"AD-24",g:"admin",t:"delete office",m:"DELETE",p:"/admin/offices/{id}",jwt:1},
+  {id:"AD-25",g:"admin",t:"audit export",m:"GET",p:"/admin/audit/export",jwt:1},
+  {id:"AD-26",g:"admin",t:"audit",m:"GET",p:"/admin/audit",jwt:1,safe:1},
+  {id:"AD-27",g:"admin",t:"site-source",m:"GET",p:"/admin/site-source",jwt:1,safe:1},
+  {id:"AD-28",g:"admin",t:"patch site-source",m:"PATCH",p:"/admin/site-source",jwt:1,b:{}},
+  {id:"AD-29",g:"admin",t:"site-source test",m:"POST",p:"/admin/site-source/test",jwt:1},
+  {id:"AD-30",g:"admin",t:"offices import site",m:"POST",p:"/admin/site-source/offices/import",jwt:1,b:{}},
+  {id:"AD-31",g:"admin",t:"links",m:"GET",p:"/admin/site-source/links",jwt:1,safe:1},
+  {id:"AD-32",g:"admin",t:"confirm link",m:"POST",p:"/admin/site-source/links/confirm",jwt:1,b:{}},
+  {id:"AD-33",g:"admin",t:"confirm suggested",m:"POST",p:"/admin/site-source/links/confirm-suggested",jwt:1,b:{}},
+  {id:"AD-34",g:"admin",t:"unlink",m:"POST",p:"/admin/site-source/links/unlink",jwt:1,b:{}},
+  {id:"AD-35",g:"admin",t:"sync-linked",m:"POST",p:"/admin/site-source/offices/sync-linked",jwt:1},
+  {id:"AD-36",g:"admin",t:"push office",m:"POST",p:"/admin/site-source/offices/{id}/push",jwt:1},
+  {id:"AD-37",g:"admin",t:"site-source check",m:"GET",p:"/admin/site-source/check",jwt:1,safe:1},
+  {id:"AD-38",g:"admin",t:"tickets",m:"GET",p:"/admin/site-source/tickets",jwt:1,safe:1},
+  {id:"AD-39",g:"admin",t:"ticket",m:"GET",p:"/admin/site-source/tickets/{id}",jwt:1},
+  {id:"AD-40",g:"admin",t:"ticket message",m:"POST",p:"/admin/site-source/tickets/{id}/messages",jwt:1,b:{body:"ok"}},
+  {id:"AD-41",g:"admin",t:"integration catalog",m:"GET",p:"/admin/integration/catalog",jwt:1,safe:1},
+  {id:"AD-42",g:"admin",t:"site-settings",m:"GET",p:"/admin/site-settings",jwt:1,safe:1},
+  {id:"AD-43",g:"admin",t:"patch site-settings",m:"PATCH",p:"/admin/site-settings",jwt:1,b:{}},
+  {id:"AD-44",g:"admin",t:"daily report",m:"GET",p:"/admin/reports/daily",jwt:1,safe:1}
+].map(e => ({...e, ver:"v1"}));
+const V2 = [
+  {id:"A-01",g:"oauth",t:"service token",m:"POST",p:"/oauth2/token",form:true,safe:1},
+  {id:"A-02",g:"oauth",t:"password verify",m:"POST",p:P+"/auth/residents/password-verify",idem:1,b:{schemaVersion:SV,login:"admin",password:"admin123",context:CTX}},
+  {id:"A-03",g:"oauth",t:"code challenge",m:"POST",p:P+"/auth/residents/code-challenges",idem:1,b:{schemaVersion:SV,identifier:{type:"phone",value:"+79990001234"},channel:"sms",context:CTX}},
+  {id:"A-04",g:"oauth",t:"challenge status",m:"GET",p:P+"/auth/residents/code-challenges/{challengeId}"},
+  {id:"A-05",g:"oauth",t:"resend code",m:"POST",p:P+"/auth/residents/code-challenges/{challengeId}/resend",idem:1},
+  {id:"A-06",g:"oauth",t:"verify code",m:"POST",p:P+"/auth/residents/code-challenges/{challengeId}/verify",idem:1,b:{schemaVersion:SV,code:"123456",context:CTX}},
+  {id:"R-01",g:"residents",t:"context",m:"GET",p:P+"/residents/{subject}/context",safe:1,need:["subject"]},
+  {id:"R-03",g:"residents",t:"changes",m:"GET",p:P+"/changes?after={cursor}&limit=50",safe:1},
+  {id:"R-04",g:"residents",t:"profile",m:"GET",p:P+"/resident-profiles/{profileId}",safe:1,need:["profileId"]},
+  {id:"R-05",g:"residents",t:"patch profile",m:"PATCH",p:P+"/resident-profiles/{profileId}",b:{schemaVersion:SV,companyShortName:"Пример+",expectedRevision:2}},
+  {id:"R-06",g:"residents",t:"search profiles",m:"POST",p:P+"/resident-profiles/search",safe:1,b:{schemaVersion:SV,query:{},limit:20}},
+  {id:"R-07",g:"residents",t:"patch identity",m:"PATCH",p:P+"/residents/{subject}/identity",b:{schemaVersion:SV,displayName:"Иванов И. И.",expectedRevision:4}},
+  {id:"R-08",g:"residents",t:"onboarding",m:"POST",p:P+"/resident-onboarding",b:{schemaVersion:SV,phone:"+79990001234",profileType:"company",legalForm:"ooo",company:"ООО Пример"}},
+  {id:"R-09",g:"residents",t:"lifecycle",m:"POST",p:P+"/resident-profiles/{profileId}/lifecycle-transitions",b:{schemaVersion:SV,transition:"suspend",reason:"manual"}},
+  {id:"R-10",g:"residents",t:"deletion request",m:"POST",p:P+"/resident-profiles/{profileId}/deletion-requests",b:{schemaVersion:SV,reason:"client_request"}},
+  {id:"R-11",g:"residents",t:"change request",m:"POST",p:P+"/resident-profiles/{profileId}/change-requests",b:{schemaVersion:SV,patch:{companyShortName:"Новое"}}},
+  {id:"R-12",g:"residents",t:"current change",m:"GET",p:P+"/resident-profiles/{profileId}/change-requests/current",safe:1,need:["profileId"]},
+  {id:"R-13",g:"residents",t:"physical access",m:"GET",p:P+"/resident-profiles/{profileId}/physical-access",safe:1,need:["profileId"]},
+  {id:"R-14",g:"residents",t:"identity",m:"GET",p:P+"/identities/{subject}",safe:1,need:["subject"]},
+  {id:"R-15",g:"residents",t:"decide change",m:"POST",p:P+"/resident-profile-change-requests/{changeRequestId}/decisions",b:{schemaVersion:SV,decision:"approve"}},
+  {id:"R-16",g:"residents",t:"cancel change",m:"POST",p:P+"/resident-profile-change-requests/{changeRequestId}/cancel"},
+  {id:"R-17",g:"residents",t:"deletion status",m:"GET",p:P+"/deletion-requests/{deletionRequestId}",need:["deletionRequestId"]},
+  {id:"M-01",g:"members",t:"memberships",m:"GET",p:P+"/resident-profiles/{profileId}/memberships",safe:1,need:["profileId"]},
+  {id:"M-02",g:"members",t:"add member",m:"POST",p:P+"/resident-profiles/{profileId}/memberships",b:{schemaVersion:SV,subject:"usr_01EMPLOYEE",role:"employee"}},
+  {id:"M-03",g:"members",t:"patch membership",m:"PATCH",p:P+"/resident-memberships/{membershipId}",b:{schemaVersion:SV,status:"suspended"}},
+  {id:"M-04",g:"members",t:"revoke",m:"POST",p:P+"/resident-memberships/{membershipId}/revoke"},
+  {id:"M-05",g:"members",t:"owner transfer",m:"POST",p:P+"/resident-profiles/{profileId}/owner-transfer",b:{schemaVersion:SV,toSubject:"usr_01NEWOWNER"}},
+  {id:"C-01",g:"contacts",t:"contact challenge",m:"POST",p:P+"/residents/{subject}/contacts/challenges",b:{schemaVersion:SV,type:"phone",value:"+79990001234"}},
+  {id:"C-02",g:"contacts",t:"verify contact",m:"POST",p:P+"/residents/{subject}/contacts/challenges/{challengeId}/verify",b:{schemaVersion:SV,code:"123456"}},
+  {id:"C-03",g:"contacts",t:"assignments",m:"GET",p:P+"/resident-profiles/{profileId}/contact-assignments",safe:1,need:["profileId"]},
+  {id:"C-04",g:"contacts",t:"replace assignments",m:"PATCH",p:P+"/resident-profiles/{profileId}/contact-assignments",b:{schemaVersion:SV,phoneContactId:"cnt_phone",emailContactId:"cnt_email"}},
+  {id:"C-05",g:"contacts",t:"reveal contacts",m:"POST",p:P+"/residents/{subject}/contacts/reveal",safe:1,need:["subject"]},
+  {id:"S-01",g:"consents",t:"consents",m:"GET",p:P+"/residents/{subject}/consents",safe:1,need:["subject"]},
+  {id:"S-02",g:"consents",t:"accept",m:"POST",p:P+"/residents/{subject}/consents/{documentCode}/accept",b:{schemaVersion:SV,documentVersion:"1.0",documentDigest:"sha256:abc"}},
+  {id:"S-03",g:"consents",t:"withdraw",m:"POST",p:P+"/residents/{subject}/consents/{documentCode}/withdraw"},
+  {id:"PD-01",g:"private",t:"status",m:"GET",p:P+"/resident-profiles/{profileId}/private-data/status",safe:1,need:["profileId"]},
+  {id:"PD-02",g:"private",t:"reveal",m:"POST",p:P+"/resident-profiles/{profileId}/private-data/reveal",safe:1,need:["profileId"],b:{schemaVersion:SV,fieldCodes:["inn","ogrn"]}},
+  {id:"PD-03",g:"private",t:"patch",m:"PATCH",p:P+"/resident-profiles/{profileId}/private-data",b:{schemaVersion:SV,values:{companyFullName:"ООО Пример",inn:"7700000000",ogrn:"1027700000000"}}},
+  {id:"PD-04",g:"private",t:"snapshot",m:"POST",p:P+"/resident-profiles/{profileId}/private-data/snapshots"},
+  {id:"PD-05",g:"private",t:"reveal profile contacts",m:"POST",p:P+"/resident-profiles/{profileId}/contacts/reveal",safe:1,need:["profileId"]},
+  {id:"PD-06",g:"private",t:"reveal snapshot",m:"POST",p:P+"/private-data-snapshots/{snapshotId}/reveal",need:["snapshotId"],b:{schemaVersion:SV,fieldCodes:["inn"]}},
+  {id:"PD-07",g:"private",t:"reveal snapshot contacts",m:"POST",p:P+"/private-data-snapshots/{snapshotId}/contacts/reveal",need:["snapshotId"]},
+  {id:"PD-08",g:"private",t:"bind snapshot",m:"POST",p:P+"/private-data-snapshots/{snapshotId}/operation-bindings",b:{schemaVersion:SV,operationType:"pass_issue",operationId:"pass_01J5"}},
+  {id:"G-01",g:"guests",t:"create",m:"POST",p:P+"/guest-parties",b:{schemaVersion:SV,visitorName:"Петров Пётр",visitDate:"2026-08-20"}},
+  {id:"G-02",g:"guests",t:"contact challenge",m:"POST",p:P+"/guest-parties/{guestPartyId}/contact-challenges",b:{schemaVersion:SV,type:"phone",value:"+79990005555"}},
+  {id:"G-03",g:"guests",t:"verify contact",m:"POST",p:P+"/guest-parties/{guestPartyId}/contact-challenges/{challengeId}/verify",b:{schemaVersion:SV,code:"123456"}},
+  {id:"G-04",g:"guests",t:"status",m:"GET",p:P+"/guest-parties/{guestPartyId}/status",safe:1,need:["guestPartyId"]},
+  {id:"G-05",g:"guests",t:"reveal contacts",m:"POST",p:P+"/guest-parties/{guestPartyId}/contacts/reveal",safe:1,need:["guestPartyId"]},
+  {id:"G-06",g:"guests",t:"private-data status",m:"GET",p:P+"/guest-parties/{guestPartyId}/private-data/status",safe:1,need:["guestPartyId"]},
+  {id:"G-07",g:"guests",t:"reveal private-data",m:"POST",p:P+"/guest-parties/{guestPartyId}/private-data/reveal",safe:1,need:["guestPartyId"],b:{schemaVersion:SV,fieldCodes:["lastName","firstName"]}},
+  {id:"G-08",g:"guests",t:"patch private-data",m:"PATCH",p:P+"/guest-parties/{guestPartyId}/private-data",b:{schemaVersion:SV,values:{lastName:"Петров",firstName:"Пётр"}}},
+  {id:"G-09",g:"guests",t:"snapshot",m:"POST",p:P+"/guest-parties/{guestPartyId}/snapshots"},
+  {id:"G-10",g:"guests",t:"confirm booking",m:"POST",p:P+"/guest-parties/{guestPartyId}/booking-confirmations",b:{schemaVersion:SV,visitDate:"2026-08-20",officeExternalId:"tf-room:107"}},
+  {id:"G-11",g:"guests",t:"claim",m:"POST",p:P+"/guest-parties/{guestPartyId}/claim",b:{schemaVersion:SV,subject:"usr_01J5Q8K2M7N4P6R9T1V3X5Z7AA"}},
+  {id:"G-12",g:"guests",t:"search",m:"POST",p:P+"/guest-parties/search",safe:1,b:{schemaVersion:SV,query:{},limit:20}},
+  {id:"G-13",g:"guests",t:"consents",m:"GET",p:P+"/guest-parties/{guestPartyId}/consents",safe:1,need:["guestPartyId"]},
+  {id:"G-14",g:"guests",t:"accept consent",m:"POST",p:P+"/guest-parties/{guestPartyId}/consents/{documentCode}/accept",b:{schemaVersion:SV,documentVersion:"1.0",documentDigest:"sha256:abc"}},
+  {id:"G-15",g:"guests",t:"withdraw consent",m:"POST",p:P+"/guest-parties/{guestPartyId}/consents/{documentCode}/withdraw"}
+].map(e => ({...e, ver:"v2"}));
+const ALL = [...V1, ...V2];
+const VARS = ["id","token","passNumber","passId","registrationId","resetToken","subject","profileId","challengeId","membershipId","guestPartyId","snapshotId","changeRequestId","deletionRequestId","documentCode","cursor"];
 const $ = (id) => document.getElementById(id);
-let cur = EPS[0], token = "", last = {}, busy = false;
+let ver = "v1", cur = V1[0], jwt = "", svc = "", last = {}, busy = false;
 
-$("ids").innerHTML = VARS.map(k => `<div><label>${k}</label><input id="v-${k}" ${k==="documentCode"?'value="pdn"':""} /></div>`).join("");
+$("ids").innerHTML = VARS.map(k => `<div><label>${k}</label><input id="v-${k}" ${k==="documentCode"?'value="pdn"':""}></div>`).join("");
 
+function eps() { return ALL.filter(e => e.ver === ver); }
 function apiRoot() {
   let u = ($("base").value.trim() || location.origin).replace(/\/+$/, "");
   if (!/\/api$/i.test(u)) u += "/api";
@@ -369,14 +341,15 @@ function fill(path) {
   return path.replace(/\{(\w+)\}/g, (_, k) => encodeURIComponent(($("v-"+k)||{}).value || "{"+k+"}"));
 }
 function fullUrl(ep) {
-  const path = fill(ep.p).replace(/^\/api(?=\/|$)/, "");
+  const path = fill(ep.p === "/" ? "/" : ep.p).replace(/^\/api(?=\/|$)/, "");
+  if (path === "/" || path === "") return apiRoot().replace(/\/api$/,"") + "/api";
   return apiRoot() + (path.startsWith("/") ? path : "/" + path);
 }
-function missing(ep) { return (ep.need || []).filter(k => !$("v-"+k).value.trim()); }
-function rid() { return "req_" + Math.random().toString(36).slice(2, 10); }
+function missing(ep) { return (ep.need||[]).filter(k => !$("v-"+k).value.trim()); }
+function rid() { return "req_" + Math.random().toString(36).slice(2,10); }
 function pick(ep) {
   cur = ep;
-  $("title").textContent = ep.id + " · " + ep.t;
+  $("title").innerHTML = `<span class="ver">${ep.ver}</span> ${ep.id} · ${ep.t}`;
   $("body").value = ep.b ? JSON.stringify(ep.b, null, 2) : "";
   $("body").disabled = ep.m === "GET" && !ep.b;
   $("url").textContent = ep.m + "  " + fullUrl(ep);
@@ -384,58 +357,58 @@ function pick(ep) {
 }
 function render() {
   const q = $("q").value.toLowerCase();
-  const ms = $("ms").value;
-  const shown = EPS.filter(e => (!ms || e.ms === ms) && (!q || (e.id+" "+e.t+" "+e.p).toLowerCase().includes(q)));
-  $("count").textContent = shown.length + "/" + EPS.length;
-  $("list").innerHTML = shown.map(e => {
-    const r = last[e.id];
-    return `<div class="ep ${cur.id===e.id?"on":""}" data-id="${e.id}">
+  const g = $("grp").value;
+  const list = eps().filter(e => (!g || e.g === g) && (!q || (e.id+" "+e.t+" "+e.p+" "+e.g).toLowerCase().includes(q)));
+  $("count").textContent = list.length + "/" + eps().length;
+  const groups = [...new Set(eps().map(e => e.g))];
+  const sel = $("grp").value;
+  $("grp").innerHTML = '<option value="">all groups</option>' + groups.map(x => `<option ${x===sel?"selected":""}>${x}</option>`).join("");
+  $("list").innerHTML = list.map(e => {
+    const r = last[e.ver+e.id];
+    return `<div class="ep ${cur && cur.ver===e.ver && cur.id===e.id?"on":""}" data-ver="${e.ver}" data-id="${e.id}">
       <span class="id">${e.id}</span><span class="m ${e.m}">${e.m}</span>
-      <span class="t">${e.t}</span><span class="ms">${e.ms}</span>
-      <span class="st ${r? (r.ok?"ok":"bad"):""}">${r?r.status:""}</span></div>`;
+      <span class="t">${e.t}</span><span class="ms">${e.g}</span>
+      <span class="st ${r?(r.ok?"ok":"bad"):""}">${r?r.status:""}</span></div>`;
   }).join("");
 }
 function harvest(o) {
   if (!o || typeof o !== "object") return;
-  const map = { access_token:"_tok", subject:"v-subject", profileId:"v-profileId", challengeId:"v-challengeId",
-    membershipId:"v-membershipId", guestPartyId:"v-guestPartyId", snapshotId:"v-snapshotId",
-    changeRequestId:"v-changeRequestId", deletionRequestId:"v-deletionRequestId" };
+  if (typeof o.token === "string" && o.token.length > 20) jwt = o.token;
+  if (typeof o.access_token === "string") svc = o.access_token;
+  const map = {subject:"v-subject",profileId:"v-profileId",challengeId:"v-challengeId",membershipId:"v-membershipId",
+    guestPartyId:"v-guestPartyId",snapshotId:"v-snapshotId",changeRequestId:"v-changeRequestId",
+    deletionRequestId:"v-deletionRequestId",passNumber:"v-passNumber"};
   for (const [k,id] of Object.entries(map)) {
-    if (typeof o[k] !== "string" || !o[k]) continue;
-    if (id === "_tok") token = o[k];
-    else if (!$(id).value) $(id).value = o[k];
+    if (typeof o[k] === "string" && o[k] && !$(id).value) $(id).value = o[k];
   }
+  if (o.user?.id && !$("v-id").value) $("v-id").value = o.user.id;
   if (o.identity?.subject && !$("v-subject").value) $("v-subject").value = o.identity.subject;
   if (o.profiles?.[0]?.profileId && !$("v-profileId").value) $("v-profileId").value = o.profiles[0].profileId;
+  if (o.items?.[0]?.id && !$("v-id").value) $("v-id").value = o.items[0].id;
   if (o.items?.[0]?.profileId && !$("v-profileId").value) $("v-profileId").value = o.items[0].profileId;
-  if (o.items?.[0]?.id && String(o.items[0].id).startsWith("prf_") && !$("v-profileId").value) $("v-profileId").value = o.items[0].id;
-  if (o.items?.[0]?.guestPartyId && !$("v-guestPartyId").value) $("v-guestPartyId").value = o.items[0].guestPartyId;
-  if (o.membership?.id && !$("v-membershipId").value) $("v-membershipId").value = o.membership.id;
+  if (o.offices?.[0]?.id && !$("v-id").value) $("v-id").value = o.offices[0].id;
+  if (o.passes?.[0]?.id && !$("v-id").value) $("v-id").value = o.passes[0].id;
+  if (o.passes?.[0]?.passNumber && !$("v-passNumber").value) $("v-passNumber").value = o.passes[0].passNumber;
   Object.values(o).forEach(v => { if (v && typeof v === "object") harvest(v); });
 }
 function explain(ep, status, data) {
-  if (ep.id === "A-01" && status === 404) {
-    return "Маршрут скрыт: MSTYLE_PRIVATE_API_ENABLED не попал в контейнер backend (пропишите в docker-compose и перезапустите).";
-  }
-  if (data && data.error === "invalid_client") return "client_id ≠ MSTYLE_CLIENT_ID";
+  if (ep.id==="A-01" && status===404) return "v2 скрыт: MSTYLE_PRIVATE_API_ENABLED не в контейнере backend.";
+  if (data && data.error==="invalid_client") return "client_id ≠ MSTYLE_CLIENT_ID";
+  if (status===401 && ep.ver==="v1") return "нужен JWT — Connect с login/pass или POST /auth/login";
   return "";
 }
 function addLog(ep, status, ok, ms, body, url) {
-  last[ep.id] = { status, ok };
+  last[ep.ver+ep.id] = {status, ok};
   const empty = $("log").querySelector(".empty");
   if (empty) empty.remove();
   const box = document.createElement("article");
   box.className = "item";
   const text = typeof body === "string" ? body : JSON.stringify(body, null, 2);
   const hint = explain(ep, status, body);
-  box.innerHTML = `<div class="h">
-      <div><b>${ep.id}</b> ${ep.t}<div class="meta">${ep.m} ${url}</div>${hint?`<div class="meta">${hint}</div>`:""}</div>
-      <div class="${ok?"ok":"bad"}">${status||"ERR"} · ${ms}ms</div>
-    </div>
-    <pre>${text.replace(/[&<>]/g, c => ({"&":"&amp;","<":"&lt;",">":"&gt;"}[c]))}</pre>`;
-  box.querySelector(".h").onclick = () => pick(ep);
+  box.innerHTML = `<div class="h"><div><span class="ver">${ep.ver}</span> <b>${ep.id}</b> ${ep.t}<div class="meta">${ep.m} ${url}</div>${hint?`<div class="meta">${hint}</div>`:""}</div><div class="${ok?"ok":"bad"}">${status||"ERR"} · ${ms}ms</div></div><pre>${text.replace(/[&<>]/g,c=>({"&":"&amp;","<":"&lt;",">":"&gt;"}[c]))}</pre>`;
+  box.querySelector(".h").onclick = () => { setVer(ep.ver, true); pick(ep); };
   $("log").appendChild(box);
-  box.scrollIntoView({ block: "end" });
+  box.scrollIntoView({block:"end"});
   const vals = Object.values(last);
   $("sum").innerHTML = `<span class="ok">${vals.filter(x=>x.ok).length} ok</span> / <span class="bad">${vals.filter(x=>!x.ok).length} fail</span>`;
   render();
@@ -444,28 +417,37 @@ async function call(ep, silent) {
   if (!silent) pick(ep);
   const url = fullUrl(ep);
   $("url").textContent = ep.m + "  " + url;
-  const headers = { Accept: "application/json", "X-Request-ID": rid() };
-  if (!ep.form && token) headers.Authorization = "Bearer " + token;
+  const headers = {Accept:"application/json","X-Request-ID":rid()};
+  if (ep.form) {
+    headers["Content-Type"] = "application/x-www-form-urlencoded";
+  } else if (ep.m !== "GET" && ep.m !== "DELETE") {
+    headers["Content-Type"] = "application/json";
+  }
+  if (ep.ver==="v2" && !ep.form && svc) headers.Authorization = "Bearer " + svc;
+  if (ep.ver==="v1" && ep.jwt && jwt) headers.Authorization = "Bearer " + jwt;
   if (ep.idem) headers["Idempotency-Key"] = "idem_" + Date.now().toString(36);
   let body;
   if (ep.form) {
-    headers["Content-Type"] = "application/x-www-form-urlencoded";
     const p = new URLSearchParams();
-    p.set("grant_type", "client_credentials");
+    p.set("grant_type","client_credentials");
     p.set("client_id", $("clientId").value.trim() || "mstyle-backend-staging");
     body = p.toString();
-  } else if (ep.m !== "GET") {
-    headers["Content-Type"] = "application/json";
+  } else if (ep.auth) {
+    body = JSON.stringify({login:$("login").value.trim(), password:$("password").value || (ep.b&&ep.b.password) || ""});
+  } else if (ep.m !== "GET" && ep.m !== "DELETE") {
     body = silent && ep.b ? JSON.stringify(ep.b) : ($("body").value || "{}");
+  } else if (ep.m === "DELETE" && ep.b) {
+    headers["Content-Type"] = "application/json";
+    body = JSON.stringify(ep.b);
   }
   const t0 = performance.now();
   try {
-    const res = await fetch(url, { method: ep.m, headers, body });
+    const res = await fetch(url, {method: ep.m, headers, body});
     const raw = await res.text();
     let data = raw;
     try { data = JSON.parse(raw); } catch {}
     if (data && typeof data === "object") harvest(data);
-    addLog(ep, res.status, res.ok, Math.round(performance.now() - t0), data, url);
+    addLog(ep, res.status, res.ok, Math.round(performance.now()-t0), data, url);
     return res.ok;
   } catch (e) {
     addLog(ep, 0, false, 0, e.message, url);
@@ -475,44 +457,82 @@ async function call(ep, silent) {
 async function auto() {
   if (busy) return;
   busy = true;
-  $("connect").disabled = true;
-  $("send").disabled = true;
-  $("log").innerHTML = "";
-  last = {};
-  $("sum").textContent = "running";
-  const ok = await call(EPS[0], true);
-  if (ok && token) {
-    for (const ep of EPS.filter(e => e.safe && e.id !== "A-01")) {
-      if (missing(ep).length) continue;
-      await call(ep, true);
+  $("connect").disabled = $("send").disabled = true;
+  $("log").innerHTML = ""; last = {}; $("sum").textContent = "running";
+  if (ver === "v2") {
+    const tok = V2.find(e => e.id==="A-01");
+    const ok = await call(tok, true);
+    if (ok && svc) {
+      for (const ep of V2.filter(e => e.safe && e.id!=="A-01")) {
+        if (missing(ep).length) continue;
+        await call(ep, true);
+      }
+    }
+  } else {
+    await call(V1.find(e=>e.id==="C-00"), true);
+    await call(V1.find(e=>e.id==="H-01"), true);
+    const loginEp = V1.find(e=>e.id==="A1-01");
+    if ($("password").value) await call(loginEp, true);
+    if (jwt) {
+      for (const ep of V1.filter(e => e.safe && e.jwt)) await call(ep, true);
     }
   }
   busy = false;
-  $("connect").disabled = false;
-  $("send").disabled = false;
+  $("connect").disabled = $("send").disabled = false;
 }
 function copyCurl() {
   const ep = cur;
-  const h = ["-H 'Accept: application/json'", "-H 'X-Request-ID: "+rid()+"'"];
-  if (!ep.form && token) h.push("-H 'Authorization: Bearer "+token+"'");
-  if (ep.idem) h.push("-H 'Idempotency-Key: idem_"+Date.now().toString(36)+"'");
+  const h = ["-H 'Accept: application/json'"];
+  if (ep.ver==="v2" && !ep.form && svc) h.push("-H 'Authorization: Bearer "+svc+"'");
+  if (ep.ver==="v1" && ep.jwt && jwt) h.push("-H 'Authorization: Bearer "+jwt+"'");
   let data = "";
   if (ep.form) data = " --data 'grant_type=client_credentials&client_id="+($("clientId").value.trim()||"mstyle-backend-staging")+"'";
-  else if (ep.m !== "GET") data = " --data '"+$("body").value.replace(/'/g,"'\\''")+"'";
+  else if (ep.m!=="GET" && ep.m!=="DELETE") data = " --data '"+$("body").value.replace(/'/g,"'\\''")+"'";
   navigator.clipboard.writeText("curl -sS -X "+ep.m+" '"+fullUrl(ep)+"' "+h.join(" ")+data);
 }
+function setVer(next, keep) {
+  ver = next;
+  $("tab-v1").classList.toggle("on", ver==="v1");
+  $("tab-v2").classList.toggle("on", ver==="v2");
+  if (keep) render();
+  else pick(eps()[0]);
+}
+function drag(el, onmove) {
+  el.addEventListener("pointerdown", (e) => {
+    e.preventDefault();
+    el.classList.add("on");
+    const move = (ev) => onmove(ev);
+    const up = () => { el.classList.remove("on"); window.removeEventListener("pointermove", move); window.removeEventListener("pointerup", up); };
+    window.addEventListener("pointermove", move);
+    window.addEventListener("pointerup", up);
+  });
+}
+drag($("vsplit"), (e) => {
+  const x = Math.min(Math.max(e.clientX, 280), window.innerWidth - 320);
+  document.documentElement.style.setProperty("--left", x + "px");
+});
+drag($("hsplit"), (e) => {
+  const top = $("list").parentElement.getBoundingClientRect().top;
+  const h = Math.min(Math.max(e.clientY - top, 80), window.innerHeight - 220);
+  document.documentElement.style.setProperty("--list", h + "px");
+});
 if (location.protocol.startsWith("http") && /pass\.mstyle\.ru$/.test(location.hostname)) $("base").value = location.origin;
-$("list").onclick = (e) => { const r = e.target.closest(".ep"); if (r) pick(EPS.find(x => x.id === r.dataset.id)); };
-$("q").oninput = $("ms").onchange = render;
-$("base").oninput = () => { $("url").textContent = cur.m + "  " + fullUrl(cur); };
+$("tab-v1").onclick = () => setVer("v1");
+$("tab-v2").onclick = () => setVer("v2");
+$("list").onclick = (e) => {
+  const r = e.target.closest(".ep");
+  if (!r) return;
+  setVer(r.dataset.ver, true);
+  pick(ALL.find(x => x.ver===r.dataset.ver && x.id===r.dataset.id));
+};
+$("q").oninput = $("grp").onchange = render;
+$("base").oninput = () => { $("url").textContent = cur.m+"  "+fullUrl(cur); };
 $("send").onclick = () => call(cur);
 $("connect").onclick = auto;
 $("curl").onclick = copyCurl;
-document.addEventListener("keydown", (e) => {
-  if ((e.metaKey || e.ctrlKey) && e.key === "Enter") { e.preventDefault(); call(cur); }
-});
+document.addEventListener("keydown", (e) => { if ((e.metaKey||e.ctrlKey) && e.key==="Enter") { e.preventDefault(); call(cur); } });
 render();
-pick(EPS[0]);
+pick(V1[0]);
 </script>
 </body>
 </html>
