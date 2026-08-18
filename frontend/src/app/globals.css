@@ -2620,6 +2620,20 @@ a.pass-detail__chip:hover,
   opacity: 0.75;
 }
 
+.app-version__sep {
+  margin: 0 0.35em;
+}
+
+.app-version__dev {
+  color: inherit;
+  text-decoration: none;
+  pointer-events: auto;
+}
+
+.app-version__dev:hover {
+  text-decoration: underline;
+}
+
 /* ── Help / FAQ floating panel ── */
 .help-faq {
   position: fixed;

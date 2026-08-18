@@ -1,6 +1,7 @@
 import {
   BadRequestException,
   ConflictException,
+  ForbiddenException,
   Injectable,
   NotFoundException,
 } from '@nestjs/common';
@@ -49,6 +50,13 @@ import {
   BUILTIN_EMPLOYEE_ROLES,
   SYSTEM_ROLES,
 } from '../access/access.constants';
+import {
+  collectOfficeTenantIds,
+  officeAssignedToAnyQuery,
+  officeAssignedToQuery,
+  officeTenantWrite,
+  normalizeOfficeTenantIds,
+} from '../common/office-tenants';
 
 const STAFF_ROLES = ['security', 'bc_admin', 'admin'] as const;
 
@@ -246,14 +254,16 @@ export class AdminService {
 
     const ownerIds = users.map((u) => u._id);
     const officeLinks = await this.officeModel
-      .find({ tenantId: { $in: ownerIds } })
+      .find(officeAssignedToAnyQuery(ownerIds))
       .lean();
+    const ownerIdSet = new Set(ownerIds.map((id) => id.toString()));
     const officesByTenant = officeLinks.reduce(
       (acc, office) => {
-        const key = office.tenantId?.toString();
-        if (!key) return acc;
-        if (!acc[key]) acc[key] = [];
-        acc[key].push(office);
+        for (const key of collectOfficeTenantIds(office)) {
+          if (!ownerIdSet.has(key)) continue;
+          if (!acc[key]) acc[key] = [];
+          acc[key].push(office);
+        }
         return acc;
       },
       {} as Record<string, typeof officeLinks>,
@@ -387,8 +397,11 @@ export class AdminService {
       const office = await this.officeModel
         .findById(params.officeId.trim())
         .lean();
-      if (office?.tenantId) {
-        filter._id = office.tenantId;
+      const occupantIds = office
+        ? collectOfficeTenantIds(office).map((id) => new Types.ObjectId(id))
+        : [];
+      if (occupantIds.length) {
+        filter._id = { $in: occupantIds };
         filter.role = 'tenant';
       } else {
         filter._id = { $in: [] };
@@ -398,11 +411,14 @@ export class AdminService {
       if (isStaffCategory) {
         filter.properties = propertyObjectId;
       } else {
-        const tenantIds = await this.officeModel.distinct('tenantId', {
-          property: propertyObjectId,
-          tenantId: { $exists: true, $ne: null },
-        });
-        filter._id = { $in: tenantIds };
+        const offices = await this.officeModel
+          .find({ property: propertyObjectId })
+          .select('tenantId tenantIds')
+          .lean();
+        const occupantIds = [
+          ...new Set(offices.flatMap((office) => collectOfficeTenantIds(office))),
+        ].map((id) => new Types.ObjectId(id));
+        filter._id = { $in: occupantIds };
         filter.role = 'tenant';
       }
     }
@@ -1061,9 +1077,9 @@ export class AdminService {
   async exportOfficesCsv() {
     const { offices } = await this.getOffices();
     const { buildOfficeCsv } = await import('../common/office-csv.js');
-    const tenantIds = offices
-      .filter((o) => o.tenantId)
-      .map((o) => new Types.ObjectId(o.tenantId));
+    const tenantIds = [
+      ...new Set(offices.flatMap((o) => o.tenantIds || (o.tenantId ? [o.tenantId] : []))),
+    ].map((id) => new Types.ObjectId(id));
     const tenants = tenantIds.length
       ? await this.userModel.find({ _id: { $in: tenantIds } }).lean()
       : [];
@@ -1078,9 +1094,10 @@ export class AdminService {
         floor: office.floor,
         areaSqm: office.areaSqm,
         company: office.company,
-        tenantEmail: office.tenantId
-          ? tenantEmailMap.get(office.tenantId)
-          : undefined,
+        tenantEmail: (office.tenantIds || (office.tenantId ? [office.tenantId] : []))
+          .map((id) => tenantEmailMap.get(id))
+          .filter(Boolean)
+          .join(', ') || undefined,
         isActive: office.isActive,
       })),
     );
@@ -1152,6 +1169,7 @@ export class AdminService {
         areaSqm: row.areaSqm,
         company: row.company,
         tenantId,
+        tenantIds: tenantId ? [tenantId] : [],
         isActive: row.isActive,
       });
 
@@ -1185,9 +1203,7 @@ export class AdminService {
       .lean();
     const propertyIds = [...new Set(offices.map((o) => o.property.toString()))];
     const tenantIds = [
-      ...new Set(
-        offices.filter((o) => o.tenantId).map((o) => o.tenantId!.toString()),
-      ),
+      ...new Set(offices.flatMap((o) => collectOfficeTenantIds(o))),
     ];
 
     const [properties, tenants] = await Promise.all([
@@ -1222,28 +1238,34 @@ export class AdminService {
     if (existing)
       throw new ConflictException('Офис с таким номером уже есть в этом БЦ');
 
+    const occupantOids = normalizeOfficeTenantIds(
+      dto.tenantIds?.length
+        ? dto.tenantIds
+        : dto.tenantId
+          ? [dto.tenantId]
+          : [],
+    );
     const office = await this.officeModel.create({
       property: new Types.ObjectId(dto.propertyId),
       number: dto.number.trim(),
       floor: dto.floor?.trim() || undefined,
       areaSqm: dto.areaSqm,
       company: dto.company?.trim(),
-      tenantId: dto.tenantId ? new Types.ObjectId(dto.tenantId) : undefined,
+      tenantId: occupantOids[0],
+      tenantIds: occupantOids,
       isActive: dto.isActive !== false,
       externalId: dto.externalId?.trim() || undefined,
     });
 
-    if (dto.tenantId) {
-      await this.syncTenantProperties(dto.tenantId);
+    for (const occupant of occupantOids) {
+      await this.syncTenantProperties(occupant.toString());
     }
 
     const propertyMap = new Map([[property._id.toString(), property]]);
-    const tenant = dto.tenantId
-      ? await this.userModel.findById(dto.tenantId).lean()
-      : null;
-    const tenantMap = tenant
-      ? new Map([[tenant._id.toString(), tenant]])
-      : new Map();
+    const occupants = occupantOids.length
+      ? await this.userModel.find({ _id: { $in: occupantOids } }).lean()
+      : [];
+    const tenantMap = new Map(occupants.map((t) => [t._id.toString(), t]));
 
     await this.auditService.log({
       action: 'office.create',
@@ -1270,7 +1292,7 @@ export class AdminService {
     const office = await this.officeModel.findById(id);
     if (!office) throw new NotFoundException('Офис не найден');
 
-    const prevTenantId = office.tenantId?.toString();
+    const prevTenantIds = collectOfficeTenantIds(office);
 
     const nextPropertyId = dto.propertyId || office.property.toString();
     const nextNumber =
@@ -1308,31 +1330,39 @@ export class AdminService {
     if (dto.company !== undefined) office.company = dto.company?.trim();
     if (dto.areaSqm !== undefined) office.areaSqm = dto.areaSqm;
     if (dto.isActive !== undefined) office.isActive = dto.isActive;
-    if (dto.tenantId !== undefined) {
-      if (dto.tenantId) {
-        office.tenantId = new Types.ObjectId(dto.tenantId);
-        // Подтянуть название компании арендатора, если не передали явно
-        if (dto.company === undefined) {
+    if (dto.tenantIds !== undefined || dto.tenantId !== undefined) {
+      const nextIds = normalizeOfficeTenantIds(
+        dto.tenantIds !== undefined
+          ? dto.tenantIds
+          : dto.tenantId
+            ? [dto.tenantId]
+            : [],
+      );
+      office.tenantIds = nextIds;
+      if (nextIds.length) {
+        office.tenantId = nextIds[0];
+        if (dto.company === undefined && nextIds.length === 1) {
           const tenant = await this.userModel
-            .findById(dto.tenantId)
+            .findById(nextIds[0])
             .select('company')
             .lean();
           if (tenant?.company) office.company = tenant.company;
         }
       } else {
-        // Явно снять привязку
-        office.set('tenantId', null);
+        office.set('tenantId', undefined);
       }
     }
 
     await office.save();
 
-    // Если сняли tenantId через null — $unset для чистоты запросов
-    if (dto.tenantId !== undefined && !dto.tenantId) {
-      await this.officeModel.updateOne(
-        { _id: office._id },
-        { $unset: { tenantId: 1 } },
-      );
+    if (dto.tenantIds !== undefined || dto.tenantId !== undefined) {
+      const nextIds = collectOfficeTenantIds(office);
+      if (!nextIds.length) {
+        await this.officeModel.updateOne(
+          { _id: office._id },
+          { $unset: { tenantId: 1 }, $set: { tenantIds: [] } },
+        );
+      }
     }
     if (dto.externalId !== undefined && !dto.externalId.trim()) {
       await this.officeModel.updateOne(
@@ -1341,20 +1371,20 @@ export class AdminService {
       );
     }
 
-    if (prevTenantId) await this.syncTenantProperties(prevTenantId);
-    const nextTenantId = office.tenantId?.toString();
-    if (nextTenantId) await this.syncTenantProperties(nextTenantId);
+    const nextTenantIds = collectOfficeTenantIds(office);
+    const syncIds = new Set([...prevTenantIds, ...nextTenantIds]);
+    for (const occupantId of syncIds) {
+      await this.syncTenantProperties(occupantId);
+    }
 
     const property = await this.propertyModel.findById(office.property).lean();
-    const tenant = office.tenantId
-      ? await this.userModel.findById(office.tenantId).lean()
-      : null;
+    const occupants = nextTenantIds.length
+      ? await this.userModel.find({ _id: { $in: nextTenantIds } }).lean()
+      : [];
     const propertyMap = property
       ? new Map([[property._id.toString(), property]])
       : new Map();
-    const tenantMap = tenant
-      ? new Map([[tenant._id.toString(), tenant]])
-      : new Map();
+    const tenantMap = new Map(occupants.map((t) => [t._id.toString(), t]));
 
     await this.auditService.log({
       action: 'office.update',
@@ -1379,24 +1409,19 @@ export class AdminService {
       this.passTemplateModel.countDocuments({ officeId: officeObjectId }),
     ]);
 
-    if (passesCount > 0) {
-      throw new BadRequestException(
-        `Нельзя удалить офис: есть ${passesCount} пропуск(ов), привязанных к этому офису.`,
-      );
-    }
-    if (templatesCount > 0) {
-      throw new BadRequestException(
-        `Нельзя удалить офис: есть ${templatesCount} шаблон(ов) пропусков для этого офиса.`,
-      );
-    }
-
-    const prevTenantId = office.tenantId?.toString();
+    const prevTenantIds = collectOfficeTenantIds(office);
     const property = await this.propertyModel.findById(office.property).lean();
 
+    // Шаблоны без живого офиса нельзя применить к новой заявке.
+    if (templatesCount > 0) {
+      await this.passTemplateModel.deleteMany({ officeId: officeObjectId });
+    }
+
+    // Пропуска не трогаем: номер/этаж/БЦ уже записаны в сам документ.
     await this.officeModel.deleteOne({ _id: officeObjectId });
 
-    if (prevTenantId) {
-      await this.syncTenantProperties(prevTenantId);
+    for (const occupantId of prevTenantIds) {
+      await this.syncTenantProperties(occupantId);
     }
 
     await this.auditService.log({
@@ -1409,13 +1434,28 @@ export class AdminService {
         floor: office.floor,
         propertyId: office.property.toString(),
         businessCenterName: property?.name,
+        passesKept: passesCount,
+        templatesRemoved: templatesCount,
       },
     });
 
-    return { message: 'Офис удалён', id: office._id.toString() };
+    return {
+      message:
+        passesCount > 0
+          ? `Офис удалён. ${passesCount} пропуск(ов) сохранены в истории.`
+          : 'Офис удалён',
+      id: office._id.toString(),
+      passesKept: passesCount,
+      templatesRemoved: templatesCount,
+    };
   }
 
   async seedTestData() {
+    if (process.env.NODE_ENV === 'production') {
+      throw new ForbiddenException(
+        'Создание тестовых данных доступно только в режиме разработки',
+      );
+    }
     const result = await this.testDataSeedService.seedTestData();
     return {
       ...result,
@@ -1425,7 +1465,7 @@ export class AdminService {
 
   async getTenantOffices(tenantId: string) {
     const offices = await this.officeModel
-      .find({ tenantId: new Types.ObjectId(tenantId), isActive: true })
+      .find({ ...officeAssignedToQuery(tenantId), isActive: true })
       .sort({ number: 1 })
       .lean();
     const propertyIds = [...new Set(offices.map((o) => o.property.toString()))];
@@ -1439,49 +1479,48 @@ export class AdminService {
   private async assignOfficesToTenant(tenantId: string, officeIds: string[]) {
     const tenantOid = new Types.ObjectId(tenantId);
     const targetOids = officeIds.map((id) => new Types.ObjectId(id));
+    const targetIdSet = new Set(officeIds);
 
-    // Кто был привязан к этим офисам раньше (чужие арендаторы + текущий)
-    const affectedBefore = await this.officeModel
-      .find({
-        $or: [
-          { tenantId: tenantOid },
-          ...(targetOids.length
-            ? [
-                {
-                  _id: { $in: targetOids },
-                  tenantId: { $exists: true, $ne: null },
-                },
-              ]
-            : []),
-        ],
-      })
-      .select('tenantId')
+    const current = await this.officeModel
+      .find(officeAssignedToQuery(tenantOid))
+      .select('tenantId tenantIds company')
       .lean();
-    const affectedTenantIds = new Set<string>(
-      affectedBefore
-        .map((o) => o.tenantId?.toString())
-        .filter((id): id is string => !!id),
-    );
-    affectedTenantIds.add(tenantId);
+    const affectedTenantIds = new Set<string>([tenantId]);
+    for (const office of current) {
+      for (const occupant of collectOfficeTenantIds(office)) {
+        affectedTenantIds.add(occupant);
+      }
+    }
 
-    await this.officeModel.updateMany(
-      { tenantId: tenantOid },
-      { $unset: { tenantId: 1 } },
-    );
+    const toRemove = current.filter((o) => !targetIdSet.has(o._id.toString()));
+    for (const office of toRemove) {
+      const next = collectOfficeTenantIds(office).filter((id) => id !== tenantId);
+      const write = officeTenantWrite(normalizeOfficeTenantIds(next));
+      await this.officeModel.updateOne({ _id: office._id }, write);
+    }
+
     if (targetOids.length) {
       const tenant = await this.userModel
         .findById(tenantId)
         .select('company')
         .lean();
-      await this.officeModel.updateMany(
-        { _id: { $in: targetOids } },
-        {
-          $set: {
-            tenantId: tenantOid,
-            ...(tenant?.company ? { company: tenant.company } : {}),
-          },
-        },
-      );
+      const targets = await this.officeModel
+        .find({ _id: { $in: targetOids } })
+        .select('tenantId tenantIds company')
+        .lean();
+      for (const office of targets) {
+        for (const occupant of collectOfficeTenantIds(office)) {
+          affectedTenantIds.add(occupant);
+        }
+        const next = collectOfficeTenantIds(office);
+        if (!next.includes(tenantId)) next.push(tenantId);
+        const oids = normalizeOfficeTenantIds(next);
+        const write = officeTenantWrite(oids);
+        if (oids.length === 1 && tenant?.company && !office.company) {
+          write.$set = { ...write.$set, company: tenant.company };
+        }
+        await this.officeModel.updateOne({ _id: office._id }, write);
+      }
     }
 
     for (const id of affectedTenantIds) {
@@ -1492,7 +1531,7 @@ export class AdminService {
   private async syncTenantProperties(tenantId: string) {
     if (!tenantId || !Types.ObjectId.isValid(tenantId)) return;
     const offices = await this.officeModel
-      .find({ tenantId: new Types.ObjectId(tenantId), isActive: true })
+      .find({ ...officeAssignedToQuery(tenantId), isActive: true })
       .lean();
     const propertyIds = [...new Set(offices.map((o) => o.property.toString()))];
     const primary = offices[0];
@@ -1549,10 +1588,19 @@ export class AdminService {
           `Нельзя удалить арендатора: у компании ${employeesCount} сотрудник(ов). Сначала удалите сотрудников (из профиля владельца или перенесите учётные записи).`,
         );
       }
-      await this.officeModel.updateMany(
-        { tenantId: user._id },
-        { $unset: { tenantId: 1 } },
-      );
+      const linked = await this.officeModel
+        .find(officeAssignedToQuery(user._id))
+        .select('tenantId tenantIds')
+        .lean();
+      for (const office of linked) {
+        const next = collectOfficeTenantIds(office).filter(
+          (id) => id !== user._id.toString(),
+        );
+        await this.officeModel.updateOne(
+          { _id: office._id },
+          officeTenantWrite(normalizeOfficeTenantIds(next)),
+        );
+      }
     }
 
     if (isEmployee) {
@@ -1589,9 +1637,11 @@ export class AdminService {
     tenantMap: Map<string, any>,
   ) {
     const property = propertyMap.get(office.property?.toString());
-    const tenant = office.tenantId
-      ? tenantMap.get(office.tenantId.toString())
-      : null;
+    const occupantIds = collectOfficeTenantIds(office);
+    const tenants = occupantIds
+      .map((id) => tenantMap.get(id))
+      .filter(Boolean);
+    const primary = tenants[0] || null;
     return {
       id: office._id.toString(),
       propertyId: office.property?.toString(),
@@ -1607,8 +1657,14 @@ export class AdminService {
       roomStatus: office.roomStatus || undefined,
       paymentStatus: office.paymentStatus || undefined,
       paidUntil: office.paidUntil || undefined,
-      tenantId: office.tenantId?.toString(),
-      tenantName: tenant?.fullName,
+      tenantId: occupantIds[0],
+      tenantIds: occupantIds,
+      tenantName: primary?.fullName,
+      tenants: tenants.map((t) => ({
+        id: t._id.toString(),
+        name: t.fullName,
+        company: t.company,
+      })),
       isActive: office.isActive,
       externalId: office.externalId,
       createdAt: office.createdAt,

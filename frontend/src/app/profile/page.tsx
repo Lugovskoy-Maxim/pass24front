@@ -22,7 +22,6 @@ import {
   User as UserIcon,
   UserPlus,
   Users,
-  Fingerprint,
 } from 'lucide-react';
 import { ProtectedLayout } from '@/components/ProtectedLayout';
 import { PersonNameFields } from '@/components/PersonNameFields';
@@ -33,10 +32,6 @@ import {
   validateProfileForm,
 } from '@/lib/form-validation';
 import { useToast } from '@/components/Toast';
-import {
-  OfficeSiteStatusNote,
-  OfficeStatusFlags,
-} from '@/components/OfficeStatusFlags';
 import { useAuth } from '@/lib/auth';
 import {
   api,
@@ -45,11 +40,7 @@ import {
   getErrorMessage,
   TenantEmployee,
 } from '@/lib/api';
-import {
-  identityStatusLabel,
-  legalFormLabel,
-  profileTypeLabel,
-} from '@/lib/pass-identity';
+import { legalFormLabel, profileTypeLabel } from '@/lib/pass-identity';
 import {
   getUserRoleLabel,
   isTenantCompanyUser,
@@ -630,17 +621,11 @@ export default function ProfilePage() {
               {user.offices.map((office) => (
                 <div
                   key={office.id}
-                  className={`text-sm px-3 py-2 rounded ${
-                    office.paymentStatus && office.paymentStatus !== 'paid'
-                      ? 'theme-alert-subtle border'
-                      : 'bg-[var(--surface-muted)]'
-                  }`}
+                  className="text-sm px-3 py-2 rounded bg-[var(--surface-muted)]"
                 >
                   {officeDisplayName(office)}
-                  <OfficeStatusFlags office={office} />
                 </div>
               ))}
-              <OfficeSiteStatusNote />
             </div>
           ) : user.office ? (
             <ProfileInfoRow
@@ -649,31 +634,6 @@ export default function ProfilePage() {
               value={`оф. ${user.office}${user.floor ? `, ${user.floor} эт.` : ''}`}
             />
           ) : null}
-          {user.pass_subject && (
-            <ProfileInfoRow
-              icon={Fingerprint}
-              label="Идентификатор Pass"
-              value={user.pass_subject}
-            />
-          )}
-          {user.identity_status && (
-            <ProfileInfoRow
-              icon={Shield}
-              label="Статус учётки Pass"
-              value={`${identityStatusLabel(user.identity_status)} · authVersion ${user.auth_version ?? 1}`}
-            />
-          )}
-          {tenantOwner && (
-            <ProfileInfoRow
-              icon={CheckCircle2}
-              label="Анкета (ПДн)"
-              value={
-                user.private_data_complete
-                  ? `полная${user.private_data_revision != null ? ` · rev ${user.private_data_revision}` : ''}`
-                  : 'неполная'
-              }
-            />
-          )}
         </div>
 
         {needsEmailVerification && (

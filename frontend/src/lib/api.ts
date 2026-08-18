@@ -1257,7 +1257,12 @@ export const api = {
       }),
 
     deleteOffice: (id: string) =>
-      request<{ message: string; id: string }>(`/admin/offices/${id}`, {
+      request<{
+        message: string;
+        id: string;
+        passesKept?: number;
+        templatesRemoved?: number;
+      }>(`/admin/offices/${id}`, {
         method: 'DELETE',
       }),
 
@@ -1393,6 +1398,8 @@ export interface BcConfig extends SiteSettings {
   contactPhone: string;
   contactEmail: string;
   receptionFloor: string;
+  /** true только если backend не в production — тестовые кнопки/сиды. */
+  devMode?: boolean;
 }
 
 export interface PassExportOfficeOption {
@@ -1482,7 +1489,9 @@ export interface Office {
   paymentStatus?: string;
   paidUntil?: string;
   tenantId?: string;
+  tenantIds?: string[];
   tenantName?: string;
+  tenants?: Array<{ id: string; name: string; company?: string }>;
   isActive: boolean;
   externalId?: string;
   createdAt: string;
@@ -1495,6 +1504,7 @@ export interface CreateOfficeData {
   areaSqm?: number;
   company?: string;
   tenantId?: string;
+  tenantIds?: string[];
   isActive?: boolean;
   externalId?: string;
 }
@@ -1622,6 +1632,26 @@ export function formatTenantOffices(offices?: TenantOffice[]): string {
       return `${o.businessCenterName ? `${o.businessCenterName}: ` : ''}${name}${o.floor ? ` (${o.floor} эт.)` : ''}`;
     })
     .join(' · ');
+}
+
+export function officeTenantIds(office: {
+  tenantId?: string;
+  tenantIds?: string[];
+}): string[] {
+  if (office.tenantIds?.length) return office.tenantIds;
+  return office.tenantId ? [office.tenantId] : [];
+}
+
+export function formatOfficeTenants(office: {
+  tenantName?: string;
+  tenants?: Array<{ id: string; name: string; company?: string }>;
+}): string {
+  if (office.tenants?.length) {
+    return office.tenants
+      .map((t) => (t.company ? `${t.name} (${t.company})` : t.name))
+      .join(', ');
+  }
+  return office.tenantName || '';
 }
 
 export function officePaymentLabel(status?: string | null): string {

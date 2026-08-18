@@ -23,6 +23,7 @@ import {
   Table2,
   Download,
   Upload,
+  AlertTriangle,
 } from 'lucide-react';
 import { AdminLayout } from '@/components/AdminLayout';
 import { AdminModal } from '@/components/AdminModal';
@@ -37,6 +38,8 @@ import {
   DEFAULT_BC_PASS_SETTINGS,
   getErrorMessage,
   officeDisplayName,
+  officeTenantIds,
+  formatOfficeTenants,
 } from '@/lib/api';
 import {
   OfficeSiteStatusNote,
@@ -105,7 +108,7 @@ export default function AdminOfficesPage() {
   const [floor, setFloor] = useState('');
   const [areaSqm, setAreaSqm] = useState('');
   const [company, setCompany] = useState('');
-  const [tenantId, setTenantId] = useState('');
+  const [tenantIds, setTenantIds] = useState<string[]>([]);
   const [officeActive, setOfficeActive] = useState(true);
   const [externalId, setExternalId] = useState('');
   const [tenantSearch, setTenantSearch] = useState('');
@@ -168,7 +171,7 @@ export default function AdminOfficesPage() {
     setFloor('');
     setAreaSqm('');
     setCompany('');
-    setTenantId('');
+    setTenantIds([]);
     setOfficeActive(true);
     setExternalId('');
     setTenantSearch('');
@@ -318,7 +321,7 @@ export default function AdminOfficesPage() {
     setFloor(office.floor || '');
     setAreaSqm(office.areaSqm?.toString() || '');
     setCompany(office.company || '');
-    setTenantId(office.tenantId || '');
+    setTenantIds(officeTenantIds(office));
     setOfficeActive(office.isActive);
     setExternalId(office.externalId || '');
     setShowForm(false);
@@ -328,7 +331,7 @@ export default function AdminOfficesPage() {
     setBindingOfficeId(office.id);
     setEditingId(null);
     setShowForm(false);
-    setTenantId(office.tenantId || '');
+    setTenantIds(officeTenantIds(office));
     setCompany(office.company || '');
     setTenantSearch('');
     // Прокрутка к панели привязки
@@ -340,18 +343,18 @@ export default function AdminOfficesPage() {
   };
 
   const handleTenantSelect = (id: string) => {
-    setTenantId(id);
+    setTenantIds((prev) => {
+      if (prev.includes(id)) return prev.filter((x) => x !== id);
+      return [...prev, id];
+    });
     const tenant = tenants.find((t) => t.id === id);
-    // Всегда подставляем компанию арендатора при выборе (можно править вручную)
-    if (tenant) {
+    if (tenant && !company.trim()) {
       setCompany(tenant.company || '');
-    } else {
-      setCompany('');
     }
   };
 
   const clearBinding = () => {
-    setTenantId('');
+    setTenantIds([]);
     setCompany('');
   };
 
@@ -369,7 +372,8 @@ export default function AdminOfficesPage() {
         floor: floor.trim() || undefined,
         areaSqm: areaSqm ? parseFloat(areaSqm) : undefined,
         company: company.trim() || undefined,
-        tenantId: tenantId || undefined,
+        tenantIds,
+        tenantId: tenantIds[0],
         isActive: officeActive,
         externalId: externalId.trim() || undefined,
       });
@@ -387,7 +391,8 @@ export default function AdminOfficesPage() {
     setSaving(true);
     try {
       await api.admin.updateOffice(officeId, {
-        tenantId: tenantId || '',
+        tenantIds,
+        tenantId: tenantIds[0] || '',
         company: company.trim() || undefined,
       });
       toast('Привязка сохранена', 'success');
@@ -408,7 +413,8 @@ export default function AdminOfficesPage() {
         number: number.trim(),
         floor: floor.trim(),
         company: company.trim() || undefined,
-        tenantId: tenantId || '',
+        tenantIds,
+        tenantId: tenantIds[0] || '',
         areaSqm: areaSqm ? parseFloat(areaSqm) : undefined,
         isActive: officeActive,
         externalId: externalId.trim(),
@@ -425,12 +431,13 @@ export default function AdminOfficesPage() {
 
   const handleDeleteOffice = async (office: Office) => {
     const label = `офис ${office.number}${office.businessCenterName ? ` (${office.businessCenterName})` : ''}`;
-    const tenantNote = office.tenantName
-      ? `\nАрендатор «${office.tenantName}» будет отвязан.`
+    const occupants = formatOfficeTenants(office);
+    const tenantNote = occupants
+      ? `\nАрендатор(ы) «${occupants}» будут отвязаны.`
       : '';
     if (
       !window.confirm(
-        `Удалить ${label}?${tenantNote}\n\nНельзя удалить, если есть пропуска или шаблоны по этому офису.\nДействие нельзя отменить.`,
+        `Удалить ${label}?${tenantNote}\n\nРанее заказанные пропуска останутся в истории.\nШаблоны этого офиса будут удалены.\nДействие нельзя отменить.`,
       )
     ) {
       return;
@@ -438,11 +445,11 @@ export default function AdminOfficesPage() {
 
     setDeletingOfficeId(office.id);
     try {
-      await api.admin.deleteOffice(office.id);
+      const result = await api.admin.deleteOffice(office.id);
       if (editingId === office.id || bindingOfficeId === office.id) {
         resetForm();
       }
-      toast('Офис удалён', 'success');
+      toast(result?.message || 'Офис удалён', 'success');
       load();
     } catch (err) {
       toast(getErrorMessage(err, 'Ошибка удаления'), 'error');
@@ -489,9 +496,15 @@ export default function AdminOfficesPage() {
         return false;
       if (activeOfficeFilters.status === 'inactive' && office.isActive)
         return false;
-      if (activeOfficeFilters.binding === 'assigned' && !office.tenantId)
+      if (
+        activeOfficeFilters.binding === 'assigned' &&
+        !officeTenantIds(office).length
+      )
         return false;
-      if (activeOfficeFilters.binding === 'free' && office.tenantId)
+      if (
+        activeOfficeFilters.binding === 'free' &&
+        officeTenantIds(office).length
+      )
         return false;
       if (!q) return true;
       const haystack = [
@@ -499,6 +512,7 @@ export default function AdminOfficesPage() {
         office.floor,
         office.company,
         office.tenantName,
+        formatOfficeTenants(office),
         office.businessCenterName,
       ]
         .filter(Boolean)
@@ -512,7 +526,7 @@ export default function AdminOfficesPage() {
     () => ({
       total: offices.length,
       active: offices.filter((o) => o.isActive).length,
-      assigned: offices.filter((o) => o.tenantId).length,
+      assigned: offices.filter((o) => officeTenantIds(o).length).length,
       shown: filteredOffices.length,
     }),
     [offices, filteredOffices],
@@ -632,28 +646,59 @@ export default function AdminOfficesPage() {
     });
   }, [tenants, tenantSearch]);
 
-  const selectedTenant = tenantId
-    ? tenants.find((t) => t.id === tenantId)
+  const selectedTenant = tenantIds[0]
+    ? tenants.find((t) => t.id === tenantIds[0])
     : undefined;
 
-  /** Компактный select для формы создания/редактирования офиса */
+  /** Компактный выбор для формы создания/редактирования офиса */
   const BindingSelectCompact = () => (
     <div className="space-y-2">
-      <div className="select-wrap">
-        <select
-          className="input text-sm"
-          value={tenantId}
-          onChange={(e) => handleTenantSelect(e.target.value)}
-        >
-          <option value="">Не назначен</option>
-          {tenants.map((t) => (
-            <option key={t.id} value={t.id}>
-              {tenantLabel(t)}
-            </option>
-          ))}
-        </select>
+      <div className="border border-[var(--border)] rounded-lg max-h-40 overflow-y-auto divide-y divide-[var(--border)] bg-[var(--surface)]">
+        {tenants.length === 0 ? (
+          <div className="p-2 text-xs text-[var(--muted)]">
+            Нет активных арендаторов
+          </div>
+        ) : (
+          tenants.map((t) => {
+            const checked = tenantIds.includes(t.id);
+            const others = tenantIds.filter((id) => id !== t.id);
+            return (
+              <label
+                key={t.id}
+                className={`flex items-start gap-2 px-2 py-1.5 text-sm cursor-pointer ${
+                  checked ? 'bg-[var(--status-approved-soft)]' : ''
+                }`}
+              >
+                <input
+                  type="checkbox"
+                  className="mt-0.5"
+                  checked={checked}
+                  onChange={() => handleTenantSelect(t.id)}
+                />
+                <span className="min-w-0">
+                  <span className="font-medium">{t.fullName}</span>
+                  {t.company ? (
+                    <span className="text-[var(--muted)]"> · {t.company}</span>
+                  ) : null}
+                  {!checked && others.length > 0 ? (
+                    <span className="block text-[11px] text-amber-700">
+                      Уже есть {others.length} арендатор
+                      {others.length > 1 ? 'а' : ''} — будет добавлен ещё один
+                    </span>
+                  ) : null}
+                </span>
+              </label>
+            );
+          })
+        )}
       </div>
-      {tenantId && (
+      {tenantIds.length > 1 && (
+        <p className="text-[11px] text-amber-800 flex items-start gap-1">
+          <AlertTriangle className="w-3.5 h-3.5 shrink-0 mt-0.5" />
+          В офисе несколько арендаторов. Оба смогут заказывать пропуска.
+        </p>
+      )}
+      {tenantIds.length > 0 && (
         <div>
           <label className="label text-xs">Компания на табличке</label>
           <input
@@ -1333,14 +1378,14 @@ export default function AdminOfficesPage() {
             </button>
           </div>
 
-          {bindingOffice.tenantId && (
-            <div className="rounded-lg border border-[var(--border)] bg-[var(--surface-muted)] p-3 mb-4 flex flex-col sm:flex-row sm:items-center justify-between gap-2">
+          {officeTenantIds(bindingOffice).length > 0 && (
+            <div className="rounded-lg border border-[var(--border)] bg-[var(--surface-muted)] p-3 mb-4 flex flex-col sm:flex-row sm:items-start justify-between gap-2">
               <div className="text-sm">
                 <div className="text-xs text-[var(--muted)] mb-0.5">
-                  Сейчас привязан
+                  Сейчас привязаны
                 </div>
                 <div className="font-medium">
-                  {bindingOffice.tenantName || 'Арендатор'}
+                  {formatOfficeTenants(bindingOffice) || 'Арендатор'}
                 </div>
                 {bindingOffice.company && (
                   <div className="text-xs text-[var(--muted)]">
@@ -1356,15 +1401,25 @@ export default function AdminOfficesPage() {
                   clearBinding();
                 }}
               >
-                Снять привязку
+                Снять всех
               </button>
+            </div>
+          )}
+
+          {tenantIds.length > 1 && (
+            <div className="rounded-lg border border-amber-200 bg-amber-50 text-amber-900 p-3 mb-4 text-sm flex items-start gap-2">
+              <AlertTriangle className="w-4 h-4 shrink-0 mt-0.5" />
+              <div>
+                В этом офисе уже есть арендатор. Можно добавить ещё одного —
+                оба смогут заказывать пропуска в это помещение.
+              </div>
             </div>
           )}
 
           <div className="space-y-3">
             <div>
               <label className="label">
-                Выберите арендатора (владельца компании)
+                Арендаторы (можно несколько)
               </label>
               <div className="relative mb-2">
                 <Search className="absolute left-3 top-1/2 -translate-y-1/2 w-4 h-4 text-[var(--muted)]" />
@@ -1376,23 +1431,6 @@ export default function AdminOfficesPage() {
                 />
               </div>
               <div className="border border-[var(--border)] rounded-lg max-h-56 overflow-y-auto divide-y divide-[var(--border)] bg-[var(--surface)]">
-                <label
-                  className={`flex items-start gap-3 p-3 cursor-pointer hover:bg-[var(--surface-muted)] ${!tenantId ? 'bg-[var(--status-approved-soft)]' : ''}`}
-                >
-                  <input
-                    type="radio"
-                    name="office-tenant"
-                    className="mt-1"
-                    checked={!tenantId}
-                    onChange={() => clearBinding()}
-                  />
-                  <span className="text-sm">
-                    <span className="font-medium">Не назначен</span>
-                    <span className="block text-xs text-[var(--muted)]">
-                      Офис свободен, пропуска компании недоступны
-                    </span>
-                  </span>
-                </label>
                 {filteredTenantsForBinding.length === 0 ? (
                   <div className="p-4 text-sm text-[var(--muted)] text-center">
                     {tenants.length === 0
@@ -1402,20 +1440,19 @@ export default function AdminOfficesPage() {
                 ) : (
                   filteredTenantsForBinding.map((t) => {
                     const officesCount = t.offices?.length || 0;
+                    const checked = tenantIds.includes(t.id);
+                    const others = tenantIds.filter((id) => id !== t.id);
                     return (
                       <label
                         key={t.id}
                         className={`flex items-start gap-3 p-3 cursor-pointer hover:bg-[var(--surface-muted)] ${
-                          tenantId === t.id
-                            ? 'bg-[var(--status-approved-soft)]'
-                            : ''
+                          checked ? 'bg-[var(--status-approved-soft)]' : ''
                         }`}
                       >
                         <input
-                          type="radio"
-                          name="office-tenant"
+                          type="checkbox"
                           className="mt-1"
-                          checked={tenantId === t.id}
+                          checked={checked}
                           onChange={() => handleTenantSelect(t.id)}
                         />
                         <span className="text-sm min-w-0">
@@ -1431,6 +1468,19 @@ export default function AdminOfficesPage() {
                               ? ` · уже ${officesCount} оф.`
                               : ''}
                           </span>
+                          {!checked && others.length > 0 ? (
+                            <span className="block text-[11px] text-amber-700 mt-0.5">
+                              Уже есть{' '}
+                              {others
+                                .map(
+                                  (id) =>
+                                    tenants.find((x) => x.id === id)
+                                      ?.fullName || 'арендатор',
+                                )
+                                .join(', ')}{' '}
+                              — будет добавлен ещё один
+                            </span>
+                          ) : null}
                         </span>
                       </label>
                     );
@@ -1439,7 +1489,7 @@ export default function AdminOfficesPage() {
               </div>
             </div>
 
-            {tenantId && (
+            {tenantIds.length > 0 && (
               <div>
                 <label className="label">Компания на табличке офиса</label>
                 <input
@@ -1679,14 +1729,19 @@ export default function AdminOfficesPage() {
                         <>
                           <div
                             className={
-                              office.tenantName
+                              formatOfficeTenants(office)
                                 ? 'font-medium'
                                 : 'text-[var(--muted)]'
                             }
                           >
-                            {office.tenantName || 'Не назначен'}
+                            {formatOfficeTenants(office) || 'Не назначен'}
                           </div>
-                          {office.company && office.tenantName && (
+                          {officeTenantIds(office).length > 1 && (
+                            <div className="text-[11px] text-amber-700">
+                              {officeTenantIds(office).length} арендатора
+                            </div>
+                          )}
+                          {office.company && formatOfficeTenants(office) && (
                             <div className="text-[11px] text-[var(--muted)] line-clamp-1">
                               {office.company}
                             </div>
@@ -1697,7 +1752,9 @@ export default function AdminOfficesPage() {
                             onClick={() => startBinding(office)}
                           >
                             <Link2 className="w-3 h-3" />
-                            {office.tenantId ? 'Сменить' : 'Назначить'}
+                            {officeTenantIds(office).length
+                              ? 'Изменить'
+                              : 'Назначить'}
                           </button>
                         </>
                       )}
@@ -1725,8 +1782,8 @@ export default function AdminOfficesPage() {
                         type="button"
                         className="p-1.5 rounded-md border border-[var(--border)] hover:bg-[var(--surface-muted)] text-[var(--primary)]"
                         title={
-                          office.tenantId
-                            ? 'Сменить арендатора'
+                          officeTenantIds(office).length
+                            ? 'Изменить арендаторов'
                             : 'Назначить арендатора'
                         }
                         onClick={() => startBinding(office)}
@@ -1863,14 +1920,19 @@ export default function AdminOfficesPage() {
                             <div className="text-right">
                               <div
                                 className={
-                                  office.tenantName
+                                  formatOfficeTenants(office)
                                     ? 'font-medium'
                                     : 'text-[var(--muted)]'
                                 }
                               >
-                                {office.tenantName || 'Не назначен'}
+                                {formatOfficeTenants(office) || 'Не назначен'}
                               </div>
-                              {office.company && office.tenantName && (
+                              {officeTenantIds(office).length > 1 && (
+                                <div className="text-[11px] text-amber-700">
+                                  Несколько арендаторов
+                                </div>
+                              )}
+                              {office.company && formatOfficeTenants(office) && (
                                 <div className="text-[11px] text-[var(--muted)]">
                                   {office.company}
                                 </div>
@@ -1887,7 +1949,9 @@ export default function AdminOfficesPage() {
                           onClick={() => startBinding(office)}
                         >
                           <Link2 className="w-3.5 h-3.5" />
-                          {office.tenantId ? 'Арендатор' : 'Назначить'}
+                          {officeTenantIds(office).length
+                            ? 'Арендаторы'
+                            : 'Назначить'}
                         </button>
                         <button
                           type="button"

@@ -24,9 +24,13 @@ export class Office {
   @Prop({ trim: true })
   company?: string;
 
-  // владелец компании (role=tenant), не сотрудник
+  // владелец компании (role=tenant), не сотрудник. Первый из tenantIds.
   @Prop({ type: Types.ObjectId, ref: 'User', index: true })
   tenantId?: Types.ObjectId;
+
+  /** Все арендаторы офиса, включая tenantId. */
+  @Prop({ type: [Types.ObjectId], ref: 'User', default: [] })
+  tenantIds?: Types.ObjectId[];
 
   @Prop({ default: true })
   isActive: boolean;
@@ -70,3 +74,4 @@ export class Office {
 export const OfficeSchema = SchemaFactory.createForClass(Office);
 
 OfficeSchema.index({ property: 1, number: 1 }, { unique: true });
+OfficeSchema.index({ tenantIds: 1 });

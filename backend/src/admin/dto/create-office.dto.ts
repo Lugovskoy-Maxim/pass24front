@@ -1,4 +1,5 @@
 import {
+  IsArray,
   IsBoolean,
   IsMongoId,
   IsNotEmpty,
@@ -7,6 +8,7 @@ import {
   IsString,
   Min,
 } from 'class-validator';
+import { EmptyToUndefined } from '../../common/dto-transforms';
 
 export class CreateOfficeDto {
   @IsMongoId()
@@ -30,8 +32,14 @@ export class CreateOfficeDto {
   company?: string;
 
   @IsOptional()
+  @EmptyToUndefined()
   @IsMongoId()
   tenantId?: string;
+
+  @IsOptional()
+  @IsArray()
+  @IsMongoId({ each: true })
+  tenantIds?: string[];
 
   @IsOptional()
   @IsBoolean()

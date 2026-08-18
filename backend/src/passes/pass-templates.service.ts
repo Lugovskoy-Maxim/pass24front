@@ -18,6 +18,10 @@ import {
 } from '../schemas';
 import { isTenantCompanyUser } from '../common/tenant-account';
 import { tenantOwnerObjectId } from '../common/tenant-owner';
+import {
+  officeAssignedToQuery,
+  officeHasTenant,
+} from '../common/office-tenants';
 import { CreatePassTemplateDto } from './dto/create-pass-template.dto';
 
 @Injectable()
@@ -196,7 +200,7 @@ export class PassTemplatesService {
         throw new ForbiddenException('Создание шаблонов недоступно');
       }
       const assignedOffices = await this.officeModel.countDocuments({
-        tenantId: tenantOwnerId,
+        ...officeAssignedToQuery(tenantOwnerId),
         isActive: true,
       });
       if (!assignedOffices) {
@@ -222,7 +226,7 @@ export class PassTemplatesService {
 
     if (
       isTenantCompanyUser(user) &&
-      office.tenantId?.toString() !== tenantOwnerId?.toString()
+      !officeHasTenant(office, tenantOwnerId)
     ) {
       throw new ForbiddenException(
         'Можно использовать только офисы своей компании',

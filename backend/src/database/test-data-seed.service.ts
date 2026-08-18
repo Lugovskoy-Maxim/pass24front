@@ -13,6 +13,7 @@ import {
 import { PropertyType } from '../schemas/enums';
 import { AUTH_CONNECTION } from './auth-database.constants';
 import { DEV_TEST_ACCOUNTS } from './dev-test-accounts';
+import { officeAssignedToQuery } from '../common/office-tenants';
 
 export interface TestDataSeedResult {
   message: string;
@@ -127,12 +128,14 @@ export class TestDataSeedService {
           areaSqm: officeSpec.areaSqm,
           company: officeSpec.company,
           tenantId: tenantUser._id,
+          tenantIds: [tenantUser._id],
           isActive: true,
         });
         result.offices++;
         result.skipped = false;
-      } else if (!exists.tenantId) {
+      } else if (!exists.tenantId && !(exists.tenantIds || []).length) {
         exists.tenantId = tenantUser._id;
+        exists.tenantIds = [tenantUser._id];
         exists.company = officeSpec.company;
         await exists.save();
       }
@@ -174,7 +177,7 @@ export class TestDataSeedService {
 
   private async syncTenantProperties(tenantId: string) {
     const offices = await this.officeModel
-      .find({ tenantId: new Types.ObjectId(tenantId), isActive: true })
+      .find({ ...officeAssignedToQuery(tenantId), isActive: true })
       .lean();
     const propertyIds = [
       ...new Set(offices.map((office) => office.property.toString())),

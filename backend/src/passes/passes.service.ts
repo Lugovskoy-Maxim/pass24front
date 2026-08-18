@@ -36,6 +36,10 @@ import {
 } from '../common/bookable-visit-dates';
 import { isValidVisitDateString } from '../common/visit-date';
 import { buildPassCsv } from '../common/pass-csv';
+import {
+  officeAssignedToQuery,
+  officeHasTenant,
+} from '../common/office-tenants';
 import { CreatePassDto } from './dto/create-pass.dto';
 import { PassExportQueryDto } from './dto/pass-export-query.dto';
 import { PassHistoryQueryDto } from './dto/pass-history-query.dto';
@@ -271,7 +275,10 @@ export class PassesService implements OnModuleInit {
     if (!ownerId) throw new ForbiddenException('Нет доступа');
 
     const offices = await this.officeModel
-      .find({ tenantId: new Types.ObjectId(ownerId), isActive: true })
+      .find({
+        ...officeAssignedToQuery(ownerId),
+        isActive: true,
+      })
       .select('_id property')
       .lean();
 
@@ -421,7 +428,10 @@ export class PassesService implements OnModuleInit {
       const ownerId = resolveTenantOwnerId(user);
       const offices = ownerId
         ? await this.officeModel
-            .find({ tenantId: new Types.ObjectId(ownerId), isActive: true })
+            .find({
+              ...officeAssignedToQuery(ownerId),
+              isActive: true,
+            })
             .lean()
         : [];
       const propertyIds = [
@@ -1267,7 +1277,7 @@ export class PassesService implements OnModuleInit {
         throw new ForbiddenException('Заказ пропусков недоступен');
       }
       const assignedOffices = await this.officeModel.countDocuments({
-        tenantId: tenantOwnerId,
+        ...officeAssignedToQuery(tenantOwnerId),
         isActive: true,
       });
       if (!assignedOffices) {
@@ -1288,8 +1298,7 @@ export class PassesService implements OnModuleInit {
 
       if (isTenantCompanyUser(user)) {
         // Сотрудник и владелец — только в офисы своей компании, не чужие и не «свободный» ввод
-        const ownsOffice =
-          office.tenantId?.toString() === tenantOwnerId?.toString();
+        const ownsOffice = officeHasTenant(office, tenantOwnerId);
         if (!ownsOffice) {
           throw new ForbiddenException(
             'Можно заказывать пропуска только в офисы своей компании',

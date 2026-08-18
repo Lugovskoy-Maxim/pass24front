@@ -14,6 +14,7 @@ type OfficeFlags = {
   paymentStatus?: string;
   paidUntil?: string;
   tenantId?: string;
+  tenantIds?: string[];
 };
 
 export function OfficeStatusFlags({ office }: { office: OfficeFlags }) {
@@ -44,7 +45,18 @@ export function OfficeStatusFlags({ office }: { office: OfficeFlags }) {
   if (room) chips.push({ key: 'room', text: room });
   const format = officeFormatLabel(office.officeFormat);
   if (format) chips.push({ key: 'fmt', text: format });
-  if (office.tenantId) {
+  const tenantCount = office.tenantIds?.length
+    ? office.tenantIds.length
+    : office.tenantId
+      ? 1
+      : 0;
+  if (tenantCount > 1) {
+    chips.push({
+      key: 'tenant',
+      text: `${tenantCount} арендатора в Pass`,
+      warn: true,
+    });
+  } else if (tenantCount === 1) {
     chips.push({ key: 'tenant', text: 'Есть арендатор в Pass' });
   }
 

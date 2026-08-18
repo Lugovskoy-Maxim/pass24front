@@ -44,6 +44,7 @@ import {
 } from '../schemas';
 import { parseClosedWeekdays } from '../common/bookable-visit-dates';
 import { resolveTenantOwnerId } from '../common/tenant-owner';
+import { officeAssignedToQuery } from '../common/office-tenants';
 import { AcceptInviteDto } from './dto/accept-invite.dto';
 import { ConfirmEmailVerifyDto } from './dto/confirm-email-verify.dto';
 import { ConfirmPasswordResetDto } from './dto/confirm-password-reset.dto';
@@ -1592,7 +1593,7 @@ export class AuthService {
   async getUserOffices(userId: string, parentTenantId?: string) {
     const ownerId = resolveTenantOwnerId({ userId, parentTenantId }) || userId;
     const offices = await this.officeModel
-      .find({ tenantId: new Types.ObjectId(ownerId), isActive: true })
+      .find({ ...officeAssignedToQuery(ownerId), isActive: true })
       .lean();
     if (!offices.length) return [];
 

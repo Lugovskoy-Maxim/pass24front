@@ -105,14 +105,16 @@ export default function AdminDashboardPage() {
             ? 'Бизнес-центры создаются в разделе «Офисы»'
             : businessCenterNames.join(' · ')}
         </p>
-        <button
-          className="btn btn-secondary text-sm"
-          onClick={handleSeed}
-          disabled={seeding}
-        >
-          <Sparkles className="w-4 h-4" />
-          {seeding ? 'Создание...' : 'Создать тестовые БЦ и арендаторов'}
-        </button>
+        {config?.devMode ? (
+          <button
+            className="btn btn-secondary text-sm"
+            onClick={handleSeed}
+            disabled={seeding}
+          >
+            <Sparkles className="w-4 h-4" />
+            {seeding ? 'Создание...' : 'Создать тестовые БЦ и арендаторов'}
+          </button>
+        ) : null}
       </div>
 
       <div className="flex flex-wrap gap-3 mb-6">

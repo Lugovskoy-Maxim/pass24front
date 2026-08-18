@@ -39,9 +39,11 @@ import {
   UserCategory,
   UserFilters,
   UserRole,
+  formatOfficeTenants,
   formatTenantOffices,
   getErrorMessage,
   getRoleLabel,
+  officeTenantIds,
 } from '@/lib/api';
 import { PageError } from '@/components/PageError';
 import { useToast } from '@/components/Toast';
@@ -470,7 +472,7 @@ function AdminUsersPageContent() {
       const filtered = officePickerQuery
         ? list.filter((o) => {
             const hay =
-              `${o.number} ${o.floor || ''} ${o.company || ''} ${o.tenantName || ''} ${bc}`.toLowerCase();
+              `${o.number} ${o.floor || ''} ${o.company || ''} ${o.tenantName || ''} ${formatOfficeTenants(o)} ${bc}`.toLowerCase();
             return hay.includes(officePickerQuery);
           })
         : list;
@@ -1284,8 +1286,8 @@ function AdminUsersPageContent() {
                   )}
                 </div>
                 <p className="text-xs text-[var(--muted)]">
-                  Выберите офисы компании. Занятый офис при сохранении перейдёт
-                  к этому арендатору.
+                  Выберите офисы компании. Если офис уже занят, арендатор
+                  добавится к существующим — предыдущих не снимаем.
                 </p>
 
                 {selectedOfficeChips.length > 0 && (
@@ -1339,10 +1341,18 @@ function AdminUsersPageContent() {
                               <div className="space-y-1.5">
                                 {offices.map((office) => {
                                   const checked = officeIds.includes(office.id);
-                                  const occupiedByOther = !!(
-                                    office.tenantId &&
-                                    office.tenantId !== editId
+                                  const occupants = officeTenantIds(office);
+                                  const occupiedByOther = occupants.some(
+                                    (id) => id !== editId,
                                   );
+                                  const otherNames =
+                                    office.tenants
+                                      ?.filter((t) => t.id !== editId)
+                                      .map((t) => t.name)
+                                      .join(', ') ||
+                                    (office.tenantId !== editId
+                                      ? office.tenantName
+                                      : '');
                                   return (
                                     <label
                                       key={office.id}
@@ -1370,13 +1380,12 @@ function AdminUsersPageContent() {
                                         ) : null}
                                         {occupiedByOther ? (
                                           <span className="block text-[11px] text-amber-700 mt-0.5">
-                                            Занят:{' '}
-                                            {office.tenantName ||
-                                              'другой арендатор'}
+                                            Уже есть:{' '}
+                                            {otherNames || 'другой арендатор'}
                                             {office.company
                                               ? ` (${office.company})`
                                               : ''}{' '}
-                                            — при сохранении перейдёт сюда
+                                            — будет добавлен ещё один
                                           </span>
                                         ) : office.company ? (
                                           <span className="block text-[11px] text-[var(--muted)]">

@@ -66,6 +66,7 @@ export class AppConfigService {
       blockedEmailDomains: site.blockedEmailDomains,
       faqItems: site.faqItems,
       helpGuideSections: site.helpGuideSections,
+      devMode: process.env.NODE_ENV !== 'production',
     };
   }
 }

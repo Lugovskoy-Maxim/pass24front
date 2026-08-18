@@ -28,6 +28,10 @@ import {
 import { Property, PropertyDocument } from '../schemas/property.schema';
 import { PropertyType } from '../schemas/enums';
 import { NotificationsService } from '../notifications/notifications.service';
+import {
+  collectOfficeTenantIds,
+  normalizeOfficeTenantIds,
+} from '../common/office-tenants';
 
 const SETTINGS_KEY = 'global';
 const DEFAULT_PREFIX = 'wps_';
@@ -1196,13 +1200,16 @@ export class SiteSourceService implements OnModuleInit, OnModuleDestroy {
     const nextPayment = office.paymentStatus;
     const alert =
       nextPayment === 'unpaid' || nextPayment === 'overdue';
-    if (office.tenantId && alert && office.lastNotifiedPayment !== nextPayment) {
-      await this.notifications.notifyOfficeStatus({
-        tenantId: office.tenantId.toString(),
-        officeLabel: office.title || office.number,
-        paymentStatus: nextPayment || 'unpaid',
-        paidUntil: office.paidUntil,
-      });
+    const occupants = collectOfficeTenantIds(office);
+    if (occupants.length && alert && office.lastNotifiedPayment !== nextPayment) {
+      for (const tenantId of occupants) {
+        await this.notifications.notifyOfficeStatus({
+          tenantId,
+          officeLabel: office.title || office.number,
+          paymentStatus: nextPayment || 'unpaid',
+          paidUntil: office.paidUntil,
+        });
+      }
       office.lastNotifiedPayment = nextPayment;
     }
     if (!alert && prevPayment && prevPayment !== nextPayment) {
@@ -1426,7 +1433,13 @@ export class SiteSourceService implements OnModuleInit, OnModuleDestroy {
     if (!keep.floor && drop.floor) keep.floor = drop.floor;
     if (keep.areaSqm == null && drop.areaSqm != null) keep.areaSqm = drop.areaSqm;
     if (!keep.company && drop.company) keep.company = drop.company;
-    if (!keep.tenantId && drop.tenantId) keep.tenantId = drop.tenantId;
+    const merged = normalizeOfficeTenantIds([
+      ...collectOfficeTenantIds(keep),
+      ...collectOfficeTenantIds(drop),
+    ]);
+    keep.tenantIds = merged;
+    if (merged.length) keep.tenantId = merged[0];
+    else if (!keep.tenantId && drop.tenantId) keep.tenantId = drop.tenantId;
     await keep.save();
   }
 
