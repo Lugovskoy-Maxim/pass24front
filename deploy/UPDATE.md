@@ -123,7 +123,7 @@ chmod +x scripts/adapt-users.sh
 ./scripts/adapt-users.sh --apply --sync
 ```
 
-Не вызывайте `npx ts-node` и не монтируйте весь `backend` в `/app` — пропадают `node_modules`, ts-node падает с `Cannot read properties of undefined (reading 'fileExists')`.
+Не вызывайте `npx ts-node` и не монтируйте весь `backend` в `/app` — пропадают `node_modules`, ts-node падает (`fileExists` или TS5109). Только `./scripts/adapt-users.sh`.
 
 Проверка: Админ → Пользователи — у карточки есть `usr_…` и `authVersion`. Повторный просмотр почти всех кладёт в `skipped`.
 

@@ -24,8 +24,10 @@ if [[ ! -f .env ]]; then
   exit 1
 fi
 
+# ts-node иначе читает Nest tsconfig (module=NodeNext) и падает с TS5109.
 $COMPOSE run --rm --no-deps \
   -v "$APP_DIR/backend/scripts:/app/scripts:ro" \
   -v "$APP_DIR/backend/src:/app/src:ro" \
+  -e TS_NODE_COMPILER_OPTIONS='{"module":"commonjs","moduleResolution":"node","esModuleInterop":true}' \
   backend \
-  ./node_modules/.bin/ts-node --transpile-only scripts/adapt-users.ts "$@"
+  ./node_modules/.bin/ts-node --transpile-only --skip-project scripts/adapt-users.ts "$@"
