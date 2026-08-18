@@ -24,7 +24,6 @@ import {
   ChevronDown,
   ChevronRight,
   User,
-  Fingerprint,
 } from 'lucide-react';
 import { AdminLayout } from '@/components/AdminLayout';
 import { AdminModal } from '@/components/AdminModal';
@@ -1509,23 +1508,15 @@ function AdminUsersPageContent() {
                   .flatMap((x) => x.employees || [])
                   .find((e) => e.id === editId);
               if (!current) return null;
+              if (
+                !current.lastLoginAt &&
+                !current.invitePending &&
+                !current.parentTenantName
+              ) {
+                return null;
+              }
               return (
                 <div className="rounded-lg border border-[var(--border)] bg-[var(--surface-muted)] p-3 text-xs text-[var(--muted)] space-y-1">
-                  <div className="flex items-center gap-2 font-medium text-sm text-[var(--text)]">
-                    <Fingerprint className="w-4 h-4 text-[var(--primary)]" />
-                    Pass
-                  </div>
-                  <div className="font-mono break-all">
-                    {current.passSubject || 'subject появится после сохранения'}
-                  </div>
-                  <div>
-                    {identityStatusLabel(current.identityStatus)} · v
-                    {current.authVersion ?? 1}
-                    {current.privateDataComplete ? ' · анкета полная' : ''}
-                    {current.privateDataRevision != null
-                      ? ` · rev ${current.privateDataRevision}`
-                      : ''}
-                  </div>
                   {current.lastLoginAt && (
                     <div>
                       Вход:{' '}

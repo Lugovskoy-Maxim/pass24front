@@ -1,0 +1,347 @@
+<!DOCTYPE html>
+<html lang="ru">
+<head>
+  <meta charset="UTF-8" />
+  <meta name="viewport" content="width=device-width, initial-scale=1" />
+  <title>Pass API · проверка эндпоинтов Mstyle v2</title>
+  <style>
+    :root {
+      --bg: #0f1218;
+      --card: #181d28;
+      --line: #2a3142;
+      --text: #eef2f8;
+      --muted: #8d97ad;
+      --accent: #4d8dff;
+      --ok: #3dcb8a;
+      --bad: #ef6b6b;
+      --get: #6ea8ff;
+      --post: #3dcb8a;
+      --patch: #e0b04a;
+    }
+    * { box-sizing: border-box; }
+    body {
+      margin: 0;
+      font: 14px/1.45 "Segoe UI", system-ui, sans-serif;
+      background: var(--bg);
+      color: var(--text);
+    }
+    .wrap { max-width: 1100px; margin: 0 auto; padding: 28px 18px 60px; }
+    h1 { font-size: 22px; margin: 0 0 6px; }
+    .lead { color: var(--muted); margin: 0 0 22px; }
+    .card {
+      background: var(--card);
+      border: 1px solid var(--line);
+      border-radius: 14px;
+      padding: 16px 18px;
+      margin-bottom: 14px;
+    }
+    label { display: block; font-size: 12px; color: var(--muted); margin: 0 0 6px; }
+    input, textarea, select, button { font: inherit; color: var(--text); }
+    input, textarea, select {
+      width: 100%;
+      background: #121722;
+      border: 1px solid var(--line);
+      border-radius: 10px;
+      padding: 10px 12px;
+    }
+    textarea { min-height: 140px; font-family: ui-monospace, Consolas, monospace; font-size: 12px; }
+    .row { display: flex; gap: 10px; flex-wrap: wrap; align-items: end; }
+    .row > * { flex: 1; min-width: 180px; }
+    .row .grow { flex: 3; min-width: 260px; }
+    button {
+      border: 0;
+      border-radius: 10px;
+      padding: 10px 14px;
+      background: var(--accent);
+      cursor: pointer;
+      white-space: nowrap;
+    }
+    button.ghost { background: #232a3b; }
+    button:disabled { opacity: .55; cursor: wait; }
+    .ok { color: var(--ok); }
+    .bad { color: var(--bad); }
+    .pill {
+      display: inline-block;
+      font-size: 11px;
+      border: 1px solid var(--line);
+      border-radius: 999px;
+      padding: 2px 8px;
+      color: var(--muted);
+    }
+    .list { display: grid; gap: 6px; }
+    .ep {
+      display: grid;
+      grid-template-columns: 54px 52px 1fr auto;
+      gap: 8px;
+      align-items: center;
+      padding: 9px 10px;
+      border-radius: 10px;
+      cursor: pointer;
+    }
+    .ep:hover, .ep.on { background: #22293a; }
+    .m { font-size: 11px; font-weight: 700; }
+    .m.GET { color: var(--get); }
+    .m.POST { color: var(--post); }
+    .m.PATCH { color: var(--patch); }
+    .id { color: var(--muted); font-size: 12px; }
+    .path {
+      margin-top: 10px;
+      font: 12px ui-monospace, Consolas, monospace;
+      color: var(--muted);
+      word-break: break-all;
+    }
+    pre {
+      margin: 10px 0 0;
+      background: #0c1017;
+      border: 1px solid var(--line);
+      border-radius: 10px;
+      padding: 12px;
+      overflow: auto;
+      white-space: pre-wrap;
+      font: 12px/1.45 ui-monospace, Consolas, monospace;
+    }
+    details { margin-top: 10px; color: var(--muted); }
+    details summary { cursor: pointer; }
+    .grid2 { display: grid; grid-template-columns: 1fr 1fr; gap: 8px; }
+    @media (max-width: 720px) { .grid2 { grid-template-columns: 1fr; } }
+  </style>
+</head>
+<body>
+  <div class="wrap">
+    <h1>Проверка API Pass ↔ Mstyle v2</h1>
+    <p class="lead">Введите базовый адрес Pass и нажмите «Подключиться». Дальше выбирайте маршрут и смотрите ответ.</p>
+
+    <div class="card">
+      <div class="row">
+        <div class="grow">
+          <label>Базовый URL</label>
+          <input id="base" value="https://pass.mstyle.ru" />
+        </div>
+        <button id="connect">Подключиться</button>
+        <button class="ghost" id="curl">curl</button>
+      </div>
+      <p id="conn" class="lead" style="margin:10px 0 0">Токен ещё не получен. Сначала «Подключиться» (A-01).</p>
+    </div>
+
+    <div class="card">
+      <div class="row">
+        <input id="q" placeholder="Поиск: A-03, context, guest…" />
+        <select id="ms">
+          <option value="">Все этапы</option>
+          <option>M0</option>
+          <option>M1</option>
+          <option>M2</option>
+        </select>
+      </div>
+      <div id="list" class="list" style="margin-top:10px"></div>
+    </div>
+
+    <div class="card">
+      <h2 id="title" style="margin:0 0 4px;font-size:16px">A-01 · Сервисный токен</h2>
+      <div id="meta" class="pill">POST</div>
+      <div class="path" id="url"></div>
+      <label style="margin-top:12px">Тело запроса</label>
+      <textarea id="body"></textarea>
+      <div class="row" style="margin-top:10px">
+        <button id="send">Отправить запрос</button>
+      </div>
+      <details>
+        <summary>Идентификаторы (подставляются из ответов)</summary>
+        <div class="grid2" style="margin-top:8px">
+          <div><label>subject</label><input id="v-subject" /></div>
+          <div><label>profileId</label><input id="v-profileId" /></div>
+          <div><label>challengeId</label><input id="v-challengeId" /></div>
+          <div><label>membershipId</label><input id="v-membershipId" /></div>
+          <div><label>guestPartyId</label><input id="v-guestPartyId" /></div>
+          <div><label>snapshotId</label><input id="v-snapshotId" /></div>
+          <div><label>changeRequestId</label><input id="v-changeRequestId" /></div>
+          <div><label>deletionRequestId</label><input id="v-deletionRequestId" /></div>
+          <div><label>documentCode</label><input id="v-documentCode" value="pdn" /></div>
+          <div><label>cursor</label><input id="v-cursor" /></div>
+        </div>
+      </details>
+    </div>
+
+    <div class="card">
+      <div id="status">Ответ появится здесь</div>
+      <pre id="resp">{}</pre>
+    </div>
+  </div>
+<script>
+const SV = "2.0";
+const CTX = { ipAddress: "192.0.2.10", userAgent: "Mstyle console", locale: "ru-RU" };
+const P = "/api/internal/integrations/mstyle/v2";
+const EPS = [
+  { id:"A-01", ms:"M0", t:"Сервисный токен", m:"POST", p:"/api/oauth2/token", form:true },
+  { id:"A-02", ms:"M1", t:"Логин и пароль", m:"POST", p:P+"/auth/residents/password-verify", idem:1, b:{schemaVersion:SV,login:"admin",password:"admin123",context:CTX} },
+  { id:"A-03", ms:"M0", t:"Начать вход по коду", m:"POST", p:P+"/auth/residents/code-challenges", idem:1, b:{schemaVersion:SV,identifier:{type:"phone",value:"+79990001234"},channel:"sms",context:CTX} },
+  { id:"A-04", ms:"M0", t:"Состояние попытки входа", m:"GET", p:P+"/auth/residents/code-challenges/{challengeId}" },
+  { id:"A-05", ms:"M0", t:"Повторно отправить код", m:"POST", p:P+"/auth/residents/code-challenges/{challengeId}/resend", idem:1 },
+  { id:"A-06", ms:"M0", t:"Проверить код", m:"POST", p:P+"/auth/residents/code-challenges/{challengeId}/verify", idem:1, b:{schemaVersion:SV,code:"123456",context:CTX} },
+  { id:"R-01", ms:"M0", t:"Контекст резидента", m:"GET", p:P+"/residents/{subject}/context" },
+  { id:"R-03", ms:"M2", t:"Лента изменений", m:"GET", p:P+"/changes?after={cursor}&limit=50" },
+  { id:"R-04", ms:"M0", t:"Профиль", m:"GET", p:P+"/resident-profiles/{profileId}" },
+  { id:"R-05", ms:"M0", t:"Изменить профиль", m:"PATCH", p:P+"/resident-profiles/{profileId}", b:{schemaVersion:SV,companyShortName:"Пример+",expectedRevision:2} },
+  { id:"R-06", ms:"M1", t:"Поиск профилей", m:"POST", p:P+"/resident-profiles/search", b:{schemaVersion:SV,query:"Пример",limit:20} },
+  { id:"R-07", ms:"M0", t:"Изменить identity", m:"PATCH", p:P+"/residents/{subject}/identity", b:{schemaVersion:SV,displayName:"Иванов И. И.",expectedRevision:4} },
+  { id:"R-08", ms:"M1", t:"Онбординг", m:"POST", p:P+"/resident-onboarding", b:{schemaVersion:SV,phone:"+79990001234",profileType:"company",legalForm:"ooo",company:"ООО Пример"} },
+  { id:"R-09", ms:"M1", t:"Lifecycle", m:"POST", p:P+"/resident-profiles/{profileId}/lifecycle-transitions", b:{schemaVersion:SV,transition:"suspend",reason:"manual"} },
+  { id:"R-10", ms:"M2", t:"Заявка на удаление", m:"POST", p:P+"/resident-profiles/{profileId}/deletion-requests", b:{schemaVersion:SV,reason:"client_request"} },
+  { id:"R-11", ms:"M1", t:"Заявка на смену", m:"POST", p:P+"/resident-profiles/{profileId}/change-requests", b:{schemaVersion:SV,patch:{companyShortName:"Новое"}} },
+  { id:"R-12", ms:"M1", t:"Текущая заявка", m:"GET", p:P+"/resident-profiles/{profileId}/change-requests/current" },
+  { id:"R-13", ms:"M1", t:"Физический доступ", m:"GET", p:P+"/resident-profiles/{profileId}/physical-access" },
+  { id:"R-14", ms:"M1", t:"Identity по subject", m:"GET", p:P+"/identities/{subject}" },
+  { id:"R-15", ms:"M1", t:"Решение по заявке", m:"POST", p:P+"/resident-profile-change-requests/{changeRequestId}/decisions", b:{schemaVersion:SV,decision:"approve"} },
+  { id:"R-16", ms:"M1", t:"Отмена заявки", m:"POST", p:P+"/resident-profile-change-requests/{changeRequestId}/cancel" },
+  { id:"R-17", ms:"M2", t:"Статус удаления", m:"GET", p:P+"/deletion-requests/{deletionRequestId}" },
+  { id:"M-01", ms:"M0", t:"Список membership", m:"GET", p:P+"/resident-profiles/{profileId}/memberships" },
+  { id:"M-02", ms:"M0", t:"Добавить сотрудника", m:"POST", p:P+"/resident-profiles/{profileId}/memberships", b:{schemaVersion:SV,subject:"usr_01EMPLOYEE",role:"employee"} },
+  { id:"M-03", ms:"M1", t:"Изменить membership", m:"PATCH", p:P+"/resident-memberships/{membershipId}", b:{schemaVersion:SV,status:"suspended"} },
+  { id:"M-04", ms:"M1", t:"Отозвать membership", m:"POST", p:P+"/resident-memberships/{membershipId}/revoke" },
+  { id:"M-05", ms:"M1", t:"Передать владельца", m:"POST", p:P+"/resident-profiles/{profileId}/owner-transfer", b:{schemaVersion:SV,toSubject:"usr_01NEWOWNER"} },
+  { id:"C-01", ms:"M0", t:"Challenge контакта", m:"POST", p:P+"/residents/{subject}/contacts/challenges", b:{schemaVersion:SV,type:"phone",value:"+79990001234"} },
+  { id:"C-02", ms:"M0", t:"Подтвердить контакт", m:"POST", p:P+"/residents/{subject}/contacts/challenges/{challengeId}/verify", b:{schemaVersion:SV,code:"123456"} },
+  { id:"C-03", ms:"M0", t:"Назначения контактов", m:"GET", p:P+"/resident-profiles/{profileId}/contact-assignments" },
+  { id:"C-04", ms:"M0", t:"Заменить назначения", m:"PATCH", p:P+"/resident-profiles/{profileId}/contact-assignments", b:{schemaVersion:SV,phoneContactId:"cnt_phone",emailContactId:"cnt_email"} },
+  { id:"C-05", ms:"M0", t:"Раскрыть контакты", m:"POST", p:P+"/residents/{subject}/contacts/reveal" },
+  { id:"S-01", ms:"M0", t:"Список согласий", m:"GET", p:P+"/residents/{subject}/consents" },
+  { id:"S-02", ms:"M0", t:"Принять согласие", m:"POST", p:P+"/residents/{subject}/consents/{documentCode}/accept", b:{schemaVersion:SV,documentVersion:"1.0",documentDigest:"sha256:abc"} },
+  { id:"S-03", ms:"M0", t:"Отозвать согласие", m:"POST", p:P+"/residents/{subject}/consents/{documentCode}/withdraw" },
+  { id:"P-01", ms:"M0", t:"Статус анкеты", m:"GET", p:P+"/resident-profiles/{profileId}/private-data/status" },
+  { id:"P-02", ms:"M0", t:"Раскрыть анкету", m:"POST", p:P+"/resident-profiles/{profileId}/private-data/reveal", b:{schemaVersion:SV,fieldCodes:["inn","ogrn"]} },
+  { id:"P-03", ms:"M0", t:"Изменить анкету", m:"PATCH", p:P+"/resident-profiles/{profileId}/private-data", b:{schemaVersion:SV,values:{companyFullName:"ООО Пример",inn:"7700000000",ogrn:"1027700000000"}} },
+  { id:"P-04", ms:"M0", t:"Снимок анкеты", m:"POST", p:P+"/resident-profiles/{profileId}/private-data/snapshots" },
+  { id:"P-05", ms:"M1", t:"Раскрыть контакты профиля", m:"POST", p:P+"/resident-profiles/{profileId}/contacts/reveal" },
+  { id:"P-06", ms:"M1", t:"Раскрыть снимок", m:"POST", p:P+"/private-data-snapshots/{snapshotId}/reveal", b:{schemaVersion:SV,fieldCodes:["inn"]} },
+  { id:"P-07", ms:"M1", t:"Раскрыть контакты снимка", m:"POST", p:P+"/private-data-snapshots/{snapshotId}/contacts/reveal" },
+  { id:"P-08", ms:"M0", t:"Привязать снимок", m:"POST", p:P+"/private-data-snapshots/{snapshotId}/operation-bindings", b:{schemaVersion:SV,operationType:"pass_issue",operationId:"pass_01J5"} },
+  { id:"G-01", ms:"M0", t:"Создать гостя", m:"POST", p:P+"/guest-parties", b:{schemaVersion:SV,visitorName:"Петров Пётр",visitDate:"2026-08-20"} },
+  { id:"G-02", ms:"M0", t:"Challenge контакта гостя", m:"POST", p:P+"/guest-parties/{guestPartyId}/contact-challenges", b:{schemaVersion:SV,type:"phone",value:"+79990005555"} },
+  { id:"G-03", ms:"M0", t:"Подтвердить контакт гостя", m:"POST", p:P+"/guest-parties/{guestPartyId}/contact-challenges/{challengeId}/verify", b:{schemaVersion:SV,code:"123456"} },
+  { id:"G-04", ms:"M0", t:"Статус гостя", m:"GET", p:P+"/guest-parties/{guestPartyId}/status" },
+  { id:"G-05", ms:"M1", t:"Раскрыть контакты гостя", m:"POST", p:P+"/guest-parties/{guestPartyId}/contacts/reveal" },
+  { id:"G-06", ms:"M0", t:"Статус анкеты гостя", m:"GET", p:P+"/guest-parties/{guestPartyId}/private-data/status" },
+  { id:"G-07", ms:"M1", t:"Раскрыть анкету гостя", m:"POST", p:P+"/guest-parties/{guestPartyId}/private-data/reveal", b:{schemaVersion:SV,fieldCodes:["lastName","firstName"]} },
+  { id:"G-08", ms:"M0", t:"Изменить анкету гостя", m:"PATCH", p:P+"/guest-parties/{guestPartyId}/private-data", b:{schemaVersion:SV,values:{lastName:"Петров",firstName:"Пётр"}} },
+  { id:"G-09", ms:"M0", t:"Снимок гостя", m:"POST", p:P+"/guest-parties/{guestPartyId}/snapshots" },
+  { id:"G-10", ms:"M0", t:"Подтвердить бронь", m:"POST", p:P+"/guest-parties/{guestPartyId}/booking-confirmations", b:{schemaVersion:SV,visitDate:"2026-08-20",officeExternalId:"tf-room:107"} },
+  { id:"G-11", ms:"M2", t:"Присвоить гостя", m:"POST", p:P+"/guest-parties/{guestPartyId}/claim", b:{schemaVersion:SV,subject:"usr_01J5Q8K2M7N4P6R9T1V3X5Z7AA"} },
+  { id:"G-12", ms:"M1", t:"Поиск гостей", m:"POST", p:P+"/guest-parties/search", b:{schemaVersion:SV,query:"Петров",limit:20} },
+  { id:"G-13", ms:"M0", t:"Согласия гостя", m:"GET", p:P+"/guest-parties/{guestPartyId}/consents" },
+  { id:"G-14", ms:"M0", t:"Принять согласие гостя", m:"POST", p:P+"/guest-parties/{guestPartyId}/consents/{documentCode}/accept", b:{schemaVersion:SV,documentVersion:"1.0",documentDigest:"sha256:abc"} },
+  { id:"G-15", ms:"M0", t:"Отозвать согласие гостя", m:"POST", p:P+"/guest-parties/{guestPartyId}/consents/{documentCode}/withdraw" }
+];
+
+const $ = (id) => document.getElementById(id);
+const V = ["subject","profileId","challengeId","membershipId","guestPartyId","snapshotId","changeRequestId","deletionRequestId","documentCode","cursor"];
+let cur = EPS[0], token = "";
+
+function base() {
+  let u = $("base").value.trim() || location.origin;
+  return u.replace(/\/+$/, "");
+}
+function fill(path) {
+  return path.replace(/\{(\w+)\}/g, (_, k) => encodeURIComponent(($("v-"+k)||{}).value || "{"+k+"}"));
+}
+function fullUrl(ep) { return base() + fill(ep.p); }
+function rid() { return "req_" + Math.random().toString(36).slice(2,10); }
+function pick(ep) {
+  cur = ep;
+  $("title").textContent = ep.id + " · " + ep.t;
+  $("meta").textContent = ep.m + " · " + ep.ms;
+  $("body").value = ep.b ? JSON.stringify(ep.b, null, 2) : "";
+  $("body").disabled = ep.m === "GET" && !ep.b;
+  $("url").textContent = fullUrl(ep);
+  render();
+}
+function render() {
+  const q = $("q").value.toLowerCase();
+  const ms = $("ms").value;
+  $("list").innerHTML = EPS.filter(e =>
+    (!ms || e.ms === ms) &&
+    (!q || (e.id+" "+e.t+" "+e.p).toLowerCase().includes(q))
+  ).map(e => `<div class="ep ${cur.id===e.id?"on":""}" data-id="${e.id}">
+    <span class="id">${e.id}</span><span class="m ${e.m}">${e.m}</span>
+    <span>${e.t}</span><span class="pill">${e.ms}</span></div>`).join("");
+}
+function harvest(o) {
+  if (!o || typeof o !== "object") return;
+  const map = { access_token:"token", subject:"v-subject", profileId:"v-profileId", challengeId:"v-challengeId",
+    membershipId:"v-membershipId", guestPartyId:"v-guestPartyId", snapshotId:"v-snapshotId",
+    changeRequestId:"v-changeRequestId", deletionRequestId:"v-deletionRequestId" };
+  for (const [k,id] of Object.entries(map)) {
+    if (typeof o[k] === "string" && o[k]) {
+      if (id === "token") { token = o[k]; $("conn").innerHTML = '<span class="ok">Подключено.</span> Токен получен, можно слать остальные запросы.'; }
+      else $(id).value = o[k];
+    }
+  }
+  if (o.identity?.subject) $("v-subject").value = o.identity.subject;
+  if (o.profiles?.[0]?.profileId) $("v-profileId").value = o.profiles[0].profileId;
+  if (o.membership?.id) $("v-membershipId").value = o.membership.id;
+  Object.values(o).forEach(v => { if (v && typeof v === "object") harvest(v); });
+}
+async function call(ep) {
+  const url = fullUrl(ep);
+  $("url").textContent = url;
+  const headers = { Accept: "application/json", "X-Request-ID": rid() };
+  if (!ep.form && token) headers.Authorization = "Bearer " + token;
+  if (ep.idem) headers["Idempotency-Key"] = "idem_" + Date.now().toString(36);
+  let body;
+  if (ep.form) {
+    headers["Content-Type"] = "application/x-www-form-urlencoded";
+    body = "grant_type=client_credentials&client_id=mstyle-backend-staging&scope=mstyle.resident.authenticate";
+  } else if (ep.m !== "GET") {
+    headers["Content-Type"] = "application/json";
+    body = $("body").value || "{}";
+  }
+  $("send").disabled = true;
+  $("connect").disabled = true;
+  const t0 = performance.now();
+  try {
+    const res = await fetch(url, { method: ep.m, headers, body });
+    const text = await res.text();
+    let data = text;
+    try { data = JSON.parse(text); } catch {}
+    const ms = Math.round(performance.now() - t0);
+    $("status").className = res.ok ? "ok" : "bad";
+    $("status").textContent = res.status + " " + res.statusText + " · " + ms + " мс";
+    $("resp").textContent = typeof data === "string" ? data : JSON.stringify(data, null, 2);
+    if (data && typeof data === "object") harvest(data);
+  } catch (e) {
+    $("status").className = "bad";
+    $("status").textContent = "Нет ответа";
+    $("resp").textContent = e.message + "\n\nЕсли открыли файл с диска и запрос к https://pass.mstyle.ru не дошёл — после выкладки сайта откройте:\nhttps://pass.mstyle.ru/mstyle-v2-console.html";
+  } finally {
+    $("send").disabled = false;
+    $("connect").disabled = false;
+  }
+}
+function copyCurl() {
+  const ep = cur;
+  const h = ["-H 'Accept: application/json'", "-H 'X-Request-ID: "+rid()+"'"];
+  if (!ep.form && token) h.push("-H 'Authorization: Bearer "+token+"'");
+  if (ep.idem) h.push("-H 'Idempotency-Key: idem_"+Date.now().toString(36)+"'");
+  let data = "";
+  if (ep.form) data = " --data 'grant_type=client_credentials&client_id=mstyle-backend-staging&scope=mstyle.resident.authenticate'";
+  else if (ep.m !== "GET") data = " --data '"+$("body").value.replace(/'/g,"'\\''")+"'";
+  const cmd = "curl -sS -X "+ep.m+" '"+fullUrl(ep)+"' "+h.join(" ")+data;
+  navigator.clipboard.writeText(cmd);
+}
+
+if (location.protocol.startsWith("http") && location.hostname.includes("pass.mstyle.ru")) {
+  $("base").value = location.origin;
+}
+$("list").onclick = (e) => {
+  const row = e.target.closest(".ep");
+  if (row) pick(EPS.find(x => x.id === row.dataset.id));
+};
+$("q").oninput = $("ms").onchange = render;
+$("base").oninput = () => { $("url").textContent = fullUrl(cur); };
+$("send").onclick = () => call(cur);
+$("connect").onclick = () => { pick(EPS[0]); call(EPS[0]); };
+$("curl").onclick = copyCurl;
+render();
+pick(EPS[0]);
+</script>
+</body>
+</html>
