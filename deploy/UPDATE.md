@@ -110,8 +110,9 @@ docker compose -f docker-compose.yml -f docker-compose.prod.yml --env-file .env 
 
 ```bash
 cd /opt/pass24front
+git checkout -- scripts/adapt-users.sh   # если pull ругается на локальные правки
 git pull --ff-only origin main
-chmod +x scripts/adapt-users.sh
+chmod +x scripts/*.sh
 
 # 1) что будет изменено (ничего не пишет)
 ./scripts/adapt-users.sh
