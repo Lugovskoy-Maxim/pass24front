@@ -75,6 +75,27 @@ npm run dev
 
 UI: `http://127.0.0.1:3000`
 
+## Адаптация пользователей под Pass v2
+
+Локально (Mongo на `27017`, URI из `backend/.env`):
+
+```bash
+cd backend
+npm run adapt:users
+npm run adapt:users -- --apply
+npm run adapt:users -- --apply --sync
+```
+
+На Windows, если `npm run` ругается на unix-синтаксис:
+
+```powershell
+cd backend
+$env:TS_NODE_COMPILER_OPTIONS='{"module":"commonjs","moduleResolution":"node"}'
+npx ts-node --transpile-only scripts/adapt-users.ts
+```
+
+На проде — `./scripts/adapt-users.sh` (см. [deploy/UPDATE.md](../deploy/UPDATE.md)).
+
 ## Переменные окружения
 
 ### Backend (`backend/.env` или compose)

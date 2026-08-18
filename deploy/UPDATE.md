@@ -102,6 +102,33 @@ docker compose -f docker-compose.yml -f docker-compose.prod.yml --env-file .env 
 
 ---
 
+## Адаптация пользователей под Pass v2
+
+Скрипт дописывает поля identity (`passSubject`, `identityStatus`, `authVersion`, `profileType`, `legalForm`). Пароли, OTP и уже выданный `passSubject` не трогает. Анкету ПДн (ИНН/ОГРН) не заполняет.
+
+По умолчанию только просмотр. `--apply` пишет в Mongo и кладёт бэкап в `backend/backups/adapt-users/`.
+
+```bash
+cd /opt/pass24front
+git pull --ff-only origin main
+chmod +x scripts/adapt-users.sh
+
+# 1) что будет изменено (ничего не пишет)
+./scripts/adapt-users.sh
+
+# 2) записать, если wouldUpdate / samples выглядят нормально
+./scripts/adapt-users.sh --apply
+
+# 3) плюс профили закрытого API (prf_…)
+./scripts/adapt-users.sh --apply --sync
+```
+
+Не вызывайте `npx ts-node` и не монтируйте весь `backend` в `/app` — пропадают `node_modules`, ts-node падает с `Cannot read properties of undefined (reading 'fileExists')`.
+
+Проверка: Админ → Пользователи — у карточки есть `usr_…` и `authVersion`. Повторный просмотр почти всех кладёт в `skipped`.
+
+---
+
 ## SSL (если понадобится обновить сертификат)
 
 ```bash
@@ -119,3 +146,4 @@ sudo ./scripts/setup-ssl.sh
 | Старая версия фронта | `./scripts/update.sh` (пересобирает образы) |
 | Нет `.env` | `cp .env.production.example .env` и задайте `JWT_SECRET`, `ADMIN_PASSWORD` |
 | Сайт не открывается снаружи | Проверьте NAT на MikroTik: TCP 80 и 443 → `192.168.200.9` |
+| `ts-node` / `fileExists` при adapt:users | Используйте `./scripts/adapt-users.sh`, не `npx ts-node` |
