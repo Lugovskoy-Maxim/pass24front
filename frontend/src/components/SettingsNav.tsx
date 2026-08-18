@@ -2,7 +2,7 @@
 
 import Link from 'next/link';
 import { usePathname } from 'next/navigation';
-import { Database, Globe, Link2, MessageSquare, SlidersHorizontal, Webhook } from 'lucide-react';
+import { Database, Globe, Link2, MessageSquare, SlidersHorizontal, Terminal, Webhook } from 'lucide-react';
 
 const ITEMS = [
   { href: '/admin/settings', label: 'Обзор', exact: true, icon: SlidersHorizontal },
@@ -11,6 +11,7 @@ const ITEMS = [
   { href: '/admin/mysql/links', label: 'Связи', icon: Link2 },
   { href: '/admin/mysql/tickets', label: 'Заявки', icon: MessageSquare },
   { href: '/admin/integration', label: 'API', icon: Webhook },
+  { href: '/admin/api-console', label: 'Прогон', icon: Terminal },
 ];
 
 export function SettingsNav() {

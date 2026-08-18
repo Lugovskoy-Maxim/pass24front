@@ -18,6 +18,7 @@ import {
   Settings,
   Database,
   Webhook,
+  Terminal,
   PanelLeftClose,
   PanelLeftOpen,
 } from 'lucide-react';
@@ -67,6 +68,12 @@ const NAV = [
     label: 'API Mstyle',
     icon: Webhook,
     permission: 'admin.settings',
+  },
+  {
+    href: '/admin/api-console',
+    label: 'Прогон API',
+    icon: Terminal,
+    permission: 'admin.panel',
   },
 ];
 
