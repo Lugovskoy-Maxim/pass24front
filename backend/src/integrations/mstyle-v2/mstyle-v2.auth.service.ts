@@ -287,13 +287,15 @@ export class MstyleAuthService {
     const identity = await this.identities.findIdentityBySubject(
       challenge.subject,
     );
-    if (
-      !identity ||
-      identity.identityStatus !== 'active' ||
-      !this.identities.usableForAuth(identity.identityStatus)
-    ) {
+    if (!identity || !this.identities.usableForAuth(identity.identityStatus)) {
       await challenge.save();
       problem(401, 'INVALID_CREDENTIALS');
+    }
+    // Онбординг создаёт invited; первый успешный код активирует учётку.
+    if (identity.identityStatus === 'invited') {
+      identity.identityStatus = 'active';
+      identity.revision += 1;
+      await identity.save();
     }
 
     const body = schema({

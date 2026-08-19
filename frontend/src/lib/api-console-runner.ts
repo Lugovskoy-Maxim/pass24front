@@ -120,21 +120,8 @@ function pickNum(obj: unknown, key: string, fallback = 1): number {
   return fallback;
 }
 
-export async function runFullApiCycle(
-  clientId: string,
-  onStep: (step: ProbeStep) => void,
-): Promise<void> {
-  const stamp = Date.now().toString(36);
-  const adminJwt = jwt();
-  const visitDate = new Date(Date.now() + 86400000).toISOString().slice(0, 10);
-  const v1Email = `probe-${stamp}@pass24.test`;
-  const v1Password = 'Probe12!';
-  const v2Email = `probe-v2-${stamp}@pass24.test`;
-  const empEmail = `probe-emp-${stamp}@pass24.test`;
-  const guestEmail = `probe-gst-${stamp}@pass24.test`;
-  const phone = `+7999${String(Date.now()).slice(-7)}`;
-
-  const step = async (
+function makeStep(onStep: (step: ProbeStep) => void) {
+  return async (
     ver: 'v1' | 'v2',
     id: string,
     title: string,
@@ -148,43 +135,20 @@ export async function runFullApiCycle(
     onStep({ ver, id, title, method, ...res, ok });
     return res;
   };
+}
 
-  const v2 = (
-    id: string,
-    title: string,
-    method: string,
-    path: string,
-    opts?: RawOpts & { okStatuses?: number[]; idempotent?: boolean },
-  ) => {
-    const { idempotent, ...rest } = opts || {};
-    const headers = { ...(rest.headers || {}) };
-    if (idempotent) headers['Idempotency-Key'] = idem();
-    return step('v2', id, title, method, `${V2}${path}`, {
-      ...rest,
-      token: rest.token ?? svc,
-      headers,
-    });
-  };
+export async function runV1ApiCycle(onStep: (step: ProbeStep) => void): Promise<void> {
+  const stamp = Date.now().toString(36);
+  const adminJwt = jwt();
+  const visitDate = new Date(Date.now() + 86400000).toISOString().slice(0, 10);
+  const v1Email = `probe-${stamp}@pass24.test`;
+  const v1Password = 'Probe12!';
+  const step = makeStep(onStep);
 
   let bcId = '';
   let officeId = '';
   let userId = '';
   let passId = '';
-  let svc = '';
-  let subject = '';
-  let profileId = '';
-  let ownerMembershipId = '';
-  let employeeMembershipId = '';
-  let employeeSubject = '';
-  let guestId = '';
-  let snapshotId = '';
-  let guestSnapshotId = '';
-  let contactId = '';
-  let challengeId = '';
-  let contactChallengeId = '';
-  let guestChallengeId = '';
-  let changeRequestId = '';
-  let deletionRequestId = '';
 
   await step('v1', 'C-00', 'config', 'GET', '/config');
   await step('v1', 'H-01', 'root', 'GET', '/');
@@ -272,6 +236,87 @@ export async function runFullApiCycle(
   await step('v1', 'P1-01', 'list passes', 'GET', '/passes', { token: adminJwt });
   await step('v1', 'AD-19', 'list offices', 'GET', '/admin/offices', { token: adminJwt });
 
+  if (userId) {
+    await step('v1', 'AD-08', 'delete user', 'DELETE', `/admin/users/${userId}`, {
+      token: adminJwt,
+    });
+  }
+  if (officeId) {
+    await step('v1', 'AD-24', 'delete office', 'DELETE', `/admin/offices/${officeId}`, {
+      token: adminJwt,
+    });
+  }
+  if (bcId) {
+    await step('v1', 'AD-18', 'delete BC', 'DELETE', `/admin/business-centers/${bcId}`, {
+      token: adminJwt,
+    });
+  }
+}
+
+export async function runV2ApiCycle(
+  clientId: string,
+  onStep: (step: ProbeStep) => void,
+): Promise<void> {
+  const stamp = Date.now().toString(36);
+  const adminJwt = jwt();
+  const v1Email = `probe-a02-${stamp}@pass24.test`;
+  const v1Password = 'Probe12!';
+  const v2Email = `probe-v2-${stamp}@pass24.test`;
+  const empEmail = `probe-emp-${stamp}@pass24.test`;
+  const guestEmail = `probe-gst-${stamp}@pass24.test`;
+  const phone = `+7999${String(Date.now()).slice(-7)}`;
+  const step = makeStep(onStep);
+  let svc = '';
+
+  const v2 = (
+    id: string,
+    title: string,
+    method: string,
+    path: string,
+    opts?: RawOpts & { okStatuses?: number[]; idempotent?: boolean },
+  ) => {
+    const { idempotent, ...rest } = opts || {};
+    const headers = { ...(rest.headers || {}) };
+    if (idempotent) headers['Idempotency-Key'] = idem();
+    return step('v2', id, title, method, `${V2}${path}`, {
+      ...rest,
+      token: rest.token ?? svc,
+      headers,
+    });
+  };
+
+  let subject = '';
+  let profileId = '';
+  let ownerMembershipId = '';
+  let employeeMembershipId = '';
+  let employeeSubject = '';
+  let guestId = '';
+  let snapshotId = '';
+  let guestSnapshotId = '';
+  let contactId = '';
+  let challengeId = '';
+  let contactChallengeId = '';
+  let guestChallengeId = '';
+  let changeRequestId = '';
+  let deletionRequestId = '';
+  let helperUserId = '';
+
+  const helper = await raw('POST', '/admin/users', {
+    token: adminJwt,
+    body: {
+      email: v1Email,
+      password: v1Password,
+      lastName: 'Probe',
+      firstName: 'Auth',
+      fullName: 'Probe Auth',
+      role: 'tenant',
+      company: `probe-${stamp}`,
+      emailVerified: true,
+    },
+  });
+  helperUserId = pick(helper.body, 'id');
+
+  try {
   const tok = await step('v2', 'A-01', 'service token', 'POST', '/oauth2/token', {
     form: new URLSearchParams({
       grant_type: 'client_credentials',
@@ -279,24 +324,7 @@ export async function runFullApiCycle(
     }).toString(),
   });
   svc = pick(tok.body, 'access_token');
-  if (!svc) {
-    if (userId) {
-      await step('v1', 'AD-08', 'delete user', 'DELETE', `/admin/users/${userId}`, {
-        token: adminJwt,
-      });
-    }
-    if (officeId) {
-      await step('v1', 'AD-24', 'delete office', 'DELETE', `/admin/offices/${officeId}`, {
-        token: adminJwt,
-      });
-    }
-    if (bcId) {
-      await step('v1', 'AD-18', 'delete BC', 'DELETE', `/admin/business-centers/${bcId}`, {
-        token: adminJwt,
-      });
-    }
-    return;
-  }
+  if (!svc) return;
 
   await v2('A-02', 'verify password', 'POST', '/auth/residents/password-verify', {
     idempotent: true,
@@ -620,20 +648,9 @@ export async function runFullApiCycle(
   );
   deletionRequestId = pick(del.body, 'deletionRequestId') || 'del_probe_missing';
   await v2('R-17', 'get deletion request', 'GET', `/deletion-requests/${deletionRequestId}`);
-
-  if (userId) {
-    await step('v1', 'AD-08', 'delete user', 'DELETE', `/admin/users/${userId}`, {
-      token: adminJwt,
-    });
-  }
-  if (officeId) {
-    await step('v1', 'AD-24', 'delete office', 'DELETE', `/admin/offices/${officeId}`, {
-      token: adminJwt,
-    });
-  }
-  if (bcId) {
-    await step('v1', 'AD-18', 'delete BC', 'DELETE', `/admin/business-centers/${bcId}`, {
-      token: adminJwt,
-    });
+  } finally {
+    if (helperUserId) {
+      await raw('DELETE', `/admin/users/${helperUserId}`, { token: adminJwt });
+    }
   }
 }

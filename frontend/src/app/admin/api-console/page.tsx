@@ -3,63 +3,111 @@
 import { useRef, useState } from 'react';
 import { Play, Terminal } from 'lucide-react';
 import { AdminLayout } from '@/components/AdminLayout';
-import { runFullApiCycle, type ProbeStep } from '@/lib/api-console-runner';
+import {
+  runV1ApiCycle,
+  runV2ApiCycle,
+  type ProbeStep,
+} from '@/lib/api-console-runner';
+
+type Tab = 'v2' | 'v1';
 
 export default function ApiConsolePage() {
-  const [steps, setSteps] = useState<ProbeStep[]>([]);
-  const [running, setRunning] = useState(false);
+  const [tab, setTab] = useState<Tab>('v2');
+  const [v1Steps, setV1Steps] = useState<ProbeStep[]>([]);
+  const [v2Steps, setV2Steps] = useState<ProbeStep[]>([]);
+  const [running, setRunning] = useState<Tab | null>(null);
   const [clientId, setClientId] = useState('mstyle-backend-staging');
   const [left, setLeft] = useState(280);
   const selected = useRef<ProbeStep | null>(null);
   const [, tick] = useState(0);
   const drag = useRef(false);
 
+  const steps = tab === 'v2' ? v2Steps : v1Steps;
   const ok = steps.filter((s) => s.ok).length;
   const fail = steps.filter((s) => !s.ok).length;
   const active = selected.current;
 
   const run = async () => {
-    setSteps([]);
     selected.current = null;
-    setRunning(true);
-    try {
-      await runFullApiCycle(clientId.trim(), (step) => {
-        setSteps((prev) => {
-          const next = [...prev, step];
-          selected.current = step;
-          return next;
-        });
+    setRunning(tab);
+    const push = (step: ProbeStep) => {
+      const setter = tab === 'v2' ? setV2Steps : setV1Steps;
+      setter((prev) => {
+        const next = [...prev, step];
+        selected.current = step;
+        return next;
       });
+    };
+    try {
+      if (tab === 'v2') {
+        setV2Steps([]);
+        await runV2ApiCycle(clientId.trim(), push);
+      } else {
+        setV1Steps([]);
+        await runV1ApiCycle(push);
+      }
     } finally {
-      setRunning(false);
+      setRunning(null);
     }
   };
 
   return (
     <AdminLayout title="Прогон API">
       <p className="text-[var(--muted)] -mt-4 mb-4 text-sm">
-        Только для администратора. Одна кнопка: v1 CRUD <code>probe-*</code> и
-        все 58 маршрутов Mstyle v2 из контракта.
+        Только для администратора. Новые маршруты — 58 из контракта Mstyle v2.
+        Старые — CRUD Pass (офисы, пользователи, пропуска).
       </p>
+
+      <div className="flex flex-wrap gap-2 mb-4">
+        <button
+          type="button"
+          className={`btn text-sm ${tab === 'v2' ? 'btn-primary' : 'btn-secondary'}`}
+          onClick={() => {
+            setTab('v2');
+            selected.current = v2Steps[v2Steps.length - 1] || null;
+            tick((n) => n + 1);
+          }}
+        >
+          Новые · Mstyle v2
+        </button>
+        <button
+          type="button"
+          className={`btn text-sm ${tab === 'v1' ? 'btn-primary' : 'btn-secondary'}`}
+          onClick={() => {
+            setTab('v1');
+            selected.current = v1Steps[v1Steps.length - 1] || null;
+            tick((n) => n + 1);
+          }}
+        >
+          Старые · Pass v1
+        </button>
+      </div>
+
       <div className="flex flex-wrap items-end gap-3 mb-4">
-        <label className="text-sm">
-          <span className="block text-xs text-[var(--muted)] mb-1">
-            Client ID (v2)
-          </span>
-          <input
-            className="input text-sm w-64"
-            value={clientId}
-            onChange={(e) => setClientId(e.target.value)}
-          />
-        </label>
+        {tab === 'v2' && (
+          <label className="text-sm">
+            <span className="block text-xs text-[var(--muted)] mb-1">
+              Client ID (v2)
+            </span>
+            <input
+              className="input text-sm w-64"
+              value={clientId}
+              onChange={(e) => setClientId(e.target.value)}
+            />
+          </label>
+        )}
         <button
           type="button"
           className="btn btn-primary"
-          disabled={running}
+          disabled={running !== null}
           onClick={() => void run()}
         >
           <Play className="w-4 h-4" />
-          {running ? 'Прогон…' : 'Полный цикл v1 + v2'}
+          {running === tab
+            ? 'Прогон…'
+            : tab === 'v2'
+              ? 'Прогон 58 маршрутов v2'
+              : 'Прогон CRUD v1'}
         </button>
         <span className="text-sm text-[var(--muted)]">
           {steps.length ? (
@@ -76,7 +124,7 @@ export default function ApiConsolePage() {
 
       <div
         className="flex border border-[var(--border)] rounded-lg overflow-hidden bg-[var(--surface)]"
-        style={{ height: 'calc(100vh - 220px)', minHeight: 360 }}
+        style={{ height: 'calc(100vh - 260px)', minHeight: 360 }}
         onPointerMove={(e) => {
           if (!drag.current) return;
           const rect = e.currentTarget.getBoundingClientRect();
@@ -92,8 +140,9 @@ export default function ApiConsolePage() {
         <div className="overflow-auto" style={{ width: left }}>
           {steps.length === 0 ? (
             <div className="p-4 text-sm text-[var(--muted)]">
-              Слева шаги, справа тело ответа. Полосу между колонками можно
-              тянуть.
+              {tab === 'v2'
+                ? 'A-01…A-06, R, M, C, S, P, G — 58 маршрутов из эндпоинты.md.'
+                : 'Конфиг, БЦ, офис, пользователь, пропуск: создать / изменить / удалить.'}
             </div>
           ) : (
             steps.map((step, i) => (
@@ -132,7 +181,7 @@ export default function ApiConsolePage() {
           }}
         />
         <div className="flex-1 min-w-0 overflow-auto p-4">
-          {active ? (
+          {active && active.ver === (tab === 'v2' ? 'v2' : 'v1') ? (
             <>
               <div className="flex items-center gap-2 mb-2">
                 <Terminal className="w-4 h-4 text-[var(--muted)]" />
