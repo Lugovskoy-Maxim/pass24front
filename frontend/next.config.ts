@@ -16,6 +16,18 @@ const nextConfig: NextConfig = {
   env: {
     NEXT_PUBLIC_APP_VERSION: buildAppVersion(),
   },
+  redirects: async () => [
+    {
+      source: '/mstyle-v2-console.html',
+      destination: '/admin/api-console',
+      permanent: false,
+    },
+    {
+      source: '/mstyle-v2-console',
+      destination: '/admin/api-console',
+      permanent: false,
+    },
+  ],
   headers: async () => [
     {
       source: '/sw.js',
