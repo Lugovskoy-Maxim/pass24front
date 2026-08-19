@@ -8,6 +8,7 @@ export type ProbeStep = {
   ok: boolean;
   ms: number;
   body: unknown;
+  request?: unknown;
 };
 
 const API = process.env.NEXT_PUBLIC_API_URL || 'http://127.0.0.1:4000/api';
@@ -132,7 +133,15 @@ function makeStep(onStep: (step: ProbeStep) => void) {
     const { okStatuses, ...rawOpts } = opts || {};
     const res = await raw(method, path, rawOpts);
     const ok = okStatuses ? okStatuses.includes(res.status) : res.ok;
-    onStep({ ver, id, title, method, ...res, ok });
+    onStep({
+      ver,
+      id,
+      title,
+      method,
+      ...res,
+      ok,
+      request: rawOpts.form != null ? rawOpts.form : rawOpts.body,
+    });
     return res;
   };
 }

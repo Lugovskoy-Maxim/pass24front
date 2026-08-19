@@ -199,6 +199,22 @@ export default function ApiConsolePage() {
               <div className="text-xs font-mono text-[var(--muted)] mb-3 break-all">
                 {active.method} {active.url}
               </div>
+              <details className="mb-4 border border-[var(--border)] rounded-md">
+                <summary className="cursor-pointer px-3 py-2 text-sm text-[var(--muted)] select-none">
+                  Запрос
+                  {active.request === undefined ? (
+                    <span className="ml-2 text-xs">без тела</span>
+                  ) : null}
+                </summary>
+                <pre className="text-xs font-mono whitespace-pre-wrap break-all px-3 pb-3">
+                  {active.request === undefined
+                    ? '—'
+                    : typeof active.request === 'string'
+                      ? active.request
+                      : JSON.stringify(active.request, null, 2)}
+                </pre>
+              </details>
+              <div className="text-sm text-[var(--muted)] mb-1">Ответ</div>
               <pre className="text-xs font-mono whitespace-pre-wrap break-all">
                 {typeof active.body === 'string'
                   ? active.body
