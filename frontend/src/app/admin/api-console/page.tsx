@@ -38,8 +38,8 @@ export default function ApiConsolePage() {
   return (
     <AdminLayout title="Прогон API">
       <p className="text-[var(--muted)] -mt-4 mb-4 text-sm">
-        Только для администратора. Одна кнопка гоняет v1 и v2: создание,
-        изменение, чтение и удаление тестовых сущностей <code>probe-*</code>.
+        Только для администратора. Одна кнопка: v1 CRUD <code>probe-*</code> и
+        все 58 маршрутов Mstyle v2 из контракта.
       </p>
       <div className="flex flex-wrap items-end gap-3 mb-4">
         <label className="text-sm">

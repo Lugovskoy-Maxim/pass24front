@@ -1010,17 +1010,13 @@ export class AdminService {
         `Нельзя удалить БЦ: в нём ${officesCount} офис(ов). Сначала удалите или перенесите офисы.`,
       );
     }
-    if (passesCount > 0) {
-      throw new BadRequestException(
-        `Нельзя удалить БЦ: есть ${passesCount} пропуск(ов), привязанных к этому объекту.`,
-      );
-    }
     if (usersCount > 0) {
       throw new BadRequestException(
         `Нельзя удалить БЦ: ${usersCount} пользователь(ей) привязаны к этому объекту.`,
       );
     }
 
+    // Пропуска не трогаем: офис/БЦ уже записаны в сам документ.
     await this.propertyModel.deleteOne({ _id: propertyId });
 
     await this.auditService.log({
@@ -1028,10 +1024,21 @@ export class AdminService {
       entityType: 'business_center',
       entityId: propertyId,
       actor,
-      details: { name: property.name, address: property.address },
+      details: {
+        name: property.name,
+        address: property.address,
+        passesKept: passesCount,
+      },
     });
 
-    return { message: 'Бизнес-центр удалён', id: property._id.toString() };
+    return {
+      message:
+        passesCount > 0
+          ? `Бизнес-центр удалён. ${passesCount} пропуск(ов) сохранены в истории.`
+          : 'Бизнес-центр удалён',
+      id: property._id.toString(),
+      passesKept: passesCount,
+    };
   }
 
   async createBusinessCenter(dto: CreateBusinessCenterDto, actor?: AuditActor) {
