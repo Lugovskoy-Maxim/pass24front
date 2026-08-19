@@ -100,7 +100,7 @@ export async function runFullApiCycle(
     opts?: { body?: unknown; token?: string; form?: string },
   ) => {
     const res = await raw(method, path, opts);
-    onStep({ ver, id, title, method, url: res.url, ...res });
+    onStep({ ver, id, title, method, ...res });
     return res;
   };
 
