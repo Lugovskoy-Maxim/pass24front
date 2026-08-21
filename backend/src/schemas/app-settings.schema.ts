@@ -61,6 +61,13 @@ export class AppSettings {
   @Prop({ type: Object, default: {} })
   uiLabels: Record<string, unknown>;
 
+  /**
+   * Явное переопределение mock-ответов Mstyle v2 из админки.
+   * undefined — использовать безопасный default окружения.
+   */
+  @Prop({ type: Boolean, default: undefined })
+  mstyleMockResponsesEnabled?: boolean;
+
   /** Регистрация арендаторов по SMS (код на телефон) */
   @Prop({ default: true })
   smsRegistrationEnabled: boolean;

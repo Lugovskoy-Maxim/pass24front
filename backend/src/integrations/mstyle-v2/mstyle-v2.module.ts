@@ -16,6 +16,7 @@ import { MstyleIdempotencyService } from './mstyle-v2.idempotency';
 import { MstyleIdentityService } from './mstyle-v2.identities';
 import { MstyleOauthController } from './mstyle-v2.oauth.controller';
 import { MstyleOauthService } from './mstyle-v2.oauth.service';
+import { MstyleMockResponseInterceptor } from './mstyle-v2.mock.interceptor';
 import { MstylePrivateController } from './mstyle-v2.private.controller';
 import { MstylePrivateDataService } from './mstyle-v2.private-data.service';
 import { MstyleRateLimitService } from './mstyle-v2.rate-limit';
@@ -26,7 +27,7 @@ import { MSTYLE_MODELS } from './mstyle-v2.schemas';
     AuthDatabaseModule.forFeature([{ name: User.name, schema: UserSchema }]),
     MongooseModule.forFeature(MSTYLE_MODELS),
   ],
-  exports: [MstyleIdentityService],
+  exports: [MstyleIdentityService, MstyleV2Config],
   controllers: [MstyleOauthController, MstylePrivateController],
   providers: [
     MstyleV2Config,
@@ -39,6 +40,7 @@ import { MSTYLE_MODELS } from './mstyle-v2.schemas';
     MstyleEventsService,
     MstyleIdempotencyService,
     MstyleRateLimitService,
+    MstyleMockResponseInterceptor,
     MstyleEnabledGuard,
     MstyleServiceTokenGuard,
     MstyleRequestGuard,

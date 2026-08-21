@@ -28,6 +28,7 @@ import {
   MstyleServiceToken,
   MstyleServiceTokenDocument,
 } from './mstyle-v2.schemas';
+import { SiteSettingsService } from '../../site-settings/site-settings.service';
 
 export type MstyleRequest = Request & {
   mstyleRequestId: string;
@@ -40,10 +41,17 @@ export const REQUIRE_REQUEST_ID = 'mstyle:request-id';
 
 @Injectable()
 export class MstyleEnabledGuard implements CanActivate {
-  constructor(private readonly cfg: MstyleV2Config) {}
+  constructor(
+    private readonly cfg: MstyleV2Config,
+    private readonly siteSettings: SiteSettingsService,
+  ) {}
 
-  canActivate(): boolean {
-    if (!this.cfg.isEnabled()) {
+  async canActivate(): Promise<boolean> {
+    if (this.cfg.isEnabled()) return true;
+    const mockMode = await this.siteSettings.getMstyleMockResponsesEnabled(
+      this.cfg.mockResponsesDefaultEnabled(),
+    );
+    if (!mockMode.enabled) {
       throw new BadRequestException({
         hideAsNotFound: true,
       });

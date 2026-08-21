@@ -13,6 +13,7 @@ import {
   MstyleServiceToken,
   MstyleServiceTokenDocument,
 } from './mstyle-v2.schemas';
+import { SiteSettingsService } from '../../site-settings/site-settings.service';
 
 type TokenForm = {
   grant_type?: string;
@@ -30,6 +31,7 @@ export class MstyleOauthService implements OnModuleInit {
     private readonly tokens: Model<MstyleServiceTokenDocument>,
     @InjectModel(MstyleOauthJti.name)
     private readonly jtis: Model<MstyleOauthJtiDocument>,
+    private readonly siteSettings: SiteSettingsService,
   ) {}
 
   onModuleInit() {
@@ -37,7 +39,10 @@ export class MstyleOauthService implements OnModuleInit {
   }
 
   async issueToken(form: TokenForm) {
-    if (!this.cfg.isEnabled()) {
+    const mockMode = await this.siteSettings.getMstyleMockResponsesEnabled(
+      this.cfg.mockResponsesDefaultEnabled(),
+    );
+    if (!this.cfg.isEnabled() && !mockMode.enabled) {
       throw new OAuthException('invalid_request', 'endpoint disabled', 404);
     }
     if (form.grant_type !== 'client_credentials') {

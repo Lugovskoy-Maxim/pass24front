@@ -910,7 +910,9 @@ export const api = {
 
     updateUser: (
       id: string,
-      data: Partial<CreateUserData & { isActive: boolean; isBlocked?: boolean }>,
+      data: Partial<
+        CreateUserData & { isActive: boolean; isBlocked?: boolean }
+      >,
     ) =>
       request<{ user: AdminUser }>(`/admin/users/${id}`, {
         method: 'PATCH',
@@ -1052,7 +1054,9 @@ export const api = {
 
     getSiteSource: () => request<SiteMysqlSettings>('/admin/site-source'),
 
-    updateSiteSource: (data: Partial<SiteMysqlSettings> & { password?: string }) =>
+    updateSiteSource: (
+      data: Partial<SiteMysqlSettings> & { password?: string },
+    ) =>
       request<{ settings: SiteMysqlSettings }>('/admin/site-source', {
         method: 'PATCH',
         body: JSON.stringify(data),
@@ -1108,7 +1112,10 @@ export const api = {
         { method: 'POST', body: JSON.stringify(data) },
       ),
 
-    confirmSuggestedLinks: (data?: { properties?: boolean; offices?: boolean }) =>
+    confirmSuggestedLinks: (data?: {
+      properties?: boolean;
+      offices?: boolean;
+    }) =>
       request<{ properties: number; offices: number }>(
         '/admin/site-source/links/confirm-suggested',
         { method: 'POST', body: JSON.stringify(data || {}) },
@@ -1197,9 +1204,21 @@ export const api = {
           schemaVersion: string;
           count: number;
           groups: string[];
+          mockResponsesEnabled: boolean;
+          mockResponsesOverridden: boolean;
+          mockResponsesEnvironmentDefault: boolean;
         };
         endpoints: IntegrationEndpoint[];
       }>('/admin/integration/catalog'),
+
+    updateIntegrationMockMode: (mockResponsesEnabled: boolean) =>
+      request<{ mockResponsesEnabled: boolean }>(
+        '/admin/integration/mock-mode',
+        {
+          method: 'PATCH',
+          body: JSON.stringify({ mockResponsesEnabled }),
+        },
+      ),
 
     getSiteSettings: () =>
       request<{ settings: SiteSettings }>('/admin/site-settings'),
@@ -1321,7 +1340,12 @@ export interface IntegrationEndpoint {
   headers: Record<string, string>;
   request?: unknown;
   requestForm?: string;
-  success: { status: number; label: string; body: unknown; contentType?: string };
+  success: {
+    status: number;
+    label: string;
+    body: unknown;
+    contentType?: string;
+  };
   errors: Array<{
     status: number;
     label: string;

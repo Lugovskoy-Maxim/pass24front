@@ -109,6 +109,29 @@ export class SiteSettingsService implements OnModuleInit {
     return this.map(doc);
   }
 
+  async getMstyleMockResponsesEnabled(
+    environmentDefault: boolean,
+  ): Promise<{ enabled: boolean; overridden: boolean }> {
+    const doc = await this.appSettingsModel
+      .findOne({ key: SETTINGS_KEY })
+      .select({ mstyleMockResponsesEnabled: 1 })
+      .lean();
+    const value = doc?.mstyleMockResponsesEnabled;
+    return {
+      enabled: typeof value === 'boolean' ? value : environmentDefault,
+      overridden: typeof value === 'boolean',
+    };
+  }
+
+  async setMstyleMockResponsesEnabled(enabled: boolean): Promise<boolean> {
+    await this.appSettingsModel.updateOne(
+      { key: SETTINGS_KEY },
+      { $set: { mstyleMockResponsesEnabled: !!enabled } },
+      { upsert: true },
+    );
+    return !!enabled;
+  }
+
   async update(data: {
     siteName?: string;
     appVersion?: string;

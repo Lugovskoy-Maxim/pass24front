@@ -49,6 +49,8 @@ import {
   MSTYLE_V2_CATALOG,
   mstyleCatalogMeta,
 } from '../integrations/mstyle-v2/mstyle-v2.catalog';
+import { MstyleV2Config } from '../integrations/mstyle-v2/mstyle-v2.config';
+import { UpdateMstyleIntegrationSettingsDto } from './dto/update-mstyle-integration-settings.dto';
 
 @Controller('admin')
 @UseGuards(AuthGuard('jwt'), PermissionsGuard)
@@ -60,6 +62,7 @@ export class AdminController {
     private readonly auditService: AuditService,
     private readonly siteSettingsService: SiteSettingsService,
     private readonly siteSourceService: SiteSourceService,
+    private readonly mstyleV2Config: MstyleV2Config,
   ) {}
 
   @Get('dashboard')
@@ -412,17 +415,47 @@ export class AdminController {
 
   @Post('site-source/tickets/:id/messages')
   @RequireAllPermissions('admin.settings')
-  addSiteTicketMessage(
-    @Param('id') id: string,
-    @Body() dto: TicketMessageDto,
-  ) {
+  addSiteTicketMessage(@Param('id') id: string, @Body() dto: TicketMessageDto) {
     return this.siteSourceService.addTicketMessage(id, dto.body);
   }
 
   @Get('integration/catalog')
   @RequireAllPermissions('admin.settings')
-  integrationCatalog() {
-    return { meta: mstyleCatalogMeta(), endpoints: MSTYLE_V2_CATALOG };
+  async integrationCatalog() {
+    const environmentDefault =
+      this.mstyleV2Config.mockResponsesDefaultEnabled();
+    const mockMode =
+      await this.siteSettingsService.getMstyleMockResponsesEnabled(
+        environmentDefault,
+      );
+    return {
+      meta: {
+        ...mstyleCatalogMeta(),
+        mockResponsesEnabled: mockMode.enabled,
+        mockResponsesOverridden: mockMode.overridden,
+        mockResponsesEnvironmentDefault: environmentDefault,
+      },
+      endpoints: MSTYLE_V2_CATALOG,
+    };
+  }
+
+  @Patch('integration/mock-mode')
+  @RequireAllPermissions('admin.settings')
+  async updateIntegrationMockMode(
+    @Body() dto: UpdateMstyleIntegrationSettingsDto,
+    @Req() req: any,
+  ) {
+    const mockResponsesEnabled =
+      await this.siteSettingsService.setMstyleMockResponsesEnabled(
+        dto.mockResponsesEnabled,
+      );
+    await this.auditService.log({
+      action: 'integration.mock_mode.update',
+      entityType: 'app_settings',
+      actor: req.user,
+      details: { mockResponsesEnabled },
+    });
+    return { mockResponsesEnabled };
   }
 
   @Get('site-settings')

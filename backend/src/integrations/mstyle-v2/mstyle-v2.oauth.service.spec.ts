@@ -13,6 +13,7 @@ function configStub(overrides: Partial<MstyleV2Config> = {}): MstyleV2Config {
     ],
     tokenTtlSec: () => 300,
     tokenAudience: () => 'pass-mstyle-private-api',
+    mockResponsesDefaultEnabled: () => false,
     assertReady: () => undefined,
     ...overrides,
   } as MstyleV2Config;
@@ -25,6 +26,12 @@ describe('MstyleOauthService', () => {
       configStub(),
       { create: async (doc: unknown) => created.push(doc) } as any,
       { create: async () => undefined } as any,
+      {
+        getMstyleMockResponsesEnabled: async () => ({
+          enabled: false,
+          overridden: false,
+        }),
+      } as any,
     );
 
     const result = await service.issueToken({
@@ -49,6 +56,12 @@ describe('MstyleOauthService', () => {
       configStub(),
       { create: async () => undefined } as any,
       { create: async () => undefined } as any,
+      {
+        getMstyleMockResponsesEnabled: async () => ({
+          enabled: false,
+          overridden: false,
+        }),
+      } as any,
     );
     await expect(
       service.issueToken({
@@ -56,5 +69,26 @@ describe('MstyleOauthService', () => {
         client_id: 'other',
       }),
     ).rejects.toBeInstanceOf(OAuthException);
+  });
+
+  it('issues a token when the private API flag is off but admin mock mode is on', async () => {
+    const service = new MstyleOauthService(
+      configStub({ isEnabled: () => false }),
+      { create: async () => undefined } as any,
+      { create: async () => undefined } as any,
+      {
+        getMstyleMockResponsesEnabled: async () => ({
+          enabled: true,
+          overridden: true,
+        }),
+      } as any,
+    );
+
+    const result = await service.issueToken({
+      grant_type: 'client_credentials',
+      client_id: 'mstyle-backend-staging',
+    });
+
+    expect(result.access_token).toMatch(/^svc_/);
   });
 });

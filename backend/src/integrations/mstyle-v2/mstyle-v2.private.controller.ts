@@ -21,6 +21,7 @@ import { MstyleEventsService } from './mstyle-v2.events';
 import { MstyleGuestsService } from './mstyle-v2.guests.service';
 import { MstyleIdempotencyService } from './mstyle-v2.idempotency';
 import { MstylePrivateDataService } from './mstyle-v2.private-data.service';
+import { MstyleMockResponseInterceptor } from './mstyle-v2.mock.interceptor';
 import {
   ChangeDecisionDto,
   ChangeRequestDto,
@@ -66,7 +67,7 @@ const NeedRequestId = () => SetMetadata(REQUIRE_REQUEST_ID, true);
 @ApiExcludeController()
 @UseFilters(MstyleProblemFilter)
 @UseGuards(MstyleEnabledGuard, MstyleServiceTokenGuard, MstyleRequestGuard)
-@UseInterceptors(MstyleResultInterceptor)
+@UseInterceptors(MstyleResultInterceptor, MstyleMockResponseInterceptor)
 @Controller(MSTYLE_PRIVATE_PREFIX)
 export class MstylePrivateController {
   constructor(

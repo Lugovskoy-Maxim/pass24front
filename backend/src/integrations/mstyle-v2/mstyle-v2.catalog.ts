@@ -1,5 +1,10 @@
 /** Каталог закрытого API Mstyle v2 — документ эндпоинты.md, 58 маршрутов. */
 
+import {
+  createMstyleMockResponse,
+  MSTYLE_MOCK_MILESTONES,
+} from './mstyle-v2.mock';
+
 export type CatalogExample = {
   status: number;
   label: string;
@@ -160,7 +165,7 @@ function ep(
   };
 }
 
-export const MSTYLE_V2_CATALOG: CatalogEndpoint[] = [
+const MSTYLE_V2_CATALOG_BASE: CatalogEndpoint[] = [
   {
     id: 'A-01',
     group: 'A — вход',
@@ -186,7 +191,10 @@ export const MSTYLE_V2_CATALOG: CatalogEndpoint[] = [
         status: 401,
         label: '401 invalid_client',
         contentType: 'application/json',
-        body: { error: 'invalid_client', error_description: 'Client authentication failed' },
+        body: {
+          error: 'invalid_client',
+          error_description: 'Client authentication failed',
+        },
       },
       {
         status: 400,
@@ -204,7 +212,12 @@ export const MSTYLE_V2_CATALOG: CatalogEndpoint[] = [
     method: 'POST',
     path: `${PRIVATE}/auth/residents/password-verify`,
     headers: IDEM,
-    request: { schemaVersion: SCHEMA, login: 'resident-login', password: 'test-password', context: CTX },
+    request: {
+      schemaVersion: SCHEMA,
+      login: 'resident-login',
+      password: 'test-password',
+      context: CTX,
+    },
     success: {
       status: 200,
       label: '200 authenticated',
@@ -237,7 +250,11 @@ export const MSTYLE_V2_CATALOG: CatalogEndpoint[] = [
       channel: 'sms',
       context: CTX,
     },
-    success: { status: 202, label: '202 challenge', body: { ...CHALLENGE, status: 'dispatch_pending' } },
+    success: {
+      status: 202,
+      label: '202 challenge',
+      body: { ...CHALLENGE, status: 'dispatch_pending' },
+    },
     errors: AUTH_FLOW_ERRORS,
   }),
   ep({
@@ -258,7 +275,11 @@ export const MSTYLE_V2_CATALOG: CatalogEndpoint[] = [
     method: 'POST',
     path: `${PRIVATE}/auth/residents/code-challenges/{challengeId}/resend`,
     headers: IDEM,
-    success: { status: 202, label: '202 resent', body: { ...CHALLENGE, status: 'dispatch_pending' } },
+    success: {
+      status: 202,
+      label: '202 resent',
+      body: { ...CHALLENGE, status: 'dispatch_pending' },
+    },
     errors: AUTH_FLOW_ERRORS,
   }),
   ep({
@@ -330,7 +351,13 @@ export const MSTYLE_V2_CATALOG: CatalogEndpoint[] = [
       label: '200 changes',
       body: {
         schemaVersion: SCHEMA,
-        items: [{ eventId: 'evt_01J5', type: 'identity.updated', occurredAt: '2026-08-14T10:00:00Z' }],
+        items: [
+          {
+            eventId: 'evt_01J5',
+            type: 'identity.updated',
+            occurredAt: '2026-08-14T10:00:00Z',
+          },
+        ],
         nextCursor: 'cur_01J5',
       },
     },
@@ -352,9 +379,20 @@ export const MSTYLE_V2_CATALOG: CatalogEndpoint[] = [
     method: 'PATCH',
     path: `${PRIVATE}/resident-profiles/{profileId}`,
     headers: { ...AUTH, 'If-Match': '"2"' },
-    request: { schemaVersion: SCHEMA, companyShortName: 'Пример+', expectedRevision: 2 },
-    success: { status: 200, label: '200 profile', body: { ...PROFILE, companyShortName: 'Пример+', revision: 3 } },
-    errors: [...COMMON_AUTH_ERRORS, problem(412, 'PRECONDITION_FAILED', 'Precondition failed')],
+    request: {
+      schemaVersion: SCHEMA,
+      companyShortName: 'Пример+',
+      expectedRevision: 2,
+    },
+    success: {
+      status: 200,
+      label: '200 profile',
+      body: { ...PROFILE, companyShortName: 'Пример+', revision: 3 },
+    },
+    errors: [
+      ...COMMON_AUTH_ERRORS,
+      problem(412, 'PRECONDITION_FAILED', 'Precondition failed'),
+    ],
   }),
   ep({
     id: 'R-06',
@@ -364,7 +402,11 @@ export const MSTYLE_V2_CATALOG: CatalogEndpoint[] = [
     method: 'POST',
     path: `${PRIVATE}/resident-profiles/search`,
     request: { schemaVersion: SCHEMA, query: 'Пример', limit: 20 },
-    success: { status: 200, label: '200 items', body: { schemaVersion: SCHEMA, items: [PROFILE] } },
+    success: {
+      status: 200,
+      label: '200 items',
+      body: { schemaVersion: SCHEMA, items: [PROFILE] },
+    },
   }),
   ep({
     id: 'R-07',
@@ -374,8 +416,16 @@ export const MSTYLE_V2_CATALOG: CatalogEndpoint[] = [
     method: 'PATCH',
     path: `${PRIVATE}/residents/{subject}/identity`,
     headers: { ...AUTH, 'If-Match': '"4"' },
-    request: { schemaVersion: SCHEMA, displayName: 'Иванов И. И.', expectedRevision: 4 },
-    success: { status: 200, label: '200 identity', body: { ...IDENTITY, displayName: 'Иванов И. И.', revision: 5 } },
+    request: {
+      schemaVersion: SCHEMA,
+      displayName: 'Иванов И. И.',
+      expectedRevision: 4,
+    },
+    success: {
+      status: 200,
+      label: '200 identity',
+      body: { ...IDENTITY, displayName: 'Иванов И. И.', revision: 5 },
+    },
   }),
   ep({
     id: 'R-08',
@@ -394,7 +444,12 @@ export const MSTYLE_V2_CATALOG: CatalogEndpoint[] = [
     success: {
       status: 201,
       label: '201 created',
-      body: { schemaVersion: SCHEMA, subject: IDENTITY.subject, profileId: PROFILE.id, membershipId: MEMBERSHIP.id },
+      body: {
+        schemaVersion: SCHEMA,
+        subject: IDENTITY.subject,
+        profileId: PROFILE.id,
+        membershipId: MEMBERSHIP.id,
+      },
     },
   }),
   ep({
@@ -406,7 +461,11 @@ export const MSTYLE_V2_CATALOG: CatalogEndpoint[] = [
     path: `${PRIVATE}/resident-profiles/{profileId}/lifecycle-transitions`,
     headers: { ...AUTH, 'If-Match': '"2"' },
     request: { schemaVersion: SCHEMA, transition: 'suspend', reason: 'manual' },
-    success: { status: 200, label: '200 profile', body: { ...PROFILE, status: 'suspended' } },
+    success: {
+      status: 200,
+      label: '200 profile',
+      body: { ...PROFILE, status: 'suspended' },
+    },
   }),
   ep({
     id: 'R-10',
@@ -419,7 +478,11 @@ export const MSTYLE_V2_CATALOG: CatalogEndpoint[] = [
     success: {
       status: 201,
       label: '201 deletion',
-      body: { schemaVersion: SCHEMA, deletionRequestId: 'del_01J5', status: 'pending' },
+      body: {
+        schemaVersion: SCHEMA,
+        deletionRequestId: 'del_01J5',
+        status: 'pending',
+      },
     },
   }),
   ep({
@@ -433,7 +496,11 @@ export const MSTYLE_V2_CATALOG: CatalogEndpoint[] = [
     success: {
       status: 201,
       label: '201 change',
-      body: { schemaVersion: SCHEMA, changeRequestId: 'crq_01J5', status: 'pending' },
+      body: {
+        schemaVersion: SCHEMA,
+        changeRequestId: 'crq_01J5',
+        status: 'pending',
+      },
     },
   }),
   ep({
@@ -446,7 +513,11 @@ export const MSTYLE_V2_CATALOG: CatalogEndpoint[] = [
     success: {
       status: 200,
       label: '200 current',
-      body: { schemaVersion: SCHEMA, changeRequestId: 'crq_01J5', status: 'pending' },
+      body: {
+        schemaVersion: SCHEMA,
+        changeRequestId: 'crq_01J5',
+        status: 'pending',
+      },
     },
   }),
   ep({
@@ -502,7 +573,15 @@ export const MSTYLE_V2_CATALOG: CatalogEndpoint[] = [
     method: 'POST',
     path: `${PRIVATE}/resident-profile-change-requests/{changeRequestId}/decisions`,
     request: { schemaVersion: SCHEMA, decision: 'approve' },
-    success: { status: 200, label: '200 decided', body: { schemaVersion: SCHEMA, changeRequestId: 'crq_01J5', status: 'approved' } },
+    success: {
+      status: 200,
+      label: '200 decided',
+      body: {
+        schemaVersion: SCHEMA,
+        changeRequestId: 'crq_01J5',
+        status: 'approved',
+      },
+    },
   }),
   ep({
     id: 'R-16',
@@ -511,7 +590,15 @@ export const MSTYLE_V2_CATALOG: CatalogEndpoint[] = [
     title: 'Отмена заявки на смену',
     method: 'POST',
     path: `${PRIVATE}/resident-profile-change-requests/{changeRequestId}/cancel`,
-    success: { status: 200, label: '200 cancelled', body: { schemaVersion: SCHEMA, changeRequestId: 'crq_01J5', status: 'cancelled' } },
+    success: {
+      status: 200,
+      label: '200 cancelled',
+      body: {
+        schemaVersion: SCHEMA,
+        changeRequestId: 'crq_01J5',
+        status: 'cancelled',
+      },
+    },
   }),
   ep({
     id: 'R-17',
@@ -520,7 +607,15 @@ export const MSTYLE_V2_CATALOG: CatalogEndpoint[] = [
     title: 'Статус заявки на удаление',
     method: 'GET',
     path: `${PRIVATE}/deletion-requests/{deletionRequestId}`,
-    success: { status: 200, label: '200 deletion', body: { schemaVersion: SCHEMA, deletionRequestId: 'del_01J5', status: 'pending' } },
+    success: {
+      status: 200,
+      label: '200 deletion',
+      body: {
+        schemaVersion: SCHEMA,
+        deletionRequestId: 'del_01J5',
+        status: 'pending',
+      },
+    },
   }),
   ep({
     id: 'M-01',
@@ -529,7 +624,11 @@ export const MSTYLE_V2_CATALOG: CatalogEndpoint[] = [
     title: 'Список membership',
     method: 'GET',
     path: `${PRIVATE}/resident-profiles/{profileId}/memberships`,
-    success: { status: 200, label: '200 memberships', body: { schemaVersion: SCHEMA, items: [MEMBERSHIP] } },
+    success: {
+      status: 200,
+      label: '200 memberships',
+      body: { schemaVersion: SCHEMA, items: [MEMBERSHIP] },
+    },
   }),
   ep({
     id: 'M-02',
@@ -538,8 +637,21 @@ export const MSTYLE_V2_CATALOG: CatalogEndpoint[] = [
     title: 'Добавить сотрудника',
     method: 'POST',
     path: `${PRIVATE}/resident-profiles/{profileId}/memberships`,
-    request: { schemaVersion: SCHEMA, subject: 'usr_01EMPLOYEE', role: 'employee' },
-    success: { status: 201, label: '201 membership', body: { ...MEMBERSHIP, id: 'mem_emp', role: 'employee', status: 'invited' } },
+    request: {
+      schemaVersion: SCHEMA,
+      subject: 'usr_01EMPLOYEE',
+      role: 'employee',
+    },
+    success: {
+      status: 201,
+      label: '201 membership',
+      body: {
+        ...MEMBERSHIP,
+        id: 'mem_emp',
+        role: 'employee',
+        status: 'invited',
+      },
+    },
   }),
   ep({
     id: 'M-03',
@@ -549,7 +661,11 @@ export const MSTYLE_V2_CATALOG: CatalogEndpoint[] = [
     method: 'PATCH',
     path: `${PRIVATE}/resident-memberships/{membershipId}`,
     request: { schemaVersion: SCHEMA, status: 'suspended' },
-    success: { status: 200, label: '200 membership', body: { ...MEMBERSHIP, status: 'suspended' } },
+    success: {
+      status: 200,
+      label: '200 membership',
+      body: { ...MEMBERSHIP, status: 'suspended' },
+    },
   }),
   ep({
     id: 'M-04',
@@ -558,7 +674,11 @@ export const MSTYLE_V2_CATALOG: CatalogEndpoint[] = [
     title: 'Отозвать membership',
     method: 'POST',
     path: `${PRIVATE}/resident-memberships/{membershipId}/revoke`,
-    success: { status: 200, label: '200 revoked', body: { ...MEMBERSHIP, status: 'revoked' } },
+    success: {
+      status: 200,
+      label: '200 revoked',
+      body: { ...MEMBERSHIP, status: 'revoked' },
+    },
   }),
   ep({
     id: 'M-05',
@@ -568,7 +688,15 @@ export const MSTYLE_V2_CATALOG: CatalogEndpoint[] = [
     method: 'POST',
     path: `${PRIVATE}/resident-profiles/{profileId}/owner-transfer`,
     request: { schemaVersion: SCHEMA, toSubject: 'usr_01NEWOWNER' },
-    success: { status: 200, label: '200 transferred', body: { schemaVersion: SCHEMA, profileId: PROFILE.id, ownerSubject: 'usr_01NEWOWNER' } },
+    success: {
+      status: 200,
+      label: '200 transferred',
+      body: {
+        schemaVersion: SCHEMA,
+        profileId: PROFILE.id,
+        ownerSubject: 'usr_01NEWOWNER',
+      },
+    },
   }),
   ep({
     id: 'C-01',
@@ -578,7 +706,15 @@ export const MSTYLE_V2_CATALOG: CatalogEndpoint[] = [
     method: 'POST',
     path: `${PRIVATE}/residents/{subject}/contacts/challenges`,
     request: { schemaVersion: SCHEMA, type: 'phone', value: '+79990001234' },
-    success: { status: 202, label: '202 challenge', body: { schemaVersion: SCHEMA, challengeId: 'cch_01J5', status: 'awaiting_code' } },
+    success: {
+      status: 202,
+      label: '202 challenge',
+      body: {
+        schemaVersion: SCHEMA,
+        challengeId: 'cch_01J5',
+        status: 'awaiting_code',
+      },
+    },
   }),
   ep({
     id: 'C-02',
@@ -591,7 +727,13 @@ export const MSTYLE_V2_CATALOG: CatalogEndpoint[] = [
     success: {
       status: 200,
       label: '200 verified',
-      body: { schemaVersion: SCHEMA, contactId: 'cnt_01J5', type: 'phone', masked: '+7 ••• •••-12-34', verifiedAt: '2026-08-14T10:00:00Z' },
+      body: {
+        schemaVersion: SCHEMA,
+        contactId: 'cnt_01J5',
+        type: 'phone',
+        masked: '+7 ••• •••-12-34',
+        verifiedAt: '2026-08-14T10:00:00Z',
+      },
     },
   }),
   ep({
@@ -604,7 +746,11 @@ export const MSTYLE_V2_CATALOG: CatalogEndpoint[] = [
     success: {
       status: 200,
       label: '200 assignments',
-      body: { schemaVersion: SCHEMA, phoneContactId: 'cnt_phone', emailContactId: 'cnt_email' },
+      body: {
+        schemaVersion: SCHEMA,
+        phoneContactId: 'cnt_phone',
+        emailContactId: 'cnt_email',
+      },
     },
   }),
   ep({
@@ -614,11 +760,19 @@ export const MSTYLE_V2_CATALOG: CatalogEndpoint[] = [
     title: 'Заменить назначения',
     method: 'PATCH',
     path: `${PRIVATE}/resident-profiles/{profileId}/contact-assignments`,
-    request: { schemaVersion: SCHEMA, phoneContactId: 'cnt_phone', emailContactId: 'cnt_email' },
+    request: {
+      schemaVersion: SCHEMA,
+      phoneContactId: 'cnt_phone',
+      emailContactId: 'cnt_email',
+    },
     success: {
       status: 200,
       label: '200 assignments',
-      body: { schemaVersion: SCHEMA, phoneContactId: 'cnt_phone', emailContactId: 'cnt_email' },
+      body: {
+        schemaVersion: SCHEMA,
+        phoneContactId: 'cnt_phone',
+        emailContactId: 'cnt_email',
+      },
     },
   }),
   ep({
@@ -633,7 +787,16 @@ export const MSTYLE_V2_CATALOG: CatalogEndpoint[] = [
       label: '200 contacts',
       body: {
         schemaVersion: SCHEMA,
-        items: [{ contactId: 'cnt_01J5', type: 'phone', value: '+79990001234', masked: '+7 ••• •••-12-34', verifiedAt: '2026-08-14T10:00:00Z', revision: 1 }],
+        items: [
+          {
+            contactId: 'cnt_01J5',
+            type: 'phone',
+            value: '+79990001234',
+            masked: '+7 ••• •••-12-34',
+            verifiedAt: '2026-08-14T10:00:00Z',
+            revision: 1,
+          },
+        ],
       },
     },
   }),
@@ -649,18 +812,20 @@ export const MSTYLE_V2_CATALOG: CatalogEndpoint[] = [
       label: '200 consents',
       body: {
         schemaVersion: SCHEMA,
-        items: [{
-          documentCode: 'pdn',
-          documentVersion: '1.0',
-          documentDigest: 'sha256:abc',
-          documentUrl: 'https://example.test/pdn',
-          locale: 'ru',
-          status: 'required',
-          revision: 1,
-          acceptedAt: null,
-          withdrawnAt: null,
-          auditRef: null,
-        }],
+        items: [
+          {
+            documentCode: 'pdn',
+            documentVersion: '1.0',
+            documentDigest: 'sha256:abc',
+            documentUrl: 'https://example.test/pdn',
+            locale: 'ru',
+            status: 'required',
+            revision: 1,
+            acceptedAt: null,
+            withdrawnAt: null,
+            auditRef: null,
+          },
+        ],
       },
     },
   }),
@@ -671,8 +836,21 @@ export const MSTYLE_V2_CATALOG: CatalogEndpoint[] = [
     title: 'Принять согласие',
     method: 'POST',
     path: `${PRIVATE}/residents/{subject}/consents/{documentCode}/accept`,
-    request: { schemaVersion: SCHEMA, documentVersion: '1.0', documentDigest: 'sha256:abc' },
-    success: { status: 200, label: '200 accepted', body: { schemaVersion: SCHEMA, documentCode: 'pdn', status: 'accepted', acceptedAt: '2026-08-14T10:00:00Z' } },
+    request: {
+      schemaVersion: SCHEMA,
+      documentVersion: '1.0',
+      documentDigest: 'sha256:abc',
+    },
+    success: {
+      status: 200,
+      label: '200 accepted',
+      body: {
+        schemaVersion: SCHEMA,
+        documentCode: 'pdn',
+        status: 'accepted',
+        acceptedAt: '2026-08-14T10:00:00Z',
+      },
+    },
   }),
   ep({
     id: 'S-03',
@@ -681,7 +859,16 @@ export const MSTYLE_V2_CATALOG: CatalogEndpoint[] = [
     title: 'Отозвать согласие',
     method: 'POST',
     path: `${PRIVATE}/residents/{subject}/consents/{documentCode}/withdraw`,
-    success: { status: 200, label: '200 withdrawn', body: { schemaVersion: SCHEMA, documentCode: 'pdn', status: 'withdrawn', withdrawnAt: '2026-08-14T10:00:00Z' } },
+    success: {
+      status: 200,
+      label: '200 withdrawn',
+      body: {
+        schemaVersion: SCHEMA,
+        documentCode: 'pdn',
+        status: 'withdrawn',
+        withdrawnAt: '2026-08-14T10:00:00Z',
+      },
+    },
   }),
   ep({
     id: 'P-01',
@@ -719,7 +906,10 @@ export const MSTYLE_V2_CATALOG: CatalogEndpoint[] = [
     success: {
       status: 200,
       label: '200 fields',
-      body: { schemaVersion: SCHEMA, fields: { inn: '7700000000', ogrn: '1027700000000' } },
+      body: {
+        schemaVersion: SCHEMA,
+        fields: { inn: '7700000000', ogrn: '1027700000000' },
+      },
     },
   }),
   ep({
@@ -730,7 +920,11 @@ export const MSTYLE_V2_CATALOG: CatalogEndpoint[] = [
     method: 'PATCH',
     path: `${PRIVATE}/resident-profiles/{profileId}/private-data`,
     request: { schemaVersion: SCHEMA, fields: { inn: '7700000001' } },
-    success: { status: 200, label: '200 patched', body: { schemaVersion: SCHEMA, revision: 2, complete: true } },
+    success: {
+      status: 200,
+      label: '200 patched',
+      body: { schemaVersion: SCHEMA, revision: 2, complete: true },
+    },
   }),
   ep({
     id: 'P-04',
@@ -751,7 +945,10 @@ export const MSTYLE_V2_CATALOG: CatalogEndpoint[] = [
     success: {
       status: 200,
       label: '200 contacts',
-      body: { schemaVersion: SCHEMA, items: [{ type: 'email', value: 'office@example.test' }] },
+      body: {
+        schemaVersion: SCHEMA,
+        items: [{ type: 'email', value: 'office@example.test' }],
+      },
     },
   }),
   ep({
@@ -762,7 +959,15 @@ export const MSTYLE_V2_CATALOG: CatalogEndpoint[] = [
     method: 'POST',
     path: `${PRIVATE}/private-data-snapshots/{snapshotId}/reveal`,
     request: { schemaVersion: SCHEMA, fieldCodes: ['inn'] },
-    success: { status: 200, label: '200 fields', body: { schemaVersion: SCHEMA, snapshotId: SNAPSHOT.snapshotId, fields: { inn: '7700000000' } } },
+    success: {
+      status: 200,
+      label: '200 fields',
+      body: {
+        schemaVersion: SCHEMA,
+        snapshotId: SNAPSHOT.snapshotId,
+        fields: { inn: '7700000000' },
+      },
+    },
   }),
   ep({
     id: 'P-07',
@@ -771,7 +976,14 @@ export const MSTYLE_V2_CATALOG: CatalogEndpoint[] = [
     title: 'Раскрыть контакты снимка',
     method: 'POST',
     path: `${PRIVATE}/private-data-snapshots/{snapshotId}/contacts/reveal`,
-    success: { status: 200, label: '200 contacts', body: { schemaVersion: SCHEMA, items: [{ type: 'phone', value: '+79990001234' }] } },
+    success: {
+      status: 200,
+      label: '200 contacts',
+      body: {
+        schemaVersion: SCHEMA,
+        items: [{ type: 'phone', value: '+79990001234' }],
+      },
+    },
   }),
   ep({
     id: 'P-08',
@@ -780,8 +992,20 @@ export const MSTYLE_V2_CATALOG: CatalogEndpoint[] = [
     title: 'Привязать снимок к операции',
     method: 'POST',
     path: `${PRIVATE}/private-data-snapshots/{snapshotId}/operation-bindings`,
-    request: { schemaVersion: SCHEMA, operationType: 'pass_issue', operationId: 'pass_01J5' },
-    success: { status: 200, label: '200 bound', body: { schemaVersion: SCHEMA, snapshotId: SNAPSHOT.snapshotId, operationId: 'pass_01J5' } },
+    request: {
+      schemaVersion: SCHEMA,
+      operationType: 'pass_issue',
+      operationId: 'pass_01J5',
+    },
+    success: {
+      status: 200,
+      label: '200 bound',
+      body: {
+        schemaVersion: SCHEMA,
+        snapshotId: SNAPSHOT.snapshotId,
+        operationId: 'pass_01J5',
+      },
+    },
   }),
   ep({
     id: 'G-01',
@@ -790,7 +1014,11 @@ export const MSTYLE_V2_CATALOG: CatalogEndpoint[] = [
     title: 'Создать гостя',
     method: 'POST',
     path: `${PRIVATE}/guest-parties`,
-    request: { schemaVersion: SCHEMA, visitorName: 'Петров Пётр', visitDate: '2026-08-20' },
+    request: {
+      schemaVersion: SCHEMA,
+      visitorName: 'Петров Пётр',
+      visitDate: '2026-08-20',
+    },
     success: { status: 201, label: '201 guest', body: GUEST },
   }),
   ep({
@@ -801,7 +1029,15 @@ export const MSTYLE_V2_CATALOG: CatalogEndpoint[] = [
     method: 'POST',
     path: `${PRIVATE}/guest-parties/{guestPartyId}/contact-challenges`,
     request: { schemaVersion: SCHEMA, type: 'phone', value: '+79990005555' },
-    success: { status: 202, label: '202 challenge', body: { schemaVersion: SCHEMA, challengeId: 'gch_01J5', status: 'awaiting_code' } },
+    success: {
+      status: 202,
+      label: '202 challenge',
+      body: {
+        schemaVersion: SCHEMA,
+        challengeId: 'gch_01J5',
+        status: 'awaiting_code',
+      },
+    },
   }),
   ep({
     id: 'G-03',
@@ -811,7 +1047,11 @@ export const MSTYLE_V2_CATALOG: CatalogEndpoint[] = [
     method: 'POST',
     path: `${PRIVATE}/guest-parties/{guestPartyId}/contact-challenges/{challengeId}/verify`,
     request: { schemaVersion: SCHEMA, code: '123456' },
-    success: { status: 200, label: '200 verified', body: { schemaVersion: SCHEMA, contactId: 'gct_01J5', type: 'phone' } },
+    success: {
+      status: 200,
+      label: '200 verified',
+      body: { schemaVersion: SCHEMA, contactId: 'gct_01J5', type: 'phone' },
+    },
   }),
   ep({
     id: 'G-04',
@@ -829,7 +1069,14 @@ export const MSTYLE_V2_CATALOG: CatalogEndpoint[] = [
     title: 'Раскрыть контакты гостя',
     method: 'POST',
     path: `${PRIVATE}/guest-parties/{guestPartyId}/contacts/reveal`,
-    success: { status: 200, label: '200 contacts', body: { schemaVersion: SCHEMA, items: [{ type: 'phone', value: '+79990005555' }] } },
+    success: {
+      status: 200,
+      label: '200 contacts',
+      body: {
+        schemaVersion: SCHEMA,
+        items: [{ type: 'phone', value: '+79990005555' }],
+      },
+    },
   }),
   ep({
     id: 'G-06',
@@ -861,7 +1108,11 @@ export const MSTYLE_V2_CATALOG: CatalogEndpoint[] = [
     method: 'POST',
     path: `${PRIVATE}/guest-parties/{guestPartyId}/private-data/reveal`,
     request: { schemaVersion: SCHEMA, fieldCodes: ['passport'] },
-    success: { status: 200, label: '200 fields', body: { schemaVersion: SCHEMA, fields: { passport: '4510 123456' } } },
+    success: {
+      status: 200,
+      label: '200 fields',
+      body: { schemaVersion: SCHEMA, fields: { passport: '4510 123456' } },
+    },
   }),
   ep({
     id: 'G-08',
@@ -871,7 +1122,11 @@ export const MSTYLE_V2_CATALOG: CatalogEndpoint[] = [
     method: 'PATCH',
     path: `${PRIVATE}/guest-parties/{guestPartyId}/private-data`,
     request: { schemaVersion: SCHEMA, fields: { passport: '4510 123456' } },
-    success: { status: 200, label: '200 patched', body: { schemaVersion: SCHEMA, revision: 1, complete: true } },
+    success: {
+      status: 200,
+      label: '200 patched',
+      body: { schemaVersion: SCHEMA, revision: 1, complete: true },
+    },
   }),
   ep({
     id: 'G-09',
@@ -880,7 +1135,11 @@ export const MSTYLE_V2_CATALOG: CatalogEndpoint[] = [
     title: 'Снимок гостя',
     method: 'POST',
     path: `${PRIVATE}/guest-parties/{guestPartyId}/snapshots`,
-    success: { status: 201, label: '201 snapshot', body: { ...SNAPSHOT, partyId: GUEST.guestPartyId } },
+    success: {
+      status: 201,
+      label: '201 snapshot',
+      body: { ...SNAPSHOT, partyId: GUEST.guestPartyId },
+    },
   }),
   ep({
     id: 'G-10',
@@ -889,8 +1148,16 @@ export const MSTYLE_V2_CATALOG: CatalogEndpoint[] = [
     title: 'Подтвердить бронь',
     method: 'POST',
     path: `${PRIVATE}/guest-parties/{guestPartyId}/booking-confirmations`,
-    request: { schemaVersion: SCHEMA, visitDate: '2026-08-20', officeExternalId: 'tf-room:107' },
-    success: { status: 200, label: '200 booked', body: { ...GUEST, status: 'confirmed' } },
+    request: {
+      schemaVersion: SCHEMA,
+      visitDate: '2026-08-20',
+      officeExternalId: 'tf-room:107',
+    },
+    success: {
+      status: 200,
+      label: '200 booked',
+      body: { ...GUEST, status: 'confirmed' },
+    },
   }),
   ep({
     id: 'G-11',
@@ -900,7 +1167,11 @@ export const MSTYLE_V2_CATALOG: CatalogEndpoint[] = [
     method: 'POST',
     path: `${PRIVATE}/guest-parties/{guestPartyId}/claim`,
     request: { schemaVersion: SCHEMA, subject: IDENTITY.subject },
-    success: { status: 200, label: '200 claimed', body: { ...GUEST, status: 'claimed' } },
+    success: {
+      status: 200,
+      label: '200 claimed',
+      body: { ...GUEST, status: 'claimed' },
+    },
   }),
   ep({
     id: 'G-12',
@@ -910,7 +1181,11 @@ export const MSTYLE_V2_CATALOG: CatalogEndpoint[] = [
     method: 'POST',
     path: `${PRIVATE}/guest-parties/search`,
     request: { schemaVersion: SCHEMA, query: 'Петров', limit: 20 },
-    success: { status: 200, label: '200 items', body: { schemaVersion: SCHEMA, items: [GUEST] } },
+    success: {
+      status: 200,
+      label: '200 items',
+      body: { schemaVersion: SCHEMA, items: [GUEST] },
+    },
   }),
   ep({
     id: 'G-13',
@@ -919,7 +1194,11 @@ export const MSTYLE_V2_CATALOG: CatalogEndpoint[] = [
     title: 'Согласия гостя',
     method: 'GET',
     path: `${PRIVATE}/guest-parties/{guestPartyId}/consents`,
-    success: { status: 200, label: '200 consents', body: { schemaVersion: SCHEMA, items: [] } },
+    success: {
+      status: 200,
+      label: '200 consents',
+      body: { schemaVersion: SCHEMA, items: [] },
+    },
   }),
   ep({
     id: 'G-14',
@@ -928,8 +1207,20 @@ export const MSTYLE_V2_CATALOG: CatalogEndpoint[] = [
     title: 'Принять согласие гостя',
     method: 'POST',
     path: `${PRIVATE}/guest-parties/{guestPartyId}/consents/{documentCode}/accept`,
-    request: { schemaVersion: SCHEMA, documentVersion: '1.0', documentDigest: 'sha256:abc' },
-    success: { status: 200, label: '200 accepted', body: { schemaVersion: SCHEMA, documentCode: 'guest_pdn', status: 'accepted' } },
+    request: {
+      schemaVersion: SCHEMA,
+      documentVersion: '1.0',
+      documentDigest: 'sha256:abc',
+    },
+    success: {
+      status: 200,
+      label: '200 accepted',
+      body: {
+        schemaVersion: SCHEMA,
+        documentCode: 'guest_pdn',
+        status: 'accepted',
+      },
+    },
   }),
   ep({
     id: 'G-15',
@@ -938,9 +1229,40 @@ export const MSTYLE_V2_CATALOG: CatalogEndpoint[] = [
     title: 'Отозвать согласие гостя',
     method: 'POST',
     path: `${PRIVATE}/guest-parties/{guestPartyId}/consents/{documentCode}/withdraw`,
-    success: { status: 200, label: '200 withdrawn', body: { schemaVersion: SCHEMA, documentCode: 'guest_pdn', status: 'withdrawn' } },
+    success: {
+      status: 200,
+      label: '200 withdrawn',
+      body: {
+        schemaVersion: SCHEMA,
+        documentCode: 'guest_pdn',
+        status: 'withdrawn',
+      },
+    },
   }),
 ];
+
+/**
+ * Каталог и фактический dev/mock-режим используют один набор ответов.
+ * Это не даёт примерам в админке разойтись с тем, что получает Mstyle.
+ */
+export const MSTYLE_V2_CATALOG: CatalogEndpoint[] = MSTYLE_V2_CATALOG_BASE.map(
+  (endpoint) => {
+    const mock = createMstyleMockResponse({ id: endpoint.id });
+    return {
+      ...endpoint,
+      milestone:
+        MSTYLE_MOCK_MILESTONES[
+          endpoint.id as keyof typeof MSTYLE_MOCK_MILESTONES
+        ] || endpoint.milestone,
+      success: {
+        ...endpoint.success,
+        status: mock.status,
+        label: `${mock.status} mock`,
+        body: mock.body,
+      },
+    };
+  },
+);
 
 export function mstyleCatalogMeta() {
   return {

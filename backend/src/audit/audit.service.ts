@@ -53,6 +53,7 @@ const ACTION_LABELS: Record<string, string> = {
   'bc.delete': 'Удаление БЦ',
   'permissions.update': 'Изменение прав доступа',
   'site_settings.update': 'Изменение настроек сайта',
+  'integration.mock_mode.update': 'Переключение mock-режима API Mstyle',
 };
 
 const ENTITY_LABELS: Record<string, string> = {

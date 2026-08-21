@@ -86,6 +86,15 @@ export class MstyleV2Config {
     return this.config.get<string>('MSTYLE_MOCK_OTP') || '123456';
   }
 
+  mockResponsesDefaultEnabled(): boolean {
+    const raw = (this.config.get<string>('MSTYLE_MOCK_RESPONSES') || '')
+      .trim()
+      .toLowerCase();
+    if (raw === 'true' || raw === '1' || raw === 'yes') return true;
+    if (raw === 'false' || raw === '0' || raw === 'no') return false;
+    return !this.isProduction();
+  }
+
   telegramBot(): string {
     return this.config.get<string>('MSTYLE_TELEGRAM_BOT') || 'mstyleauthbot';
   }
