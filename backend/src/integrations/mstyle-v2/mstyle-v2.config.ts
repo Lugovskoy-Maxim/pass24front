@@ -1,10 +1,20 @@
 import { Injectable } from '@nestjs/common';
 import { ConfigService } from '@nestjs/config';
+import { readFileSync } from 'fs';
 import {
   DEFAULT_DATA_SCOPES,
   DEFAULT_TOKEN_TTL_SEC,
   MSTYLE_TOKEN_AUD,
 } from './mstyle-v2.constants';
+
+export type MstyleClientAuth = 'mtls' | 'private_key_jwt';
+
+export type MstyleOauthClient = {
+  clientId: string;
+  auth: MstyleClientAuth;
+  publicKey: string;
+  scopes: string[];
+};
 
 @Injectable()
 export class MstyleV2Config {
@@ -29,15 +39,53 @@ export class MstyleV2Config {
     );
   }
 
-  clientAuth(): 'mtls' | 'private_key_jwt' {
-    const raw = (
-      this.config.get<string>('MSTYLE_CLIENT_AUTH') || 'mtls'
-    ).toLowerCase();
-    return raw === 'private_key_jwt' ? 'private_key_jwt' : 'mtls';
+  clientAuth(): MstyleClientAuth {
+    return this.authFrom('MSTYLE_CLIENT_AUTH', 'mtls');
   }
 
   clientPublicKey(): string {
-    return (this.config.get<string>('MSTYLE_CLIENT_PUBLIC_KEY') || '').trim();
+    return this.publicKeyFrom(
+      'MSTYLE_CLIENT_PUBLIC_KEY',
+      'MSTYLE_CLIENT_PUBLIC_KEY_FILE',
+    );
+  }
+
+  reconcileClientId(): string | undefined {
+    return (
+      (this.config.get<string>('MSTYLE_RECONCILE_CLIENT_ID') || '').trim() ||
+      undefined
+    );
+  }
+
+  reconcileClientAuth(): MstyleClientAuth {
+    return this.authFrom('MSTYLE_RECONCILE_CLIENT_AUTH', 'private_key_jwt');
+  }
+
+  reconcileClientPublicKey(): string {
+    return this.publicKeyFrom(
+      'MSTYLE_RECONCILE_CLIENT_PUBLIC_KEY',
+      'MSTYLE_RECONCILE_CLIENT_PUBLIC_KEY_FILE',
+    );
+  }
+
+  oauthClient(clientId: string): MstyleOauthClient | undefined {
+    if (clientId === this.clientId()) {
+      return {
+        clientId,
+        auth: this.clientAuth(),
+        publicKey: this.clientPublicKey(),
+        scopes: this.defaultScopes(),
+      };
+    }
+    if (clientId === this.reconcileClientId()) {
+      return {
+        clientId,
+        auth: this.reconcileClientAuth(),
+        publicKey: this.reconcileClientPublicKey(),
+        scopes: ['mstyle.changes.read'],
+      };
+    }
+    return undefined;
   }
 
   tokenTtlSec(): number {
@@ -141,14 +189,67 @@ export class MstyleV2Config {
         'MSTYLE_PRIVATE_API_ENABLED=true in production requires MSTYLE_CLIENT_ID',
       );
     }
-    if (
-      this.isEnabled() &&
-      this.clientAuth() === 'private_key_jwt' &&
-      !this.clientPublicKey()
-    ) {
+    const reconcileClientId = this.reconcileClientId();
+    if (reconcileClientId && reconcileClientId === this.clientId()) {
       throw new Error(
-        'MSTYLE_CLIENT_AUTH=private_key_jwt requires MSTYLE_CLIENT_PUBLIC_KEY',
+        'MSTYLE_RECONCILE_CLIENT_ID must differ from MSTYLE_CLIENT_ID',
+      );
+    }
+    this.assertClientKey(
+      'MSTYLE_CLIENT',
+      this.clientAuth(),
+      this.clientPublicKey(),
+    );
+    if (reconcileClientId) {
+      this.assertClientKey(
+        'MSTYLE_RECONCILE_CLIENT',
+        this.reconcileClientAuth(),
+        this.reconcileClientPublicKey(),
       );
     }
   }
+
+  private authFrom(
+    envName: string,
+    fallback: MstyleClientAuth,
+  ): MstyleClientAuth {
+    const raw = (this.config.get<string>(envName) || fallback).toLowerCase();
+    if (raw === 'private_key_jwt' || raw === 'mtls') return raw;
+    throw new Error(`${envName} must be mtls or private_key_jwt`);
+  }
+
+  private publicKeyFrom(valueEnv: string, fileEnv: string): string {
+    const inline = (this.config.get<string>(valueEnv) || '').trim();
+    if (inline) return normalizePem(inline);
+
+    const path = (this.config.get<string>(fileEnv) || '').trim();
+    if (!path) return '';
+    try {
+      return normalizePem(readFileSync(path, 'utf8'));
+    } catch (error) {
+      const reason = error instanceof Error ? error.message : String(error);
+      throw new Error(`Cannot read ${fileEnv}: ${reason}`);
+    }
+  }
+
+  private assertClientKey(
+    envPrefix: string,
+    auth: MstyleClientAuth,
+    publicKey: string,
+  ) {
+    if (auth === 'private_key_jwt' && !publicKey) {
+      throw new Error(
+        `${envPrefix}_AUTH=private_key_jwt requires ${envPrefix}_PUBLIC_KEY or ${envPrefix}_PUBLIC_KEY_FILE`,
+      );
+    }
+    if (/-----BEGIN (?:RSA |EC )?PRIVATE KEY-----/.test(publicKey)) {
+      throw new Error(
+        `${envPrefix} must use a public key; keep the private key on the calling server`,
+      );
+    }
+  }
+}
+
+function normalizePem(value: string): string {
+  return value.trim().replace(/\\n/g, '\n');
 }

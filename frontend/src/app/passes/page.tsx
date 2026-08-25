@@ -291,12 +291,12 @@ function PassesPageContent() {
       <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-4 mb-6">
         <div className="flex flex-col sm:flex-row sm:items-center gap-3 sm:gap-4 min-w-0">
           <div>
-            <h1 className="page-title">{labels.pages.passesTitle}</h1>
+            {/* <h1 className="page-title">{labels.pages.passesTitle}</h1>
             <p className="text-sm text-[var(--muted)] mt-1">
               {canViewAll
                 ? labels.pages.passesSubtitleAll
                 : labels.pages.passesSubtitleOwn}
-            </p>
+            </p> */}
           </div>
           {canCreate && (
             <Link

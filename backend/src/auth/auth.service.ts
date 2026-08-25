@@ -1627,6 +1627,33 @@ export class AuthService {
     });
   }
 
+  async getServiceRequestIdentity(userId: string) {
+    const user = await this.userModel.findById(userId).lean();
+    if (!user) throw new UnauthorizedException();
+    const owner = user.parentTenantId
+      ? await this.userModel.findById(user.parentTenantId).lean()
+      : user;
+    if (!owner) throw new UnauthorizedException();
+    const offices = await this.getUserOffices(
+      userId,
+      user.parentTenantId?.toString(),
+    );
+    return {
+      company: owner.company || user.company || '',
+      office: offices
+        .map((office) =>
+          [
+            office.businessCenterName,
+            office.title || (office.number ? `оф. ${office.number}` : ''),
+          ]
+            .filter(Boolean)
+            .join(' · '),
+        )
+        .filter(Boolean)
+        .join(', '),
+    };
+  }
+
   private resolveVerificationChannel(
     dto: RegisterDto,
     email?: string,

@@ -91,7 +91,7 @@ export function PassTemplatesPicker({
   };
 
   return (
-    <div className="card p-4 mb-5 space-y-3">
+    <div className="card p-4 mb-5 space-y-3 w-full">
       <div className="flex items-start justify-between gap-3">
         <div className="flex items-start gap-2 min-w-0">
           <Bookmark className="w-4 h-4 text-[var(--accent)] shrink-0 mt-0.5" />

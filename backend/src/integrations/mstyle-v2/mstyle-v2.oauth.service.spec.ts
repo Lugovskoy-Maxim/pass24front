@@ -1,3 +1,4 @@
+import { createSign, generateKeyPairSync, randomUUID } from 'crypto';
 import { MstyleOauthService } from './mstyle-v2.oauth.service';
 import { MstyleV2Config } from './mstyle-v2.config';
 import { OAuthException } from './mstyle-v2.problem';
@@ -13,8 +14,18 @@ function configStub(overrides: Partial<MstyleV2Config> = {}): MstyleV2Config {
     ],
     tokenTtlSec: () => 300,
     tokenAudience: () => 'pass-mstyle-private-api',
+    tokenEndpointAudiences: () => ['https://pass.example/api/oauth2/token'],
     mockResponsesDefaultEnabled: () => false,
     assertReady: () => undefined,
+    oauthClient: (clientId: string) =>
+      clientId === 'mstyle-backend-staging'
+        ? {
+            clientId,
+            auth: 'mtls',
+            publicKey: '',
+            scopes: ['mstyle.resident.authenticate', 'mstyle.residents.read'],
+          }
+        : undefined,
     ...overrides,
   } as MstyleV2Config;
 }
@@ -91,4 +102,119 @@ describe('MstyleOauthService', () => {
 
     expect(result.access_token).toMatch(/^svc_/);
   });
+
+  it('verifies private_key_jwt with the public key assigned to the client', async () => {
+    const { privateKey, publicKey } = generateKeyPairSync('rsa', {
+      modulusLength: 2048,
+    });
+    const clientId = 'mstyle-backend-prod';
+    const assertion = signAssertion(privateKey, {
+      iss: clientId,
+      sub: clientId,
+      aud: 'https://pass.example/api/oauth2/token',
+    });
+    const created: Array<Record<string, unknown>> = [];
+    const service = new MstyleOauthService(
+      configStub({
+        oauthClient: (id: string) =>
+          id === clientId
+            ? {
+                clientId,
+                auth: 'private_key_jwt',
+                publicKey: publicKey.export({ type: 'spki', format: 'pem' }),
+                scopes: [
+                  'mstyle.resident.authenticate',
+                  'mstyle.residents.read',
+                ],
+              }
+            : undefined,
+      }),
+      {
+        create: async (doc: Record<string, unknown>) => created.push(doc),
+      } as any,
+      { create: async () => undefined } as any,
+      {
+        getMstyleMockResponsesEnabled: async () => ({
+          enabled: false,
+          overridden: false,
+        }),
+      } as any,
+    );
+
+    const result = await service.issueToken({
+      grant_type: 'client_credentials',
+      client_id: clientId,
+      scope: 'mstyle.resident.authenticate mstyle.residents.read',
+      client_assertion_type:
+        'urn:ietf:params:oauth:client-assertion-type:jwt-bearer',
+      client_assertion: assertion,
+    });
+
+    expect(result.scope).toBe(
+      'mstyle.resident.authenticate mstyle.residents.read',
+    );
+    expect(created[0].clientId).toBe(clientId);
+  });
+
+  it('limits the reconcile client to changes.read', async () => {
+    const clientId = 'mstyle-reconcile-prod';
+    const service = new MstyleOauthService(
+      configStub({
+        oauthClient: (id: string) =>
+          id === clientId
+            ? {
+                clientId,
+                auth: 'mtls',
+                publicKey: '',
+                scopes: ['mstyle.changes.read'],
+              }
+            : undefined,
+      }),
+      { create: async () => undefined } as any,
+      { create: async () => undefined } as any,
+      {
+        getMstyleMockResponsesEnabled: async () => ({
+          enabled: false,
+          overridden: false,
+        }),
+      } as any,
+    );
+
+    const result = await service.issueToken({
+      grant_type: 'client_credentials',
+      client_id: clientId,
+    });
+    expect(result.scope).toBe('mstyle.changes.read');
+
+    await expect(
+      service.issueToken({
+        grant_type: 'client_credentials',
+        client_id: clientId,
+        scope: 'mstyle.residents.read',
+      }),
+    ).rejects.toMatchObject({ oauthError: 'invalid_scope' });
+  });
 });
+
+function signAssertion(
+  privateKey: ReturnType<typeof generateKeyPairSync>['privateKey'],
+  claims: Record<string, unknown>,
+) {
+  const now = Math.floor(Date.now() / 1000);
+  const encodedHeader = base64url({ alg: 'RS256', typ: 'JWT' });
+  const encodedClaims = base64url({
+    ...claims,
+    iat: now,
+    exp: now + 60,
+    jti: randomUUID(),
+  });
+  const input = `${encodedHeader}.${encodedClaims}`;
+  const signer = createSign('RSA-SHA256');
+  signer.update(input);
+  signer.end();
+  return `${input}.${signer.sign(privateKey).toString('base64url')}`;
+}
+
+function base64url(value: Record<string, unknown>) {
+  return Buffer.from(JSON.stringify(value)).toString('base64url');
+}

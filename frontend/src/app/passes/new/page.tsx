@@ -294,20 +294,22 @@ function NewPassForm() {
       isTenantCompanyUser(user) && (user.offices?.length ?? 0) === 0;
     return (
       <ProtectedLayout permissions={['passes.create']}>
-        <h1 className="page-title mb-2">Заказ пропуска</h1>
-        <div className="card p-6 max-w-xl space-y-4 border-[var(--alert-border)] bg-[var(--alert-surface-subtle)]">
-          <p className="text-[var(--alert-text)]">
-            {companyNoOffices
-              ? 'Заказ пропусков недоступен: у компании нет закреплённых офисов. Обратитесь к администратору бизнес-центра.'
-              : 'Заказ пропусков недоступен: офис не назначен. Дождитесь подтверждения регистрации и назначения офиса администратором.'}
-          </p>
-          <button
-            type="button"
-            className="btn btn-secondary"
-            onClick={() => router.back()}
-          >
-            Назад
-          </button>
+        <div className="w-full max-w-xl mx-auto">
+          <h1 className="page-title mb-2">Заказ пропуска</h1>
+          <div className="card p-6 space-y-4 border-[var(--alert-border)] bg-[var(--alert-surface-subtle)]">
+            <p className="text-[var(--alert-text)]">
+              {companyNoOffices
+                ? 'Заказ пропусков недоступен: у компании нет закреплённых офисов. Обратитесь к администратору бизнес-центра.'
+                : 'Заказ пропусков недоступен: офис не назначен. Дождитесь подтверждения регистрации и назначения офиса администратором.'}
+            </p>
+            <button
+              type="button"
+              className="btn btn-secondary"
+              onClick={() => router.back()}
+            >
+              Назад
+            </button>
+          </div>
         </div>
       </ProtectedLayout>
     );
@@ -315,240 +317,246 @@ function NewPassForm() {
 
   return (
     <ProtectedLayout permissions={['passes.create']}>
-      <h1 className="page-title mb-2">
-        {selectedTemplateId || templateId
-          ? 'Заказ по шаблону'
-          : 'Заказ пропуска'}
-      </h1>
-      {canUseTemplates && (
-        <PassTemplatesPicker
-          enabledTypes={enabledTypes}
-          selectedId={selectedTemplateId || templateId}
-          onSelect={applyTemplate}
-        />
-      )}
-      <form
-        onSubmit={handleSubmit}
-        className="card p-6 max-w-xl space-y-5"
-        noValidate
-      >
-        {enabledTypes.length > 1 && (
-          <div>
-            <label className="label">Тип пропуска</label>
-            <div className="grid grid-cols-2 sm:grid-cols-4 gap-2">
-              {(Object.entries(TYPE_LABELS) as [PassType, string][])
-                .filter(
-                  ([key]) =>
-                    !user?.enabledPassTypes?.length ||
-                    user.enabledPassTypes.includes(key),
-                )
-                .map(([key, label]) => (
-                  <button
-                    key={key}
-                    type="button"
-                    className={`py-2 px-3 text-sm rounded-lg border transition-colors ${
-                      passType === key
-                        ? 'border-[var(--status-approved-border)] bg-[var(--status-approved-soft)] text-[var(--status-approved)] font-medium'
-                        : 'border-[var(--border)] hover:bg-[var(--surface-muted)]'
-                    }`}
-                    onClick={() => setPassType(key)}
-                  >
-                    {label}
-                  </button>
-                ))}
+      <div className="w-full max-w-xl mx-auto">
+        <h1 className="page-title mb-2">
+          {selectedTemplateId || templateId
+            ? 'Заказ по шаблону'
+            : 'Заказ пропуска'}
+        </h1>
+        {canUseTemplates && (
+          <PassTemplatesPicker
+            enabledTypes={enabledTypes}
+            selectedId={selectedTemplateId || templateId}
+            onSelect={applyTemplate}
+          />
+        )}
+        <form
+          onSubmit={handleSubmit}
+          className="card p-6 space-y-5 w-full"
+          noValidate
+        >
+          {enabledTypes.length > 1 && (
+            <div>
+              <label className="label">Тип пропуска</label>
+              <div className="grid grid-cols-2 sm:grid-cols-4 gap-2">
+                {(Object.entries(TYPE_LABELS) as [PassType, string][])
+                  .filter(
+                    ([key]) =>
+                      !user?.enabledPassTypes?.length ||
+                      user.enabledPassTypes.includes(key),
+                  )
+                  .map(([key, label]) => (
+                    <button
+                      key={key}
+                      type="button"
+                      className={`py-2 px-3 text-sm rounded-lg border transition-colors ${
+                        passType === key
+                          ? 'border-[var(--status-approved-border)] bg-[var(--status-approved-soft)] text-[var(--status-approved)] font-medium'
+                          : 'border-[var(--border)] hover:bg-[var(--surface-muted)]'
+                      }`}
+                      onClick={() => setPassType(key)}
+                    >
+                      {label}
+                    </button>
+                  ))}
+              </div>
             </div>
-          </div>
-        )}
+          )}
 
-        <FormField
-          id="visitorName"
-          label={getVisitorNameLabel(passType)}
-          required
-          error={fieldErrors.visitorName}
-        >
-          <FormInput
+          <FormField
             id="visitorName"
-            value={visitorName}
-            onChange={(e) => {
-              setVisitorName(e.target.value);
-              clearFieldError('visitorName');
-            }}
-            invalid={!!fieldErrors.visitorName}
-          />
-        </FormField>
-
-        <FormField id="visitorPhone" label="Телефон">
-          <FormInput
-            id="visitorPhone"
-            type="tel"
-            value={visitorPhone}
-            onChange={(e) => setVisitorPhone(e.target.value)}
-            placeholder={ph.phone}
-          />
-        </FormField>
-
-        {passType === 'parking' && (
-          <div className="form-grid-2">
-            <FormField
-              id="vehiclePlate"
-              label="Гос. номер"
-              required
-              error={fieldErrors.vehiclePlate}
-            >
-              <FormInput
-                id="vehiclePlate"
-                mono
-                value={vehiclePlate}
-                onChange={(e) => {
-                  setVehiclePlate(e.target.value);
-                  clearFieldError('vehiclePlate');
-                }}
-                invalid={!!fieldErrors.vehiclePlate}
-                placeholder={ph.vehiclePlate}
-              />
-            </FormField>
-            <FormField id="vehicleModel" label="Марка / модель">
-              <FormInput
-                id="vehicleModel"
-                value={vehicleModel}
-                onChange={(e) => setVehicleModel(e.target.value)}
-              />
-            </FormField>
-          </div>
-        )}
-
-        <FormField
-          id="visitDate"
-          label="Дата визита"
-          required
-          error={fieldErrors.visitDate}
-          hint="Доступны только ближайшие рабочие дни с учётом выходных БЦ"
-        >
-          <VisitDatePicker
-            value={visitDate}
-            bookableDates={bookableDates}
-            onChange={(date) => {
-              setVisitDate(date);
-              clearFieldError('visitDate');
-            }}
-            invalid={!!fieldErrors.visitDate}
-          />
-        </FormField>
-
-        {tenantCompanyUser || tenantOffices.length > 0 ? (
-          <FormField
-            id="officeId"
-            label="Офис (куда)"
+            label={getVisitorNameLabel(passType)}
             required
-            error={fieldErrors.officeId}
-            hint={
-              officeSelectOptions.length > 1
-                ? 'Офис и бизнес-центр в одном списке'
-                : undefined
-            }
-          >
-            <FormSelect
-              id="officeId"
-              value={officeId}
-              onChange={(e) => {
-                handleOfficeSelect(e.target.value);
-                clearFieldError('officeId');
-              }}
-              invalid={!!fieldErrors.officeId}
-            >
-              <option value="">Выберите офис</option>
-              {officeSelectOptions.map((o) => (
-                <option key={o.id} value={o.id}>
-                  {o.label}
-                </option>
-              ))}
-            </FormSelect>
-            {selectedOfficeHours && (
-              <p className="text-xs text-[var(--muted)] mt-2">
-                Рабочие часы {selectedOfficeHours.name}:{' '}
-                {selectedOfficeHours.from}–{selectedOfficeHours.to}
-              </p>
-            )}
-          </FormField>
-        ) : (
-          <FormField
-            id="office"
-            label="Офис (куда)"
-            required
-            error={fieldErrors.office}
+            error={fieldErrors.visitorName}
           >
             <FormInput
-              id="office"
-              value={office}
+              id="visitorName"
+              value={visitorName}
               onChange={(e) => {
-                setOffice(e.target.value);
-                clearFieldError('office');
+                setVisitorName(e.target.value);
+                clearFieldError('visitorName');
               }}
-              invalid={!!fieldErrors.office}
-              placeholder={ph.officeNumber}
+              invalid={!!fieldErrors.visitorName}
             />
           </FormField>
-        )}
 
-        <FormField id="comment" label="Комментарий для ресепшн">
-          <FormTextarea
-            id="comment"
-            value={comment}
-            onChange={(e) => setComment(e.target.value)}
-            placeholder={ph.passComment}
-          />
-        </FormField>
-
-        <div className="border border-[var(--border)] rounded-lg p-4 bg-[var(--surface-muted)] space-y-3">
-          <label className="flex items-center gap-2 cursor-pointer">
-            <input
-              type="checkbox"
-              className="checkbox"
-              checked={sendEmail}
-              onChange={(e) => setSendEmail(e.target.checked)}
+          <FormField id="visitorPhone" label="Телефон">
+            <FormInput
+              id="visitorPhone"
+              type="tel"
+              value={visitorPhone}
+              onChange={(e) => setVisitorPhone(e.target.value)}
+              placeholder={ph.phone}
             />
-            <span className="text-sm font-medium">
-              Отправить пропуск на email
-            </span>
-          </label>
-          {sendEmail && (
+          </FormField>
+
+          {passType === 'parking' && (
+            <div className="form-grid-2">
+              <FormField
+                id="vehiclePlate"
+                label="Гос. номер"
+                required
+                error={fieldErrors.vehiclePlate}
+              >
+                <FormInput
+                  id="vehiclePlate"
+                  mono
+                  value={vehiclePlate}
+                  onChange={(e) => {
+                    setVehiclePlate(e.target.value);
+                    clearFieldError('vehiclePlate');
+                  }}
+                  invalid={!!fieldErrors.vehiclePlate}
+                  placeholder={ph.vehiclePlate}
+                />
+              </FormField>
+              <FormField id="vehicleModel" label="Марка / модель">
+                <FormInput
+                  id="vehicleModel"
+                  value={vehicleModel}
+                  onChange={(e) => setVehicleModel(e.target.value)}
+                />
+              </FormField>
+            </div>
+          )}
+
+          <FormField
+            id="visitDate"
+            label="Дата визита"
+            required
+            error={fieldErrors.visitDate}
+            hint="Доступны только ближайшие рабочие дни с учётом выходных БЦ"
+          >
+            <VisitDatePicker
+              value={visitDate}
+              bookableDates={bookableDates}
+              onChange={(date) => {
+                setVisitDate(date);
+                clearFieldError('visitDate');
+              }}
+              invalid={!!fieldErrors.visitDate}
+            />
+          </FormField>
+
+          {tenantCompanyUser || tenantOffices.length > 0 ? (
             <FormField
-              id="recipientEmail"
-              label="Email получателя"
+              id="officeId"
+              label="Офис (куда)"
               required
-              error={fieldErrors.recipientEmail}
-              hint="На почту придёт ссылка на пропуск с QR-кодом"
+              error={fieldErrors.officeId}
+              hint={
+                officeSelectOptions.length > 1
+                  ? 'Офис и бизнес-центр в одном списке'
+                  : undefined
+              }
+            >
+              <FormSelect
+                id="officeId"
+                value={officeId}
+                onChange={(e) => {
+                  handleOfficeSelect(e.target.value);
+                  clearFieldError('officeId');
+                }}
+                invalid={!!fieldErrors.officeId}
+              >
+                <option value="">Выберите офис</option>
+                {officeSelectOptions.map((o) => (
+                  <option key={o.id} value={o.id}>
+                    {o.label}
+                  </option>
+                ))}
+              </FormSelect>
+              {selectedOfficeHours && (
+                <p className="text-xs text-[var(--muted)] mt-2">
+                  Рабочие часы {selectedOfficeHours.name}:{' '}
+                  {selectedOfficeHours.from}–{selectedOfficeHours.to}
+                </p>
+              )}
+            </FormField>
+          ) : (
+            <FormField
+              id="office"
+              label="Офис (куда)"
+              required
+              error={fieldErrors.office}
             >
               <FormInput
-                id="recipientEmail"
-                type="email"
-                value={recipientEmail}
+                id="office"
+                value={office}
                 onChange={(e) => {
-                  setRecipientEmail(e.target.value);
-                  clearFieldError('recipientEmail');
+                  setOffice(e.target.value);
+                  clearFieldError('office');
                 }}
-                invalid={!!fieldErrors.recipientEmail}
-                placeholder={ph.guestEmail}
+                invalid={!!fieldErrors.office}
+                placeholder={ph.officeNumber}
               />
             </FormField>
           )}
-        </div>
 
-        <FormErrorBanner message={formError} />
+          <FormField id="comment" label="Комментарий для ресепшн">
+            <FormTextarea
+              id="comment"
+              value={comment}
+              onChange={(e) => setComment(e.target.value)}
+              placeholder={ph.passComment}
+            />
+          </FormField>
 
-        <div className="flex gap-3">
-          <button type="submit" className="btn btn-primary" disabled={loading}>
-            {loading ? 'Отправка...' : 'Отправить заявку'}
-          </button>
-          <button
-            type="button"
-            className="btn btn-secondary"
-            onClick={() => router.back()}
-          >
-            Отмена
-          </button>
-        </div>
-      </form>
+          <div className="border border-[var(--border)] rounded-lg p-4 bg-[var(--surface-muted)] space-y-3">
+            <label className="flex items-center gap-2 cursor-pointer">
+              <input
+                type="checkbox"
+                className="checkbox"
+                checked={sendEmail}
+                onChange={(e) => setSendEmail(e.target.checked)}
+              />
+              <span className="text-sm font-medium">
+                Отправить пропуск на email
+              </span>
+            </label>
+            {sendEmail && (
+              <FormField
+                id="recipientEmail"
+                label="Email получателя"
+                required
+                error={fieldErrors.recipientEmail}
+                hint="На почту придёт ссылка на пропуск с QR-кодом"
+              >
+                <FormInput
+                  id="recipientEmail"
+                  type="email"
+                  value={recipientEmail}
+                  onChange={(e) => {
+                    setRecipientEmail(e.target.value);
+                    clearFieldError('recipientEmail');
+                  }}
+                  invalid={!!fieldErrors.recipientEmail}
+                  placeholder={ph.guestEmail}
+                />
+              </FormField>
+            )}
+          </div>
+
+          <FormErrorBanner message={formError} />
+
+          <div className="flex gap-3">
+            <button
+              type="submit"
+              className="btn btn-primary"
+              disabled={loading}
+            >
+              {loading ? 'Отправка...' : 'Отправить заявку'}
+            </button>
+            <button
+              type="button"
+              className="btn btn-secondary"
+              onClick={() => router.back()}
+            >
+              Отмена
+            </button>
+          </div>
+        </form>
+      </div>
     </ProtectedLayout>
   );
 }

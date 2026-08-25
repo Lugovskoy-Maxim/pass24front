@@ -2,8 +2,7 @@ import { Injectable, OnModuleInit } from '@nestjs/common';
 import { InjectModel } from '@nestjs/mongoose';
 import { createPublicKey, createVerify } from 'crypto';
 import { Model } from 'mongoose';
-import { MstyleV2Config } from './mstyle-v2.config';
-import { DEFAULT_DATA_SCOPES } from './mstyle-v2.constants';
+import { MstyleV2Config, type MstyleOauthClient } from './mstyle-v2.config';
 import { sha256Hex } from './mstyle-v2.crypto';
 import { Ids } from './mstyle-v2.ids';
 import { OAuthException } from './mstyle-v2.problem';
@@ -52,13 +51,13 @@ export class MstyleOauthService implements OnModuleInit {
       );
     }
     const clientId = (form.client_id || '').trim();
-    if (!clientId || clientId !== this.cfg.clientId()) {
+    const client = clientId ? this.cfg.oauthClient(clientId) : undefined;
+    if (!client) {
       throw new OAuthException('invalid_client', 'Unknown client_id', 401);
     }
 
-    const auth = this.cfg.clientAuth();
-    if (auth === 'private_key_jwt') {
-      await this.verifyAssertion(form, clientId);
+    if (client.auth === 'private_key_jwt') {
+      await this.verifyAssertion(form, client);
     } else if (form.client_assertion || form.client_assertion_type) {
       throw new OAuthException(
         'invalid_client',
@@ -71,10 +70,10 @@ export class MstyleOauthService implements OnModuleInit {
       .split(/\s+/)
       .map((s) => s.trim())
       .filter(Boolean);
-    const allowed = new Set(this.cfg.defaultScopes());
+    const allowed = new Set(client.scopes);
     const scopes = requested.length
       ? requested.filter((scope) => allowed.has(scope))
-      : [...DEFAULT_DATA_SCOPES];
+      : [...client.scopes];
     if (requested.length && scopes.length !== requested.length) {
       throw new OAuthException(
         'invalid_scope',
@@ -103,7 +102,7 @@ export class MstyleOauthService implements OnModuleInit {
     };
   }
 
-  private async verifyAssertion(form: TokenForm, clientId: string) {
+  private async verifyAssertion(form: TokenForm, client: MstyleOauthClient) {
     const expectedType =
       'urn:ietf:params:oauth:client-assertion-type:jwt-bearer';
     if (form.client_assertion_type !== expectedType) {
@@ -121,8 +120,8 @@ export class MstyleOauthService implements OnModuleInit {
         401,
       );
     }
-    const claims = verifyClientJwt(assertion, this.cfg.clientPublicKey());
-    if (claims.iss !== clientId || claims.sub !== clientId) {
+    const claims = verifyClientJwt(assertion, client.publicKey);
+    if (claims.iss !== client.clientId || claims.sub !== client.clientId) {
       throw new OAuthException('invalid_client', 'iss/sub mismatch', 401);
     }
     const aud = Array.isArray(claims.aud) ? claims.aud : [claims.aud];
@@ -150,7 +149,7 @@ export class MstyleOauthService implements OnModuleInit {
     try {
       await this.jtis.create({
         jti,
-        clientId,
+        clientId: client.clientId,
         expiresAt: new Date(exp * 1000),
       });
     } catch {
@@ -193,7 +192,7 @@ function verifyClientJwt(token: string, pem: string): Record<string, unknown> {
     verifier.update(`${parts[0]}.${parts[1]}`);
     verifier.end();
     const signature = Buffer.from(parts[2], 'base64url');
-    const ok = verifier.verify(key, signature);
+    const ok = verifier.verify({ key, dsaEncoding: 'ieee-p1363' }, signature);
     if (!ok) {
       throw new OAuthException(
         'invalid_client',

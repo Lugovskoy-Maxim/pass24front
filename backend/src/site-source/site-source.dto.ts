@@ -3,12 +3,14 @@ import {
   IsArray,
   IsBoolean,
   IsInt,
+  IsIn,
   IsMongoId,
   IsOptional,
   IsString,
   Max,
   MaxLength,
   Min,
+  MinLength,
   ValidateNested,
 } from 'class-validator';
 
@@ -211,4 +213,45 @@ export class TicketMessageDto {
   @IsString()
   @MaxLength(4000)
   body: string;
+}
+
+export const SERVICE_REQUEST_TOPICS = [
+  'access',
+  'office',
+  'parking',
+  'engineering',
+  'cleaning',
+  'security',
+  'other',
+] as const;
+
+export const SERVICE_REQUEST_STATUSES = [
+  'new',
+  'open',
+  'in_progress',
+  'resolved',
+  'closed',
+  'cancelled',
+] as const;
+
+export class CreateServiceRequestDto {
+  @IsString()
+  @IsIn(SERVICE_REQUEST_TOPICS)
+  topic: string;
+
+  @IsString()
+  @MinLength(3)
+  @MaxLength(160)
+  subject: string;
+
+  @IsString()
+  @MinLength(5)
+  @MaxLength(4000)
+  body: string;
+}
+
+export class UpdateServiceRequestStatusDto {
+  @IsString()
+  @IsIn(SERVICE_REQUEST_STATUSES)
+  status: string;
 }

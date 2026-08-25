@@ -55,6 +55,7 @@ export class JwtStrategy extends PassportStrategy(Strategy) {
       email: payload.email,
       role: user.role || payload.role,
       fullName: user.fullName,
+      company: user.company,
       parentTenantId: user.parentTenantId?.toString(),
       isActive: user.isActive !== false,
       permissions,

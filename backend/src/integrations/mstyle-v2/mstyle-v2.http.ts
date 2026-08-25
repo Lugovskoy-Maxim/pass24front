@@ -88,7 +88,7 @@ export class MstyleServiceTokenGuard implements CanActivate {
     const needed = ROUTE_SCOPES.find(
       (rule) => rule.method === method && rule.match.test(path),
     );
-    if (needed && !req.mstyleScopes.includes(needed.scope)) {
+    if (!needed || !req.mstyleScopes.includes(needed.scope)) {
       problem(403, 'INSUFFICIENT_SCOPE');
     }
     return true;

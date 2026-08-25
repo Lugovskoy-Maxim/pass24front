@@ -37,6 +37,17 @@ export const ALL_PERMISSIONS = [
   },
   { key: 'passes.lookup', label: 'Поиск пропуска по номеру', group: 'Ресепшн' },
   {
+    key: 'requests.view_own',
+    label: 'Просмотр заявок своей компании',
+    group: 'Заявки',
+  },
+  { key: 'requests.create', label: 'Создание заявок', group: 'Заявки' },
+  {
+    key: 'requests.manage',
+    label: 'Управление всеми заявками',
+    group: 'Заявки',
+  },
+  {
     key: 'admin.panel',
     label: 'Панель администратора',
     group: 'Администрирование',
@@ -64,7 +75,13 @@ export const ALL_PERMISSIONS = [
 ] as const;
 
 export const DEFAULT_ROLE_PERMISSIONS: Record<string, string[]> = {
-  tenant: ['passes.create', 'passes.templates', 'passes.view_own'],
+  tenant: [
+    'passes.create',
+    'passes.templates',
+    'passes.view_own',
+    'requests.view_own',
+    'requests.create',
+  ],
   security: [
     'passes.view_all',
     'passes.approve',
@@ -80,6 +97,7 @@ export const DEFAULT_ROLE_PERMISSIONS: Record<string, string[]> = {
     'admin.users',
     'admin.offices',
     'admin.settings',
+    'requests.manage',
   ],
   admin: ALL_PERMISSIONS.map((p) => p.key),
 };
@@ -100,6 +118,8 @@ export const DEFAULT_EMPLOYEE_ROLE_PERMISSIONS: Record<string, string[]> = {
     'passes.create',
     'passes.templates',
     'passes.view_own',
+    'requests.view_own',
+    'requests.create',
   ],
 };
 

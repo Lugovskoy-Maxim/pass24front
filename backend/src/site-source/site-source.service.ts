@@ -96,6 +96,22 @@ type SourceOfficeItem = {
 
 type SiteLinkStatus = 'linked' | 'suggested' | 'unmatched';
 
+export type ServiceRequestActor = {
+  userId: string;
+  parentTenantId?: string;
+  email?: string;
+  fullName?: string;
+  company?: string;
+  role?: string;
+};
+
+export type CreateServiceRequestInput = {
+  topic: string;
+  subject: string;
+  body: string;
+  office?: string;
+};
+
 type SiteLinksResult = {
   properties: Array<{
     sourceCode: string;
@@ -202,18 +218,20 @@ export class SiteSourceService implements OnModuleInit, OnModuleDestroy {
     };
   }
 
-  async saveConfig(input: {
-    enabled?: boolean;
-    host?: string;
-    port?: number;
-    database?: string;
-    user?: string;
-    password?: string;
-    writeEnabled?: boolean;
-    autoSyncEnabled?: boolean;
-    autoSyncIntervalSec?: number;
-    autoApply?: boolean;
-  } & Partial<SiteMysqlMapping>): Promise<SiteMysqlPublic> {
+  async saveConfig(
+    input: {
+      enabled?: boolean;
+      host?: string;
+      port?: number;
+      database?: string;
+      user?: string;
+      password?: string;
+      writeEnabled?: boolean;
+      autoSyncEnabled?: boolean;
+      autoSyncIntervalSec?: number;
+      autoApply?: boolean;
+    } & Partial<SiteMysqlMapping>,
+  ): Promise<SiteMysqlPublic> {
     const doc = await this.loadDoc();
     const current = doc.siteMysql || {};
     const next = { ...current };
@@ -230,7 +248,8 @@ export class SiteSourceService implements OnModuleInit, OnModuleDestroy {
     if (input.password) {
       next.passwordEnc = encryptJson(this.secret(), input.password);
     }
-    if (input.writeEnabled !== undefined) next.writeEnabled = input.writeEnabled;
+    if (input.writeEnabled !== undefined)
+      next.writeEnabled = input.writeEnabled;
     if (input.autoSyncEnabled !== undefined)
       next.autoSyncEnabled = input.autoSyncEnabled;
     if (input.autoSyncIntervalSec !== undefined) {
@@ -283,9 +302,7 @@ export class SiteSourceService implements OnModuleInit, OnModuleDestroy {
       > = [];
       for (const item of source.items) {
         const property = await this.findProperty(item);
-        const office = property
-          ? await this.findOffice(item, property)
-          : null;
+        const office = property ? await this.findOffice(item, property) : null;
         items.push({
           ...item,
           match: {
@@ -415,7 +432,8 @@ export class SiteSourceService implements OnModuleInit, OnModuleDestroy {
             : 'unmatched') as SiteLinkStatus,
         linkedId: linked?._id.toString(),
         linkedName: linked?.name,
-        suggestedId: suggested && !linked ? suggested._id.toString() : undefined,
+        suggestedId:
+          suggested && !linked ? suggested._id.toString() : undefined,
         suggestedName: suggested && !linked ? suggested.name : undefined,
       };
     });
@@ -580,7 +598,9 @@ export class SiteSourceService implements OnModuleInit, OnModuleDestroy {
     }
     const postId = sourcePostId(office.externalId);
     if (!postId) {
-      throw new BadRequestException(`Непонятный externalId: ${office.externalId}`);
+      throw new BadRequestException(
+        `Непонятный externalId: ${office.externalId}`,
+      );
     }
     const mapping = await this.currentMapping();
     const number = patch?.number ?? office.number;
@@ -595,7 +615,13 @@ export class SiteSourceService implements OnModuleInit, OnModuleDestroy {
       if (!tables.includes(postmeta)) {
         throw new BadRequestException(`Нет таблицы ${postmeta}`);
       }
-      await this.upsertMeta(conn, postmeta, postId, mapping.roomNumberMeta, number);
+      await this.upsertMeta(
+        conn,
+        postmeta,
+        postId,
+        mapping.roomNumberMeta,
+        number,
+      );
       if (floor != null)
         await this.upsertMeta(conn, postmeta, postId, mapping.floorMeta, floor);
       if (area != null)
@@ -630,7 +656,8 @@ export class SiteSourceService implements OnModuleInit, OnModuleDestroy {
     if (patch?.number) office.number = patch.number;
     if (patch?.floor !== undefined) office.floor = patch.floor || undefined;
     if (patch?.areaSqm !== undefined) office.areaSqm = patch.areaSqm;
-    if (patch?.company !== undefined) office.company = patch.company || undefined;
+    if (patch?.company !== undefined)
+      office.company = patch.company || undefined;
     await office.save();
     return { ok: true, externalId: office.externalId, postId };
   }
@@ -660,7 +687,11 @@ export class SiteSourceService implements OnModuleInit, OnModuleDestroy {
       let ticket = { n: 0, maxId: 0 };
       if (tables.includes(tickets)) {
         const cols = await this.tableColumns(conn, tickets);
-        const idCol = cols.includes('id') ? 'id' : cols.includes('ID') ? 'ID' : cols[0];
+        const idCol = cols.includes('id')
+          ? 'id'
+          : cols.includes('ID')
+            ? 'ID'
+            : cols[0];
         const [rows] = await conn.query(
           `SELECT COUNT(*) AS n, MAX(${ident(idCol)}) AS maxId FROM ${ident(tickets)}`,
         );
@@ -670,7 +701,8 @@ export class SiteSourceService implements OnModuleInit, OnModuleDestroy {
       const fingerprint = `r${rooms.n}:${rooms.maxId}:${rooms.maxMod}|t${ticket.n}:${ticket.maxId}`;
       const doc = await this.loadDoc();
       const raw = doc.siteMysql || {};
-      const changed = !!raw.lastFingerprint && raw.lastFingerprint !== fingerprint;
+      const changed =
+        !!raw.lastFingerprint && raw.lastFingerprint !== fingerprint;
       raw.lastCheckedAt = new Date().toISOString();
       if (!raw.lastFingerprint || changed) {
         if (changed) {
@@ -710,8 +742,11 @@ export class SiteSourceService implements OnModuleInit, OnModuleDestroy {
       id?: unknown;
       status?: unknown;
       title?: unknown;
+      topic?: unknown;
       office?: unknown;
       created?: unknown;
+      requester?: unknown;
+      company?: unknown;
       raw: Record<string, unknown>;
     }>;
   }> {
@@ -739,7 +774,13 @@ export class SiteSourceService implements OnModuleInit, OnModuleDestroy {
         };
       }
       const cols = await this.tableColumns(conn, table);
-      const sample = await this.sampleTable(conn, table, Math.min(limit, 100));
+      const idColumn = firstColumn(cols, ['id', 'ID', 'request_id']);
+      const [ticketRows] = await conn.query(
+        `SELECT * FROM ${ident(table)}${
+          idColumn ? ` ORDER BY ${ident(idColumn)} DESC` : ''
+        } LIMIT ${Math.min(limit, 200)}`,
+      );
+      const sample = (ticketRows as Record<string, unknown>[]).map(plainRow);
       return {
         stub: false,
         table,
@@ -748,10 +789,231 @@ export class SiteSourceService implements OnModuleInit, OnModuleDestroy {
           id: pick(row, ['id', 'ID', 'request_id']),
           status: pick(row, ['status', 'state', 'request_status']),
           title: pick(row, ['title', 'subject', 'name', 'topic']),
+          topic: pick(row, ['topic', 'category', 'type', 'request_type']),
           office: pick(row, ['office', 'room', 'room_number', 'office_number']),
           created: pick(row, ['created_at', 'created', 'date', 'post_date']),
+          requester: pick(row, [
+            'requester',
+            'requester_name',
+            'author_name',
+            'user_name',
+          ]),
+          company: pick(row, ['company', 'company_name', 'organization']),
           raw: row,
         })),
+      };
+    } finally {
+      await conn.end();
+    }
+  }
+
+  async listTicketsForActor(actor: ServiceRequestActor, canManage: boolean) {
+    const result = await this.listTickets(200);
+    if (canManage) return result;
+
+    const items = result.items.filter((item) =>
+      ticketBelongsToActor(item.raw, actor),
+    );
+    return {
+      ...result,
+      items,
+      note:
+        result.note ||
+        (result.items.length > 0 && items.length === 0
+          ? 'Показаны только заявки вашей компании. Старые заявки без email или идентификатора владельца скрыты.'
+          : undefined),
+    };
+  }
+
+  async getTicketForActor(
+    id: string,
+    actor: ServiceRequestActor,
+    canManage: boolean,
+  ) {
+    const detail = await this.getTicket(id);
+    if (!canManage && !ticketBelongsToActor(detail.ticket.raw || {}, actor)) {
+      throw new NotFoundException('Заявка не найдена');
+    }
+    return detail;
+  }
+
+  async createTicket(
+    actor: ServiceRequestActor,
+    input: CreateServiceRequestInput,
+  ) {
+    const cfg = await this.getPublicConfig();
+    if (!cfg.writeEnabled) {
+      throw new BadRequestException(
+        'Создание заявок выключено в настройках MySQL.',
+      );
+    }
+
+    const conn = await this.connect();
+    try {
+      const tables = await this.listTables(conn);
+      const prefix = await this.resolvePrefix(conn, tables);
+      const mapping = await this.currentMapping();
+      const table = tableName(prefix, mapping.serviceRequestsTable);
+      if (!tables.includes(table)) {
+        throw new BadRequestException(`Таблица ${table} не найдена`);
+      }
+
+      const columns = await this.tableColumns(conn, table);
+      const titleColumn = firstColumn(columns, [
+        'title',
+        'subject',
+        'name',
+        'request_title',
+      ]);
+      const emailColumn = firstColumn(columns, [
+        'requester_email',
+        'user_email',
+        'author_email',
+        'email',
+      ]);
+      const ownerColumn = firstColumn(columns, [
+        'tenant_external_id',
+        'owner_external_id',
+        'pass_user_id',
+        'requester_external_id',
+      ]);
+      if (!titleColumn) {
+        throw new BadRequestException(
+          `В ${table} не найдена колонка заголовка заявки`,
+        );
+      }
+      if (!emailColumn && !ownerColumn) {
+        throw new BadRequestException(
+          `В ${table} нужна колонка email или внешнего идентификатора владельца`,
+        );
+      }
+
+      const values = new Map<string, unknown>();
+      const put = (column: string | undefined, value: unknown) => {
+        if (column && value != null && String(value).trim() !== '') {
+          values.set(column, value);
+        }
+      };
+      put(titleColumn, input.subject.trim());
+      put(firstColumn(columns, ['status', 'state', 'request_status']), 'new');
+      put(
+        firstColumn(columns, ['topic', 'category', 'type', 'request_type']),
+        input.topic,
+      );
+      put(
+        firstColumn(columns, [
+          'description',
+          'body',
+          'content',
+          'message',
+          'text',
+        ]),
+        input.body.trim(),
+      );
+      put(
+        firstColumn(columns, [
+          'office',
+          'room',
+          'room_number',
+          'office_number',
+        ]),
+        input.office?.trim(),
+      );
+      put(emailColumn, actor.email?.trim().toLowerCase());
+      put(ownerColumn, actor.parentTenantId || actor.userId);
+      put(
+        firstColumn(columns, [
+          'requester',
+          'requester_name',
+          'author_name',
+          'user_name',
+        ]),
+        actor.fullName,
+      );
+      put(
+        firstColumn(columns, ['company', 'company_name', 'organization']),
+        actor.company,
+      );
+      put(
+        firstColumn(columns, ['created_at', 'created', 'date', 'post_date']),
+        new Date(),
+      );
+
+      const insertColumns = [...values.keys()];
+      const [insertResult] = await conn.query(
+        `INSERT INTO ${ident(table)} (${insertColumns.map(ident).join(', ')}) VALUES (${insertColumns
+          .map(() => '?')
+          .join(', ')})`,
+        insertColumns.map((column) => values.get(column)),
+      );
+      const ticketId = String((insertResult as mysql.ResultSetHeader).insertId);
+
+      const messagesTable = tableName(
+        prefix,
+        mapping.serviceRequestMessagesTable,
+      );
+      if (tables.includes(messagesTable)) {
+        await this.addTicketMessage(ticketId, input.body, actor);
+      }
+
+      return {
+        stored: true,
+        message: 'Заявка создана',
+        ticket: {
+          id: ticketId,
+          status: 'new',
+          title: input.subject.trim(),
+          topic: input.topic,
+          office: input.office || '',
+          created: new Date().toISOString(),
+          requester: actor.fullName || '',
+          company: actor.company || '',
+          raw: Object.fromEntries(values),
+        },
+      };
+    } finally {
+      await conn.end();
+    }
+  }
+
+  async updateTicketStatus(id: string, status: string) {
+    const cfg = await this.getPublicConfig();
+    if (!cfg.writeEnabled) {
+      throw new BadRequestException('Запись в MySQL выключена.');
+    }
+
+    const conn = await this.connect();
+    try {
+      const tables = await this.listTables(conn);
+      const prefix = await this.resolvePrefix(conn, tables);
+      const mapping = await this.currentMapping();
+      const table = tableName(prefix, mapping.serviceRequestsTable);
+      if (!tables.includes(table)) {
+        throw new BadRequestException(`Таблица ${table} не найдена`);
+      }
+      const columns = await this.tableColumns(conn, table);
+      const idColumn = firstColumn(columns, ['id', 'ID', 'request_id']);
+      const statusColumn = firstColumn(columns, [
+        'status',
+        'state',
+        'request_status',
+      ]);
+      if (!idColumn || !statusColumn) {
+        throw new BadRequestException(
+          `В ${table} не найдены колонки id/status`,
+        );
+      }
+      const [result] = await conn.query(
+        `UPDATE ${ident(table)} SET ${ident(statusColumn)} = ? WHERE ${ident(idColumn)} = ? LIMIT 1`,
+        [status, id],
+      );
+      if ((result as mysql.ResultSetHeader).affectedRows === 0) {
+        throw new NotFoundException('Заявка не найдена');
+      }
+      return {
+        stored: true,
+        message: 'Статус заявки изменён',
+        ticket: { id, status, raw: { [idColumn]: id, [statusColumn]: status } },
       };
     } finally {
       await conn.end();
@@ -804,7 +1066,11 @@ export class SiteSourceService implements OnModuleInit, OnModuleDestroy {
     }
   }
 
-  async addTicketMessage(id: string, body: string) {
+  async addTicketMessage(
+    id: string,
+    body: string,
+    actor?: ServiceRequestActor,
+  ) {
     const cfg = await this.getPublicConfig();
     if (!cfg.writeEnabled) {
       throw new BadRequestException(
@@ -854,6 +1120,26 @@ export class SiteSourceService implements OnModuleInit, OnModuleDestroy {
       } else if (cols.includes('date')) {
         extra.push('date');
         extraVals.push(new Date());
+      }
+      const authorColumn = firstColumn(cols, [
+        'author_name',
+        'sender_name',
+        'user_name',
+        'author',
+      ]);
+      if (authorColumn && actor?.fullName && !extra.includes(authorColumn)) {
+        extra.push(authorColumn);
+        extraVals.push(actor.fullName);
+      }
+      const emailColumn = firstColumn(cols, [
+        'author_email',
+        'sender_email',
+        'user_email',
+        'email',
+      ]);
+      if (emailColumn && actor?.email && !extra.includes(emailColumn)) {
+        extra.push(emailColumn);
+        extraVals.push(actor.email);
       }
       await conn.query(
         `INSERT INTO ${ident(messagesTable)} (${ident(fk)}, ${ident(textCol)}${
@@ -1075,10 +1361,7 @@ export class SiteSourceService implements OnModuleInit, OnModuleDestroy {
     await property.save();
   }
 
-  private async findOffice(
-    item: SourceOfficeItem,
-    property: PropertyDocument,
-  ) {
+  private async findOffice(item: SourceOfficeItem, property: PropertyDocument) {
     if (item.externalId) {
       const byExt = await this.offices.findOne({
         externalId: item.externalId,
@@ -1141,15 +1424,13 @@ export class SiteSourceService implements OnModuleInit, OnModuleDestroy {
       }
     }
 
-    if (item.externalId && !office.externalId) office.externalId = item.externalId;
+    if (item.externalId && !office.externalId)
+      office.externalId = item.externalId;
     await this.applySourceToOffice(office, item);
     return office;
   }
 
-  private async absorbProperty(
-    from: PropertyDocument,
-    into: PropertyDocument,
-  ) {
+  private async absorbProperty(from: PropertyDocument, into: PropertyDocument) {
     const fromOffices = await this.offices.find({ property: from._id });
     let merged = 0;
     for (const src of fromOffices) {
@@ -1171,10 +1452,7 @@ export class SiteSourceService implements OnModuleInit, OnModuleDestroy {
     from.isActive = false;
     from.set('code', undefined);
     await from.save();
-    await this.properties.updateOne(
-      { _id: from._id },
-      { $unset: { code: 1 } },
-    );
+    await this.properties.updateOne({ _id: from._id }, { $unset: { code: 1 } });
     return merged;
   }
 
@@ -1188,7 +1466,8 @@ export class SiteSourceService implements OnModuleInit, OnModuleDestroy {
     if (item.floor) office.floor = item.floor;
     if (item.areaSqm != null) office.areaSqm = item.areaSqm;
     if (item.company) office.company = item.company;
-    if (item.availability !== undefined) office.availability = item.availability;
+    if (item.availability !== undefined)
+      office.availability = item.availability;
     if (item.officeFormat !== undefined)
       office.officeFormat = item.officeFormat;
     if (item.busyUntil !== undefined) office.busyUntil = item.busyUntil;
@@ -1198,10 +1477,13 @@ export class SiteSourceService implements OnModuleInit, OnModuleDestroy {
     if (item.paidUntil !== undefined) office.paidUntil = item.paidUntil;
     office.isActive = item.isActive !== false;
     const nextPayment = office.paymentStatus;
-    const alert =
-      nextPayment === 'unpaid' || nextPayment === 'overdue';
+    const alert = nextPayment === 'unpaid' || nextPayment === 'overdue';
     const occupants = collectOfficeTenantIds(office);
-    if (occupants.length && alert && office.lastNotifiedPayment !== nextPayment) {
+    if (
+      occupants.length &&
+      alert &&
+      office.lastNotifiedPayment !== nextPayment
+    ) {
       for (const tenantId of occupants) {
         await this.notifications.notifyOfficeStatus({
           tenantId,
@@ -1431,7 +1713,8 @@ export class SiteSourceService implements OnModuleInit, OnModuleDestroy {
   private async mergeOfficeDocs(keep: OfficeDocument, drop: OfficeDocument) {
     if (!keep.externalId && drop.externalId) keep.externalId = drop.externalId;
     if (!keep.floor && drop.floor) keep.floor = drop.floor;
-    if (keep.areaSqm == null && drop.areaSqm != null) keep.areaSqm = drop.areaSqm;
+    if (keep.areaSqm == null && drop.areaSqm != null)
+      keep.areaSqm = drop.areaSqm;
     if (!keep.company && drop.company) keep.company = drop.company;
     const merged = normalizeOfficeTenantIds([
       ...collectOfficeTenantIds(keep),
@@ -1653,7 +1936,10 @@ export class SiteSourceService implements OnModuleInit, OnModuleDestroy {
     ids: Array<string | number>,
     taxonomy: string,
   ) {
-    const map = new Map<string, { termId: string; name: string; slug: string }>();
+    const map = new Map<
+      string,
+      { termId: string; name: string; slug: string }
+    >();
     const rel = `${prefix}term_relationships`;
     const tax = `${prefix}term_taxonomy`;
     const terms = `${prefix}terms`;
@@ -1726,6 +2012,40 @@ function pick(row: Record<string, unknown>, keys: string[]) {
   return undefined;
 }
 
+function firstColumn(columns: string[], candidates: string[]) {
+  return candidates.find((candidate) => columns.includes(candidate));
+}
+
+function ticketBelongsToActor(
+  row: Record<string, unknown>,
+  actor: ServiceRequestActor,
+) {
+  const actorIds = new Set(
+    [actor.userId, actor.parentTenantId].filter(Boolean).map(String),
+  );
+  const ownerValue = pick(row, [
+    'tenant_external_id',
+    'owner_external_id',
+    'pass_user_id',
+    'requester_external_id',
+    'tenant_id',
+    'owner_id',
+    'requester_id',
+    'created_by',
+  ]);
+  if (ownerValue != null && actorIds.has(String(ownerValue))) return true;
+
+  const actorEmail = String(actor.email || '')
+    .trim()
+    .toLowerCase();
+  const requestEmail = String(
+    pick(row, ['requester_email', 'user_email', 'author_email', 'email']) || '',
+  )
+    .trim()
+    .toLowerCase();
+  return !!actorEmail && actorEmail === requestEmail;
+}
+
 function isSiteBusinessCenterCode(code?: string) {
   return /tf[_-]?business[_-]?center/i.test(String(code || ''));
 }
@@ -1770,7 +2090,9 @@ function officeNumber(
 }
 
 function areaFromBadge(value?: string): number | undefined {
-  const match = String(value || '').replace(/\s/g, '').match(/(\d+(?:[.,]\d+)?)\s*м/i);
+  const match = String(value || '')
+    .replace(/\s/g, '')
+    .match(/(\d+(?:[.,]\d+)?)\s*м/i);
   if (!match) return undefined;
   return num(match[1].replace(',', '.'));
 }

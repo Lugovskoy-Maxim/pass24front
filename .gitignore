@@ -7,6 +7,7 @@ pass365/
 backend/dist
 backend/backups/
 frontend/tsconfig.tsbuildinfo
+*-private.pem
 
 # MongoDB runtime data (Docker bind mount) — never commit collections/WiredTiger files
 data/*
