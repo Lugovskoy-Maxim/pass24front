@@ -27,7 +27,7 @@ import { MSTYLE_MODELS } from './mstyle-v2.schemas';
     AuthDatabaseModule.forFeature([{ name: User.name, schema: UserSchema }]),
     MongooseModule.forFeature(MSTYLE_MODELS),
   ],
-  exports: [MstyleIdentityService, MstyleV2Config],
+  exports: [MstyleIdentityService, MstyleOauthService, MstyleV2Config],
   controllers: [MstyleOauthController, MstylePrivateController],
   providers: [
     MstyleV2Config,

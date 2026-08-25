@@ -2,6 +2,7 @@ export const MSTYLE_SCHEMA_VERSION = '2.0' as const;
 export const MSTYLE_PRIVATE_PREFIX = 'internal/integrations/mstyle/v2';
 export const MSTYLE_TOKEN_AUD = 'pass-mstyle-private-api';
 export const MSTYLE_AUTH_SCOPE = 'mstyle.resident.authenticate';
+export const MSTYLE_ADMIN_PROBE_CLIENT_ID = 'pass-admin-api-console';
 export const MSTYLE_PROBLEM_BASE = 'https://pass.example/problems';
 
 export const AUTH_CHANNELS = ['sms', 'telegram', 'email'] as const;

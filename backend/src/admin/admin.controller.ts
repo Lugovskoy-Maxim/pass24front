@@ -9,7 +9,9 @@ import {
   Body,
   Controller,
   Delete,
+  ForbiddenException,
   Get,
+  Header,
   Param,
   Patch,
   Post,
@@ -50,6 +52,8 @@ import {
   mstyleCatalogMeta,
 } from '../integrations/mstyle-v2/mstyle-v2.catalog';
 import { MstyleV2Config } from '../integrations/mstyle-v2/mstyle-v2.config';
+import { MstyleOauthService } from '../integrations/mstyle-v2/mstyle-v2.oauth.service';
+import { MSTYLE_ADMIN_PROBE_CLIENT_ID } from '../integrations/mstyle-v2/mstyle-v2.constants';
 import { UpdateMstyleIntegrationSettingsDto } from './dto/update-mstyle-integration-settings.dto';
 
 @Controller('admin')
@@ -63,6 +67,7 @@ export class AdminController {
     private readonly siteSettingsService: SiteSettingsService,
     private readonly siteSourceService: SiteSourceService,
     private readonly mstyleV2Config: MstyleV2Config,
+    private readonly mstyleOauthService: MstyleOauthService,
   ) {}
 
   @Get('dashboard')
@@ -456,6 +461,28 @@ export class AdminController {
       details: { mockResponsesEnabled },
     });
     return { mockResponsesEnabled };
+  }
+
+  @Post('integration/probe-token')
+  @Header('Cache-Control', 'no-store')
+  @RequireAllPermissions('admin.settings')
+  async issueIntegrationProbeToken(@Req() req: any) {
+    if (req.user?.role !== 'admin') {
+      throw new ForbiddenException(
+        'Запуск полного прогона API доступен только администратору',
+      );
+    }
+    const token = await this.mstyleOauthService.issueAdminProbeToken();
+    await this.auditService.log({
+      action: 'integration.api_probe.start',
+      entityType: 'app_settings',
+      actor: req.user,
+      details: {
+        clientId: MSTYLE_ADMIN_PROBE_CLIENT_ID,
+        expiresIn: token.expires_in,
+      },
+    });
+    return token;
   }
 
   @Get('site-settings')

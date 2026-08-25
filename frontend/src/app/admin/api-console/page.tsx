@@ -16,7 +16,6 @@ export default function ApiConsolePage() {
   const [v1Steps, setV1Steps] = useState<ProbeStep[]>([]);
   const [v2Steps, setV2Steps] = useState<ProbeStep[]>([]);
   const [running, setRunning] = useState<Tab | null>(null);
-  const [clientId, setClientId] = useState('mstyle-backend-staging');
   const [left, setLeft] = useState(280);
   const selected = useRef<ProbeStep | null>(null);
   const [, tick] = useState(0);
@@ -41,7 +40,7 @@ export default function ApiConsolePage() {
     try {
       if (tab === 'v2') {
         setV2Steps([]);
-        await runV2ApiCycle(clientId.trim(), push);
+        await runV2ApiCycle(push);
       } else {
         setV1Steps([]);
         await runV1ApiCycle(push);
@@ -55,7 +54,9 @@ export default function ApiConsolePage() {
     <AdminLayout title="Прогон API">
       <p className="text-[var(--muted)] -mt-4 mb-4 text-sm">
         Только для администратора. Новые маршруты — 58 из контракта Mstyle v2.
-        Старые — CRUD Pass (офисы, пользователи, пропуска).
+        Короткоживущий токен для прогона выдаётся автоматически; приватные ключи
+        не передаются в браузер. Старые — CRUD Pass (офисы, пользователи,
+        пропуска).
       </p>
 
       <div className="flex flex-wrap gap-2 mb-4">
@@ -84,18 +85,6 @@ export default function ApiConsolePage() {
       </div>
 
       <div className="flex flex-wrap items-end gap-3 mb-4">
-        {tab === 'v2' && (
-          <label className="text-sm">
-            <span className="block text-xs text-[var(--muted)] mb-1">
-              Client ID (v2)
-            </span>
-            <input
-              className="input text-sm w-64"
-              value={clientId}
-              onChange={(e) => setClientId(e.target.value)}
-            />
-          </label>
-        )}
         <button
           type="button"
           className="btn btn-primary"
@@ -128,7 +117,9 @@ export default function ApiConsolePage() {
         onPointerMove={(e) => {
           if (!drag.current) return;
           const rect = e.currentTarget.getBoundingClientRect();
-          setLeft(Math.min(Math.max(e.clientX - rect.left, 200), rect.width - 280));
+          setLeft(
+            Math.min(Math.max(e.clientX - rect.left, 200), rect.width - 280),
+          );
         }}
         onPointerUp={() => {
           drag.current = false;

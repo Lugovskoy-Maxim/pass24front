@@ -2,6 +2,10 @@ import { createSign, generateKeyPairSync, randomUUID } from 'crypto';
 import { MstyleOauthService } from './mstyle-v2.oauth.service';
 import { MstyleV2Config } from './mstyle-v2.config';
 import { OAuthException } from './mstyle-v2.problem';
+import {
+  DEFAULT_DATA_SCOPES,
+  MSTYLE_ADMIN_PROBE_CLIENT_ID,
+} from './mstyle-v2.constants';
 
 function configStub(overrides: Partial<MstyleV2Config> = {}): MstyleV2Config {
   return {
@@ -60,6 +64,28 @@ describe('MstyleOauthService', () => {
       'mstyle.resident.authenticate',
     ]);
     expect(result).not.toHaveProperty('schemaVersion');
+  });
+
+  it('issues a five-minute full-scope token for the admin API console', async () => {
+    const created: Array<Record<string, unknown>> = [];
+    const service = new MstyleOauthService(
+      configStub({ tokenTtlSec: () => 3600 }),
+      {
+        create: async (doc: Record<string, unknown>) => created.push(doc),
+      } as any,
+      { create: async () => undefined } as any,
+      {} as any,
+    );
+
+    const result = await service.issueAdminProbeToken();
+
+    expect(result.access_token).toMatch(/^svc_/);
+    expect(result.expires_in).toBe(300);
+    expect(result.scope).toBe(DEFAULT_DATA_SCOPES.join(' '));
+    expect(created[0]).toMatchObject({
+      clientId: MSTYLE_ADMIN_PROBE_CLIENT_ID,
+      scopes: [...DEFAULT_DATA_SCOPES],
+    });
   });
 
   it('rejects unknown client', async () => {

@@ -128,9 +128,12 @@ function makeStep(onStep: (step: ProbeStep) => void) {
     title: string,
     method: string,
     path: string,
-    opts?: RawOpts & { okStatuses?: number[] },
+    opts?: RawOpts & {
+      okStatuses?: number[];
+      redactAccessToken?: boolean;
+    },
   ) => {
-    const { okStatuses, ...rawOpts } = opts || {};
+    const { okStatuses, redactAccessToken, ...rawOpts } = opts || {};
     const res = await raw(method, path, rawOpts);
     const ok = okStatuses ? okStatuses.includes(res.status) : res.ok;
     onStep({
@@ -140,10 +143,20 @@ function makeStep(onStep: (step: ProbeStep) => void) {
       method,
       ...res,
       ok,
+      body: redactAccessToken ? redactTokenResponse(res.body) : res.body,
       request: rawOpts.form != null ? rawOpts.form : rawOpts.body,
     });
     return res;
   };
+}
+
+function redactTokenResponse(body: unknown): unknown {
+  if (!body || typeof body !== 'object' || Array.isArray(body)) return body;
+  const result = { ...(body as Record<string, unknown>) };
+  if (typeof result.access_token === 'string') {
+    result.access_token = 'svc_•••••••• (скрыт)';
+  }
+  return result;
 }
 
 export async function runV1ApiCycle(onStep: (step: ProbeStep) => void): Promise<void> {
@@ -263,7 +276,6 @@ export async function runV1ApiCycle(onStep: (step: ProbeStep) => void): Promise<
 }
 
 export async function runV2ApiCycle(
-  clientId: string,
   onStep: (step: ProbeStep) => void,
 ): Promise<void> {
   const stamp = Date.now().toString(36);
@@ -326,12 +338,14 @@ export async function runV2ApiCycle(
   helperUserId = pick(helper.body, 'id');
 
   try {
-  const tok = await step('v2', 'A-01', 'service token', 'POST', '/oauth2/token', {
-    form: new URLSearchParams({
-      grant_type: 'client_credentials',
-      client_id: clientId || 'mstyle-backend-staging',
-    }).toString(),
-  });
+  const tok = await step(
+    'v2',
+    'A-01',
+    'temporary probe token',
+    'POST',
+    '/admin/integration/probe-token',
+    { token: adminJwt, redactAccessToken: true },
+  );
   svc = pick(tok.body, 'access_token');
   if (!svc) return;
 

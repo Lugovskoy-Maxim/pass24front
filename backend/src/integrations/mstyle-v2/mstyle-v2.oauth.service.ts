@@ -13,6 +13,11 @@ import {
   MstyleServiceTokenDocument,
 } from './mstyle-v2.schemas';
 import { SiteSettingsService } from '../../site-settings/site-settings.service';
+import {
+  DEFAULT_DATA_SCOPES,
+  DEFAULT_TOKEN_TTL_SEC,
+  MSTYLE_ADMIN_PROBE_CLIENT_ID,
+} from './mstyle-v2.constants';
 
 type TokenForm = {
   grant_type?: string;
@@ -84,8 +89,29 @@ export class MstyleOauthService implements OnModuleInit {
       throw new OAuthException('invalid_scope', 'No scopes granted');
     }
 
+    return this.createServiceToken(clientId, scopes, this.cfg.tokenTtlSec());
+  }
+
+  /**
+   * Short-lived, full-scope token for the authenticated admin API console.
+   * This deliberately bypasses OAuth client authentication so production
+   * private keys never have to be copied to Pass or exposed to the browser.
+   */
+  issueAdminProbeToken() {
+    const ttl = Math.min(this.cfg.tokenTtlSec(), DEFAULT_TOKEN_TTL_SEC);
+    return this.createServiceToken(
+      MSTYLE_ADMIN_PROBE_CLIENT_ID,
+      [...DEFAULT_DATA_SCOPES],
+      ttl,
+    );
+  }
+
+  private async createServiceToken(
+    clientId: string,
+    scopes: string[],
+    ttl: number,
+  ) {
     const accessToken = Ids.token();
-    const ttl = this.cfg.tokenTtlSec();
     await this.tokens.create({
       tokenHash: sha256Hex(accessToken),
       clientId,

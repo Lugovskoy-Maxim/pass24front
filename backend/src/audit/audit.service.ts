@@ -54,6 +54,7 @@ const ACTION_LABELS: Record<string, string> = {
   'permissions.update': 'Изменение прав доступа',
   'site_settings.update': 'Изменение настроек сайта',
   'integration.mock_mode.update': 'Переключение mock-режима API Mstyle',
+  'integration.api_probe.start': 'Запуск прогона API Mstyle',
 };
 
 const ENTITY_LABELS: Record<string, string> = {
