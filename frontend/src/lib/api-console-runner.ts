@@ -14,7 +14,7 @@ export type ProbeStep = {
 const API = process.env.NEXT_PUBLIC_API_URL || 'http://127.0.0.1:4000/api';
 const SV = '2.0';
 const V2 = '/internal/integrations/mstyle/v2';
-const MOCK_OTP = '123456';
+const MOCK_OTP = '1234';
 const CTX = {
   ipAddress: '192.0.2.10',
   userAgent: 'Pass admin api-console',

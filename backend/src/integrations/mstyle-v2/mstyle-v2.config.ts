@@ -2,6 +2,7 @@ import { Injectable } from '@nestjs/common';
 import { ConfigService } from '@nestjs/config';
 import { readFileSync } from 'fs';
 import {
+  CODE_LENGTH,
   DEFAULT_DATA_SCOPES,
   DEFAULT_TOKEN_TTL_SEC,
   MSTYLE_TOKEN_AUD,
@@ -152,7 +153,7 @@ export class MstyleV2Config {
   }
 
   mockOtp(): string {
-    return this.config.get<string>('MSTYLE_MOCK_OTP') || '123456';
+    return this.config.get<string>('MSTYLE_MOCK_OTP') || '1234';
   }
 
   mockResponsesDefaultEnabled(): boolean {
@@ -205,6 +206,11 @@ export class MstyleV2Config {
 
   assertReady(): void {
     if (!this.isEnabled()) return;
+    if (!new RegExp(`^\\d{${CODE_LENGTH}}$`).test(this.mockOtp())) {
+      throw new Error(
+        `MSTYLE_MOCK_OTP must contain exactly ${CODE_LENGTH} digits`,
+      );
+    }
     if (this.isProduction() && !this.config.get<string>('MSTYLE_CLIENT_ID')) {
       throw new Error(
         'MSTYLE_PRIVATE_API_ENABLED=true in production requires MSTYLE_CLIENT_ID',

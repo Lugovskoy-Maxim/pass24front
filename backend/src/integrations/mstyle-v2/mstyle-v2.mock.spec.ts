@@ -492,6 +492,13 @@ describe('Mstyle v2 contract mocks', () => {
     }
   });
 
+  it.each(['A-03', 'A-04', 'A-05'])(
+    '%s returns a four-digit challenge length',
+    (id) => {
+      expect(createMstyleMockResponse({ id }).body.codeLength).toBe(4);
+    },
+  );
+
   it('returns selected private fields and complete snapshot metadata', () => {
     const reveal = createMstyleMockResponse({
       id: 'P-02',

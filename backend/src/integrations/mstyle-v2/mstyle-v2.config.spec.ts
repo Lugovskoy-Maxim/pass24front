@@ -2,6 +2,24 @@ import { ConfigService } from '@nestjs/config';
 import { MstyleV2Config } from './mstyle-v2.config';
 
 describe('MstyleV2Config OAuth clients', () => {
+  it('uses a four-digit mock OTP', () => {
+    const config = createConfig({
+      MSTYLE_CLIENT_ID: 'mstyle-backend-prod',
+      MSTYLE_CLIENT_AUTH: 'mtls',
+    });
+
+    expect(config.mockOtp()).toBe('1234');
+    expect(() => config.assertReady()).not.toThrow();
+  });
+
+  it('rejects a mock OTP that is not exactly four digits', () => {
+    const config = createConfig({ MSTYLE_MOCK_OTP: '123456' });
+
+    expect(() => config.assertReady()).toThrow(
+      'MSTYLE_MOCK_OTP must contain exactly 4 digits',
+    );
+  });
+
   it('resolves separate primary and changes-only clients', () => {
     const config = createConfig({
       MSTYLE_CLIENT_ID: 'mstyle-backend-prod',

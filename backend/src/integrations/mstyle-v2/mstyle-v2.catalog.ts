@@ -128,7 +128,7 @@ const CHALLENGE = {
   challengeId: 'ach_01J5Q8K2M7N4P6R9T1V3X5Z7A2',
   status: 'awaiting_code',
   channel: 'sms',
-  codeLength: 6,
+  codeLength: 4,
   expiresAt: '2026-08-14T10:05:00Z',
   resendAfter: '2026-08-14T10:01:00Z',
   pollAfterMs: 1500,
@@ -290,7 +290,7 @@ const MSTYLE_V2_CATALOG_BASE: CatalogEndpoint[] = [
     method: 'POST',
     path: `${PRIVATE}/auth/residents/code-challenges/{challengeId}/verify`,
     headers: IDEM,
-    request: { schemaVersion: SCHEMA, code: '123456', context: CTX },
+    request: { schemaVersion: SCHEMA, code: '1234', context: CTX },
     success: {
       status: 200,
       label: '200 authenticated',
@@ -723,7 +723,7 @@ const MSTYLE_V2_CATALOG_BASE: CatalogEndpoint[] = [
     title: 'Подтвердить контакт',
     method: 'POST',
     path: `${PRIVATE}/residents/{subject}/contacts/challenges/{challengeId}/verify`,
-    request: { schemaVersion: SCHEMA, code: '123456' },
+    request: { schemaVersion: SCHEMA, code: '1234' },
     success: {
       status: 200,
       label: '200 verified',
@@ -1046,7 +1046,7 @@ const MSTYLE_V2_CATALOG_BASE: CatalogEndpoint[] = [
     title: 'Подтвердить контакт гостя',
     method: 'POST',
     path: `${PRIVATE}/guest-parties/{guestPartyId}/contact-challenges/{challengeId}/verify`,
-    request: { schemaVersion: SCHEMA, code: '123456' },
+    request: { schemaVersion: SCHEMA, code: '1234' },
     success: {
       status: 200,
       label: '200 verified',

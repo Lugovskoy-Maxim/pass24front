@@ -8,6 +8,7 @@ import {
   IsObject,
   IsOptional,
   IsString,
+  Matches,
   Max,
   MaxLength,
   Min,
@@ -82,7 +83,7 @@ export class CodeChallengeDto extends SchemaVersionDto {
 export class VerifyCodeDto extends SchemaVersionDto {
   @IsString()
   @IsNotEmpty()
-  @MaxLength(16)
+  @Matches(/^\d{4}$/, { message: 'code must contain exactly 4 digits' })
   code: string;
 
   @ValidateNested()
