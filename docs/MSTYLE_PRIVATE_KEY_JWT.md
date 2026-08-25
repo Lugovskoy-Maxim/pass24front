@@ -57,6 +57,30 @@ GET /api/internal/integrations/mstyle/v2/changes?after=<cursor>&limit=50
 Authorization: Bearer <service-token>
 ```
 
+## SMS Aero для входа по телефону
+
+Маршруты A-03–A-06 используют SMS Aero Mobile ID для пары `phone + sms`, если
+в backend-контейнер переданы настройки:
+
+```dotenv
+SMS_ENABLED=true
+SMSAERO_EMAIL=...
+SMSAERO_API_KEY=...
+SMSAERO_SIGN=mts_mstyle
+MSTYLE_DISPATCH_ENABLED=true
+MSTYLE_MOCK_RESPONSES=false
+MSTYLE_MOCK_OTP=1234
+```
+
+- A-03 запускает SIM-PUSH с SMS fallback;
+- A-04 проверяет статус SIM-PUSH и при подтверждении возвращает
+  `status: consumed` вместе с `authentication`;
+- A-05 создаёт новый запрос Mobile ID;
+- A-06 проверяет четырёхзначный SMS-код через SMS Aero.
+
+Для неизвестного или недоступного резидента внешний запрос не отправляется, а
+ответ не раскрывает существование учётной записи.
+
 ## Требования к `client_assertion`
 
 - `alg`: `RS256` или `ES256`;

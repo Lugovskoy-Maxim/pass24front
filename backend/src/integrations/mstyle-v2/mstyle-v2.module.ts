@@ -2,6 +2,7 @@ import { Module } from '@nestjs/common';
 import { MongooseModule } from '@nestjs/mongoose';
 import { AuthDatabaseModule } from '../../database/auth-database.module';
 import { User, UserSchema } from '../../schemas';
+import { SmsModule } from '../../sms/sms.module';
 import { MstyleAuthService } from './mstyle-v2.auth.service';
 import { MstyleV2Config } from './mstyle-v2.config';
 import { MstyleDirectoryService } from './mstyle-v2.directory.service';
@@ -26,6 +27,7 @@ import { MSTYLE_MODELS } from './mstyle-v2.schemas';
   imports: [
     AuthDatabaseModule.forFeature([{ name: User.name, schema: UserSchema }]),
     MongooseModule.forFeature(MSTYLE_MODELS),
+    SmsModule,
   ],
   exports: [MstyleIdentityService, MstyleOauthService, MstyleV2Config],
   controllers: [MstyleOauthController, MstylePrivateController],

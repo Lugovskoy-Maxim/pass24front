@@ -3,6 +3,7 @@ import { InjectModel } from '@nestjs/mongoose';
 import * as bcrypt from 'bcryptjs';
 import { Model } from 'mongoose';
 import { normalizeRuMobilePhone } from '../../common/phone';
+import { SmsService } from '../../sms/sms.service';
 import {
   ALLOWED_AUTH_PAIRS,
   AUTH_SUCCESS_REPLAY_MS,
@@ -37,6 +38,7 @@ export class MstyleAuthService {
     private readonly rates: MstyleRateLimitService,
     @InjectModel(MstyleChallenge.name)
     private readonly challenges: Model<MstyleChallengeDocument>,
+    private readonly sms: SmsService,
   ) {}
 
   async verifyPassword(
@@ -153,6 +155,12 @@ export class MstyleAuthService {
     const challengeId = Ids.challenge();
     const now = Date.now();
     const code = this.cfg.mockOtp();
+    const useSmsAero = this.useSmsAero(dto.identifier.type, dto.channel);
+    if (useSmsAero) this.requireSmsAero();
+    const mobileId =
+      useSmsAero && !isDummy
+        ? await this.sms.startMobileAuth(normalized)
+        : undefined;
     const challenge = await this.challenges.create({
       challengeId,
       kind: 'auth',
@@ -168,6 +176,9 @@ export class MstyleAuthService {
       isDummy,
       codeHash: await bcrypt.hash(code, 8),
       codeLength: CODE_LENGTH,
+      verificationProvider: useSmsAero ? 'smsaero_mobile_id' : 'local',
+      mobileIdRequestId: mobileId?.requestId,
+      mobileIdAuthType: mobileId?.authType,
       verifyAttempts: 0,
       expiresAt: new Date(now + CHALLENGE_TTL_MS),
       resendAfter: new Date(now + RESEND_MIN_MS),
@@ -195,6 +206,19 @@ export class MstyleAuthService {
   ): Promise<MstyleResult> {
     const challenge = await this.loadChallenge(challengeId, clientId);
     this.expireIfNeeded(challenge);
+    if (
+      this.isSmsAeroChallenge(challenge) &&
+      challenge.status !== 'expired' &&
+      challenge.status !== 'consumed' &&
+      !challenge.isDummy &&
+      challenge.mobileIdRequestId
+    ) {
+      this.requireSmsAero();
+      const verified = await this.sms.isMobileAuthVerified(
+        challenge.mobileIdRequestId,
+      );
+      if (verified) await this.consumeChallenge(challenge);
+    }
     await challenge.save();
     return new MstyleResult(this.challengeDto(challenge), 200, {
       'Cache-Control': 'no-store',
@@ -220,8 +244,23 @@ export class MstyleAuthService {
     this.rates.consume('startByIp', ip);
 
     const now = Date.now();
-    const code = this.cfg.mockOtp();
-    challenge.codeHash = await bcrypt.hash(code, 8);
+    if (this.isSmsAeroChallenge(challenge)) {
+      this.requireSmsAero();
+      if (!challenge.isDummy) {
+        const identity = challenge.subject
+          ? await this.identities.findIdentityBySubject(challenge.subject)
+          : null;
+        if (!identity?.phone) {
+          problem(503, 'UPSTREAM_UNAVAILABLE', { retryable: true });
+        }
+        const mobileId = await this.sms.startMobileAuth(identity.phone);
+        challenge.mobileIdRequestId = mobileId.requestId;
+        challenge.mobileIdAuthType = mobileId.authType;
+      }
+    } else {
+      challenge.codeHash = await bcrypt.hash(this.cfg.mockOtp(), 8);
+    }
+    challenge.codeLength = CODE_LENGTH;
     challenge.status = 'dispatch_pending';
     challenge.verifyAttempts = 0;
     challenge.expiresAt = new Date(now + CHALLENGE_TTL_MS);
@@ -277,39 +316,28 @@ export class MstyleAuthService {
       problem(429, 'RATE_LIMITED', { retryable: false, retryAfter: 60 });
     }
 
-    const matches = await bcrypt.compare(dto.code, challenge.codeHash);
+    let matches: boolean;
+    if (this.isSmsAeroChallenge(challenge)) {
+      this.requireSmsAero();
+      if (challenge.isDummy || !challenge.mobileIdRequestId) {
+        await bcrypt.compare(dto.code, challenge.codeHash);
+        matches = false;
+      } else {
+        matches = await this.sms.verifyMobileAuth(
+          challenge.mobileIdRequestId,
+          dto.code,
+        );
+      }
+    } else {
+      matches = await bcrypt.compare(dto.code, challenge.codeHash);
+    }
     challenge.verifyAttempts += 1;
     if (!matches || challenge.isDummy || !challenge.subject) {
       await challenge.save();
       problem(401, 'INVALID_CREDENTIALS');
     }
 
-    const identity = await this.identities.findIdentityBySubject(
-      challenge.subject,
-    );
-    if (!identity || !this.identities.usableForAuth(identity.identityStatus)) {
-      await challenge.save();
-      problem(401, 'INVALID_CREDENTIALS');
-    }
-    // Онбординг создаёт invited; первый успешный код активирует учётку.
-    if (identity.identityStatus === 'invited') {
-      identity.identityStatus = 'active';
-      identity.revision += 1;
-      await identity.save();
-    }
-
-    const body = schema({
-      authenticationId: Ids.authentication(),
-      subject: identity.subject,
-      identityStatus: identity.identityStatus,
-      authVersion: identity.authVersion,
-      authenticatedAt: nowIso(),
-      authenticationMethod: challenge.channel || 'sms',
-    });
-    challenge.status = 'consumed';
-    challenge.consumedAt = new Date();
-    challenge.consumedAuthJson = JSON.stringify(body);
-    await challenge.save();
+    const body = await this.consumeChallenge(challenge);
     return new MstyleResult(body, 200, { 'Cache-Control': 'no-store' });
   }
 
@@ -356,6 +384,63 @@ export class MstyleAuthService {
       body.telegramAction =
         challenge.telegramAction || this.telegramAction(challenge.challengeId);
     }
+    if (this.isSmsAeroChallenge(challenge)) {
+      body.delivery = {
+        provider: 'smsaero',
+        type: 'mobile_id',
+      };
+    }
+    if (challenge.status === 'consumed' && challenge.consumedAuthJson) {
+      body.authentication = JSON.parse(challenge.consumedAuthJson);
+    }
+    return body;
+  }
+
+  private useSmsAero(identifierType: string, channel: string): boolean {
+    return (
+      this.cfg.dispatchEnabled() &&
+      identifierType === 'phone' &&
+      channel === 'sms'
+    );
+  }
+
+  private isSmsAeroChallenge(challenge: MstyleChallengeDocument): boolean {
+    return challenge.verificationProvider === 'smsaero_mobile_id';
+  }
+
+  private requireSmsAero(): void {
+    if (!this.sms.isConfigured()) {
+      problem(503, 'UPSTREAM_UNAVAILABLE', { retryable: true });
+    }
+  }
+
+  private async consumeChallenge(challenge: MstyleChallengeDocument) {
+    const identity = challenge.subject
+      ? await this.identities.findIdentityBySubject(challenge.subject)
+      : null;
+    if (!identity || !this.identities.usableForAuth(identity.identityStatus)) {
+      await challenge.save();
+      problem(401, 'INVALID_CREDENTIALS');
+    }
+    // Онбординг создаёт invited; первый успешный код активирует учётку.
+    if (identity.identityStatus === 'invited') {
+      identity.identityStatus = 'active';
+      identity.revision += 1;
+      await identity.save();
+    }
+
+    const body = schema({
+      authenticationId: Ids.authentication(),
+      subject: identity.subject,
+      identityStatus: identity.identityStatus,
+      authVersion: identity.authVersion,
+      authenticatedAt: nowIso(),
+      authenticationMethod: challenge.channel || 'sms',
+    });
+    challenge.status = 'consumed';
+    challenge.consumedAt = new Date();
+    challenge.consumedAuthJson = JSON.stringify(body);
+    await challenge.save();
     return body;
   }
 

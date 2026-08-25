@@ -129,6 +129,10 @@ const CHALLENGE = {
   status: 'awaiting_code',
   channel: 'sms',
   codeLength: 4,
+  delivery: {
+    provider: 'smsaero',
+    type: 'mobile_id',
+  },
   expiresAt: '2026-08-14T10:05:00Z',
   resendAfter: '2026-08-14T10:01:00Z',
   pollAfterMs: 1500,

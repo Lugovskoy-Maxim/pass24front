@@ -373,8 +373,17 @@ export class MstyleChallenge {
   @Prop({ required: true })
   codeHash: string;
 
-  @Prop({ default: 6 })
+  @Prop({ default: 4 })
   codeLength: number;
+
+  @Prop({ enum: ['local', 'smsaero_mobile_id'], default: 'local' })
+  verificationProvider?: string;
+
+  @Prop({ type: Number })
+  mobileIdRequestId?: number;
+
+  @Prop()
+  mobileIdAuthType?: string;
 
   @Prop({ default: 0 })
   verifyAttempts: number;

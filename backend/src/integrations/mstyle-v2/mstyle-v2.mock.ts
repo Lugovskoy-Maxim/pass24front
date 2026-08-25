@@ -454,6 +454,10 @@ export function createMstyleMockResponse(
           status: input.id === 'A-04' ? 'awaiting_code' : 'dispatch_pending',
           channel: 'email',
           codeLength: 4,
+          delivery: {
+            provider: 'mock',
+            type: 'code',
+          },
           expiresAt:
             input.id === 'A-05'
               ? '2026-08-14T10:10:00Z'
