@@ -17,9 +17,10 @@ cd "$APP_DIR"
 echo "==> Каталог: $APP_DIR"
 echo "==> Ветка: $BRANCH"
 
-# Сброс локальных правок на сервере (иначе pull может не пройти)
+# Сброс локальных правок на сервере (иначе pull может не пройти).
+# OAuth public keys are copied to the server outside git and must survive update.
 git checkout -- . 2>/dev/null || true
-git clean -fd 2>/dev/null || true
+git clean -fd -e backend/config/oauth-public-keys/ -e backend/config/oauth-public-keys/** 2>/dev/null || true
 git fetch origin
 git checkout "$BRANCH"
 git pull --ff-only origin "$BRANCH"

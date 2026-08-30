@@ -79,6 +79,8 @@ services:
         condition: service_healthy
       mailpit:
         condition: service_started
+    volumes:
+      - ./backend/config/oauth-public-keys:/app/config/oauth-public-keys:ro
     # For development hot-reload (uncomment if needed):
     # command: npm run start:dev
     # volumes:
