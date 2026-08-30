@@ -31,12 +31,14 @@ MSTYLE_PUBLIC_BASE_URL=https://pass.mstyle.ru
 
 MSTYLE_CLIENT_ID=mstyle-backend-prod
 MSTYLE_CLIENT_AUTH=private_key_jwt
-MSTYLE_CLIENT_PUBLIC_KEY_FILE=/run/secrets/mstyle-backend-prod-public.pem
+MSTYLE_CLIENT_KID=mstyle-backend-prod-20260823-01
+MSTYLE_CLIENT_PUBLIC_KEY_FILE=/app/config/oauth-public-keys/mstyle-backend-prod-20260823-01-public.pem
 MSTYLE_CLIENT_SCOPES=mstyle.resident.authenticate mstyle.residents.read
 
 MSTYLE_RECONCILE_CLIENT_ID=mstyle-reconcile-prod
 MSTYLE_RECONCILE_CLIENT_AUTH=private_key_jwt
-MSTYLE_RECONCILE_CLIENT_PUBLIC_KEY_FILE=/run/secrets/mstyle-reconcile-prod-public.pem
+MSTYLE_RECONCILE_CLIENT_KID=mstyle-reconcile-prod-20260823-01
+MSTYLE_RECONCILE_CLIENT_PUBLIC_KEY_FILE=/app/config/oauth-public-keys/mstyle-reconcile-prod-20260823-01-public.pem
 ```
 
 Если используются `*_PUBLIC_KEY_FILE`, публичные файлы нужно смонтировать в
