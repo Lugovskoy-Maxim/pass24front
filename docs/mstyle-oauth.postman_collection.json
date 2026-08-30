@@ -1,0 +1,225 @@
+{
+  "info": {
+    "_postman_id": "8a1b6a0c-7a57-4a55-9d3a-99a8ed0a6c24",
+    "name": "M-Style Pass24 OAuth",
+    "description": "Проверка private_key_jwt для https://pass.mstyle.ru/api/oauth2/token. Приватные ключи не включены: вставьте их в переменные коллекции backend_private_key_pem и reconcile_private_key_pem.",
+    "schema": "https://schema.getpostman.com/json/collection/v2.1.0/collection.json"
+  },
+  "event": [
+    {
+      "listen": "prerequest",
+      "script": {
+        "type": "text/javascript",
+        "exec": [
+          "const tokenUrl = pm.collectionVariables.get('token_url');",
+          "const configs = {",
+          "  backend: {",
+          "    clientId: 'mstyle-backend-prod',",
+          "    kid: 'mstyle-backend-prod-20260823-01',",
+          "    scope: 'mstyle.resident.authenticate mstyle.residents.read',",
+          "    privateKeyVar: 'backend_private_key_pem'",
+          "  },",
+          "  reconcile: {",
+          "    clientId: 'mstyle-reconcile-prod',",
+          "    kid: 'mstyle-reconcile-prod-20260823-01',",
+          "    scope: 'mstyle.changes.read',",
+          "    privateKeyVar: 'reconcile_private_key_pem'",
+          "  }",
+          "};",
+          "",
+          "const requestName = (pm.info.requestName || '').toLowerCase();",
+          "const cfg = requestName.includes('reconcile') ? configs.reconcile : configs.backend;",
+          "const privateKeyPem = (pm.collectionVariables.get(cfg.privateKeyVar) || '').replace(/\\\\n/g, '\\n').trim();",
+          "",
+          "if (!privateKeyPem) {",
+          "  throw new Error(`Заполните collection variable ${cfg.privateKeyVar}: вставьте PKCS#8 private key PEM, начиная с -----BEGIN PRIVATE KEY-----`);",
+          "}",
+          "",
+          "if (!globalThis.crypto || !crypto.subtle) {",
+          "  throw new Error('В этой версии Postman нет Web Crypto API. Обновите Postman или сгенерируйте client_assertion внешним Node.js скриптом.');",
+          "}",
+          "",
+          "function base64UrlBytes(bytes) {",
+          "  let binary = '';",
+          "  for (const byte of bytes) binary += String.fromCharCode(byte);",
+          "  return btoa(binary).replace(/=/g, '').replace(/\\+/g, '-').replace(/\\//g, '_');",
+          "}",
+          "",
+          "function base64UrlJson(value) {",
+          "  return base64UrlBytes(new TextEncoder().encode(JSON.stringify(value)));",
+          "}",
+          "",
+          "function pemToArrayBuffer(pem) {",
+          "  const b64 = pem",
+          "    .replace('-----BEGIN PRIVATE KEY-----', '')",
+          "    .replace('-----END PRIVATE KEY-----', '')",
+          "    .replace(/\\s/g, '');",
+          "  const binary = atob(b64);",
+          "  const bytes = new Uint8Array(binary.length);",
+          "  for (let i = 0; i < binary.length; i += 1) bytes[i] = binary.charCodeAt(i);",
+          "  return bytes.buffer;",
+          "}",
+          "",
+          "const now = Math.floor(Date.now() / 1000);",
+          "const header = { alg: 'RS256', typ: 'JWT', kid: cfg.kid };",
+          "const payload = {",
+          "  iss: cfg.clientId,",
+          "  sub: cfg.clientId,",
+          "  aud: tokenUrl,",
+          "  jti: `${Date.now()}-${Math.random().toString(36).slice(2)}`,",
+          "  iat: now,",
+          "  exp: now + 60",
+          "};",
+          "",
+          "const signingInput = `${base64UrlJson(header)}.${base64UrlJson(payload)}`;",
+          "const key = await crypto.subtle.importKey(",
+          "  'pkcs8',",
+          "  pemToArrayBuffer(privateKeyPem),",
+          "  { name: 'RSASSA-PKCS1-v1_5', hash: 'SHA-256' },",
+          "  false,",
+          "  ['sign']",
+          ");",
+          "const signature = await crypto.subtle.sign(",
+          "  { name: 'RSASSA-PKCS1-v1_5' },",
+          "  key,",
+          "  new TextEncoder().encode(signingInput)",
+          ");",
+          "",
+          "pm.collectionVariables.set('oauth_client_id', cfg.clientId);",
+          "pm.collectionVariables.set('oauth_kid', cfg.kid);",
+          "pm.collectionVariables.set('oauth_scope', cfg.scope);",
+          "pm.collectionVariables.set('client_assertion', `${signingInput}.${base64UrlBytes(new Uint8Array(signature))}`);"
+        ]
+      }
+    }
+  ],
+  "item": [
+    {
+      "name": "Token - backend",
+      "request": {
+        "method": "POST",
+        "header": [
+          {
+            "key": "Content-Type",
+            "value": "application/x-www-form-urlencoded"
+          }
+        ],
+        "body": {
+          "mode": "urlencoded",
+          "urlencoded": [
+            {
+              "key": "grant_type",
+              "value": "client_credentials",
+              "type": "text"
+            },
+            {
+              "key": "client_id",
+              "value": "{{oauth_client_id}}",
+              "type": "text"
+            },
+            {
+              "key": "client_assertion_type",
+              "value": "urn:ietf:params:oauth:client-assertion-type:jwt-bearer",
+              "type": "text"
+            },
+            {
+              "key": "client_assertion",
+              "value": "{{client_assertion}}",
+              "type": "text"
+            },
+            {
+              "key": "scope",
+              "value": "{{oauth_scope}}",
+              "type": "text"
+            }
+          ]
+        },
+        "url": "{{token_url}}",
+        "description": "client_id=mstyle-backend-prod, JWT header kid=mstyle-backend-prod-20260823-01, alg=RS256."
+      },
+      "response": []
+    },
+    {
+      "name": "Token - reconcile",
+      "request": {
+        "method": "POST",
+        "header": [
+          {
+            "key": "Content-Type",
+            "value": "application/x-www-form-urlencoded"
+          }
+        ],
+        "body": {
+          "mode": "urlencoded",
+          "urlencoded": [
+            {
+              "key": "grant_type",
+              "value": "client_credentials",
+              "type": "text"
+            },
+            {
+              "key": "client_id",
+              "value": "{{oauth_client_id}}",
+              "type": "text"
+            },
+            {
+              "key": "client_assertion_type",
+              "value": "urn:ietf:params:oauth:client-assertion-type:jwt-bearer",
+              "type": "text"
+            },
+            {
+              "key": "client_assertion",
+              "value": "{{client_assertion}}",
+              "type": "text"
+            },
+            {
+              "key": "scope",
+              "value": "{{oauth_scope}}",
+              "type": "text"
+            }
+          ]
+        },
+        "url": "{{token_url}}",
+        "description": "client_id=mstyle-reconcile-prod, JWT header kid=mstyle-reconcile-prod-20260823-01, alg=RS256."
+      },
+      "response": []
+    }
+  ],
+  "variable": [
+    {
+      "key": "token_url",
+      "value": "https://pass.mstyle.ru/api/oauth2/token",
+      "type": "string"
+    },
+    {
+      "key": "backend_private_key_pem",
+      "value": "",
+      "type": "string"
+    },
+    {
+      "key": "reconcile_private_key_pem",
+      "value": "",
+      "type": "string"
+    },
+    {
+      "key": "oauth_client_id",
+      "value": "",
+      "type": "string"
+    },
+    {
+      "key": "oauth_kid",
+      "value": "",
+      "type": "string"
+    },
+    {
+      "key": "oauth_scope",
+      "value": "",
+      "type": "string"
+    },
+    {
+      "key": "client_assertion",
+      "value": "",
+      "type": "string"
+    }
+  ]
+}
