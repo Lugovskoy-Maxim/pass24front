@@ -3,7 +3,15 @@
 import { Suspense, useEffect, useState, useCallback, useRef } from 'react';
 import { useRouter, useSearchParams } from 'next/navigation';
 import Link from 'next/link';
-import { Download, Inbox, Plus, Printer, Search, Table2 } from 'lucide-react';
+import {
+  ChevronDown,
+  Download,
+  Inbox,
+  Plus,
+  Printer,
+  Search,
+  Table2,
+} from 'lucide-react';
 import { ProtectedLayout } from '@/components/ProtectedLayout';
 import { PassListCard } from '@/components/PassListCard';
 import { PassDetailModal } from '@/components/PassDetailModal';
@@ -40,6 +48,15 @@ const ALL_STATUSES: PassStatus[] = [
   'cancelled',
 ];
 const PAGE_SIZE = 50;
+const FRESH_PASS_STATUSES = new Set<PassStatus>([
+  'pending',
+  'approved',
+  'active',
+]);
+
+function isFreshPass(pass: Pass): boolean {
+  return FRESH_PASS_STATUSES.has(pass.status);
+}
 
 function formatPassCount(count: number, labels: UiLabels): string {
   const mod10 = count % 10;
@@ -72,6 +89,7 @@ function PassesPageContent() {
   const [actionLoading, setActionLoading] = useState(false);
   const [rejectReason, setRejectReason] = useState('');
   const [exportOpen, setExportOpen] = useState(false);
+  const [archivedOpen, setArchivedOpen] = useState(false);
 
   const labels = getUiLabels(config);
 
@@ -283,6 +301,13 @@ function PassesPageContent() {
     </>
   );
 
+  const groupArchived = !statusFilter;
+  const freshPasses = groupArchived ? passes.filter(isFreshPass) : passes;
+  const archivedPasses = groupArchived
+    ? passes.filter((pass) => !isFreshPass(pass))
+    : [];
+  const shownPasses = groupArchived ? freshPasses : passes;
+
   // Нельзя return null до ProtectedLayout — иначе редирект/проверка прав не сработает
   return (
     <ProtectedLayout
@@ -395,7 +420,12 @@ function PassesPageContent() {
                 ? `Показано ${passes.length} из ${total}`
                 : formatPassCount(passes.length, labels)}
             </p>
-            {passes.map((pass) => (
+            {shownPasses.length === 0 && archivedPasses.length > 0 && (
+              <div className="rounded-lg border border-dashed border-[var(--border)] px-4 py-3 text-sm text-[var(--muted)] bg-[var(--surface)]">
+                Свежих пропусков нет
+              </div>
+            )}
+            {shownPasses.map((pass) => (
               <PassListCard
                 key={pass.id}
                 pass={pass}
@@ -405,6 +435,40 @@ function PassesPageContent() {
                 onClick={() => setSelected(pass)}
               />
             ))}
+            {archivedPasses.length > 0 && (
+              <div className="mt-2">
+                <button
+                  type="button"
+                  className="w-full flex items-center justify-between gap-3 rounded-lg border border-[var(--border)] bg-[var(--surface)] px-4 py-3 text-left text-sm font-medium text-[var(--text)] hover:border-[var(--border-strong)] transition"
+                  onClick={() => setArchivedOpen((value) => !value)}
+                  aria-expanded={archivedOpen}
+                >
+                  <span>
+                    Завершённые, отменённые и остальные ·{' '}
+                    {formatPassCount(archivedPasses.length, labels)}
+                  </span>
+                  <ChevronDown
+                    className={`w-4 h-4 shrink-0 text-[var(--muted)] transition-transform ${
+                      archivedOpen ? 'rotate-180' : ''
+                    }`}
+                  />
+                </button>
+                {archivedOpen && (
+                  <div className="flex flex-col gap-1.5 mt-1.5">
+                    {archivedPasses.map((pass) => (
+                      <PassListCard
+                        key={pass.id}
+                        pass={pass}
+                        labels={labels}
+                        selected={selected?.id === pass.id}
+                        showCreator={showCreatorInfo}
+                        onClick={() => setSelected(pass)}
+                      />
+                    ))}
+                  </div>
+                )}
+              </div>
+            )}
             {hasMore && (
               <button
                 type="button"
