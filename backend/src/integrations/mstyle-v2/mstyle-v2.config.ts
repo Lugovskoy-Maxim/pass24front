@@ -13,6 +13,7 @@ export type MstyleOauthClient = {
   clientId: string;
   auth: MstyleClientAuth;
   publicKey: string;
+  publicKeysByKid?: Record<string, string>;
   scopes: string[];
 };
 
@@ -50,6 +51,12 @@ export class MstyleV2Config {
     );
   }
 
+  clientKeyKid(): string | undefined {
+    return (
+      (this.config.get<string>('MSTYLE_CLIENT_KID') || '').trim() || undefined
+    );
+  }
+
   reconcileClientId(): string | undefined {
     return (
       (this.config.get<string>('MSTYLE_RECONCILE_CLIENT_ID') || '').trim() ||
@@ -68,20 +75,34 @@ export class MstyleV2Config {
     );
   }
 
+  reconcileClientKeyKid(): string | undefined {
+    return (
+      (this.config.get<string>('MSTYLE_RECONCILE_CLIENT_KID') || '').trim() ||
+      undefined
+    );
+  }
+
   oauthClient(clientId: string): MstyleOauthClient | undefined {
     if (clientId === this.clientId()) {
+      const publicKey = this.clientPublicKey();
       return {
         clientId,
         auth: this.clientAuth(),
-        publicKey: this.clientPublicKey(),
+        publicKey,
+        publicKeysByKid: this.publicKeysByKid(this.clientKeyKid(), publicKey),
         scopes: this.defaultScopes(),
       };
     }
     if (clientId === this.reconcileClientId()) {
+      const publicKey = this.reconcileClientPublicKey();
       return {
         clientId,
         auth: this.reconcileClientAuth(),
-        publicKey: this.reconcileClientPublicKey(),
+        publicKey,
+        publicKeysByKid: this.publicKeysByKid(
+          this.reconcileClientKeyKid(),
+          publicKey,
+        ),
         scopes: ['mstyle.changes.read'],
       };
     }
@@ -247,6 +268,11 @@ export class MstyleV2Config {
         `${envPrefix} must use a public key; keep the private key on the calling server`,
       );
     }
+  }
+
+  private publicKeysByKid(kid: string | undefined, publicKey: string) {
+    if (!kid || !publicKey) return undefined;
+    return { [kid]: publicKey };
   }
 }
 

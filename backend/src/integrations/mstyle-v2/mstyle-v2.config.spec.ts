@@ -8,11 +8,13 @@ describe('MstyleV2Config OAuth clients', () => {
       MSTYLE_CLIENT_AUTH: 'private_key_jwt',
       MSTYLE_CLIENT_PUBLIC_KEY:
         '-----BEGIN PUBLIC KEY-----\\nprimary\\n-----END PUBLIC KEY-----',
+      MSTYLE_CLIENT_KID: 'mstyle-backend-prod-20260827-01',
       MSTYLE_CLIENT_SCOPES:
         'mstyle.resident.authenticate mstyle.residents.read',
       MSTYLE_RECONCILE_CLIENT_ID: 'mstyle-reconcile-prod',
       MSTYLE_RECONCILE_CLIENT_PUBLIC_KEY:
         '-----BEGIN PUBLIC KEY-----\\nreconcile\\n-----END PUBLIC KEY-----',
+      MSTYLE_RECONCILE_CLIENT_KID: 'mstyle-reconcile-prod-20260827-01',
     });
 
     expect(config.oauthClient('mstyle-backend-prod')).toEqual({
@@ -20,6 +22,10 @@ describe('MstyleV2Config OAuth clients', () => {
       auth: 'private_key_jwt',
       publicKey:
         '-----BEGIN PUBLIC KEY-----\nprimary\n-----END PUBLIC KEY-----',
+      publicKeysByKid: {
+        'mstyle-backend-prod-20260827-01':
+          '-----BEGIN PUBLIC KEY-----\nprimary\n-----END PUBLIC KEY-----',
+      },
       scopes: ['mstyle.resident.authenticate', 'mstyle.residents.read'],
     });
     expect(config.oauthClient('mstyle-reconcile-prod')).toEqual({
@@ -27,6 +33,10 @@ describe('MstyleV2Config OAuth clients', () => {
       auth: 'private_key_jwt',
       publicKey:
         '-----BEGIN PUBLIC KEY-----\nreconcile\n-----END PUBLIC KEY-----',
+      publicKeysByKid: {
+        'mstyle-reconcile-prod-20260827-01':
+          '-----BEGIN PUBLIC KEY-----\nreconcile\n-----END PUBLIC KEY-----',
+      },
       scopes: ['mstyle.changes.read'],
     });
     expect(() => config.assertReady()).not.toThrow();

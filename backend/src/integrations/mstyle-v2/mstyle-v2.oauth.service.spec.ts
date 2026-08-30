@@ -134,7 +134,9 @@ describe('MstyleOauthService', () => {
       modulusLength: 2048,
     });
     const clientId = 'mstyle-backend-prod';
+    const kid = 'mstyle-backend-prod-20260827-01';
     const assertion = signAssertion(privateKey, {
+      kid,
       iss: clientId,
       sub: clientId,
       aud: 'https://pass.example/api/oauth2/token',
@@ -148,6 +150,9 @@ describe('MstyleOauthService', () => {
                 clientId,
                 auth: 'private_key_jwt',
                 publicKey: publicKey.export({ type: 'spki', format: 'pem' }),
+                publicKeysByKid: {
+                  [kid]: publicKey.export({ type: 'spki', format: 'pem' }),
+                },
                 scopes: [
                   'mstyle.resident.authenticate',
                   'mstyle.residents.read',
@@ -180,6 +185,59 @@ describe('MstyleOauthService', () => {
       'mstyle.resident.authenticate mstyle.residents.read',
     );
     expect(created[0].clientId).toBe(clientId);
+  });
+
+  it('rejects private_key_jwt with an unknown kid for the client', async () => {
+    const { privateKey, publicKey } = generateKeyPairSync('rsa', {
+      modulusLength: 2048,
+    });
+    const clientId = 'mstyle-backend-prod';
+    const assertion = signAssertion(privateKey, {
+      kid: 'old-key',
+      iss: clientId,
+      sub: clientId,
+      aud: 'https://pass.example/api/oauth2/token',
+    });
+    const service = new MstyleOauthService(
+      configStub({
+        oauthClient: (id: string) =>
+          id === clientId
+            ? {
+                clientId,
+                auth: 'private_key_jwt',
+                publicKey: publicKey.export({ type: 'spki', format: 'pem' }),
+                publicKeysByKid: {
+                  'mstyle-backend-prod-20260827-01': publicKey.export({
+                    type: 'spki',
+                    format: 'pem',
+                  }),
+                },
+                scopes: ['mstyle.resident.authenticate'],
+              }
+            : undefined,
+      }),
+      { create: async () => undefined } as any,
+      { create: async () => undefined } as any,
+      {
+        getMstyleMockResponsesEnabled: async () => ({
+          enabled: false,
+          overridden: false,
+        }),
+      } as any,
+    );
+
+    await expect(
+      service.issueToken({
+        grant_type: 'client_credentials',
+        client_id: clientId,
+        client_assertion_type:
+          'urn:ietf:params:oauth:client-assertion-type:jwt-bearer',
+        client_assertion: assertion,
+      }),
+    ).rejects.toMatchObject({
+      oauthError: 'invalid_client',
+      description: 'Unknown assertion kid',
+    });
   });
 
   it('limits the reconcile client to changes.read', async () => {
@@ -227,9 +285,14 @@ function signAssertion(
   claims: Record<string, unknown>,
 ) {
   const now = Math.floor(Date.now() / 1000);
-  const encodedHeader = base64url({ alg: 'RS256', typ: 'JWT' });
+  const { kid, ...payloadClaims } = claims;
+  const encodedHeader = base64url({
+    alg: 'RS256',
+    typ: 'JWT',
+    ...(kid ? { kid } : {}),
+  });
   const encodedClaims = base64url({
-    ...claims,
+    ...payloadClaims,
     iat: now,
     exp: now + 60,
     jti: randomUUID(),

@@ -146,7 +146,9 @@ export class MstyleOauthService implements OnModuleInit {
         401,
       );
     }
-    const claims = verifyClientJwt(assertion, client.publicKey);
+    const header = parseClientJwtHeader(assertion);
+    const publicKey = publicKeyForKid(client, header.kid);
+    const claims = verifyClientJwt(assertion, publicKey);
     if (claims.iss !== client.clientId || claims.sub !== client.clientId) {
       throw new OAuthException('invalid_client', 'iss/sub mismatch', 401);
     }
@@ -182,6 +184,31 @@ export class MstyleOauthService implements OnModuleInit {
       throw new OAuthException('invalid_client', 'jti already used', 401);
     }
   }
+}
+
+function parseClientJwtHeader(token: string): { alg?: string; kid?: string } {
+  const parts = token.split('.');
+  if (parts.length !== 3) {
+    throw new OAuthException('invalid_client', 'Malformed assertion', 401);
+  }
+  try {
+    return JSON.parse(base64urlJson(parts[0]));
+  } catch {
+    throw new OAuthException('invalid_client', 'Malformed assertion', 401);
+  }
+}
+
+function publicKeyForKid(client: MstyleOauthClient, kid?: string): string {
+  const keys = client.publicKeysByKid || {};
+  if (!Object.keys(keys).length) return client.publicKey;
+  if (!kid) {
+    throw new OAuthException('invalid_client', 'assertion kid required', 401);
+  }
+  const publicKey = keys[kid];
+  if (!publicKey) {
+    throw new OAuthException('invalid_client', 'Unknown assertion kid', 401);
+  }
+  return publicKey;
 }
 
 function verifyClientJwt(token: string, pem: string): Record<string, unknown> {
