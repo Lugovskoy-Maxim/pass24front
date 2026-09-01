@@ -113,6 +113,7 @@ function LoginPageInner() {
     phone?: string;
     email?: string;
   } | null>(null);
+  const [personalDataAccepted, setPersonalDataAccepted] = useState(false);
   const {
     login: authLogin,
     requestRegistrationCode,
@@ -394,6 +395,14 @@ function LoginPageInner() {
       verificationChannel: effectiveChannel,
       blockedEmailDomains: config?.blockedEmailDomains,
     });
+    if (
+      mode === 'register' &&
+      registerStep === 'form' &&
+      !personalDataAccepted
+    ) {
+      errors.personalDataConsent =
+        'Подтвердите согласие на обработку персональных данных';
+    }
     setFieldErrors(errors);
     if (hasFieldErrors(errors)) return;
 
@@ -617,6 +626,7 @@ function LoginPageInner() {
     setPasswordConfirm('');
     setSmsResendIn(0);
     setResetResendIn(0);
+    if (next !== 'register') setPersonalDataAccepted(false);
     if (next === 'forgot') {
       const loginPhone = normalizeRuMobilePhone(login);
       setResetPhone(loginPhone ? formatRuMobilePhone(loginPhone) : '');
@@ -1029,6 +1039,43 @@ function LoginPageInner() {
                     autoComplete="new-password"
                   />
                 </FormField>
+                <label className="flex items-start gap-3 rounded-lg border border-[var(--border)] bg-[var(--surface-muted)] px-3 py-3 text-sm text-[var(--muted)]">
+                  <input
+                    type="checkbox"
+                    className="mt-1 h-4 w-4 shrink-0 accent-[var(--primary)]"
+                    checked={personalDataAccepted}
+                    onChange={(e) => {
+                      setPersonalDataAccepted(e.target.checked);
+                      clearFieldError('personalDataConsent');
+                    }}
+                  />
+                  <span>
+                    Я принимаю условия{' '}
+                    <a
+                      href="https://mstyle.ru/privacy-policy/"
+                      target="_blank"
+                      rel="noreferrer"
+                      className="text-[var(--primary)] hover:underline"
+                    >
+                      политики конфиденциальности
+                    </a>{' '}
+                    и даю{' '}
+                    <a
+                      href="https://mstyle.ru/soglasen-s-obrabotkoy-personalnyh-dannyh/"
+                      target="_blank"
+                      rel="noreferrer"
+                      className="text-[var(--primary)] hover:underline"
+                    >
+                      согласие на обработку персональных данных
+                    </a>
+                    .
+                    {fieldErrors.personalDataConsent && (
+                      <span className="block mt-1 text-[var(--danger)]">
+                        {fieldErrors.personalDataConsent}
+                      </span>
+                    )}
+                  </span>
+                </label>
               </>
             )}
 

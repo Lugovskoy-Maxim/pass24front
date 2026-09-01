@@ -683,6 +683,7 @@ export class AdminService {
     if (!user) throw new NotFoundException('Пользователь не найден');
 
     const prevRole = user.role;
+    let emailChanged = false;
 
     if (
       dto.fullName !== undefined ||
@@ -719,7 +720,36 @@ export class AdminService {
         user.username = await this.ensureUniqueUsername(dto.username, id);
       }
     }
-    if (dto.emailVerified !== undefined) user.emailVerified = dto.emailVerified;
+    if (dto.email !== undefined) {
+      const next = dto.email.trim().toLowerCase();
+      const current = (user.email || '').trim().toLowerCase();
+      if (!next) throw new BadRequestException('Укажите email');
+      if (next !== current) {
+        const clash = await this.userModel.findOne({
+          _id: { $ne: new Types.ObjectId(id) },
+          email: next,
+        });
+        if (clash) {
+          throw new ConflictException(
+            'Пользователь с таким email уже существует',
+          );
+        }
+        user.email = next;
+        user.emailVerified = false;
+        user.authVersion = (user.authVersion || 1) + 1;
+        emailChanged = true;
+        user.set('emailVerifyCodeHash', undefined);
+        user.set('emailVerifyExpiresAt', undefined);
+        user.set('emailVerifyLastSentAt', undefined);
+        user.set('passwordResetCodeHash', undefined);
+        user.set('passwordResetExpiresAt', undefined);
+        user.set('passwordResetLastSentAt', undefined);
+        user.set('passwordResetTokenHash', undefined);
+      }
+    }
+    if (dto.emailVerified !== undefined && !emailChanged) {
+      user.emailVerified = dto.emailVerified;
+    }
     if (dto.privateDataComplete !== undefined) {
       user.privateDataComplete = dto.privateDataComplete;
     }

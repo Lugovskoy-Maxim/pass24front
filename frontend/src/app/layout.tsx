@@ -12,6 +12,7 @@ import { PwaRegistrar } from '@/components/PwaRegistrar';
 import { PwaInstallPrompt } from '@/components/PwaInstallPrompt';
 import { PushNotificationPrompt } from '@/components/PushNotificationPrompt';
 import { HelpFaq } from '@/components/HelpFaq';
+import { SiteFooter } from '@/components/SiteFooter';
 import './globals.css';
 
 const manrope = Manrope({
@@ -82,6 +83,7 @@ export default function RootLayout({
           <AuthProvider>
             <ToastProvider>
               {children}
+              <SiteFooter />
               <PwaRegistrar />
               <PwaInstallPrompt />
               <PushNotificationPrompt />

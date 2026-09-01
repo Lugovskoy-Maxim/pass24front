@@ -621,6 +621,7 @@ function AdminUsersPageContent() {
       if (editId) {
         // Сотрудник компании: роль не отправляем (бэкенд её не меняет)
         await api.admin.updateUser(editId, {
+          email: form.email.trim().toLowerCase(),
           ...base,
           ...(isCompanyEmployee ? {} : { role: form.role }),
           isActive,
@@ -984,7 +985,6 @@ function AdminUsersPageContent() {
                 value={form.email}
                 onChange={(e) => setForm({ ...form, email: e.target.value })}
                 required
-                disabled={!!editId}
               />
             </div>
             <div>

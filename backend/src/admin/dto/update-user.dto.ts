@@ -2,6 +2,7 @@ import { Type } from 'class-transformer';
 import {
   IsArray,
   IsBoolean,
+  IsEmail,
   IsIn,
   IsInt,
   IsMongoId,
@@ -13,8 +14,12 @@ import {
   ValidateIf,
 } from 'class-validator';
 
-/** PATCH /admin/users/:id — все поля опциональны. Email не меняется. */
+/** PATCH /admin/users/:id — все поля опциональны. */
 export class UpdateUserDto {
+  @IsOptional()
+  @IsEmail()
+  email?: string;
+
   @IsOptional()
   @IsString()
   @MinLength(6)
