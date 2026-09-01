@@ -173,6 +173,10 @@ export class UpdateSiteSettingsDto {
   registrationNotifyUserIds?: string[];
 
   @IsOptional()
+  @IsBoolean()
+  helpButtonEnabled?: boolean;
+
+  @IsOptional()
   @IsArray()
   @ArrayMaxSize(50)
   @ValidateNested({ each: true })

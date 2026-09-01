@@ -20,7 +20,6 @@ import {
   getHomePath,
   isTenantCompanyUser,
 } from '@/lib/permissions';
-import { AppVersion } from '@/components/AppVersion';
 
 export default function PassTicketPage() {
   const params = useParams();
@@ -132,7 +131,6 @@ export default function PassTicketPage() {
           </>
         ) : null}
       </main>
-      <AppVersion className="py-4" />
     </div>
   );
 }

@@ -3,7 +3,6 @@
 import { useEffect } from 'react';
 import { useRouter } from 'next/navigation';
 import { useAuth } from '@/lib/auth';
-import { AppVersion } from '@/components/AppVersion';
 
 // старый /templates → заказ пропуска
 export default function TemplatesPage() {
@@ -20,9 +19,8 @@ export default function TemplatesPage() {
   }, [router, user, loading]);
 
   return (
-    <div className="min-h-screen flex flex-col items-center justify-center gap-3">
+    <div className="app-shell-center flex flex-col items-center justify-center gap-3">
       <div className="animate-pulse text-[var(--muted)]">Перенаправление…</div>
-      <AppVersion />
     </div>
   );
 }

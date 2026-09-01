@@ -1,0 +1,6 @@
+<svg xmlns="http://www.w3.org/2000/svg" width="72" height="28" viewBox="0 0 72 28" role="img" aria-label="TOMILO developer logo">
+  <path d="M6 8.5a4 4 0 0 1 4-4h35a4 4 0 0 1 4 4v11a4 4 0 0 1-4 4H10a4 4 0 0 1-4-4z" fill="none" stroke="#374151" stroke-width="2"/>
+  <path d="M15 10h16M23 10v9.5" fill="none" stroke="#374151" stroke-width="2.15" stroke-linecap="round" stroke-linejoin="round"/>
+  <path d="M39 18.5h5" fill="none" stroke="#374151" stroke-width="2.6" stroke-linecap="round" opacity="0.55"/>
+  <path d="M56 5l5 4.5-5 4.5M66 14l-5 4.5 5 4.5" fill="none" stroke="#374151" stroke-width="2.15" stroke-linecap="round" stroke-linejoin="round"/>
+</svg>

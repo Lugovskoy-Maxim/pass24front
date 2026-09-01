@@ -77,7 +77,7 @@ export default function RootLayout({
           }}
         />
       </head>
-      <body>
+      <body className="min-h-dvh flex flex-col">
         <ThemeProvider>
           <ThemeColorsApplier />
           <AuthProvider>

@@ -206,6 +206,11 @@ body {
   -moz-osx-font-smoothing: grayscale;
 }
 
+.app-shell-center {
+  flex: 1 0 auto;
+  min-height: 0;
+}
+
 h1,
 h2,
 h3 {

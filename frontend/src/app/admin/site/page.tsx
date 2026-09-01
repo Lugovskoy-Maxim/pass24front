@@ -147,6 +147,7 @@ function normalizeSettings(s: SiteSettings): SiteSettings {
     registrationNotifyUserIds: Array.isArray(s.registrationNotifyUserIds)
       ? s.registrationNotifyUserIds.map(String)
       : [],
+    helpButtonEnabled: s.helpButtonEnabled !== false,
     faqItems: resolveFaqItems(s.faqItems).map((item) => ({ ...item })),
     helpGuideSections: resolveGuideSections(s.helpGuideSections).map(
       (item) => ({
@@ -971,6 +972,29 @@ export default function AdminSiteSettingsPage() {
                 </button>
               </div>
             </div>
+
+            <label className="flex items-start gap-3 rounded-lg border border-[var(--border)] bg-[var(--surface-muted)] p-4 cursor-pointer">
+              <input
+                type="checkbox"
+                className="checkbox mt-0.5"
+                checked={settings.helpButtonEnabled !== false}
+                onChange={(e) =>
+                  setSettings({
+                    ...settings,
+                    helpButtonEnabled: e.target.checked,
+                  })
+                }
+              />
+              <span>
+                <span className="text-sm font-medium block">
+                  Показывать кнопку «Помощь»
+                </span>
+                <span className="text-xs text-[var(--muted)]">
+                  Если выключено, плавающая кнопка и панель помощи не
+                  отображаются на сайте.
+                </span>
+              </span>
+            </label>
 
             <div className="space-y-4">
               {(settings.faqItems || []).map((item, index) => (

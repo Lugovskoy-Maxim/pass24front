@@ -60,6 +60,8 @@ export interface SiteSettingsDto {
   registrationNotifyEmails: string[];
   /** Staff user ids — тоже уведомляем на их email. */
   registrationNotifyUserIds: string[];
+  /** Показывать плавающую кнопку «Помощь». */
+  helpButtonEnabled: boolean;
   faqItems: NormalizedFaqItem[];
   helpGuideSections: NormalizedGuideSection[];
 }
@@ -155,6 +157,7 @@ export class SiteSettingsService implements OnModuleInit {
     blockedEmailDomains?: string[];
     registrationNotifyEmails?: string[];
     registrationNotifyUserIds?: string[];
+    helpButtonEnabled?: boolean;
     /** Сырой список из DTO — id опционален, нормализуется внутри */
     faqItems?: Array<{ id?: string; question?: string; answer?: string }>;
     helpGuideSections?: Array<{
@@ -261,6 +264,9 @@ export class SiteSettingsService implements OnModuleInit {
         ),
       ].slice(0, 50);
     }
+    if (data.helpButtonEnabled !== undefined) {
+      update.helpButtonEnabled = !!data.helpButtonEnabled;
+    }
     if (data.faqItems !== undefined) {
       update.faqItems = normalizeFaqItems(data.faqItems);
     }
@@ -338,6 +344,7 @@ export class SiteSettingsService implements OnModuleInit {
       registrationNotifyUserIds: Array.isArray(doc?.registrationNotifyUserIds)
         ? doc.registrationNotifyUserIds.map(String).filter(Boolean).slice(0, 50)
         : [],
+      helpButtonEnabled: doc?.helpButtonEnabled !== false,
       faqItems: normalizeFaqItems(
         doc?.faqItems?.length ? doc.faqItems : DEFAULT_FAQ_ITEMS,
       ),

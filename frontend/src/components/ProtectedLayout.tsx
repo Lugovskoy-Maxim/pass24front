@@ -13,7 +13,6 @@ import { useAuth } from '@/lib/auth';
 import { Header } from './Header';
 import { MobileNav } from './MobileNav';
 import { PendingApprovalBanner } from './PendingApprovalBanner';
-import { AppVersion } from './AppVersion';
 import { UserRole } from '@/lib/api';
 import {
   getHomePath,
@@ -79,31 +78,28 @@ export function ProtectedLayout({
 
   if (loading) {
     return (
-      <div className="min-h-screen flex flex-col items-center justify-center gap-3">
+      <div className="app-shell-center flex flex-col items-center justify-center gap-3">
         <div className="animate-pulse text-[var(--muted)]">Загрузка...</div>
-        <AppVersion />
       </div>
     );
   }
 
   if (!user) {
     return (
-      <div className="min-h-screen flex flex-col items-center justify-center gap-3">
+      <div className="app-shell-center flex flex-col items-center justify-center gap-3">
         <div className="animate-pulse text-[var(--muted)]">
           Переход на страницу входа…
         </div>
-        <AppVersion />
       </div>
     );
   }
 
   if (denied) {
     return (
-      <div className="min-h-screen flex flex-col items-center justify-center gap-3">
+      <div className="app-shell-center flex flex-col items-center justify-center gap-3">
         <div className="animate-pulse text-[var(--muted)]">
           Нет доступа, перенаправление…
         </div>
-        <AppVersion />
       </div>
     );
   }
@@ -116,7 +112,6 @@ export function ProtectedLayout({
       >
         <PendingApprovalBanner user={user} />
         {children}
-        <AppVersion className="mt-10 mb-2 pb-[env(safe-area-inset-bottom,0px)]" />
       </main>
       <MobileNav />
     </>

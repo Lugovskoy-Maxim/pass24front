@@ -64,6 +64,7 @@ export class AppConfigService {
       smsRegistrationEnabled: site.smsRegistrationEnabled,
       smsRegistrationDisabledMessage: site.smsRegistrationDisabledMessage,
       blockedEmailDomains: site.blockedEmailDomains,
+      helpButtonEnabled: site.helpButtonEnabled,
       faqItems: site.faqItems,
       helpGuideSections: site.helpGuideSections,
       devMode: process.env.NODE_ENV !== 'production',

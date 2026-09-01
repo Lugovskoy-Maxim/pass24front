@@ -1412,6 +1412,8 @@ export interface SiteSettings {
   registrationNotifyEmails?: string[];
   /** Staff user ids для уведомлений. */
   registrationNotifyUserIds?: string[];
+  /** Показывать плавающую кнопку «Помощь». */
+  helpButtonEnabled?: boolean;
   faqItems?: FaqItem[];
   helpGuideSections?: HelpGuideSection[];
 }

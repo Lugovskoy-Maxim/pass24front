@@ -35,6 +35,7 @@ export function HelpFaq() {
   const triggerRef = useRef<HTMLButtonElement>(null);
   const titleId = useId();
   const config = useConfig();
+  const helpButtonEnabled = config?.helpButtonEnabled !== false;
   const faqItems = useMemo(
     () => resolveFaqItems(config?.faqItems),
     [config?.faqItems],
@@ -101,6 +102,8 @@ export function HelpFaq() {
   const toggleFaq = (id: string) => {
     setExpandedFaq((prev) => (prev === id ? null : id));
   };
+
+  if (!helpButtonEnabled) return null;
 
   return (
     <div className={`help-faq ${open ? 'help-faq--open' : ''}`}>

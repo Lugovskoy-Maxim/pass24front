@@ -14,7 +14,6 @@ import {
   FormInput,
   PasswordInput,
 } from '@/components/FormField';
-import { AppVersion } from '@/components/AppVersion';
 import { SiteBrand } from '@/components/SiteBrand';
 import { ThemeToggle } from '@/components/ThemeToggle';
 import { useConfig } from '@/hooks/useConfig';
@@ -94,7 +93,7 @@ export default function InviteAcceptPage() {
   };
 
   return (
-    <div className="min-h-screen flex items-center justify-center p-4 bg-[var(--bg)] relative">
+    <div className="app-shell-center flex items-center justify-center p-4 bg-[var(--bg)] relative">
       <div className="absolute top-4 right-4">
         <ThemeToggle />
       </div>
@@ -218,7 +217,6 @@ export default function InviteAcceptPage() {
             </form>
           )}
         </div>
-        <AppVersion className="mt-6" />
       </div>
     </div>
   );

@@ -98,6 +98,10 @@ export class AppSettings {
   @Prop({ type: [String], default: [] })
   registrationNotifyUserIds?: string[];
 
+  /** Показывать плавающую кнопку «Помощь» на фронте */
+  @Prop({ default: true })
+  helpButtonEnabled: boolean;
+
   /** Вопросы и ответы для панели помощи */
   @Prop({
     type: [

@@ -22,7 +22,6 @@ import {
   FormInput,
   PasswordInput,
 } from '@/components/FormField';
-import { AppVersion } from '@/components/AppVersion';
 import {
   buildFullName,
   getUserNameLabels,
@@ -293,9 +292,8 @@ function LoginPageInner() {
 
   if (authLoading || user) {
     return (
-      <div className="min-h-screen flex flex-col items-center justify-center gap-3">
+      <div className="app-shell-center flex flex-col items-center justify-center gap-3">
         <div className="animate-pulse text-[var(--muted)]">Загрузка...</div>
-        <AppVersion />
       </div>
     );
   }
@@ -669,7 +667,7 @@ function LoginPageInner() {
   })();
 
   return (
-    <div className="min-h-screen flex items-center justify-center p-4 bg-[var(--bg)] relative">
+    <div className="app-shell-center flex items-center justify-center p-4 bg-[var(--bg)] relative">
       <div className="absolute top-4 right-4">
         <ThemeToggle />
       </div>
@@ -1292,7 +1290,6 @@ function LoginPageInner() {
             </div>
           )}
         </div>
-        <AppVersion className="mt-6" />
       </div>
     </div>
   );
@@ -1302,9 +1299,8 @@ export default function LoginPage() {
   return (
     <Suspense
       fallback={
-        <div className="min-h-screen flex flex-col items-center justify-center gap-3">
+        <div className="app-shell-center flex flex-col items-center justify-center gap-3">
           <div className="animate-pulse text-[var(--muted)]">Загрузка...</div>
-          <AppVersion />
         </div>
       }
     >
