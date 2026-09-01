@@ -1,22 +1,41 @@
 #!/usr/bin/env node
 
-const fs = require('fs');
-const crypto = require('crypto');
-const https = require('https');
+const fs = require("fs");
+const crypto = require("crypto");
+const https = require("https");
 
 const tokenUrl =
-  process.env.MSTYLE_TOKEN_URL || 'https://pass.mstyle.ru/api/oauth2/token';
+  process.env.MSTYLE_TOKEN_URL || "https://pass.mstyle.ru/api/oauth2/token";
 const keyDir =
-  process.env.MSTYLE_KEYS_DIR || '/Users/tomilo/Downloads/production-4';
+  process.env.MSTYLE_KEYS_DIR || "/Users/tomilo/Downloads/production-4";
+const backendScopes =
+  process.env.MSTYLE_CLIENT_SCOPES ||
+  [
+    "mstyle.resident.authenticate",
+    "mstyle.residents.read",
+    "mstyle.residents.write",
+    "mstyle.profiles.read",
+    "mstyle.profiles.write",
+    "mstyle.memberships.read",
+    "mstyle.memberships.write",
+    "mstyle.contacts.read",
+    "mstyle.contacts.write",
+    "mstyle.consents.read",
+    "mstyle.consents.write",
+    "mstyle.private-data.read",
+    "mstyle.private-data.write",
+    "mstyle.guests.read",
+    "mstyle.guests.write",
+    "mstyle.admin.search",
+    "mstyle.changes.read",
+  ].join(" ");
 
 const clients = [
   {
-    name: 'backend',
-    clientId: process.env.MSTYLE_CLIENT_ID || 'mstyle-backend-prod',
-    kid: process.env.MSTYLE_CLIENT_KID || 'mstyle-backend-prod-20260823-01',
-    scope:
-      process.env.MSTYLE_CLIENT_SCOPES ||
-      'mstyle.resident.authenticate mstyle.residents.read',
+    name: "backend",
+    clientId: process.env.MSTYLE_CLIENT_ID || "mstyle-backend-prod",
+    kid: process.env.MSTYLE_CLIENT_KID || "mstyle-backend-prod-20260823-01",
+    scope: backendScopes,
     privateKeyPath:
       process.env.MSTYLE_CLIENT_PRIVATE_KEY_FILE ||
       `${keyDir}/mstyle-backend-prod-20260823-01-private.pem`,
@@ -25,13 +44,12 @@ const clients = [
       `${keyDir}/mstyle-backend-prod-20260823-01-public.pem`,
   },
   {
-    name: 'reconcile',
-    clientId:
-      process.env.MSTYLE_RECONCILE_CLIENT_ID || 'mstyle-reconcile-prod',
+    name: "reconcile",
+    clientId: process.env.MSTYLE_RECONCILE_CLIENT_ID || "mstyle-reconcile-prod",
     kid:
       process.env.MSTYLE_RECONCILE_CLIENT_KID ||
-      'mstyle-reconcile-prod-20260823-01',
-    scope: process.env.MSTYLE_RECONCILE_CLIENT_SCOPES || 'mstyle.changes.read',
+      "mstyle-reconcile-prod-20260823-01",
+    scope: process.env.MSTYLE_RECONCILE_CLIENT_SCOPES || "mstyle.changes.read",
     privateKeyPath:
       process.env.MSTYLE_RECONCILE_CLIENT_PRIVATE_KEY_FILE ||
       `${keyDir}/mstyle-reconcile-prod-20260823-01-private.pem`,
@@ -43,14 +61,14 @@ const clients = [
 
 function b64url(input) {
   return Buffer.from(input)
-    .toString('base64')
-    .replace(/=/g, '')
-    .replace(/\+/g, '-')
-    .replace(/\//g, '_');
+    .toString("base64")
+    .replace(/=/g, "")
+    .replace(/\+/g, "-")
+    .replace(/\//g, "_");
 }
 
 function sha256Hex(buffer) {
-  return crypto.createHash('sha256').update(buffer).digest('hex');
+  return crypto.createHash("sha256").update(buffer).digest("hex");
 }
 
 function assertFile(path) {
@@ -66,8 +84,8 @@ function verifyKeyPair(client) {
   const privateKey = fs.readFileSync(client.privateKeyPath);
   const publicKey = fs.readFileSync(client.publicKeyPath);
   const message = Buffer.from(`pass24-${client.name}-oauth-check`);
-  const signature = crypto.sign('RSA-SHA256', message, privateKey);
-  const matches = crypto.verify('RSA-SHA256', message, publicKey, signature);
+  const signature = crypto.sign("RSA-SHA256", message, privateKey);
+  const matches = crypto.verify("RSA-SHA256", message, publicKey, signature);
 
   return {
     matches,
@@ -77,7 +95,7 @@ function verifyKeyPair(client) {
 
 function makeAssertion(client) {
   const now = Math.floor(Date.now() / 1000);
-  const header = { alg: 'RS256', typ: 'JWT', kid: client.kid };
+  const header = { alg: "RS256", typ: "JWT", kid: client.kid };
   const payload = {
     iss: client.clientId,
     sub: client.clientId,
@@ -91,7 +109,7 @@ function makeAssertion(client) {
     JSON.stringify(payload),
   )}`;
   const signature = crypto.sign(
-    'RSA-SHA256',
+    "RSA-SHA256",
     Buffer.from(signingInput),
     fs.readFileSync(client.privateKeyPath),
   );
@@ -105,18 +123,18 @@ function postForm(url, body) {
     const req = https.request(
       url,
       {
-        method: 'POST',
+        method: "POST",
         headers: {
-          'content-type': 'application/x-www-form-urlencoded',
-          'content-length': Buffer.byteLength(data),
+          "content-type": "application/x-www-form-urlencoded",
+          "content-length": Buffer.byteLength(data),
         },
       },
       (res) => {
-        let responseBody = '';
-        res.on('data', (chunk) => {
+        let responseBody = "";
+        res.on("data", (chunk) => {
           responseBody += chunk;
         });
-        res.on('end', () => {
+        res.on("end", () => {
           resolve({
             status: res.statusCode,
             headers: res.headers,
@@ -126,7 +144,7 @@ function postForm(url, body) {
       },
     );
 
-    req.on('error', (error) => resolve({ error: String(error) }));
+    req.on("error", (error) => resolve({ error: String(error) }));
     req.write(data);
     req.end();
   });
@@ -143,23 +161,23 @@ function safeJson(value) {
 async function checkClient(client) {
   const keyCheck = verifyKeyPair(client);
   const response = await postForm(tokenUrl, {
-    grant_type: 'client_credentials',
+    grant_type: "client_credentials",
     client_id: client.clientId,
     client_assertion_type:
-      'urn:ietf:params:oauth:client-assertion-type:jwt-bearer',
+      "urn:ietf:params:oauth:client-assertion-type:jwt-bearer",
     client_assertion: makeAssertion(client),
     scope: client.scope,
   });
 
-  const parsed = safeJson(response.body || '');
+  const parsed = safeJson(response.body || "");
 
   return {
     name: client.name,
     tokenUrl,
-    method: 'POST',
+    method: "POST",
     clientId: client.clientId,
     kid: client.kid,
-    alg: 'RS256',
+    alg: "RS256",
     scope: client.scope,
     privateKeyFile: client.privateKeyPath,
     publicKeyFile: client.publicKeyPath,
@@ -180,7 +198,7 @@ async function checkClient(client) {
 async function main() {
   console.log(`Token URL: ${tokenUrl}`);
   console.log(`Keys dir: ${keyDir}`);
-  console.log('Access tokens are intentionally not printed.\n');
+  console.log("Access tokens are intentionally not printed.\n");
 
   let failed = false;
   for (const client of clients) {
@@ -190,7 +208,7 @@ async function main() {
         failed = true;
       }
       console.log(JSON.stringify(result, null, 2));
-      console.log('');
+      console.log("");
     } catch (error) {
       failed = true;
       console.error(
@@ -205,7 +223,7 @@ async function main() {
           2,
         ),
       );
-      console.error('');
+      console.error("");
     }
   }
 

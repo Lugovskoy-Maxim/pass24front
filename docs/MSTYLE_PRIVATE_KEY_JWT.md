@@ -2,10 +2,10 @@
 
 В интеграции используются два OAuth-клиента:
 
-| Клиент                  | Назначение                                           | Разрешённые scopes                                   |
-| ----------------------- | ---------------------------------------------------- | ---------------------------------------------------- |
-| `mstyle-backend-prod`   | вход резидента и получение его контекста с профилями | `mstyle.resident.authenticate mstyle.residents.read` |
-| `mstyle-reconcile-prod` | чтение ленты изменений                               | только `mstyle.changes.read`                         |
+| Клиент                  | Назначение                                                          | Разрешённые scopes             |
+| ----------------------- | ------------------------------------------------------------------- | ------------------------------ |
+| `mstyle-backend-prod`   | внешняя авторизация, резиденты, профили, контакты, гости, изменения | полный набор scopes Mstyle API |
+| `mstyle-reconcile-prod` | чтение ленты изменений                                              | только `mstyle.changes.read`   |
 
 ## Где должны находиться ключи
 
@@ -33,7 +33,7 @@ MSTYLE_CLIENT_ID=mstyle-backend-prod
 MSTYLE_CLIENT_AUTH=private_key_jwt
 MSTYLE_CLIENT_KID=mstyle-backend-prod-20260823-01
 MSTYLE_CLIENT_PUBLIC_KEY_FILE=/app/config/oauth-public-keys/mstyle-backend-prod-20260823-01-public.pem
-MSTYLE_CLIENT_SCOPES=mstyle.resident.authenticate mstyle.residents.read
+MSTYLE_CLIENT_SCOPES=mstyle.resident.authenticate mstyle.residents.read mstyle.residents.write mstyle.profiles.read mstyle.profiles.write mstyle.memberships.read mstyle.memberships.write mstyle.contacts.read mstyle.contacts.write mstyle.consents.read mstyle.consents.write mstyle.private-data.read mstyle.private-data.write mstyle.guests.read mstyle.guests.write mstyle.admin.search mstyle.changes.read
 
 MSTYLE_RECONCILE_CLIENT_ID=mstyle-reconcile-prod
 MSTYLE_RECONCILE_CLIENT_AUTH=private_key_jwt
@@ -68,3 +68,37 @@ Authorization: Bearer <service-token>
 Assertion передаётся в `POST /api/oauth2/token` вместе с
 `grant_type=client_credentials`, `client_id` и
 `client_assertion_type=urn:ietf:params:oauth:client-assertion-type:jwt-bearer`.
+
+## Проверка и логи Docker на сервере
+
+После обновления кода token endpoint должен отвечать `200 OK`:
+
+```bash
+cd /opt/pass24front
+./update.sh
+```
+
+Посмотреть последние логи backend:
+
+```bash
+docker compose -f docker-compose.yml -f docker-compose.prod.yml --env-file .env logs --tail=200 backend
+```
+
+Смотреть backend-логи в реальном времени:
+
+```bash
+docker compose -f docker-compose.yml -f docker-compose.prod.yml --env-file .env logs -f backend
+```
+
+Если удобнее по имени контейнера:
+
+```bash
+docker logs --tail=200 pass24-backend
+docker logs -f pass24-backend
+```
+
+Проверить, какие OAuth-переменные реально попали в контейнер:
+
+```bash
+docker exec pass24-backend printenv | grep '^MSTYLE_'
+```
