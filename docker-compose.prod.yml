@@ -63,8 +63,9 @@ services:
       - MSTYLE_MOCK_OTP=${MSTYLE_MOCK_OTP:-1234}
       - MSTYLE_ENVIRONMENT=${MSTYLE_ENVIRONMENT:-production}
       - MSTYLE_PUBLIC_BASE_URL=${MSTYLE_PUBLIC_BASE_URL:-${PUBLIC_APP_URL}}
-      # Когда поднят profile telegram: gateway в netns wireguard
-      - TELEGRAM_GATEWAY_URL=${TELEGRAM_GATEWAY_URL:-http://wireguard:8091}
+      # Пусто по умолчанию — update.sh без --profile telegram не ходит на wireguard.
+      # Когда поднят profile telegram: TELEGRAM_GATEWAY_URL=http://wireguard:8091
+      - TELEGRAM_GATEWAY_URL=${TELEGRAM_GATEWAY_URL:-}
       - TELEGRAM_GATEWAY_TOKEN=${TELEGRAM_GATEWAY_TOKEN:-}
       - MSTYLE_TELEGRAM_BOT=${MSTYLE_TELEGRAM_BOT:-mstyleauthbot}
 
