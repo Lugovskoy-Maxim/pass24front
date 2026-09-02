@@ -179,13 +179,13 @@ SMS-вариант:
 
 ### 2. `POST /auth/register/confirm`
 
-Подтверждение 6-значным кодом → создание user.
+Подтверждение 4-значным кодом → создание user.
 
 **Body**
 
 | поле | тип | обяз. |
 |------|-----|-------|
-| `code` | string | да, ровно 6 цифр |
+| `code` | string | да, 4 цифры (email); для SMS Mobile ID допускается 4–8 |
 | `email` | string | email **или** phone |
 | `phone` | string | |
 

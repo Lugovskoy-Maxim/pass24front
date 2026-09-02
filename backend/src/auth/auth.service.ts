@@ -25,6 +25,7 @@ import { AuditService } from '../audit/audit.service';
 import { AUTH_CONNECTION } from '../database/auth-database.constants';
 import { MailService } from '../mail/mail.service';
 import { SmsService } from '../sms/sms.service';
+import { generateOtpCode } from '../common/otp-code';
 import { normalizeRuMobilePhone } from '../common/phone';
 import {
   isAllowedRegistrationEmail,
@@ -223,7 +224,7 @@ export class AuthService {
       }
       unset = { codeHash: 1 };
     } else {
-      const code = String(Math.floor(100000 + Math.random() * 900000));
+      const code = generateOtpCode();
       pendingData.codeHash = await bcrypt.hash(code, 10);
       await this.mailService.sendRegistrationCode(email!, code);
       unset = { mobileIdRequestId: 1, mobileIdAuthType: 1 };
@@ -604,7 +605,7 @@ export class AuthService {
       }
     }
 
-    const code = String(Math.floor(100000 + Math.random() * 900000));
+    const code = generateOtpCode();
     const codeHash = await bcrypt.hash(code, 10);
     const now = new Date();
     user.passwordResetCodeHash = codeHash;
@@ -838,7 +839,7 @@ export class AuthService {
       }
     }
 
-    const code = String(Math.floor(100000 + Math.random() * 900000));
+    const code = generateOtpCode();
     const codeHash = await bcrypt.hash(code, 10);
     const now = new Date();
     user.emailVerifyCodeHash = codeHash;

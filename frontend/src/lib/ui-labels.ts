@@ -214,7 +214,7 @@ export const DEFAULT_UI_LABELS = {
     email: 'renta@mstyle.ru',
     phone: '+7 495 663-00-00',
     login: 'renta@mstyle.ru или +7 495 663-00-00',
-    verificationCode: '000000',
+    verificationCode: '0000',
     employeeEmail: 'sotrudnik@mstyle.ru',
     vehiclePlate: 'А777МС77',
     officeNumber: '401, БЦ Добрынинский',

@@ -898,7 +898,7 @@ function LoginPageInner() {
                 <p className="text-sm text-[var(--text)]">
                   {verificationChannel === 'phone'
                     ? 'Подтвердите запрос в SIM-PUSH на телефоне. После подтверждения регистрация продолжится автоматически для номера '
-                    : 'Введите 6-значный код, отправленный на '}
+                    : 'Введите 4-значный код, отправленный на '}
                   <span className="font-medium">{verificationTarget}</span>
                 </p>
                 {verificationChannel === 'phone' &&
@@ -926,7 +926,7 @@ function LoginPageInner() {
                     autoComplete="one-time-code"
                     value={verificationCode}
                     onChange={(e) => {
-                      const maxLen = verificationChannel === 'phone' ? 8 : 6;
+                      const maxLen = verificationChannel === 'phone' ? 8 : 4;
                       setVerificationCode(
                         e.target.value.replace(/\D/g, '').slice(0, maxLen),
                       );

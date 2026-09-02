@@ -3,7 +3,7 @@ import { IsNotEmpty, IsString, Length, Matches } from 'class-validator';
 export class ConfirmEmailVerifyDto {
   @IsString()
   @IsNotEmpty()
-  @Length(6, 6)
-  @Matches(/^\d{6}$/, { message: 'Код состоит из 6 цифр' })
+  @Length(4, 4)
+  @Matches(/^\d{4}$/, { message: 'Код состоит из 4 цифр' })
   code: string;
 }

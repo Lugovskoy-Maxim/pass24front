@@ -414,8 +414,8 @@ export default function ProfilePage() {
   const handleConfirmEmailCode = async (e: FormEvent) => {
     e.preventDefault();
     const code = emailVerifyCode.trim();
-    if (!/^\d{6}$/.test(code)) {
-      toast('Введите 6-значный код из письма', 'error');
+    if (!/^\d{4}$/.test(code)) {
+      toast('Введите 4-значный код из письма', 'error');
       return;
     }
     setEmailVerifyLoading(true);
@@ -644,7 +644,7 @@ export default function ProfilePage() {
                 <p className="font-medium text-amber-950">Подтвердите email</p>
                 <p className="text-sm text-amber-900/85 mt-1">
                   Адрес <strong className="break-all">{user.email}</strong> ещё
-                  не подтверждён. Мы отправим 6-значный код на эту почту.
+                  не подтверждён. Мы отправим 4-значный код на эту почту.
                 </p>
               </div>
             </div>
@@ -676,7 +676,7 @@ export default function ProfilePage() {
                     value={emailVerifyCode}
                     onChange={(e) =>
                       setEmailVerifyCode(
-                        e.target.value.replace(/\D/g, '').slice(0, 6),
+                        e.target.value.replace(/\D/g, '').slice(0, 4),
                       )
                     }
                     placeholder={ph.verificationCode}
