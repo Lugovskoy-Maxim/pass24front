@@ -207,17 +207,29 @@ function createFixture() {
     isMobileAuthVerified: jest.fn(async () => false),
     verifyMobileAuth: jest.fn(async () => false),
   };
+  const mail = {
+    sendEmailVerificationCode: jest.fn(async () => ({ sent: true })),
+  };
+  const telegramGateway = {
+    isConfigured: jest.fn(() => false),
+    registerPendingOtp: jest.fn(async () => true),
+    sendOtp: jest.fn(async () => true),
+  };
   const service = new MstyleAuthService(
     config as any,
     identities as any,
     rates as any,
     challenges as any,
     sms as any,
+    mail as any,
+    telegramGateway as any,
   );
 
   return {
     service,
     sms,
+    mail,
+    telegramGateway,
     challenges,
     challenge: () => stored,
   };

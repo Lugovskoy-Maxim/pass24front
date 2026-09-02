@@ -76,6 +76,9 @@ services:
       - MSTYLE_MOCK_OTP=${MSTYLE_MOCK_OTP:-1234}
       - MSTYLE_ENVIRONMENT=${MSTYLE_ENVIRONMENT:-staging}
       - MSTYLE_PUBLIC_BASE_URL=${MSTYLE_PUBLIC_BASE_URL:-}
+      - TELEGRAM_GATEWAY_URL=${TELEGRAM_GATEWAY_URL:-}
+      - TELEGRAM_GATEWAY_TOKEN=${TELEGRAM_GATEWAY_TOKEN:-}
+      - MSTYLE_TELEGRAM_BOT=${MSTYLE_TELEGRAM_BOT:-mstyleauthbot}
     depends_on:
       mongo:
         condition: service_healthy
@@ -88,6 +91,47 @@ services:
     # volumes:
     #   - ./backend:/app
     #   - /app/node_modules
+
+  # WireGuard client — только для Telegram Bot API egress.
+  # Поднимать с: docker compose --profile telegram up -d
+  wireguard:
+    profiles: ["telegram"]
+    image: lscr.io/linuxserver/wireguard:latest
+    container_name: pass24-wireguard
+    restart: unless-stopped
+    cap_add:
+      - NET_ADMIN
+      - SYS_MODULE
+    sysctls:
+      - net.ipv4.conf.all.src_valid_mark=1
+    environment:
+      - PUID=1000
+      - PGID=1000
+      - TZ=Europe/Moscow
+    volumes:
+      - ./docker/wireguard:/config
+    ports:
+      # HTTP API telegram-gateway слушает в общем netns
+      - "127.0.0.1:8091:8091"
+    devices:
+      - /dev/net/tun:/dev/net/tun
+
+  # Telegram OTP gateway (Bot API через WireGuard)
+  telegram-gateway:
+    profiles: ["telegram"]
+    build:
+      context: ./docker/telegram-gateway
+      dockerfile: Dockerfile
+    container_name: pass24-telegram-gateway
+    restart: unless-stopped
+    network_mode: "service:wireguard"
+    environment:
+      - PORT=8091
+      - TELEGRAM_BOT_TOKEN=${TELEGRAM_BOT_TOKEN:-}
+      - TELEGRAM_GATEWAY_TOKEN=${TELEGRAM_GATEWAY_TOKEN:-}
+      - TELEGRAM_POLL=${TELEGRAM_POLL:-true}
+    depends_on:
+      - wireguard
 
   # Next.js Frontend
   frontend:

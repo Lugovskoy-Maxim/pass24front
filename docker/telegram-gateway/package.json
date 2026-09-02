@@ -1,0 +1,13 @@
+{
+  "name": "pass24-telegram-gateway",
+  "version": "1.0.0",
+  "private": true,
+  "description": "Telegram Bot API gateway (OTP). Egress goes through WireGuard sidecar.",
+  "main": "server.js",
+  "scripts": {
+    "start": "node server.js"
+  },
+  "engines": {
+    "node": ">=20"
+  }
+}

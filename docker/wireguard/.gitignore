@@ -1,0 +1,5 @@
+wg0.conf
+*.key
+*.pem
+!wg0.conf.example
+!README.md

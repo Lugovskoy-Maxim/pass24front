@@ -23,6 +23,7 @@ import { MailModule } from './mail/mail.module';
 import { SmsModule } from './sms/sms.module';
 import { SiteSettingsModule } from './site-settings/site-settings.module';
 import { NotificationsModule } from './notifications/notifications.module';
+import { TelegramModule } from './telegram/telegram.module';
 import { MstyleV2Module } from './integrations/mstyle-v2/mstyle-v2.module';
 
 @Module({
@@ -49,6 +50,7 @@ import { MstyleV2Module } from './integrations/mstyle-v2/mstyle-v2.module';
     AuditModule,
     MailModule, // @Global — OTP, билеты, сброс пароля
     SmsModule, // @Global — SMS Aero (регистрация по телефону)
+    TelegramModule, // @Global — OTP через telegram-gateway (WireGuard)
     SiteSettingsModule, // бренд, FAQ, инструкции, SMS-флаги
     NotificationsModule,
     AuthModule,
