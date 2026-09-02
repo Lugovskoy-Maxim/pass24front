@@ -20,3 +20,5 @@ data/mongo/*
 WiredTiger*
 mongod.lock
 storage.bson
+
+scripts/__pycache__/
