@@ -56,7 +56,9 @@ docker ps   # проверить имя
 5. Условие: «Выполнять, только если компьютер подключён к сети» — по желанию  
 6. Docker Desktop должен быть запущен к моменту бэкапа (можно поставить отложенный старт или запускать compose в автозагрузке).
 
-Старые файлы старше **14 дней** скрипт удаляет сам (`RETENTION_DAYS`).
+Старые файлы старше **7 дней** скрипт удаляет сам (`RETENTION_DAYS=7`).
+При создании бэкапа «8-го дня» локальные (и FTP, если включён) копии с датой
+старше окна хранения удаляются.
 
 ### Восстановление с Windows
 
@@ -167,11 +169,45 @@ scp "user@192.168.200.9:/opt/pass24front/backups/mongo/*.gz" "$env:USERPROFILE\D
 
 ---
 
+## Выгрузка на FTP (7 дней)
+
+После локального dump скрипт может залить оба `.gz` на FTP и **удалить на FTP**
+файлы старше `RETENTION_DAYS` (по дате в имени `pass24_YYYYMMDD_...`).
+
+В `/opt/pass24front/.env` (или env перед запуском):
+
+```env
+RETENTION_DAYS=7
+BACKUP_FTP_ENABLED=true
+BACKUP_FTP_HOST=ftp.example.com
+BACKUP_FTP_PORT=21
+BACKUP_FTP_USER=backup_user
+BACKUP_FTP_PASS=secret
+BACKUP_FTP_DIR=/pass24-backups
+BACKUP_FTP_SSL=false
+BACKUP_FTP_PASSIVE=true
+```
+
+Нужен `python3` на сервере (stdlib `ftplib`, без pip).
+
+```bash
+cd /opt/pass24front
+sudo chmod +x scripts/mongo-backup.sh scripts/mongo-backup-ftp.py
+sudo ./scripts/mongo-backup.sh
+```
+
+На Windows то же через `$env:BACKUP_FTP_*=...` и `.\scripts\mongo-backup.ps1`.
+
+Пароль FTP **только** в `.env` / переменных окружения, не в git.
+
+---
+
 ## Проверка
 
 1. После бэкапа файлы `.gz` не нулевого размера (обычно десятки KB–MB).  
 2. Раз в месяц проверьте restore на **тестовом** контейнере Mongo, не на проде.  
-3. Храните копии не только на том же диске, где Docker volume (флешка / другой диск / облако).
+3. Храните копии не только на том же диске, где Docker volume (флешка / FTP / другой диск).  
+4. При включённом FTP в логе cron должны быть строки `FTP uploaded` и `FTP prune done`.
 
 ---
 
@@ -180,6 +216,7 @@ scp "user@192.168.200.9:/opt/pass24front/backups/mongo/*.gz" "$env:USERPROFILE\D
 | Файл | ОС |
 |------|-----|
 | `scripts/mongo-backup.sh` | Linux (сервер / WSL) |
+| `scripts/mongo-backup-ftp.py` | FTP upload + remote prune |
 | `scripts/setup-mongo-backup-cron.sh` | Linux cron |
 | `scripts/mongo-backup.ps1` | Windows, локальный Docker |
 | `scripts/mongo-backup-from-server.ps1` | Windows ← scp с сервера |
