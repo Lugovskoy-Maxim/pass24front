@@ -150,8 +150,12 @@ if [[ "$FTP_ENABLED" == "true" || "$FTP_ENABLED" == "1" || "$FTP_ENABLED" == "ye
   export BACKUP_FTP_SSL="${BACKUP_FTP_SSL:-false}"
   export BACKUP_FTP_PASSIVE="${BACKUP_FTP_PASSIVE:-true}"
   export BACKUP_FTP_INSECURE_SSL="${BACKUP_FTP_INSECURE_SSL:-false}"
-  python3 "$FTP_SCRIPT" "$PASS24_FILE" "$AUTH_FILE"
-  echo "Backup OK (FTP upload + remote prune ${RETENTION_DAYS}d)"
+  if python3 "$FTP_SCRIPT" "$PASS24_FILE" "$AUTH_FILE"; then
+    echo "Backup OK (FTP upload + remote prune ${RETENTION_DAYS}d)"
+  else
+    echo "Local backup OK, FTP upload failed (see error above)" >&2
+    exit 1
+  fi
 else
   echo "FTP skipped (set BACKUP_FTP_ENABLED=true to upload)"
 fi

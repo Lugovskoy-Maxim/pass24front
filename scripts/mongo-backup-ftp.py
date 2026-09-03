@@ -39,34 +39,52 @@ NAME_RES = (
 )
 
 
+def env_str(name: str, default: str = "") -> str:
+    raw = os.environ.get(name)
+    if raw is None:
+        return default
+    raw = raw.strip().strip("\r")
+    if len(raw) >= 2 and raw[0] == raw[-1] and raw[0] in ('"', "'"):
+        raw = raw[1:-1]
+    return raw
+
+
 def env_bool(name: str, default: bool = False) -> bool:
-    raw = (os.environ.get(name) or "").strip().lower()
+    raw = env_str(name).lower()
     if not raw:
         return default
     return raw in ("1", "true", "yes", "on")
 
 
 def connect() -> ftplib.FTP:
-    host = (os.environ.get("BACKUP_FTP_HOST") or "").strip()
-    user = (os.environ.get("BACKUP_FTP_USER") or "").strip()
-    password = os.environ.get("BACKUP_FTP_PASS") or ""
-    port = int((os.environ.get("BACKUP_FTP_PORT") or "21").strip() or "21")
+    host = env_str("BACKUP_FTP_HOST")
+    user = env_str("BACKUP_FTP_USER")
+    password = env_str("BACKUP_FTP_PASS")
+    port = int(env_str("BACKUP_FTP_PORT", "21") or "21")
+    use_ssl = env_bool("BACKUP_FTP_SSL", False)
     if not host or not user:
         raise SystemExit("BACKUP_FTP_HOST and BACKUP_FTP_USER are required")
 
-    if env_bool("BACKUP_FTP_SSL", False):
-        context = ssl.create_default_context()
-        if env_bool("BACKUP_FTP_INSECURE_SSL", False):
-            context.check_hostname = False
-            context.verify_mode = ssl.CERT_NONE
-        ftp: ftplib.FTP = ftplib.FTP_TLS(context=context)
-        ftp.connect(host, port, timeout=60)
-        ftp.login(user, password)
-        ftp.prot_p()
-    else:
-        ftp = ftplib.FTP()
-        ftp.connect(host, port, timeout=60)
-        ftp.login(user, password)
+    try:
+        if use_ssl:
+            context = ssl.create_default_context()
+            if env_bool("BACKUP_FTP_INSECURE_SSL", False):
+                context.check_hostname = False
+                context.verify_mode = ssl.CERT_NONE
+            ftp: ftplib.FTP = ftplib.FTP_TLS(context=context)
+            ftp.connect(host, port, timeout=60)
+            ftp.login(user, password)
+            ftp.prot_p()
+        else:
+            ftp = ftplib.FTP()
+            ftp.connect(host, port, timeout=60)
+            ftp.login(user, password)
+    except ftplib.error_perm as exc:
+        raise SystemExit(
+            f"FTP login failed ({exc}). Host={host} user={user} port={port} "
+            f"ssl={str(use_ssl).lower()}. Check BACKUP_FTP_USER/PASS in .env "
+            "(quotes, spaces, Windows CRLF). Do not paste the password here."
+        ) from exc
 
     if env_bool("BACKUP_FTP_PASSIVE", True):
         ftp.set_pasv(True)
@@ -154,8 +172,8 @@ def main(argv: list[str]) -> int:
             print(f"Refusing to upload missing/tiny file: {path}", file=sys.stderr)
             return 1
 
-    retention = int((os.environ.get("RETENTION_DAYS") or "7").strip() or "7")
-    remote_dir = (os.environ.get("BACKUP_FTP_DIR") or "/").strip() or "/"
+    retention = int(env_str("RETENTION_DAYS", "7") or "7")
+    remote_dir = env_str("BACKUP_FTP_DIR", "/") or "/"
 
     ftp = connect()
     try:
