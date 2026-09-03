@@ -17,12 +17,40 @@ set -euo pipefail
 SCRIPT_DIR="$(cd "$(dirname "$0")" && pwd)"
 APP_DIR="$(cd "$SCRIPT_DIR/.." && pwd)"
 
-# Подхватить секреты с прод-.env (docker-compose формат KEY=VAL).
+# docker-compose .env is KEY=VAL, not bash. `source` breaks on values like
+# SMTP_FROM=Name <email@host> (redirect with no filename → unexpected newline).
+load_dotenv() {
+  local file="$1" line key value first last
+  while IFS= read -r line || [[ -n "$line" ]]; do
+    line="${line%$'\r'}"
+    line="${line#"${line%%[![:space:]]*}"}"
+    [[ -z "$line" || "${line:0:1}" == "#" ]] && continue
+    if [[ "$line" =~ ^export[[:space:]]+ ]]; then
+      line="${line#export}"
+      line="${line#"${line%%[![:space:]]*}"}"
+    fi
+    [[ "$line" == *"="* ]] || continue
+    key="${line%%=*}"
+    value="${line#*=}"
+    key="${key%"${key##*[![:space:]]}"}"
+    [[ "$key" =~ ^[A-Za-z_][A-Za-z0-9_]*$ ]] || continue
+    case "$key" in
+      PATH|HOME|IFS|PWD|OLDPWD|UID|EUID|PPID) continue ;;
+    esac
+    if [[ ${#value} -ge 2 ]]; then
+      first="${value:0:1}"
+      last="${value: -1}"
+      if [[ "$first" == "$last" && ( "$first" == '"' || "$first" == "'" ) ]]; then
+        value="${value:1:${#value}-2}"
+      fi
+    fi
+    printf -v "$key" '%s' "$value"
+    export "$key"
+  done < "$file"
+}
+
 if [[ -f "$APP_DIR/.env" ]]; then
-  set -a
-  # shellcheck disable=SC1091
-  source "$APP_DIR/.env"
-  set +a
+  load_dotenv "$APP_DIR/.env"
 fi
 
 CONTAINER="${MONGO_CONTAINER:-pass24-mongo}"
