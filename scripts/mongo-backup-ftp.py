@@ -2,8 +2,9 @@
 """Upload Mongo backup .gz files to FTP/FTPS and prune remote copies older than N days.
 
 Filename pattern (date taken from name, not FTP mtime):
-  pass24_YYYYMMDD_HHMMSS.gz
-  pass24_auth_YYYYMMDD_HHMMSS.gz
+  pass24_YYYY-MM-DD_HH-MM-SS.gz
+  pass24_auth_YYYY-MM-DD_HH-MM-SS.gz
+  (legacy: pass24_YYYYMMDD_HHMMSS.gz)
 
 Env:
   BACKUP_FTP_HOST (required)
@@ -26,9 +27,15 @@ import sys
 from datetime import datetime, timedelta
 from pathlib import Path
 
-NAME_RE = re.compile(
-    r"^(?:pass24|pass24_auth)_(\d{8})_\d{6}\.gz$",
-    re.IGNORECASE,
+NAME_RES = (
+    re.compile(
+        r"^(?:pass24|pass24_auth)_(\d{4}-\d{2}-\d{2})_\d{2}-\d{2}-\d{2}(?:_\d+)?\.gz$",
+        re.IGNORECASE,
+    ),
+    re.compile(
+        r"^(?:pass24|pass24_auth)_(\d{8})_\d{6}(?:_\d+)?\.gz$",
+        re.IGNORECASE,
+    ),
 )
 
 
@@ -101,13 +108,16 @@ def list_names(ftp: ftplib.FTP) -> list[str]:
 
 
 def stamp_from_name(name: str) -> datetime | None:
-    match = NAME_RE.match(name)
-    if not match:
-        return None
-    try:
-        return datetime.strptime(match.group(1), "%Y%m%d")
-    except ValueError:
-        return None
+    for pattern in NAME_RES:
+        match = pattern.match(name)
+        if not match:
+            continue
+        day = match.group(1).replace("-", "")
+        try:
+            return datetime.strptime(day, "%Y%m%d")
+        except ValueError:
+            return None
+    return None
 
 
 def prune(ftp: ftplib.FTP, retention_days: int) -> int:

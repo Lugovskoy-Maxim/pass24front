@@ -56,10 +56,24 @@ fi
 CONTAINER="${MONGO_CONTAINER:-pass24-mongo}"
 BACKUP_DIR="${BACKUP_DIR:-$APP_DIR/backups/mongo}"
 RETENTION_DAYS="${RETENTION_DAYS:-7}"
-STAMP="$(date +%Y%m%d_%H%M%S)"
+# Unique per run: date AND time, e.g. 2026-09-03_10-47-53
+STAMP="$(date +%Y-%m-%d_%H-%M-%S)"
 FTP_SCRIPT="$SCRIPT_DIR/mongo-backup-ftp.py"
 
 mkdir -p "$BACKUP_DIR"
+if [[ "$(id -u)" -eq 0 ]]; then
+  app_owner="$(stat -c '%U:%G' "$APP_DIR" 2>/dev/null || true)"
+  if [[ "$app_owner" == *:* ]]; then
+    chown -R "$app_owner" "$BACKUP_DIR" || true
+  fi
+  chmod 0775 "$BACKUP_DIR" || true
+fi
+if [[ ! -w "$BACKUP_DIR" ]]; then
+  echo "Cannot write to $BACKUP_DIR" >&2
+  ls -ld "$BACKUP_DIR" >&2 || true
+  echo "Fix: sudo chown -R $(id -un):$(id -gn) $BACKUP_DIR" >&2
+  exit 1
+fi
 
 if ! docker ps --format '{{.Names}}' | grep -qx "$CONTAINER"; then
   echo "Mongo container '$CONTAINER' is not running" >&2
@@ -68,6 +82,12 @@ fi
 
 PASS24_FILE="$BACKUP_DIR/pass24_${STAMP}.gz"
 AUTH_FILE="$BACKUP_DIR/pass24_auth_${STAMP}.gz"
+suffix=1
+while [[ -e "$PASS24_FILE" || -e "$AUTH_FILE" ]]; do
+  suffix=$((suffix + 1))
+  PASS24_FILE="$BACKUP_DIR/pass24_${STAMP}_${suffix}.gz"
+  AUTH_FILE="$BACKUP_DIR/pass24_auth_${STAMP}_${suffix}.gz"
+done
 
 docker exec "$CONTAINER" mongodump --db pass24 --archive --gzip >"$PASS24_FILE"
 docker exec "$CONTAINER" mongodump --db pass24_auth --archive --gzip >"$AUTH_FILE"
@@ -80,8 +100,8 @@ for f in "$PASS24_FILE" "$AUTH_FILE"; do
   fi
 done
 
-# Локально: дата из имени pass24_YYYYMMDD_HHMMSS.gz — удаляем старше RETENTION_DAYS.
-# При создании бэкапа «8-го дня» пропадают файлы с датой < сегодня−7.
+# Локально: дата из имени — удаляем старше RETENTION_DAYS.
+# Новые: pass24_YYYY-MM-DD_HH-MM-SS.gz  Старые: pass24_YYYYMMDD_HHMMSS.gz
 prune_local_by_stamp() {
   local cutoff
   if date -d "${RETENTION_DAYS} days ago" +%Y%m%d >/dev/null 2>&1; then
@@ -94,12 +114,15 @@ prune_local_by_stamp() {
   shopt -s nullglob
   for f in "$BACKUP_DIR"/pass24_*.gz "$BACKUP_DIR"/pass24_auth_*.gz; do
     base="$(basename "$f")"
-    if [[ "$base" =~ ^(pass24|pass24_auth)_([0-9]{8})_[0-9]{6}\.gz$ ]]; then
+    day=""
+    if [[ "$base" =~ ^(pass24|pass24_auth)_([0-9]{4}-[0-9]{2}-[0-9]{2})_([0-9]{2}-[0-9]{2}-[0-9]{2})(_[0-9]+)?\.gz$ ]]; then
+      day="${BASH_REMATCH[2]//-/}"
+    elif [[ "$base" =~ ^(pass24|pass24_auth)_([0-9]{8})_[0-9]{6}(_[0-9]+)?\.gz$ ]]; then
       day="${BASH_REMATCH[2]}"
-      if [[ "$day" < "$cutoff" ]]; then
-        rm -f -- "$f"
-        echo "Local deleted (>${RETENTION_DAYS}d): $base"
-      fi
+    fi
+    if [[ -n "$day" && "$day" < "$cutoff" ]]; then
+      rm -f -- "$f"
+      echo "Local deleted (>${RETENTION_DAYS}d): $base"
     fi
   done
   shopt -u nullglob

@@ -24,8 +24,8 @@ cd C:\Users\it\Documents\GitHub\pass24front
 
 ```
 C:\Users\it\Documents\pass24-backups\mongo\
-  pass24_YYYYMMDD_HHMMSS.gz
-  pass24_auth_YYYYMMDD_HHMMSS.gz
+  pass24_YYYY-MM-DD_HH-MM-SS.gz
+  pass24_auth_YYYY-MM-DD_HH-MM-SS.gz
 ```
 
 Другой каталог:

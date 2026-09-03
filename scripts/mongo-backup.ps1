@@ -13,7 +13,7 @@
 #   $env:BACKUP_FTP_HOST / USER / PASS / DIR / PORT / SSL
 #
 # Восстановление (пример):
-#   Get-Content .\pass24_YYYYMMDD_HHMMSS.gz -AsByteStream |
+#   Get-Content .\pass24_YYYY-MM-DD_HH-MM-SS.gz -AsByteStream |
 #     docker exec -i pass24-mongo mongorestore --archive --gzip --drop --db pass24
 
 $ErrorActionPreference = "Stop"
@@ -28,7 +28,7 @@ $BackupDir = if ($env:BACKUP_DIR) {
   Join-Path $env:USERPROFILE "Documents\pass24-backups\mongo"
 }
 $RetentionDays = if ($env:RETENTION_DAYS) { [int]$env:RETENTION_DAYS } else { 7 }
-$Stamp = Get-Date -Format "yyyyMMdd_HHmmss"
+$Stamp = Get-Date -Format "yyyy-MM-dd_HH-mm-ss"
 $FtpScript = Join-Path $ScriptDir "mongo-backup-ftp.py"
 
 if (-not (Get-Command docker -ErrorAction SilentlyContinue)) {
@@ -44,6 +44,12 @@ New-Item -ItemType Directory -Force -Path $BackupDir | Out-Null
 
 $pass24File = Join-Path $BackupDir "pass24_$Stamp.gz"
 $authFile = Join-Path $BackupDir "pass24_auth_$Stamp.gz"
+$suffix = 1
+while ((Test-Path $pass24File) -or (Test-Path $authFile)) {
+  $suffix++
+  $pass24File = Join-Path $BackupDir "pass24_${Stamp}_$suffix.gz"
+  $authFile = Join-Path $BackupDir "pass24_auth_${Stamp}_$suffix.gz"
+}
 
 function Invoke-MongoDump {
   param([string]$DbName, [string]$OutFile)
@@ -62,14 +68,18 @@ function Invoke-MongoDump {
 Invoke-MongoDump -DbName "pass24" -OutFile $pass24File
 Invoke-MongoDump -DbName "pass24_auth" -OutFile $authFile
 
-# Локально: дата из имени pass24_YYYYMMDD_HHMMSS.gz (как на FTP)
+# Локально: дата из имени (новые YYYY-MM-DD_HH-MM-SS и старые YYYYMMDD_HHMMSS)
 $cutoffDay = (Get-Date).Date.AddDays(-$RetentionDays).ToString("yyyyMMdd")
 Get-ChildItem -Path $BackupDir -Filter "pass24*.gz" -ErrorAction SilentlyContinue | ForEach-Object {
-  if ($_.Name -match '^(pass24|pass24_auth)_(\d{8})_\d{6}\.gz$') {
-    if ($Matches[2] -lt $cutoffDay) {
-      Write-Host "Local deleted (>${RetentionDays}d): $($_.Name)"
-      Remove-Item -Force $_.FullName
-    }
+  $day = $null
+  if ($_.Name -match '^(pass24|pass24_auth)_(\d{4}-\d{2}-\d{2})_\d{2}-\d{2}-\d{2}(?:_\d+)?\.gz$') {
+    $day = $Matches[2] -replace '-', ''
+  } elseif ($_.Name -match '^(pass24|pass24_auth)_(\d{8})_\d{6}(?:_\d+)?\.gz$') {
+    $day = $Matches[2]
+  }
+  if ($day -and $day -lt $cutoffDay) {
+    Write-Host "Local deleted (>${RetentionDays}d): $($_.Name)"
+    Remove-Item -Force $_.FullName
   }
 }
 
