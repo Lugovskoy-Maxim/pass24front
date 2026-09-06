@@ -278,7 +278,7 @@ describe('MstyleOauthService', () => {
       }),
     ).rejects.toMatchObject({
       oauthError: 'invalid_client',
-      description: 'Unknown assertion kid',
+      oauthDescription: 'Unknown assertion kid',
     });
   });
 
@@ -309,8 +309,16 @@ describe('MstyleOauthService', () => {
     const result = await service.issueToken({
       grant_type: 'client_credentials',
       client_id: clientId,
+      scope: 'mstyle.changes.read',
     });
     expect(result.scope).toBe('mstyle.changes.read');
+
+    await expect(
+      service.issueToken({
+        grant_type: 'client_credentials',
+        client_id: clientId,
+      }),
+    ).rejects.toMatchObject({ oauthError: 'invalid_scope' });
 
     await expect(
       service.issueToken({

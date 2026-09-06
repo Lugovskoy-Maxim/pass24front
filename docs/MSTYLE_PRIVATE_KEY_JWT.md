@@ -165,3 +165,34 @@ MSTYLE_CHECK_CLIENTS=reconcile \
 MSTYLE_KEYS_DIR=/path/to/private-and-public-keys \
 node scripts/check-mstyle-oauth.js
 ```
+
+## Smoke-проверка Mstyle v2 API
+
+После OAuth можно проверить закрытый API одной командой. Скрипт получает
+отдельный token под каждый scope, не печатает access token, создаёт тестовый
+профиль/гостя с уникальным `smoke-*` префиксом и проверяет `X-Request-ID`,
+`Idempotency-Key`, `ETag`/`If-Match`:
+
+```bash
+cd /opt/pass24front
+MSTYLE_KEYS_DIR=/path/to/private-and-public-keys \
+node scripts/check-mstyle-v2-smoke.js
+```
+
+Если ключи названы нестандартно:
+
+```bash
+MSTYLE_CLIENT_ID=mstyle-backend-prod \
+MSTYLE_CLIENT_KID=mstyle-backend-prod-20260823-01 \
+MSTYLE_CLIENT_PRIVATE_KEY_FILE=/path/to/mstyle-backend-prod-20260823-01-private.pem \
+MSTYLE_CLIENT_PUBLIC_KEY_FILE=/path/to/mstyle-backend-prod-20260823-01-public.pem \
+node scripts/check-mstyle-v2-smoke.js
+```
+
+Для проверки другого адреса:
+
+```bash
+MSTYLE_API_BASE_URL=https://pass.mstyle.ru/api \
+MSTYLE_KEYS_DIR=/path/to/private-and-public-keys \
+node scripts/check-mstyle-v2-smoke.js
+```

@@ -13,6 +13,7 @@ import {
   safeEqualHex,
 } from './mstyle-v2.crypto';
 import { Ids, ulid } from './mstyle-v2.ids';
+import { consentItem } from './mstyle-v2.present';
 import { ProblemException } from './mstyle-v2.problem';
 
 describe('mstyle-v2 helpers', () => {
@@ -86,5 +87,34 @@ describe('mstyle-v2 helpers', () => {
     expect(body.status).toBe(401);
     expect(body.requestId).toBe('req_test');
     expect(body.type).toContain('invalid-credentials');
+  });
+
+  it('keeps consent history in public DTOs', () => {
+    const item = consentItem({
+      documentCode: 'pdn',
+      documentVersion: '1.0',
+      documentDigest: 'sha256:test',
+      documentUrl: '',
+      locale: 'ru-RU',
+      status: 'accepted',
+      revision: 2,
+      acceptedAt: '2026-09-06T10:00:00.000Z',
+      withdrawnAt: null,
+      auditRef: 'evt_current',
+      history: [
+        {
+          status: 'accepted',
+          documentVersion: '1.0',
+          documentDigest: 'sha256:test',
+          documentUrl: '',
+          locale: 'ru-RU',
+          auditRef: 'evt_current',
+          recordedAt: '2026-09-06T10:00:00.000Z',
+        },
+      ],
+    } as any);
+
+    expect(item.history).toHaveLength(1);
+    expect(item.history[0].auditRef).toBe('evt_current');
   });
 });

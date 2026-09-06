@@ -15,6 +15,7 @@ cd /opt/pass24front && ./scripts/update.sh
 ```
 
 Скрипт сам:
+
 1. Переключится на `main`
 2. Скачает последние изменения с GitHub
 3. Пересоберёт и перезапустит Docker-контейнеры
@@ -50,13 +51,13 @@ docker compose -f docker-compose.yml -f docker-compose.prod.yml --env-file .env 
 
 Настройки в `/opt/pass24front/.env`:
 
-| Переменная | Описание |
-|------------|----------|
-| `ADMIN_EMAIL` | Email для входа |
-| `ADMIN_PASSWORD` | Пароль (задайте свой!) |
-| `ADMIN_FULL_NAME` | Имя в системе |
-| `ADMIN_ROLE` | `admin` — супер-администратор со всеми правами |
-| `SEED_DEV_DATA` | `false` на проде — без тестовых аккаунтов |
+| Переменная        | Описание                                       |
+| ----------------- | ---------------------------------------------- |
+| `ADMIN_EMAIL`     | Email для входа                                |
+| `ADMIN_PASSWORD`  | Пароль (задайте свой!)                         |
+| `ADMIN_FULL_NAME` | Имя в системе                                  |
+| `ADMIN_ROLE`      | `admin` — супер-администратор со всеми правами |
+| `SEED_DEV_DATA`   | `false` на проде — без тестовых аккаунтов      |
 
 По умолчанию (если не меняли `.env`):
 
@@ -100,6 +101,33 @@ docker compose -f docker-compose.yml -f docker-compose.prod.yml --env-file .env 
 В логах backend при первом запуске должно быть:
 `Супер-администратор создан: ...` или `Супер-администратор уже существует: ...`
 
+### Проверка OAuth и Mstyle v2 API
+
+С машины, где лежат private/public пары ключей:
+
+```bash
+cd /opt/pass24front
+
+# Только token endpoint, без печати access token
+MSTYLE_KEYS_DIR=/path/to/private-and-public-keys \
+node scripts/check-mstyle-oauth.js
+
+# OAuth + несколько M0 маршрутов закрытого API
+MSTYLE_KEYS_DIR=/path/to/private-and-public-keys \
+node scripts/check-mstyle-v2-smoke.js
+```
+
+Если ключи названы не как `<kid>-private.pem` и `<kid>-public.pem`, задайте
+явные пути:
+
+```bash
+MSTYLE_CLIENT_ID=mstyle-backend-prod \
+MSTYLE_CLIENT_KID=mstyle-backend-prod-20260823-01 \
+MSTYLE_CLIENT_PRIVATE_KEY_FILE=/path/to/private.pem \
+MSTYLE_CLIENT_PUBLIC_KEY_FILE=/path/to/public.pem \
+node scripts/check-mstyle-v2-smoke.js
+```
+
 ---
 
 ## Адаптация пользователей под Pass v2
@@ -141,10 +169,10 @@ sudo ./scripts/setup-ssl.sh
 
 ## Частые проблемы
 
-| Проблема | Решение |
-|----------|---------|
-| `Permission denied` на скрипт | `chmod +x scripts/*.sh` |
-| Старая версия фронта | `./scripts/update.sh` (пересобирает образы) |
-| Нет `.env` | `cp .env.production.example .env` и задайте `JWT_SECRET`, `ADMIN_PASSWORD` |
-| Сайт не открывается снаружи | Проверьте NAT на MikroTik: TCP 80 и 443 → `192.168.200.9` |
-| `ts-node` / `fileExists` при adapt:users | Используйте `./scripts/adapt-users.sh`, не `npx ts-node` |
+| Проблема                                 | Решение                                                                    |
+| ---------------------------------------- | -------------------------------------------------------------------------- |
+| `Permission denied` на скрипт            | `chmod +x scripts/*.sh`                                                    |
+| Старая версия фронта                     | `./scripts/update.sh` (пересобирает образы)                                |
+| Нет `.env`                               | `cp .env.production.example .env` и задайте `JWT_SECRET`, `ADMIN_PASSWORD` |
+| Сайт не открывается снаружи              | Проверьте NAT на MikroTik: TCP 80 и 443 → `192.168.200.9`                  |
+| `ts-node` / `fileExists` при adapt:users | Используйте `./scripts/adapt-users.sh`, не `npx ts-node`                   |

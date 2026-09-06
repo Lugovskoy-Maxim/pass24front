@@ -15,7 +15,7 @@ export class Property {
   address: string;
 
   // обычно business_center
-  @Prop({ enum: PropertyType, default: PropertyType.OTHER })
+  @Prop({ type: String, enum: PropertyType, default: PropertyType.OTHER })
   type: PropertyType;
 
   // внешний/внутренний код, удобно для синка
