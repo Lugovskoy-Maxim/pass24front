@@ -75,21 +75,22 @@ export class MstyleOauthService implements OnModuleInit {
       .split(/\s+/)
       .map((s) => s.trim())
       .filter(Boolean);
-    const allowed = new Set(client.scopes);
-    const scopes = requested.length
-      ? requested.filter((scope) => allowed.has(scope))
-      : [...client.scopes];
-    if (requested.length && scopes.length !== requested.length) {
+    if (requested.length !== 1) {
       throw new OAuthException(
         'invalid_scope',
-        'One or more requested scopes are not allowed',
+        'Exactly one scope must be requested',
       );
     }
-    if (!scopes.length) {
-      throw new OAuthException('invalid_scope', 'No scopes granted');
+    const allowed = new Set(client.scopes);
+    const scope = requested[0];
+    if (!allowed.has(scope)) {
+      throw new OAuthException(
+        'invalid_scope',
+        'Requested scope is not allowed',
+      );
     }
 
-    return this.createServiceToken(clientId, scopes, this.cfg.tokenTtlSec());
+    return this.createServiceToken(clientId, [scope], this.cfg.tokenTtlSec());
   }
 
   /**

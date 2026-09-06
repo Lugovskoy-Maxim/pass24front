@@ -16,7 +16,7 @@
           "  backend: {",
           "    clientId: 'mstyle-backend-prod',",
           "    kid: 'mstyle-backend-prod-20260823-01',",
-          "    scope: 'mstyle.resident.authenticate mstyle.residents.read mstyle.residents.write mstyle.profiles.read mstyle.profiles.write mstyle.memberships.read mstyle.memberships.write mstyle.contacts.read mstyle.contacts.write mstyle.consents.read mstyle.consents.write mstyle.private-data.read mstyle.private-data.write mstyle.guests.read mstyle.guests.write mstyle.admin.search mstyle.changes.read',",
+          "    scope: pm.collectionVariables.get('backend_requested_scope') || 'mstyle.resident.authenticate',",
           "    privateKeyVar: 'backend_private_key_pem'",
           "  },",
           "  reconcile: {",
@@ -173,6 +173,11 @@
     {
       "key": "reconcile_private_key_pem",
       "value": "",
+      "type": "string"
+    },
+    {
+      "key": "backend_requested_scope",
+      "value": "mstyle.resident.authenticate",
       "type": "string"
     },
     {

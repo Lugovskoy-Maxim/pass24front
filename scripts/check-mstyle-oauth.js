@@ -8,34 +8,36 @@ const tokenUrl =
   process.env.MSTYLE_TOKEN_URL || "https://pass.mstyle.ru/api/oauth2/token";
 const keyDir =
   process.env.MSTYLE_KEYS_DIR || "/Users/tomilo/Downloads/production-4";
-const backendScopes =
+const checkClients = splitList(process.env.MSTYLE_CHECK_CLIENTS || "all");
+const backendScopes = splitScopes(
   process.env.MSTYLE_CLIENT_SCOPES ||
-  [
-    "mstyle.resident.authenticate",
-    "mstyle.residents.read",
-    "mstyle.residents.write",
-    "mstyle.profiles.read",
-    "mstyle.profiles.write",
-    "mstyle.memberships.read",
-    "mstyle.memberships.write",
-    "mstyle.contacts.read",
-    "mstyle.contacts.write",
-    "mstyle.consents.read",
-    "mstyle.consents.write",
-    "mstyle.private-data.read",
-    "mstyle.private-data.write",
-    "mstyle.guests.read",
-    "mstyle.guests.write",
-    "mstyle.admin.search",
-    "mstyle.changes.read",
-  ].join(" ");
+    [
+      "mstyle.resident.authenticate",
+      "mstyle.residents.read",
+      "mstyle.residents.write",
+      "mstyle.profiles.read",
+      "mstyle.profiles.write",
+      "mstyle.memberships.read",
+      "mstyle.memberships.write",
+      "mstyle.contacts.read",
+      "mstyle.contacts.write",
+      "mstyle.consents.read",
+      "mstyle.consents.write",
+      "mstyle.private-data.read",
+      "mstyle.private-data.write",
+      "mstyle.guests.read",
+      "mstyle.guests.write",
+      "mstyle.admin.search",
+      "mstyle.changes.read",
+    ].join(" "),
+);
 
 const clients = [
   {
     name: "backend",
     clientId: process.env.MSTYLE_CLIENT_ID || "mstyle-backend-prod",
     kid: process.env.MSTYLE_CLIENT_KID || "mstyle-backend-prod-20260823-01",
-    scope: backendScopes,
+    scopes: backendScopes,
     privateKeyPath:
       process.env.MSTYLE_CLIENT_PRIVATE_KEY_FILE ||
       `${keyDir}/mstyle-backend-prod-20260823-01-private.pem`,
@@ -49,7 +51,9 @@ const clients = [
     kid:
       process.env.MSTYLE_RECONCILE_CLIENT_KID ||
       "mstyle-reconcile-prod-20260823-01",
-    scope: process.env.MSTYLE_RECONCILE_CLIENT_SCOPES || "mstyle.changes.read",
+    scopes: splitScopes(
+      process.env.MSTYLE_RECONCILE_CLIENT_SCOPES || "mstyle.changes.read",
+    ),
     privateKeyPath:
       process.env.MSTYLE_RECONCILE_CLIENT_PRIVATE_KEY_FILE ||
       `${keyDir}/mstyle-reconcile-prod-20260823-01-private.pem`,
@@ -58,6 +62,22 @@ const clients = [
       `${keyDir}/mstyle-reconcile-prod-20260823-01-public.pem`,
   },
 ];
+
+const selectedClients = clients.filter(
+  (client) =>
+    checkClients.includes("all") || checkClients.includes(client.name),
+);
+
+function splitScopes(value) {
+  return splitList(value);
+}
+
+function splitList(value) {
+  return String(value || "")
+    .split(/[,\s]+/)
+    .map((item) => item.trim())
+    .filter(Boolean);
+}
 
 function b64url(input) {
   return Buffer.from(input)
@@ -75,6 +95,11 @@ function assertFile(path) {
   if (!fs.existsSync(path)) {
     throw new Error(`File not found: ${path}`);
   }
+}
+
+function assertClientFiles(client) {
+  assertFile(client.privateKeyPath);
+  assertFile(client.publicKeyPath);
 }
 
 function verifyKeyPair(client) {
@@ -158,7 +183,7 @@ function safeJson(value) {
   }
 }
 
-async function checkClient(client) {
+async function checkClient(client, scope) {
   const keyCheck = verifyKeyPair(client);
   const response = await postForm(tokenUrl, {
     grant_type: "client_credentials",
@@ -166,7 +191,7 @@ async function checkClient(client) {
     client_assertion_type:
       "urn:ietf:params:oauth:client-assertion-type:jwt-bearer",
     client_assertion: makeAssertion(client),
-    scope: client.scope,
+    scope,
   });
 
   const parsed = safeJson(response.body || "");
@@ -178,7 +203,7 @@ async function checkClient(client) {
     clientId: client.clientId,
     kid: client.kid,
     alg: "RS256",
-    scope: client.scope,
+    requestedScope: scope,
     privateKeyFile: client.privateKeyPath,
     publicKeyFile: client.publicKeyPath,
     publicPemSha256: keyCheck.publicPemSha256,
@@ -198,32 +223,72 @@ async function checkClient(client) {
 async function main() {
   console.log(`Token URL: ${tokenUrl}`);
   console.log(`Keys dir: ${keyDir}`);
+  console.log(
+    `Clients: ${selectedClients.map((client) => client.name).join(", ")}`,
+  );
+  console.log("Each token request uses exactly one scope.");
   console.log("Access tokens are intentionally not printed.\n");
 
+  if (!selectedClients.length) {
+    console.error(
+      "No clients selected. Use MSTYLE_CHECK_CLIENTS=all, backend or reconcile.",
+    );
+    process.exitCode = 1;
+    return;
+  }
+
+  const missingFiles = [
+    ...new Set(
+      selectedClients.flatMap((client) => [
+        client.privateKeyPath,
+        client.publicKeyPath,
+      ]),
+    ),
+  ].filter((file) => !fs.existsSync(file));
+
+  if (missingFiles.length) {
+    console.error("Missing key files:");
+    for (const file of missingFiles) console.error(`- ${file}`);
+    console.error(
+      "\nSet MSTYLE_KEYS_DIR or explicit *_PRIVATE_KEY_FILE / *_PUBLIC_KEY_FILE env vars and run again.",
+    );
+    process.exitCode = 1;
+    return;
+  }
+
   let failed = false;
-  for (const client of clients) {
-    try {
-      const result = await checkClient(client);
-      if (!result.ok || !result.hasAccessToken || !result.keyPairMatches) {
+  for (const client of selectedClients) {
+    assertClientFiles(client);
+    for (const scope of client.scopes) {
+      try {
+        const result = await checkClient(client, scope);
+        if (
+          !result.ok ||
+          !result.hasAccessToken ||
+          !result.keyPairMatches ||
+          result.responseScope !== scope
+        ) {
+          failed = true;
+        }
+        console.log(JSON.stringify(result, null, 2));
+        console.log("");
+      } catch (error) {
         failed = true;
+        console.error(
+          JSON.stringify(
+            {
+              name: client.name,
+              clientId: client.clientId,
+              kid: client.kid,
+              requestedScope: scope,
+              error: error.message,
+            },
+            null,
+            2,
+          ),
+        );
+        console.error("");
       }
-      console.log(JSON.stringify(result, null, 2));
-      console.log("");
-    } catch (error) {
-      failed = true;
-      console.error(
-        JSON.stringify(
-          {
-            name: client.name,
-            clientId: client.clientId,
-            kid: client.kid,
-            error: error.message,
-          },
-          null,
-          2,
-        ),
-      );
-      console.error("");
     }
   }
 

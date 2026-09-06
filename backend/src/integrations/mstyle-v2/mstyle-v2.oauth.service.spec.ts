@@ -124,12 +124,13 @@ describe('MstyleOauthService', () => {
     const result = await service.issueToken({
       grant_type: 'client_credentials',
       client_id: 'mstyle-backend-staging',
+      scope: 'mstyle.resident.authenticate',
     });
 
     expect(result.access_token).toMatch(/^svc_/);
   });
 
-  it('verifies private_key_jwt with the public key assigned to the client', async () => {
+  it('verifies private_key_jwt with the public key assigned to the client and issues one requested scope', async () => {
     const { privateKey, publicKey } = generateKeyPairSync('rsa', {
       modulusLength: 2048,
     });
@@ -175,16 +176,57 @@ describe('MstyleOauthService', () => {
     const result = await service.issueToken({
       grant_type: 'client_credentials',
       client_id: clientId,
-      scope: 'mstyle.resident.authenticate mstyle.residents.read',
+      scope: 'mstyle.resident.authenticate',
       client_assertion_type:
         'urn:ietf:params:oauth:client-assertion-type:jwt-bearer',
       client_assertion: assertion,
     });
 
-    expect(result.scope).toBe(
-      'mstyle.resident.authenticate mstyle.residents.read',
-    );
+    expect(result.scope).toBe('mstyle.resident.authenticate');
     expect(created[0].clientId).toBe(clientId);
+    expect(created[0].scopes).toEqual(['mstyle.resident.authenticate']);
+  });
+
+  it('rejects OAuth token requests without exactly one scope', async () => {
+    const service = new MstyleOauthService(
+      configStub({
+        oauthClient: (id: string) =>
+          id === 'mstyle-backend-staging'
+            ? {
+                clientId: id,
+                auth: 'mtls',
+                publicKey: '',
+                scopes: [
+                  'mstyle.resident.authenticate',
+                  'mstyle.residents.read',
+                ],
+              }
+            : undefined,
+      }),
+      { create: async () => undefined } as any,
+      { create: async () => undefined } as any,
+      {
+        getMstyleMockResponsesEnabled: async () => ({
+          enabled: false,
+          overridden: false,
+        }),
+      } as any,
+    );
+
+    await expect(
+      service.issueToken({
+        grant_type: 'client_credentials',
+        client_id: 'mstyle-backend-staging',
+      }),
+    ).rejects.toMatchObject({ oauthError: 'invalid_scope' });
+
+    await expect(
+      service.issueToken({
+        grant_type: 'client_credentials',
+        client_id: 'mstyle-backend-staging',
+        scope: 'mstyle.resident.authenticate mstyle.residents.read',
+      }),
+    ).rejects.toMatchObject({ oauthError: 'invalid_scope' });
   });
 
   it('rejects private_key_jwt with an unknown kid for the client', async () => {

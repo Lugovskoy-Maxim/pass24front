@@ -7,6 +7,11 @@
 | `mstyle-backend-prod`   | внешняя авторизация, резиденты, профили, контакты, гости, изменения | полный набор scopes Mstyle API |
 | `mstyle-reconcile-prod` | чтение ленты изменений                                              | только `mstyle.changes.read`   |
 
+`MSTYLE_CLIENT_SCOPES` задаёт разрешённый список прав для
+`mstyle-backend-prod`. В каждом запросе A-01 параметр `scope` должен содержать
+ровно одно право из этого списка. Если scope не передан, передано несколько
+прав или право не входит в список, Pass возвращает `invalid_scope`.
+
 ## Где должны находиться ключи
 
 Приватные PEM-ключи остаются на сервере Mstyle/WordPress и используются только
@@ -93,6 +98,16 @@ Assertion передаётся в `POST /api/oauth2/token` вместе с
 `grant_type=client_credentials`, `client_id` и
 `client_assertion_type=urn:ietf:params:oauth:client-assertion-type:jwt-bearer`.
 
+Пример значения `scope` для входа резидента:
+
+```text
+scope=mstyle.resident.authenticate
+```
+
+Для проверки других M0 endpoint нужно получать отдельный токен с нужным одним
+scope, например `mstyle.profiles.read`, `mstyle.contacts.write` или
+`mstyle.guests.write`.
+
 ## Проверка и логи Docker на сервере
 
 После обновления кода token endpoint должен отвечать `200 OK`:
@@ -125,4 +140,28 @@ docker logs -f pass24-backend
 
 ```bash
 docker exec pass24-backend printenv | grep '^MSTYLE_'
+```
+
+Проверить OAuth с машины, где лежат private/public пары ключей. Скрипт делает
+отдельный token-запрос на каждый разрешённый scope и не печатает access token:
+
+```bash
+MSTYLE_KEYS_DIR=/path/to/private-and-public-keys node scripts/check-mstyle-oauth.js
+```
+
+Проверить только один scope backend-клиента:
+
+```bash
+MSTYLE_CLIENT_SCOPES=mstyle.profiles.read \
+MSTYLE_CHECK_CLIENTS=backend \
+MSTYLE_KEYS_DIR=/path/to/private-and-public-keys \
+node scripts/check-mstyle-oauth.js
+```
+
+Для reconcile-клиента отдельно:
+
+```bash
+MSTYLE_CHECK_CLIENTS=reconcile \
+MSTYLE_KEYS_DIR=/path/to/private-and-public-keys \
+node scripts/check-mstyle-oauth.js
 ```
