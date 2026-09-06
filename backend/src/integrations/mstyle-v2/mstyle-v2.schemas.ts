@@ -299,6 +299,17 @@ export class MstyleConsent {
 
   @Prop({ type: String, default: null })
   auditRef: string | null;
+
+  @Prop({ type: [Object], default: [] })
+  history: Array<{
+    status: string;
+    documentVersion: string;
+    documentDigest: string;
+    documentUrl: string;
+    locale: string;
+    auditRef: string;
+    recordedAt: string;
+  }>;
 }
 export type MstyleConsentDocument = MstyleConsent & Document;
 export const MstyleConsentSchema = SchemaFactory.createForClass(MstyleConsent);

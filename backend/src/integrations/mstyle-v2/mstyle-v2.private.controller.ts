@@ -68,6 +68,7 @@ const NeedRequestId = () => SetMetadata(REQUIRE_REQUEST_ID, true);
 @UseFilters(MstyleProblemFilter)
 @UseGuards(MstyleEnabledGuard, MstyleServiceTokenGuard, MstyleRequestGuard)
 @UseInterceptors(MstyleResultInterceptor, MstyleMockResponseInterceptor)
+@NeedRequestId()
 @Controller(MSTYLE_PRIVATE_PREFIX)
 export class MstylePrivateController {
   constructor(
@@ -196,29 +197,55 @@ export class MstylePrivateController {
   }
 
   @Patch('residents/:subject/identity')
+  @Idempotent()
   patchIdentity(
     @Param('subject') subject: string,
     @Body() dto: PatchIdentityDto,
-    @Headers('if-match') ifMatch?: string,
+    @Headers('if-match') ifMatch: string | undefined,
+    @Req() req: MstyleRequest,
   ) {
-    return this.directory.patchIdentity(subject, dto, ifMatch);
+    return this.withIdempotency(
+      req,
+      'PATCH',
+      `/residents/${subject}/identity`,
+      { dto, ifMatch },
+      () => this.directory.patchIdentity(subject, dto, ifMatch),
+    );
   }
 
   @Post('residents/:subject/contacts/challenges')
+  @Idempotent()
   startContact(
     @Param('subject') subject: string,
     @Body() dto: ContactChallengeDto,
+    @Req() req: MstyleRequest,
   ) {
-    return this.directory.startContactChallenge(subject, dto);
+    return this.withIdempotency(
+      req,
+      'POST',
+      `/residents/${subject}/contacts/challenges`,
+      dto,
+      () => this.directory.startContactChallenge(subject, dto),
+    );
   }
 
   @Post('residents/:subject/contacts/challenges/:challengeId/verify')
+  @Idempotent()
   verifyContact(
     @Param('subject') subject: string,
     @Param('challengeId') challengeId: string,
     @Body() dto: ContactVerifyDto,
+    @Req() req: MstyleRequest,
   ) {
-    return this.directory.verifyContactChallenge(subject, challengeId, dto);
+    return this.withIdempotency(
+      req,
+      'POST',
+      `/residents/${subject}/contacts/challenges/${challengeId}/verify`,
+      { schemaVersion: dto.schemaVersion },
+      () => this.directory.verifyContactChallenge(subject, challengeId, dto),
+      'CHALLENGE_CONSUMED',
+      true,
+    );
   }
 
   @Post('residents/:subject/contacts/reveal')
@@ -232,20 +259,36 @@ export class MstylePrivateController {
   }
 
   @Post('residents/:subject/consents/:documentCode/accept')
+  @Idempotent()
   acceptConsent(
     @Param('subject') subject: string,
     @Param('documentCode') documentCode: string,
     @Body() dto: ConsentAcceptDto,
+    @Req() req: MstyleRequest,
   ) {
-    return this.directory.acceptConsent(subject, documentCode, dto);
+    return this.withIdempotency(
+      req,
+      'POST',
+      `/residents/${subject}/consents/${documentCode}/accept`,
+      dto,
+      () => this.directory.acceptConsent(subject, documentCode, dto),
+    );
   }
 
   @Post('residents/:subject/consents/:documentCode/withdraw')
+  @Idempotent()
   withdrawConsent(
     @Param('subject') subject: string,
     @Param('documentCode') documentCode: string,
+    @Req() req: MstyleRequest,
   ) {
-    return this.directory.withdrawConsent(subject, documentCode);
+    return this.withIdempotency(
+      req,
+      'POST',
+      `/residents/${subject}/consents/${documentCode}/withdraw`,
+      {},
+      () => this.directory.withdrawConsent(subject, documentCode),
+    );
   }
 
   @Get('identities/:subject')
@@ -259,8 +302,11 @@ export class MstylePrivateController {
   }
 
   @Post('resident-onboarding')
-  onboard(@Body() dto: OnboardingDto) {
-    return this.directory.onboard(dto);
+  @Idempotent()
+  onboard(@Body() dto: OnboardingDto, @Req() req: MstyleRequest) {
+    return this.withIdempotency(req, 'POST', '/resident-onboarding', dto, () =>
+      this.directory.onboard(dto),
+    );
   }
 
   @Post('resident-profiles/search')
@@ -274,19 +320,36 @@ export class MstylePrivateController {
   }
 
   @Post('resident-profiles/:profileId/memberships')
+  @Idempotent()
   addMembership(
     @Param('profileId') profileId: string,
     @Body() dto: CreateMembershipDto,
+    @Req() req: MstyleRequest,
   ) {
-    return this.directory.addMembership(profileId, dto);
+    return this.withIdempotency(
+      req,
+      'POST',
+      `/resident-profiles/${profileId}/memberships`,
+      dto,
+      () => this.directory.addMembership(profileId, dto),
+    );
   }
 
   @Post('resident-profiles/:profileId/owner-transfer')
+  @Idempotent()
   transfer(
     @Param('profileId') profileId: string,
     @Body() dto: OwnerTransferDto,
+    @Headers('if-match') ifMatch: string | undefined,
+    @Req() req: MstyleRequest,
   ) {
-    return this.directory.transferOwner(profileId, dto);
+    return this.withIdempotency(
+      req,
+      'POST',
+      `/resident-profiles/${profileId}/owner-transfer`,
+      { dto, ifMatch },
+      () => this.directory.transferOwner(profileId, dto, ifMatch),
+    );
   }
 
   @Get('resident-profiles/:profileId/contact-assignments')
@@ -295,11 +358,20 @@ export class MstylePrivateController {
   }
 
   @Patch('resident-profiles/:profileId/contact-assignments')
+  @Idempotent()
   replaceAssignments(
     @Param('profileId') profileId: string,
     @Body() dto: PatchAssignmentsDto,
+    @Headers('if-match') ifMatch: string | undefined,
+    @Req() req: MstyleRequest,
   ) {
-    return this.directory.replaceAssignments(profileId, dto);
+    return this.withIdempotency(
+      req,
+      'PATCH',
+      `/resident-profiles/${profileId}/contact-assignments`,
+      { dto, ifMatch },
+      () => this.directory.replaceAssignments(profileId, dto, ifMatch),
+    );
   }
 
   @Get('resident-profiles/:profileId/private-data/status')
@@ -313,16 +385,35 @@ export class MstylePrivateController {
   }
 
   @Patch('resident-profiles/:profileId/private-data')
+  @Idempotent()
   patchPrivate(
     @Param('profileId') profileId: string,
     @Body() dto: PatchPrivateDataDto,
+    @Headers('if-match') ifMatch: string | undefined,
+    @Req() req: MstyleRequest,
   ) {
-    return this.privateData.patchResident(profileId, dto);
+    return this.withIdempotency(
+      req,
+      'PATCH',
+      `/resident-profiles/${profileId}/private-data`,
+      { dto, ifMatch },
+      () => this.privateData.patchResident(profileId, dto, ifMatch),
+    );
   }
 
   @Post('resident-profiles/:profileId/private-data/snapshots')
-  snapshotResident(@Param('profileId') profileId: string) {
-    return this.privateData.snapshotResident(profileId);
+  @Idempotent()
+  snapshotResident(
+    @Param('profileId') profileId: string,
+    @Req() req: MstyleRequest,
+  ) {
+    return this.withIdempotency(
+      req,
+      'POST',
+      `/resident-profiles/${profileId}/private-data/snapshots`,
+      {},
+      () => this.privateData.snapshotResident(profileId),
+    );
   }
 
   @Post('resident-profiles/:profileId/contacts/reveal')
@@ -341,28 +432,52 @@ export class MstylePrivateController {
   }
 
   @Post('resident-profiles/:profileId/change-requests')
+  @Idempotent()
   createChange(
     @Param('profileId') profileId: string,
     @Body() dto: ChangeRequestDto,
+    @Req() req: MstyleRequest,
   ) {
-    return this.directory.createChangeRequest(profileId, dto);
+    return this.withIdempotency(
+      req,
+      'POST',
+      `/resident-profiles/${profileId}/change-requests`,
+      dto,
+      () => this.directory.createChangeRequest(profileId, dto),
+    );
   }
 
   @Post('resident-profiles/:profileId/lifecycle-transitions')
+  @Idempotent()
   lifecycle(
     @Param('profileId') profileId: string,
     @Body() dto: LifecycleDto,
-    @Headers('if-match') ifMatch?: string,
+    @Headers('if-match') ifMatch: string | undefined,
+    @Req() req: MstyleRequest,
   ) {
-    return this.directory.lifecycle(profileId, dto, ifMatch);
+    return this.withIdempotency(
+      req,
+      'POST',
+      `/resident-profiles/${profileId}/lifecycle-transitions`,
+      { dto, ifMatch },
+      () => this.directory.lifecycle(profileId, dto, ifMatch),
+    );
   }
 
   @Post('resident-profiles/:profileId/deletion-requests')
+  @Idempotent()
   deletion(
     @Param('profileId') profileId: string,
     @Body() dto: DeletionRequestDto,
+    @Req() req: MstyleRequest,
   ) {
-    return this.directory.requestDeletion(profileId, dto);
+    return this.withIdempotency(
+      req,
+      'POST',
+      `/resident-profiles/${profileId}/deletion-requests`,
+      dto,
+      () => this.directory.requestDeletion(profileId, dto),
+    );
   }
 
   @Get('resident-profiles/:profileId')
@@ -371,38 +486,84 @@ export class MstylePrivateController {
   }
 
   @Patch('resident-profiles/:profileId')
+  @Idempotent()
   patchProfile(
     @Param('profileId') profileId: string,
     @Body() dto: PatchProfileDto,
-    @Headers('if-match') ifMatch?: string,
+    @Headers('if-match') ifMatch: string | undefined,
+    @Req() req: MstyleRequest,
   ) {
-    return this.directory.patchProfile(profileId, dto, ifMatch);
+    return this.withIdempotency(
+      req,
+      'PATCH',
+      `/resident-profiles/${profileId}`,
+      { dto, ifMatch },
+      () => this.directory.patchProfile(profileId, dto, ifMatch),
+    );
   }
 
   @Patch('resident-memberships/:membershipId')
+  @Idempotent()
   patchMembership(
     @Param('membershipId') membershipId: string,
     @Body() dto: PatchMembershipDto,
+    @Headers('if-match') ifMatch: string | undefined,
+    @Req() req: MstyleRequest,
   ) {
-    return this.directory.patchMembership(membershipId, dto);
+    return this.withIdempotency(
+      req,
+      'PATCH',
+      `/resident-memberships/${membershipId}`,
+      { dto, ifMatch },
+      () => this.directory.patchMembership(membershipId, dto, ifMatch),
+    );
   }
 
   @Post('resident-memberships/:membershipId/revoke')
-  revokeMembership(@Param('membershipId') membershipId: string) {
-    return this.directory.revokeMembership(membershipId);
+  @Idempotent()
+  revokeMembership(
+    @Param('membershipId') membershipId: string,
+    @Headers('if-match') ifMatch: string | undefined,
+    @Req() req: MstyleRequest,
+  ) {
+    return this.withIdempotency(
+      req,
+      'POST',
+      `/resident-memberships/${membershipId}/revoke`,
+      { ifMatch },
+      () => this.directory.revokeMembership(membershipId, ifMatch),
+    );
   }
 
   @Post('resident-profile-change-requests/:changeRequestId/decisions')
+  @Idempotent()
   decide(
     @Param('changeRequestId') changeRequestId: string,
     @Body() dto: ChangeDecisionDto,
+    @Req() req: MstyleRequest,
   ) {
-    return this.directory.decideChange(changeRequestId, dto);
+    return this.withIdempotency(
+      req,
+      'POST',
+      `/resident-profile-change-requests/${changeRequestId}/decisions`,
+      dto,
+      () => this.directory.decideChange(changeRequestId, dto),
+    );
   }
 
   @Post('resident-profile-change-requests/:changeRequestId/cancel')
-  cancel(@Param('changeRequestId') changeRequestId: string) {
-    return this.directory.cancelChange(changeRequestId);
+  @Idempotent()
+  cancel(
+    @Param('changeRequestId') changeRequestId: string,
+    @Req() req: MstyleRequest,
+  ) {
+    return this.withIdempotency(
+      req,
+      'POST',
+      `/resident-profile-change-requests/${changeRequestId}/cancel`,
+      {},
+      () => this.directory.cancelChange(changeRequestId),
+    );
   }
 
   @Get('deletion-requests/:deletionRequestId')
@@ -424,11 +585,19 @@ export class MstylePrivateController {
   }
 
   @Post('private-data-snapshots/:snapshotId/operation-bindings')
+  @Idempotent()
   bindSnapshot(
     @Param('snapshotId') snapshotId: string,
     @Body() dto: BindSnapshotDto,
+    @Req() req: MstyleRequest,
   ) {
-    return this.privateData.bindSnapshot(snapshotId, dto);
+    return this.withIdempotency(
+      req,
+      'POST',
+      `/private-data-snapshots/${snapshotId}/operation-bindings`,
+      dto,
+      () => this.privateData.bindSnapshot(snapshotId, dto),
+    );
   }
 
   @Post('guest-parties/search')
@@ -437,25 +606,46 @@ export class MstylePrivateController {
   }
 
   @Post('guest-parties')
-  createGuest(@Body() dto: CreateGuestDto) {
-    return this.guests.create(dto);
+  @Idempotent()
+  createGuest(@Body() dto: CreateGuestDto, @Req() req: MstyleRequest) {
+    return this.withIdempotency(req, 'POST', '/guest-parties', dto, () =>
+      this.guests.create(dto),
+    );
   }
 
   @Post('guest-parties/:guestPartyId/contact-challenges')
+  @Idempotent()
   guestContact(
     @Param('guestPartyId') guestPartyId: string,
     @Body() dto: ContactChallengeDto,
+    @Req() req: MstyleRequest,
   ) {
-    return this.guests.startContact(guestPartyId, dto);
+    return this.withIdempotency(
+      req,
+      'POST',
+      `/guest-parties/${guestPartyId}/contact-challenges`,
+      dto,
+      () => this.guests.startContact(guestPartyId, dto),
+    );
   }
 
   @Post('guest-parties/:guestPartyId/contact-challenges/:challengeId/verify')
+  @Idempotent()
   guestVerify(
     @Param('guestPartyId') guestPartyId: string,
     @Param('challengeId') challengeId: string,
     @Body() dto: ContactVerifyDto,
+    @Req() req: MstyleRequest,
   ) {
-    return this.guests.verifyContact(guestPartyId, challengeId, dto);
+    return this.withIdempotency(
+      req,
+      'POST',
+      `/guest-parties/${guestPartyId}/contact-challenges/${challengeId}/verify`,
+      { schemaVersion: dto.schemaVersion },
+      () => this.guests.verifyContact(guestPartyId, challengeId, dto),
+      'CHALLENGE_CONSUMED',
+      true,
+    );
   }
 
   @Get('guest-parties/:guestPartyId/status')
@@ -482,32 +672,69 @@ export class MstylePrivateController {
   }
 
   @Patch('guest-parties/:guestPartyId/private-data')
+  @Idempotent()
   guestPatchPrivate(
     @Param('guestPartyId') guestPartyId: string,
     @Body() dto: PatchPrivateDataDto,
+    @Headers('if-match') ifMatch: string | undefined,
+    @Req() req: MstyleRequest,
   ) {
-    return this.privateData.patchGuest(guestPartyId, dto);
+    return this.withIdempotency(
+      req,
+      'PATCH',
+      `/guest-parties/${guestPartyId}/private-data`,
+      { dto, ifMatch },
+      () => this.privateData.patchGuest(guestPartyId, dto, ifMatch),
+    );
   }
 
   @Post('guest-parties/:guestPartyId/snapshots')
-  guestSnapshot(@Param('guestPartyId') guestPartyId: string) {
-    return this.privateData.snapshotGuest(guestPartyId);
+  @Idempotent()
+  guestSnapshot(
+    @Param('guestPartyId') guestPartyId: string,
+    @Req() req: MstyleRequest,
+  ) {
+    return this.withIdempotency(
+      req,
+      'POST',
+      `/guest-parties/${guestPartyId}/snapshots`,
+      {},
+      () => this.privateData.snapshotGuest(guestPartyId),
+    );
   }
 
   @Post('guest-parties/:guestPartyId/booking-confirmations')
+  @Idempotent()
   guestBook(
     @Param('guestPartyId') guestPartyId: string,
     @Body() dto: ConfirmBookingDto,
+    @Headers('if-match') ifMatch: string | undefined,
+    @Req() req: MstyleRequest,
   ) {
-    return this.guests.confirmBooking(guestPartyId, dto);
+    return this.withIdempotency(
+      req,
+      'POST',
+      `/guest-parties/${guestPartyId}/booking-confirmations`,
+      { dto, ifMatch },
+      () => this.guests.confirmBooking(guestPartyId, dto, ifMatch),
+    );
   }
 
   @Post('guest-parties/:guestPartyId/claim')
+  @Idempotent()
   guestClaim(
     @Param('guestPartyId') guestPartyId: string,
     @Body() dto: ClaimGuestDto,
+    @Headers('if-match') ifMatch: string | undefined,
+    @Req() req: MstyleRequest,
   ) {
-    return this.guests.claim(guestPartyId, dto);
+    return this.withIdempotency(
+      req,
+      'POST',
+      `/guest-parties/${guestPartyId}/claim`,
+      { dto, ifMatch },
+      () => this.guests.claim(guestPartyId, dto, ifMatch),
+    );
   }
 
   @Get('guest-parties/:guestPartyId/consents')
@@ -516,20 +743,36 @@ export class MstylePrivateController {
   }
 
   @Post('guest-parties/:guestPartyId/consents/:documentCode/accept')
+  @Idempotent()
   guestAccept(
     @Param('guestPartyId') guestPartyId: string,
     @Param('documentCode') documentCode: string,
     @Body() dto: ConsentAcceptDto,
+    @Req() req: MstyleRequest,
   ) {
-    return this.guests.acceptConsent(guestPartyId, documentCode, dto);
+    return this.withIdempotency(
+      req,
+      'POST',
+      `/guest-parties/${guestPartyId}/consents/${documentCode}/accept`,
+      dto,
+      () => this.guests.acceptConsent(guestPartyId, documentCode, dto),
+    );
   }
 
   @Post('guest-parties/:guestPartyId/consents/:documentCode/withdraw')
+  @Idempotent()
   guestWithdraw(
     @Param('guestPartyId') guestPartyId: string,
     @Param('documentCode') documentCode: string,
+    @Req() req: MstyleRequest,
   ) {
-    return this.guests.withdrawConsent(guestPartyId, documentCode);
+    return this.withIdempotency(
+      req,
+      'POST',
+      `/guest-parties/${guestPartyId}/consents/${documentCode}/withdraw`,
+      {},
+      () => this.guests.withdrawConsent(guestPartyId, documentCode),
+    );
   }
 
   private async withIdempotency(

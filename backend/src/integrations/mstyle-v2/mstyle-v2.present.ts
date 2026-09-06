@@ -108,6 +108,7 @@ export function consentItem(doc: MstyleConsent) {
     acceptedAt: doc.acceptedAt ?? null,
     withdrawnAt: doc.withdrawnAt ?? null,
     auditRef: doc.auditRef ?? null,
+    history: doc.history || [],
   };
 }
 

@@ -257,8 +257,13 @@ export class MstyleGuestsService {
     });
   }
 
-  async confirmBooking(guestPartyId: string, dto: ConfirmBookingDto) {
+  async confirmBooking(
+    guestPartyId: string,
+    dto: ConfirmBookingDto,
+    ifMatch?: string,
+  ) {
     const guest = await this.requireGuest(guestPartyId);
+    this.assertMatch(ifMatch, guest.revision);
     const snapshot = await this.snapshots.findOne({
       snapshotId: dto.snapshotId,
       partyId: guestPartyId,
@@ -293,8 +298,9 @@ export class MstyleGuestsService {
     );
   }
 
-  async claim(guestPartyId: string, dto: ClaimGuestDto) {
+  async claim(guestPartyId: string, dto: ClaimGuestDto, ifMatch?: string) {
     const guest = await this.requireGuest(guestPartyId);
+    this.assertMatch(ifMatch, guest.revision);
     const identity = await this.identities.findIdentityBySubject(dto.subject);
     if (!identity) problem(404, 'NOT_FOUND');
     guest.status = 'claimed';
@@ -441,5 +447,20 @@ export class MstyleGuestsService {
     const guest = await this.guests.findOne({ guestPartyId });
     if (!guest) problem(404, 'NOT_FOUND');
     return guest;
+  }
+
+  private assertMatch(ifMatch: string | undefined, revision: number) {
+    if (!ifMatch) return;
+    const raw = ifMatch.replace(/^W\//, '').replace(/"/g, '').trim();
+    const idx = raw.lastIndexOf('-');
+    const parsedRevision = Number(raw.slice(idx + 1));
+    if (
+      idx < 1 ||
+      raw.slice(0, idx) !== 'guest' ||
+      !Number.isFinite(parsedRevision) ||
+      parsedRevision !== revision
+    ) {
+      problem(412, 'PRECONDITION_FAILED');
+    }
   }
 }

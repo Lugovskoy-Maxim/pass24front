@@ -723,6 +723,8 @@ export class MstyleDirectoryService {
       displayName: dto.displayName,
       status: 'invited',
     });
+    await this.assertCanBeEmployee(identity.subject, profileId);
+    await this.assertEmployeeLimit(profile);
     await this.identities.syncContact(
       identity.subject,
       dto.identifier.type,
@@ -784,15 +786,20 @@ export class MstyleDirectoryService {
     );
   }
 
-  async patchMembership(membershipId: string, dto: PatchMembershipDto) {
+  async patchMembership(
+    membershipId: string,
+    dto: PatchMembershipDto,
+    ifMatch?: string,
+  ) {
     const membership = await this.memberships.findOne({ membershipId });
     if (!membership || membership.role === 'owner') problem(404, 'NOT_FOUND');
+    const profile = await this.requireProfile(membership.profileId);
+    this.assertMatch(ifMatch, 'memberships', profile.membershipSetRevision);
     if (dto.status) membership.status = dto.status;
     if (dto.validFrom !== undefined) membership.validFrom = dto.validFrom;
     if (dto.validUntil !== undefined) membership.validUntil = dto.validUntil;
     membership.revision += 1;
     await membership.save();
-    const profile = await this.requireProfile(membership.profileId);
     profile.membershipSetRevision += 1;
     await profile.save();
     const identity = await this.requireIdentity(membership.subject);
@@ -818,13 +825,14 @@ export class MstyleDirectoryService {
     );
   }
 
-  async revokeMembership(membershipId: string) {
+  async revokeMembership(membershipId: string, ifMatch?: string) {
     const membership = await this.memberships.findOne({ membershipId });
     if (!membership || membership.role === 'owner') problem(404, 'NOT_FOUND');
+    const profile = await this.requireProfile(membership.profileId);
+    this.assertMatch(ifMatch, 'memberships', profile.membershipSetRevision);
     membership.status = 'revoked';
     membership.revision += 1;
     await membership.save();
-    const profile = await this.requireProfile(membership.profileId);
     profile.membershipSetRevision += 1;
     await profile.save();
     const identity = await this.requireIdentity(membership.subject);
@@ -850,8 +858,13 @@ export class MstyleDirectoryService {
     );
   }
 
-  async transferOwner(profileId: string, dto: OwnerTransferDto) {
+  async transferOwner(
+    profileId: string,
+    dto: OwnerTransferDto,
+    ifMatch?: string,
+  ) {
     const profile = await this.requireProfile(profileId);
+    this.assertMatch(ifMatch, 'memberships', profile.membershipSetRevision);
     const current = await this.memberships.findOne({
       profileId,
       role: 'owner',
@@ -862,7 +875,17 @@ export class MstyleDirectoryService {
       profileId,
       subject: dto.newOwnerSubject,
     });
-    if (!incoming) problem(404, 'NOT_FOUND');
+    if (!incoming || incoming.status === 'revoked') problem(404, 'NOT_FOUND');
+    await this.assertCanBeEmployee(
+      current.subject,
+      profileId,
+      current.membershipId,
+    );
+    await this.assertCanBeOwner(
+      incoming.subject,
+      profileId,
+      incoming.membershipId,
+    );
     current.role = 'employee';
     current.revision += 1;
     incoming.role = 'owner';
@@ -1033,13 +1056,33 @@ export class MstyleDirectoryService {
     );
   }
 
-  async replaceAssignments(profileId: string, dto: PatchAssignmentsDto) {
+  async replaceAssignments(
+    profileId: string,
+    dto: PatchAssignmentsDto,
+    ifMatch?: string,
+  ) {
     const profile = await this.requireProfile(profileId);
-    if (dto.assignmentSetRevision !== profile.assignmentSetRevision) {
+    const parsed = parseIfMatch(ifMatch);
+    if (
+      parsed
+        ? parsed.kind !== 'assignments' ||
+          parsed.revision !== profile.assignmentSetRevision
+        : dto.assignmentSetRevision !== profile.assignmentSetRevision
+    ) {
       problem(412, 'PRECONDITION_FAILED');
+    }
+    const activeKeys = new Set<string>();
+    for (const item of dto.items) {
+      if ((item.status || 'active') !== 'active') continue;
+      const key = `${item.purpose}:${item.subject}:${item.contactId}`;
+      if (activeKeys.has(key)) {
+        problem(409, 'CONFLICT', { title: 'Duplicate active assignment' });
+      }
+      activeKeys.add(key);
     }
     await this.assignments.deleteMany({ profileId });
     const items: ReturnType<typeof assignmentDto>[] = [];
+    const activePurposeTypes = new Set<string>();
     for (const item of dto.items) {
       const contact = await this.contacts.findOne({
         contactId: item.contactId,
@@ -1055,6 +1098,27 @@ export class MstyleDirectoryService {
             },
           ],
         });
+      }
+      if (!contact.verifiedAt) {
+        problem(422, 'VALIDATION_FAILED', {
+          errors: [
+            {
+              field: 'contactId',
+              code: 'not_verified',
+              message: item.contactId,
+            },
+          ],
+        });
+      }
+      if ((item.status || 'active') === 'active') {
+        const purposeType = `${item.purpose}:${contact.type}`;
+        if (activePurposeTypes.has(purposeType)) {
+          problem(409, 'CONFLICT', {
+            title:
+              'Only one active assignment is allowed per purpose and contact type',
+          });
+        }
+        activePurposeTypes.add(purposeType);
       }
       const created = await this.assignments.create({
         assignmentId: Ids.assignment(),
@@ -1168,6 +1232,7 @@ export class MstyleDirectoryService {
   ) {
     let row = await this.consents.findOne({ partyType, partyId, documentCode });
     const now = nowIso();
+    const auditRef = Ids.event();
     if (!row) {
       row = await this.consents.create({
         partyType,
@@ -1181,7 +1246,18 @@ export class MstyleDirectoryService {
         revision: 1,
         acceptedAt: status === 'accepted' ? now : null,
         withdrawnAt: status === 'withdrawn' ? now : null,
-        auditRef: Ids.event(),
+        auditRef,
+        history: [
+          {
+            status,
+            documentVersion: dto.documentVersion || '1',
+            documentDigest: dto.documentDigest || '',
+            documentUrl: dto.documentUrl || '',
+            locale: dto.locale || 'ru-RU',
+            auditRef,
+            recordedAt: now,
+          },
+        ],
       });
     } else {
       if (dto.documentVersion) row.documentVersion = dto.documentVersion;
@@ -1192,7 +1268,19 @@ export class MstyleDirectoryService {
       row.revision += 1;
       if (status === 'accepted') row.acceptedAt = now;
       if (status === 'withdrawn') row.withdrawnAt = now;
-      row.auditRef = Ids.event();
+      row.auditRef = auditRef;
+      row.history = [
+        ...(row.history || []),
+        {
+          status,
+          documentVersion: row.documentVersion,
+          documentDigest: row.documentDigest,
+          documentUrl: row.documentUrl || '',
+          locale: row.locale || 'ru-RU',
+          auditRef,
+          recordedAt: now,
+        },
+      ];
       await row.save();
     }
     const eventIds = [
@@ -1220,6 +1308,89 @@ export class MstyleDirectoryService {
       200,
       { ETag: etag('consents', revision), 'Cache-Control': 'no-store' },
     );
+  }
+
+  private async assertEmployeeLimit(profile: MstyleProfileDocument) {
+    const limit = profile.memberPolicy?.employeeLimit;
+    if (limit == null) return;
+    const used = await this.memberships.countDocuments({
+      profileId: profile.profileId,
+      role: 'employee',
+      status: { $ne: 'revoked' },
+    });
+    if (used >= limit) {
+      problem(409, 'CONFLICT', { title: 'Employee limit reached' });
+    }
+  }
+
+  private async assertCanBeEmployee(
+    subject: string,
+    profileId: string,
+    ignoreMembershipId?: string,
+  ) {
+    const memberships = await this.memberships.find({
+      subject,
+      status: { $ne: 'revoked' },
+      ...(ignoreMembershipId
+        ? { membershipId: { $ne: ignoreMembershipId } }
+        : {}),
+    });
+    const ownerElsewhere = memberships.find((m) => m.role === 'owner');
+    if (ownerElsewhere) {
+      problem(409, 'CONFLICT', {
+        title: 'Owner cannot be assigned as employee',
+        errors: [
+          {
+            field: 'subject',
+            code: 'root_user_conflict',
+            message: ownerElsewhere.profileId,
+          },
+        ],
+      });
+    }
+    const employeeElsewhere = memberships.find(
+      (m) => m.role === 'employee' && m.profileId !== profileId,
+    );
+    if (employeeElsewhere) {
+      problem(409, 'CONFLICT', {
+        title: 'Employee is already assigned to another profile',
+        errors: [
+          {
+            field: 'subject',
+            code: 'already_bound_to_other_parent',
+            message: employeeElsewhere.profileId,
+          },
+        ],
+      });
+    }
+  }
+
+  private async assertCanBeOwner(
+    subject: string,
+    profileId: string,
+    ignoreMembershipId?: string,
+  ) {
+    const employeeElsewhere = await this.memberships.findOne({
+      subject,
+      role: 'employee',
+      profileId: { $ne: profileId },
+      status: { $ne: 'revoked' },
+      ...(ignoreMembershipId
+        ? { membershipId: { $ne: ignoreMembershipId } }
+        : {}),
+    });
+    if (employeeElsewhere) {
+      problem(409, 'CONFLICT', {
+        title: 'Employee cannot become owner while assigned elsewhere',
+        errors: [
+          {
+            field: 'newOwnerSubject',
+            code: 'already_bound_to_other_parent',
+            message: employeeElsewhere.profileId,
+          },
+        ],
+      });
+    }
   }
 
   private async requireIdentity(subject: string) {

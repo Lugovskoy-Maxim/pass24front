@@ -97,6 +97,11 @@ export class MstylePrivateDataService {
         doc,
         missing,
       ),
+      200,
+      {
+        ETag: etag('private', doc?.revision ?? 0),
+        'Cache-Control': 'no-store',
+      },
     );
   }
 
@@ -127,13 +132,18 @@ export class MstylePrivateDataService {
     );
   }
 
-  async patchResident(profileId: string, dto: PatchPrivateDataDto) {
+  async patchResident(
+    profileId: string,
+    dto: PatchPrivateDataDto,
+    ifMatch?: string,
+  ) {
     const profile = await this.requireProfile(profileId);
     this.assertFields(Object.keys(dto.values), RESIDENT_PRIVATE_FIELDS);
     let doc = await this.privateData.findOne({
       partyType: 'resident_profile',
       partyId: profileId,
     });
+    this.assertMatch(ifMatch, 'private', doc?.revision ?? 0);
     const current = doc
       ? decryptJson<Record<string, unknown>>(
           this.cfg.piiSecret(),
@@ -361,6 +371,11 @@ export class MstylePrivateDataService {
         doc,
         missing,
       ),
+      200,
+      {
+        ETag: etag('private', doc?.revision ?? 0),
+        'Cache-Control': 'no-store',
+      },
     );
   }
 
@@ -388,13 +403,18 @@ export class MstylePrivateDataService {
     );
   }
 
-  async patchGuest(guestPartyId: string, dto: PatchPrivateDataDto) {
+  async patchGuest(
+    guestPartyId: string,
+    dto: PatchPrivateDataDto,
+    ifMatch?: string,
+  ) {
     const guest = await this.requireGuest(guestPartyId);
     this.assertFields(Object.keys(dto.values), GUEST_PRIVATE_FIELDS);
     let doc = await this.privateData.findOne({
       partyType: 'guest_party',
       partyId: guestPartyId,
     });
+    this.assertMatch(ifMatch, 'private', doc?.revision ?? 0);
     const current = doc
       ? decryptJson<Record<string, unknown>>(
           this.cfg.piiSecret(),
@@ -629,6 +649,25 @@ export class MstylePrivateDataService {
           message: 'Unknown fieldCode',
         })),
       });
+    }
+  }
+
+  private assertMatch(
+    ifMatch: string | undefined,
+    kind: string,
+    revision: number,
+  ) {
+    if (!ifMatch) return;
+    const raw = ifMatch.replace(/^W\//, '').replace(/"/g, '').trim();
+    const idx = raw.lastIndexOf('-');
+    const parsedRevision = Number(raw.slice(idx + 1));
+    if (
+      idx < 1 ||
+      raw.slice(0, idx) !== kind ||
+      !Number.isFinite(parsedRevision) ||
+      parsedRevision !== revision
+    ) {
+      problem(412, 'PRECONDITION_FAILED');
     }
   }
 }
