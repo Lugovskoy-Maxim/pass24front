@@ -5,7 +5,8 @@
   "description": "Telegram Bot API gateway (OTP). Egress goes through WireGuard sidecar.",
   "main": "server.js",
   "scripts": {
-    "start": "node server.js"
+    "start": "node server.js",
+    "test": "node --test server.test.js"
   },
   "engines": {
     "node": ">=20"

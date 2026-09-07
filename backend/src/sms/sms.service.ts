@@ -39,9 +39,10 @@ export class SmsService {
 
   isConfigured(): boolean {
     return (
-      this.configService.get<string>('SMS_ENABLED') === 'true' &&
-      !!this.configService.get<string>('SMSAERO_EMAIL') &&
-      !!this.configService.get<string>('SMSAERO_API_KEY')
+      this.configService.get<string>('SMS_ENABLED')?.trim().toLowerCase() ===
+        'true' &&
+      !!this.configService.get<string>('SMSAERO_EMAIL')?.trim() &&
+      !!this.configService.get<string>('SMSAERO_API_KEY')?.trim()
     );
   }
 
@@ -282,6 +283,7 @@ export class SmsService {
           'Content-Type': 'application/x-www-form-urlencoded; charset=UTF-8',
         },
         body: form.toString(),
+        signal: AbortSignal.timeout(15_000),
       });
       const data = (await res.json()) as SmsAeroResponse;
       if (!res.ok) {

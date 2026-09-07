@@ -1,4 +1,6 @@
 import { Module } from '@nestjs/common';
+import { ConfigService } from '@nestjs/config';
+import { createMstyleSmsService, MSTYLE_SMS_SERVICE } from './mstyle-v2.sms';
 import { MongooseModule } from '@nestjs/mongoose';
 import { AuthDatabaseModule } from '../../database/auth-database.module';
 import { User, UserSchema } from '../../schemas';
@@ -32,6 +34,11 @@ import { MSTYLE_MODELS } from './mstyle-v2.schemas';
   exports: [MstyleIdentityService, MstyleOauthService, MstyleV2Config],
   controllers: [MstyleOauthController, MstylePrivateController],
   providers: [
+    {
+      provide: MSTYLE_SMS_SERVICE,
+      inject: [ConfigService],
+      useFactory: createMstyleSmsService,
+    },
     MstyleV2Config,
     MstyleOauthService,
     MstyleAuthService,

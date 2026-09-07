@@ -13,6 +13,35 @@ describe('MstyleAuthService SMS Aero Mobile ID', () => {
   beforeEach(() => jest.useFakeTimers());
   afterEach(() => jest.useRealTimers());
 
+  it('registers a Telegram code with the phone and challenge expiry', async () => {
+    const fixture = createFixture();
+    fixture.telegramGateway.isConfigured.mockReturnValue(true);
+    const result = await fixture.service.startCodeChallenge(
+      { ...challengeDto(), channel: 'telegram' },
+      'mstyle-backend-prod',
+      '192.0.2.10',
+    );
+    expect(result.status).toBe(202);
+    expect(fixture.telegramGateway.registerPendingOtp).toHaveBeenCalledWith(
+      expect.objectContaining({
+        phone: '+79990001234',
+        code: expect.stringMatching(/^\d{4}$/),
+        expiresAt: fixture.challenge().expiresAt.toISOString(),
+      }),
+    );
+  });
+
+  it('returns upstream unavailable when the Telegram gateway is missing', async () => {
+    const fixture = createFixture();
+    await expect(
+      fixture.service.startCodeChallenge(
+        { ...challengeDto(), channel: 'telegram' },
+        'mstyle-backend-prod',
+        '192.0.2.10',
+      ),
+    ).rejects.toMatchObject({ problemCode: 'UPSTREAM_UNAVAILABLE' });
+  });
+
   it('submits an email OTP for an active identity', async () => {
     const fixture = createFixture();
     const result = await fixture.service.startCodeChallenge(
@@ -208,7 +237,7 @@ function createFixture() {
   const config = {
     rateLimitSecret: () => 'test-rate-secret',
     mockOtp: () => '1234',
-    telegramBot: () => 'mstyleauthbot',
+    telegramBot: () => 'm_style_office_bot',
     dispatchEnabled: () => true,
   };
   const identities = {

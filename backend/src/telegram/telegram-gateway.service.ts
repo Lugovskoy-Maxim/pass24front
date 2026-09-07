@@ -23,6 +23,8 @@ export class TelegramGatewayService {
     startToken: string;
     code: string;
     text?: string;
+    phone: string;
+    expiresAt: string;
   }): Promise<boolean> {
     return this.post('/v1/pending', params);
   }
@@ -65,6 +67,7 @@ export class TelegramGatewayService {
         method: 'POST',
         headers,
         body: JSON.stringify(body),
+        signal: AbortSignal.timeout(10_000),
       });
       if (!res.ok) {
         const text = await res.text().catch(() => '');

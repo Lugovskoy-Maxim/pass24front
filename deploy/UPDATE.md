@@ -71,7 +71,31 @@ docker compose -f docker-compose.yml -f docker-compose.prod.yml --env-file .env 
 `Email OTP submitted to SMTP` — передачу письма SMTP-серверу (не подтверждение доставки во входящие).
 Имя Telegram-бота в `.env` имеет приоритет над значением по умолчанию в коде.
 
-### Обновление вручную
+### Отдельный SMS Aero для авторизации V2
+
+Регистрация PASS использует `SMS_ENABLED` и `SMSAERO_*`.
+Внешняя авторизация V2 (запуск, повторная отправка, статус и проверка кода)
+использует отдельные настройки в `.env`:
+
+```dotenv
+MSTYLE_SMS_ENABLED=true
+MSTYLE_SMSAERO_EMAIL=LOGIN_OF_MSTYLE_SMSAERO_ACCOUNT
+MSTYLE_SMSAERO_API_KEY=API_KEY_OF_MSTYLE_SMSAERO_ACCOUNT
+MSTYLE_SMSAERO_SIGN=APPROVED_MOBILE_AUTH_NAME
+MSTYLE_SMSAERO_CALLBACK_URL=https://pass.mstyle.ru/api/sms/mobile-id/callback
+MSTYLE_DISPATCH_ENABLED=true
+MSTYLE_MOCK_RESPONSES=false
+```
+
+Email здесь — логин кабинета SMS Aero, API key — его ключ. Это не OAuth
+`MSTYLE_CLIENT_ID` и не ключи RS256. Укажите имя из раздела мобильной авторизации
+кабинета для `mstyle.ru`. Callback остаётся на PASS, поскольку его обрабатывает backend PASS.
+Если V2-настройки отсутствуют, отправка через старый кабинет не выполняется:
+реальный SMS challenge возвращает `UPSTREAM_UNAVAILABLE`.
+После изменения окружения пересоздайте backend. Начатые до смены кабинета SMS-сессии
+проверяются у прежнего провайдера только со старыми настройками; для теста запросите новый challenge.
+
+### Команды ручного обновления
 
 ```bash
 ssh user@192.168.200.9

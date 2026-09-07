@@ -73,6 +73,11 @@ services:
       - MSTYLE_IDEMPOTENCY_SECRET=${MSTYLE_IDEMPOTENCY_SECRET:-}
       - MSTYLE_MOCK_RESPONSES=${MSTYLE_MOCK_RESPONSES:-}
       - MSTYLE_DISPATCH_ENABLED=${MSTYLE_DISPATCH_ENABLED:-false}
+      - MSTYLE_SMS_ENABLED=${MSTYLE_SMS_ENABLED:-false}
+      - MSTYLE_SMSAERO_EMAIL=${MSTYLE_SMSAERO_EMAIL:-}
+      - MSTYLE_SMSAERO_API_KEY=${MSTYLE_SMSAERO_API_KEY:-}
+      - MSTYLE_SMSAERO_SIGN=${MSTYLE_SMSAERO_SIGN:-}
+      - MSTYLE_SMSAERO_CALLBACK_URL=${MSTYLE_SMSAERO_CALLBACK_URL:-}
       - MSTYLE_MOCK_OTP=${MSTYLE_MOCK_OTP:-1234}
       - MSTYLE_ENVIRONMENT=${MSTYLE_ENVIRONMENT:-staging}
       - MSTYLE_PUBLIC_BASE_URL=${MSTYLE_PUBLIC_BASE_URL:-}
@@ -130,6 +135,13 @@ services:
       - TELEGRAM_BOT_TOKEN=${TELEGRAM_BOT_TOKEN:-}
       - TELEGRAM_GATEWAY_TOKEN=${TELEGRAM_GATEWAY_TOKEN:-}
       - TELEGRAM_POLL=${TELEGRAM_POLL:-true}
+      - MSTYLE_TELEGRAM_BOT=${MSTYLE_TELEGRAM_BOT:-m_style_office_bot}
+    healthcheck:
+      test: ["CMD", "node", "-e", "fetch('http://127.0.0.1:8091/health').then(r=>process.exit(r.ok?0:1)).catch(()=>process.exit(1))"]
+      interval: 30s
+      timeout: 5s
+      retries: 3
+      start_period: 30s
     depends_on:
       - wireguard
 

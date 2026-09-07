@@ -68,14 +68,20 @@ Authorization: Bearer <service-token>
 в backend-контейнер переданы настройки:
 
 ```dotenv
-SMS_ENABLED=true
-SMSAERO_EMAIL=...
-SMSAERO_API_KEY=...
-SMSAERO_SIGN=mts_mstyle
+MSTYLE_SMS_ENABLED=true
+MSTYLE_SMSAERO_EMAIL=...
+MSTYLE_SMSAERO_API_KEY=...
+MSTYLE_SMSAERO_SIGN=APPROVED_MOBILE_AUTH_NAME
+MSTYLE_SMSAERO_CALLBACK_URL=https://pass.mstyle.ru/api/sms/mobile-id/callback
 MSTYLE_DISPATCH_ENABLED=true
 MSTYLE_MOCK_RESPONSES=false
 MSTYLE_MOCK_OTP=1234
 ```
+
+Это отдельный кабинет SMS Aero для `mstyle.ru`. Регистрация PASS продолжает
+использовать `SMS_ENABLED` и `SMSAERO_*`. V2 не подставляет их при отсутствии своих
+настроек. Имя Mobile Auth берётся из нового кабинета; OAuth `client_id` и RS256
+не являются учётными данными SMS Aero.
 
 - A-03 запускает SIM-PUSH с SMS fallback;
 - A-04 проверяет статус SIM-PUSH и при подтверждении возвращает

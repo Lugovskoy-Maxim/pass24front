@@ -1,4 +1,5 @@
-import { Injectable, Logger } from '@nestjs/common';
+import { Inject, Injectable, Logger } from '@nestjs/common';
+import { MSTYLE_SMS_SERVICE } from './mstyle-v2.sms';
 import { InjectModel } from '@nestjs/mongoose';
 import * as bcrypt from 'bcryptjs';
 import { Model } from 'mongoose';
@@ -43,7 +44,7 @@ export class MstyleAuthService {
     private readonly rates: MstyleRateLimitService,
     @InjectModel(MstyleChallenge.name)
     private readonly challenges: Model<MstyleChallengeDocument>,
-    private readonly sms: SmsService,
+    @Inject(MSTYLE_SMS_SERVICE) private readonly sms: SmsService,
     private readonly mail: MailService,
     private readonly telegramGateway: TelegramGatewayService,
   ) {}
@@ -172,9 +173,7 @@ export class MstyleAuthService {
         ? await this.sms.startMobileAuth(normalized)
         : undefined;
     const telegramAction =
-      dto.channel === 'telegram'
-        ? this.telegramAction(challengeId)
-        : undefined;
+      dto.channel === 'telegram' ? this.telegramAction(challengeId) : undefined;
     const challenge = await this.challenges.create({
       challengeId,
       kind: 'auth',
@@ -205,6 +204,8 @@ export class MstyleAuthService {
       isDummy,
       useSmsAero,
       email: dto.identifier.type === 'email' ? normalized : undefined,
+      phone: dto.identifier.type === 'phone' ? normalized : undefined,
+      expiresAt: challenge.expiresAt.toISOString(),
       challengeId,
     });
 
@@ -297,11 +298,16 @@ export class MstyleAuthService {
     await challenge.save();
 
     let email: string | undefined;
-    if (challenge.channel === 'email' && challenge.subject) {
+    let phone: string | undefined;
+    if (
+      challenge.subject &&
+      ['email', 'telegram'].includes(challenge.channel || '')
+    ) {
       const identity = await this.identities.findIdentityBySubject(
         challenge.subject,
       );
       email = identity?.email || undefined;
+      phone = identity?.phone || undefined;
     }
     await this.dispatchChallengeCode({
       channel: challenge.channel || 'email',
@@ -309,6 +315,8 @@ export class MstyleAuthService {
       isDummy: Boolean(challenge.isDummy),
       useSmsAero,
       email,
+      phone,
+      expiresAt: challenge.expiresAt.toISOString(),
       challengeId: challenge.challengeId,
     });
 
@@ -453,6 +461,9 @@ export class MstyleAuthService {
 
   private requireSmsAero(): void {
     if (!this.sms.isConfigured()) {
+      this.logger.warn(
+        'V2 SMS unavailable: check MSTYLE_SMS_ENABLED, MSTYLE_SMSAERO_EMAIL, MSTYLE_SMSAERO_API_KEY and MSTYLE_SMSAERO_SIGN',
+      );
       problem(503, 'UPSTREAM_UNAVAILABLE', { retryable: true });
     }
   }
@@ -520,6 +531,8 @@ export class MstyleAuthService {
     isDummy: boolean;
     useSmsAero: boolean;
     email?: string | null;
+    phone?: string | null;
+    expiresAt: string;
     challengeId: string;
   }) {
     if (!this.cfg.dispatchEnabled()) {
@@ -553,11 +566,16 @@ export class MstyleAuthService {
         this.logger.warn(
           'telegram channel requested but TELEGRAM_GATEWAY_URL is not set',
         );
-        return;
+        problem(503, 'UPSTREAM_UNAVAILABLE', { retryable: true });
+      }
+      if (!params.phone) {
+        problem(503, 'UPSTREAM_UNAVAILABLE', { retryable: true });
       }
       const ok = await this.telegramGateway.registerPendingOtp({
         startToken: this.telegramStartToken(params.challengeId),
         code: params.code,
+        phone: params.phone,
+        expiresAt: params.expiresAt,
         text: `Код входа M-Style / Pass: ${params.code}`,
       });
       if (!ok) {
