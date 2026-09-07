@@ -176,12 +176,10 @@ export class User {
 
 export const UserSchema = SchemaFactory.createForClass(User);
 
-UserSchema.index({ username: 1 }, { unique: true, sparse: true });
 UserSchema.index({ properties: 1 });
 UserSchema.index({ role: 1, isActive: 1 });
 UserSchema.index({ fullName: 'text' });
 UserSchema.index({ parentTenantId: 1 });
-UserSchema.index({ passSubject: 1 }, { unique: true, sparse: true });
 UserSchema.index({ identityStatus: 1 });
 UserSchema.index({ profileType: 1 });
 UserSchema.index({ 'meta.externalId': 1 }, { unique: true, sparse: true });

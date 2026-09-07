@@ -79,13 +79,13 @@ export class MstyleIdentity {
     middleName: string | null;
   };
 
-  @Prop({ sparse: true, lowercase: true, trim: true })
+  @Prop({ lowercase: true, trim: true })
   login?: string;
 
-  @Prop({ sparse: true })
+  @Prop()
   phone?: string;
 
-  @Prop({ sparse: true, lowercase: true, trim: true })
+  @Prop({ lowercase: true, trim: true })
   email?: string;
 
   @Prop({ default: false })

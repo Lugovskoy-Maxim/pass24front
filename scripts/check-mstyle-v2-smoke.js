@@ -11,12 +11,18 @@ const baseUrl = trimRight(
 const tokenUrl = process.env.MSTYLE_TOKEN_URL || `${baseUrl}/oauth2/token`;
 const keyDir =
   process.env.MSTYLE_KEYS_DIR || "/Users/tomilo/Downloads/production-4";
-const clientId = process.env.MSTYLE_CLIENT_ID || "mstyle-backend-prod";
-const kid = process.env.MSTYLE_CLIENT_KID || "mstyle-backend-prod-20260823-01";
-const privateKeyPath =
-  process.env.MSTYLE_CLIENT_PRIVATE_KEY_FILE || `${keyDir}/${kid}-private.pem`;
-const publicKeyPath =
-  process.env.MSTYLE_CLIENT_PUBLIC_KEY_FILE || `${keyDir}/${kid}-public.pem`;
+const backendClient = {
+  clientId: process.env.MSTYLE_CLIENT_ID || "mstyle-backend-prod",
+  kid: process.env.MSTYLE_CLIENT_KID || "mstyle-backend-prod-20260823-01",
+};
+backendClient.privateKeyPath = process.env.MSTYLE_CLIENT_PRIVATE_KEY_FILE || `${keyDir}/${backendClient.kid}-private.pem`;
+backendClient.publicKeyPath = process.env.MSTYLE_CLIENT_PUBLIC_KEY_FILE || `${keyDir}/${backendClient.kid}-public.pem`;
+const reconcileClient = {
+  clientId: process.env.MSTYLE_RECONCILE_CLIENT_ID || "mstyle-reconcile-prod",
+  kid: process.env.MSTYLE_RECONCILE_CLIENT_KID || "mstyle-reconcile-prod-20260823-01",
+};
+reconcileClient.privateKeyPath = process.env.MSTYLE_RECONCILE_CLIENT_PRIVATE_KEY_FILE || `${keyDir}/${reconcileClient.kid}-private.pem`;
+reconcileClient.publicKeyPath = process.env.MSTYLE_RECONCILE_CLIENT_PUBLIC_KEY_FILE || `${keyDir}/${reconcileClient.kid}-public.pem`;
 const schemaVersion = "2.0";
 const apiPrefix = "/internal/integrations/mstyle/v2";
 const stamp = Date.now().toString(36);
@@ -36,12 +42,14 @@ const steps = [
     id: "T-01",
     title: "OAuth token, changes.read",
     scope: "mstyle.changes.read",
-    request: () => tokenFor("mstyle.changes.read"),
+    client: reconcileClient,
+    request: () => tokenFor("mstyle.changes.read", reconcileClient),
   },
   {
     id: "R-03",
     title: "Change feed",
     scope: "mstyle.changes.read",
+    client: reconcileClient,
     method: "GET",
     path: "/changes?limit=5",
   },
@@ -177,12 +185,12 @@ function sha256Hex(buffer) {
   return crypto.createHash("sha256").update(buffer).digest("hex");
 }
 
-function makeAssertion() {
+function makeAssertion(client) {
   const now = Math.floor(Date.now() / 1000);
-  const header = { alg: "RS256", typ: "JWT", kid };
+  const header = { alg: "RS256", typ: "JWT", kid: client.kid };
   const payload = {
-    iss: clientId,
-    sub: clientId,
+    iss: client.clientId,
+    sub: client.clientId,
     aud: tokenUrl,
     jti: crypto.randomUUID(),
     iat: now,
@@ -194,19 +202,20 @@ function makeAssertion() {
   const signature = crypto.sign(
     "RSA-SHA256",
     Buffer.from(signingInput),
-    fs.readFileSync(privateKeyPath),
+    fs.readFileSync(client.privateKeyPath),
   );
   return `${signingInput}.${b64url(signature)}`;
 }
 
-async function tokenFor(scope) {
-  if (state.tokens.has(scope)) return state.tokens.get(scope);
+async function tokenFor(scope, client = backendClient) {
+  const tokenKey = `${client.clientId}:${scope}`;
+  if (state.tokens.has(tokenKey)) return state.tokens.get(tokenKey);
   const response = await postForm(tokenUrl, {
     grant_type: "client_credentials",
-    client_id: clientId,
+    client_id: client.clientId,
     client_assertion_type:
       "urn:ietf:params:oauth:client-assertion-type:jwt-bearer",
-    client_assertion: makeAssertion(),
+    client_assertion: makeAssertion(client),
     scope,
   });
   const body = parseJson(response.body);
@@ -222,7 +231,7 @@ async function tokenFor(scope) {
       `Token scope mismatch: requested ${scope}, got ${body.scope}`,
     );
   }
-  state.tokens.set(scope, body.access_token);
+  state.tokens.set(tokenKey, body.access_token);
   return body.access_token;
 }
 
@@ -283,10 +292,12 @@ function parseJson(value) {
 }
 
 function redact(body) {
-  if (!body || typeof body !== "object" || Array.isArray(body)) return body;
-  const copy = { ...body };
-  if (copy.access_token) copy.access_token = "hidden";
-  return copy;
+  if (Array.isArray(body)) return body.map(redact);
+  if (!body || typeof body !== "object") return body;
+  return Object.fromEntries(Object.entries(body).map(([key, value]) => [
+    key,
+    /token|assertion|secret|password|code/i.test(key) ? "hidden" : redact(value),
+  ]));
 }
 
 function pick(obj, key) {
@@ -299,16 +310,16 @@ function pick(obj, key) {
   return "";
 }
 
-function ensureKeys() {
-  const privateExists = fs.existsSync(privateKeyPath);
-  const publicExists = fs.existsSync(publicKeyPath);
+function ensureKeys(client) {
+  const privateExists = fs.existsSync(client.privateKeyPath);
+  const publicExists = fs.existsSync(client.publicKeyPath);
   if (!privateExists || !publicExists) {
     throw new Error(
-      `Key files not found. private=${privateKeyPath} public=${publicKeyPath}`,
+      `Key files not found. private=${client.privateKeyPath} public=${client.publicKeyPath}`,
     );
   }
-  const privateKey = fs.readFileSync(privateKeyPath);
-  const publicKey = fs.readFileSync(publicKeyPath);
+  const privateKey = fs.readFileSync(client.privateKeyPath);
+  const publicKey = fs.readFileSync(client.publicKeyPath);
   const message = Buffer.from("pass24-mstyle-v2-smoke");
   const signature = crypto.sign("RSA-SHA256", message, privateKey);
   const matches = crypto.verify("RSA-SHA256", message, publicKey, signature);
@@ -328,7 +339,7 @@ async function runStep(step) {
       note: "token received and hidden",
     };
   }
-  const token = await tokenFor(step.scope);
+  const token = await tokenFor(step.scope, step.client || backendClient);
   const path = typeof step.path === "function" ? step.path() : step.path;
   const url = `${baseUrl}${apiPrefix}${path}`;
   const json = step.body ? JSON.stringify(step.body()) : undefined;
@@ -360,18 +371,19 @@ async function runStep(step) {
 }
 
 async function main() {
-  const publicPemSha256 = ensureKeys();
+  const publicPemSha256 = ensureKeys(backendClient);
+  ensureKeys(reconcileClient);
   console.log(
     JSON.stringify(
       {
         baseUrl,
         tokenUrl,
-        clientId,
-        kid,
+        clientId: backendClient.clientId,
+        kid: backendClient.kid,
         alg: "RS256",
         publicPemSha256,
-        privateKeyFile: privateKeyPath,
-        publicKeyFile: publicKeyPath,
+        privateKeyFile: backendClient.privateKeyPath,
+        publicKeyFile: backendClient.publicKeyPath,
         accessTokensPrinted: false,
       },
       null,
