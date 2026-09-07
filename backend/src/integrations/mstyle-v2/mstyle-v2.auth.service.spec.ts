@@ -13,6 +13,43 @@ describe('MstyleAuthService SMS Aero Mobile ID', () => {
   beforeEach(() => jest.useFakeTimers());
   afterEach(() => jest.useRealTimers());
 
+  it('submits an email OTP for an active identity', async () => {
+    const fixture = createFixture();
+    const result = await fixture.service.startCodeChallenge(
+      {
+        ...challengeDto(),
+        identifier: { type: 'email', value: 'test@example.com' },
+        channel: 'email',
+      },
+      'mstyle-backend-prod',
+      '192.0.2.10',
+    );
+    expect(result.status).toBe(202);
+    expect(fixture.mail.sendEmailVerificationCode).toHaveBeenCalledWith(
+      'test@example.com',
+      expect.stringMatching(/^\d{4}$/),
+    );
+    expect(fixture.sms.startMobileAuth).not.toHaveBeenCalled();
+  });
+
+  it('reports SMTP failure as upstream unavailable', async () => {
+    const fixture = createFixture();
+    fixture.mail.sendEmailVerificationCode.mockRejectedValueOnce(
+      new Error('SMTP unavailable'),
+    );
+    await expect(
+      fixture.service.startCodeChallenge(
+        {
+          ...challengeDto(),
+          identifier: { type: 'email', value: 'test@example.com' },
+          channel: 'email',
+        },
+        'mstyle-backend-prod',
+        '192.0.2.10',
+      ),
+    ).rejects.toMatchObject({ problemCode: 'UPSTREAM_UNAVAILABLE' });
+  });
+
   it('starts Mobile ID for A-03 and stores the provider request', async () => {
     const fixture = createFixture();
 

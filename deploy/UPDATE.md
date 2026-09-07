@@ -34,6 +34,45 @@ cd /opt/pass24front && NO_CACHE=1 ./scripts/update.sh
 
 ## Пошагово (если нужно вручную)
 
+### Если не приходит код по почте
+
+В `/opt/pass24front/.env` задайте каждую переменную отдельной строкой:
+
+```dotenv
+SMTP_HOST=smtp.spaceweb.ru
+SMTP_PORT=465
+SMTP_SECURE=true
+SMTP_USER=pass@mstyle.ru
+SMTP_PASS=REPLACE_WITH_MAILBOX_PASSWORD
+SMTP_FROM="Пропуск.М-Стиль Офис <pass@mstyle.ru>"
+MSTYLE_DISPATCH_ENABLED=true
+MSTYLE_MOCK_RESPONSES=false
+MSTYLE_TELEGRAM_BOT=m_style_office_bot
+```
+
+Не заменяйте весь `.env`: сохраните остальные настройки и текущие секреты.
+Проверьте, что режим mock также выключен в админке: сохранённая настройка
+имеет приоритет над начальным значением из окружения.
+`SMTP_HOST=mailpit` оставляет письма в тестовом почтовом ящике, наружу они не уходят.
+Внешняя авторизация отправляет код только существующему активному арендатору.
+Для неизвестной или неактивной записи возвращается такой же ответ 202 без письма,
+чтобы API не раскрывал наличие учётной записи.
+
+После изменения `.env` пересоздайте backend (обычный restart не обновляет окружение):
+
+```bash
+docker compose -f docker-compose.yml -f docker-compose.prod.yml --env-file .env up -d --build --force-recreate backend
+docker compose -f docker-compose.yml -f docker-compose.prod.yml --env-file .env logs -f --tail=200 backend
+```
+
+В логах `OTP dispatch disabled` означает выключенную отправку,
+`no eligible identity` — отсутствие подходящего активного пользователя,
+`email OTP dispatch failed` — ошибку SMTP,
+`Email OTP submitted to SMTP` — передачу письма SMTP-серверу (не подтверждение доставки во входящие).
+Имя Telegram-бота в `.env` имеет приоритет над значением по умолчанию в коде.
+
+### Обновление вручную
+
 ```bash
 ssh user@192.168.200.9
 cd /opt/pass24front

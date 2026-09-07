@@ -78,7 +78,7 @@ services:
       - MSTYLE_PUBLIC_BASE_URL=${MSTYLE_PUBLIC_BASE_URL:-}
       - TELEGRAM_GATEWAY_URL=${TELEGRAM_GATEWAY_URL:-}
       - TELEGRAM_GATEWAY_TOKEN=${TELEGRAM_GATEWAY_TOKEN:-}
-      - MSTYLE_TELEGRAM_BOT=${MSTYLE_TELEGRAM_BOT:-mstyleauthbot}
+      - MSTYLE_TELEGRAM_BOT=${MSTYLE_TELEGRAM_BOT:-m_style_office_bot}
     depends_on:
       mongo:
         condition: service_healthy

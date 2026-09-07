@@ -522,12 +522,25 @@ export class MstyleAuthService {
     email?: string | null;
     challengeId: string;
   }) {
-    if (params.isDummy || params.useSmsAero || !this.cfg.dispatchEnabled()) {
+    if (!this.cfg.dispatchEnabled()) {
+      this.logger.warn(
+        `OTP dispatch disabled: MSTYLE_DISPATCH_ENABLED=false; challenge=${params.challengeId}; channel=${params.channel}`,
+      );
       return;
     }
+    if (params.isDummy) {
+      this.logger.log(
+        `OTP dispatch skipped: no eligible identity; challenge=${params.challengeId}; channel=${params.channel}`,
+      );
+      return;
+    }
+    if (params.useSmsAero) return;
     if (params.channel === 'email' && params.email) {
       try {
         await this.mail.sendEmailVerificationCode(params.email, params.code);
+        this.logger.log(
+          `Email OTP submitted to SMTP; challenge=${params.challengeId}`,
+        );
       } catch (err) {
         const message = err instanceof Error ? err.message : String(err);
         this.logger.warn(`mstyle email OTP dispatch failed: ${message}`);

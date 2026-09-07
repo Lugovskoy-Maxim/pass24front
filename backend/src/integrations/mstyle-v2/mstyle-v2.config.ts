@@ -166,7 +166,12 @@ export class MstyleV2Config {
   }
 
   telegramBot(): string {
-    return this.config.get<string>('MSTYLE_TELEGRAM_BOT') || 'mstyleauthbot';
+    return (
+      this.config
+        .get<string>('MSTYLE_TELEGRAM_BOT')
+        ?.trim()
+        .replace(/^@/, '') || 'm_style_office_bot'
+    );
   }
 
   environment(): string {

@@ -2,6 +2,12 @@ import { ConfigService } from '@nestjs/config';
 import { MstyleV2Config } from './mstyle-v2.config';
 
 describe('MstyleV2Config OAuth clients', () => {
+  it('uses the office bot and normalizes an explicit username', () => {
+    expect(createConfig({}).telegramBot()).toBe('m_style_office_bot');
+    expect(
+      createConfig({ MSTYLE_TELEGRAM_BOT: ' @custom_bot ' }).telegramBot(),
+    ).toBe('custom_bot');
+  });
   it('uses a four-digit mock OTP', () => {
     const config = createConfig({
       MSTYLE_CLIENT_ID: 'mstyle-backend-prod',
