@@ -187,7 +187,7 @@ export class PassTemplatesService {
     return this.templateModel.findOneAndUpdate(
       filter,
       { $set: update, $setOnInsert: { createdBy: new Types.ObjectId(userId) } },
-      { upsert: true, new: true },
+      { upsert: true, returnDocument: 'after' },
     );
   }
 

@@ -233,7 +233,7 @@ export class AuthService {
     const pending = await this.pendingModel.findOneAndUpdate(
       pendingKey,
       { $set: pendingData, $unset: unset },
-      { upsert: true, new: true, setDefaultsOnInsert: true },
+      { upsert: true, returnDocument: 'after', setDefaultsOnInsert: true },
     );
 
     return {

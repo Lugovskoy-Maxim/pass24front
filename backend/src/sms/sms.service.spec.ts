@@ -48,6 +48,24 @@ describe('SMS Aero Mobile ID authentication', () => {
     expect(await service().verifyMobileAuth(123, '1234')).toBe(false);
   });
 
+  it('reports a lost provider session as retryable infrastructure failure', async () => {
+    jest
+      .spyOn(globalThis, 'fetch')
+      .mockResolvedValueOnce(response(2))
+      .mockResolvedValueOnce({
+        ok: false,
+        json: async () => ({
+          success: false,
+          message: 'session not found',
+          data: { id: 123, status: 2 },
+        }),
+      } as Response);
+
+    await expect(service().verifyMobileAuth(123, '1234')).rejects.toThrow(
+      'Сессия мобильной авторизации SMS Aero недоступна',
+    );
+  });
+
   it('accepts OTP verification only after the final status becomes 1', async () => {
     jest
       .spyOn(globalThis, 'fetch')

@@ -151,6 +151,18 @@ export class SmsService {
     }
 
     const payload = JSON.stringify(response);
+    const message =
+      typeof response.message === 'string'
+        ? response.message.toLowerCase()
+        : JSON.stringify(response.message ?? '').toLowerCase();
+    if (message.includes('session not found')) {
+      this.logger.error(
+        `SMS Aero Mobile ID session unavailable id=${requestId}: ${payload}`,
+      );
+      throw new InternalServerErrorException(
+        'Сессия мобильной авторизации SMS Aero недоступна. Запросите новый код.',
+      );
+    }
     this.logger.warn(`Mobile ID verify failed id=${requestId}: ${payload}`);
     return false;
   }

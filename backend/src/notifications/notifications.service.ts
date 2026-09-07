@@ -71,7 +71,7 @@ export class NotificationsService implements OnModuleInit {
                   subject,
                 },
               },
-              { upsert: true, new: true },
+              { upsert: true, returnDocument: 'after' },
             )
             .select('+privateKey')
             .lean();
@@ -118,7 +118,7 @@ export class NotificationsService implements OnModuleInit {
           userAgent: userAgent?.slice(0, 500),
         },
       },
-      { upsert: true, new: true },
+      { upsert: true, returnDocument: 'after' },
     );
     return { subscribed: true, renewalToken };
   }

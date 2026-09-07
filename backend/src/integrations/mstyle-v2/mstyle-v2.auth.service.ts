@@ -370,10 +370,14 @@ export class MstyleAuthService {
         await bcrypt.compare(dto.code, challenge.codeHash);
         matches = false;
       } else {
-        matches = await this.sms.verifyMobileAuth(
-          challenge.mobileIdRequestId,
-          dto.code,
-        );
+        try {
+          matches = await this.sms.verifyMobileAuth(
+            challenge.mobileIdRequestId,
+            dto.code,
+          );
+        } catch {
+          problem(503, 'UPSTREAM_UNAVAILABLE', { retryable: true });
+        }
       }
     } else {
       matches = await bcrypt.compare(dto.code, challenge.codeHash);

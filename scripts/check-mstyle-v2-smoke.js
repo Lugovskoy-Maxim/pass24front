@@ -26,6 +26,7 @@ reconcileClient.publicKeyPath = process.env.MSTYLE_RECONCILE_CLIENT_PUBLIC_KEY_F
 const schemaVersion = "2.0";
 const apiPrefix = "/internal/integrations/mstyle/v2";
 const stamp = Date.now().toString(36);
+const emailChallengeAddress = process.env.MSTYLE_V2_EMAIL || "";
 
 const state = {
   tokens: new Map(),
@@ -165,6 +166,27 @@ const steps = [
       claimedProfileId: state.profileId,
     }),
   },
+  ...(emailChallengeAddress
+    ? [
+        {
+          id: "A-03-email",
+          title: "Email code challenge",
+          scope: "mstyle.resident.authenticate",
+          method: "POST",
+          path: "/auth/residents/code-challenges",
+          body: () => ({
+            schemaVersion,
+            identifier: { type: "email", value: emailChallengeAddress },
+            channel: "email",
+            context: {
+              ipAddress: "198.51.100.22",
+              userAgent: "pass24-v2-smoke/1.0",
+              locale: "ru-RU",
+            },
+          }),
+        },
+      ]
+    : []),
 ];
 
 function trimRight(value, char) {

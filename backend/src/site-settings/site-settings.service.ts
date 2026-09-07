@@ -278,7 +278,7 @@ export class SiteSettingsService implements OnModuleInit {
       .findOneAndUpdate(
         { key: SETTINGS_KEY },
         { $set: update },
-        { new: true, upsert: true },
+        { returnDocument: 'after', upsert: true },
       )
       .lean();
 
