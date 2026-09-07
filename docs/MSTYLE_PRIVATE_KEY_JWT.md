@@ -38,7 +38,7 @@ MSTYLE_CLIENT_ID=mstyle-backend-prod
 MSTYLE_CLIENT_AUTH=private_key_jwt
 MSTYLE_CLIENT_KID=mstyle-backend-prod-20260823-01
 MSTYLE_CLIENT_PUBLIC_KEY_FILE=/app/config/oauth-public-keys/mstyle-backend-prod-20260823-01-public.pem
-MSTYLE_CLIENT_SCOPES=mstyle.resident.authenticate mstyle.residents.read mstyle.residents.write mstyle.profiles.read mstyle.profiles.write mstyle.memberships.read mstyle.memberships.write mstyle.contacts.read mstyle.contacts.write mstyle.consents.read mstyle.consents.write mstyle.private-data.read mstyle.private-data.write mstyle.guests.read mstyle.guests.write mstyle.admin.search mstyle.changes.read
+MSTYLE_CLIENT_SCOPES=mstyle.resident.authenticate mstyle.resident.context.read mstyle.residents.read mstyle.residents.write mstyle.profiles.read mstyle.profiles.write mstyle.memberships.read mstyle.memberships.write mstyle.contacts.read mstyle.contacts.write mstyle.consents.read mstyle.consents.write mstyle.private-data.read mstyle.private-data.write mstyle.guests.read mstyle.guests.write mstyle.admin.search mstyle.changes.read
 
 MSTYLE_RECONCILE_CLIENT_ID=mstyle-reconcile-prod
 MSTYLE_RECONCILE_CLIENT_AUTH=private_key_jwt

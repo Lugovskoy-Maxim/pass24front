@@ -75,6 +75,7 @@ export const PRIVATE_EDIT_POLICIES = [
 
 export const DEFAULT_DATA_SCOPES = [
   MSTYLE_AUTH_SCOPE,
+  'mstyle.resident.context.read',
   'mstyle.residents.read',
   'mstyle.residents.write',
   'mstyle.profiles.read',
@@ -138,7 +139,7 @@ export const ROUTE_SCOPES: Array<{
   {
     method: 'GET',
     match: /\/residents\/[^/]+\/context$/,
-    scope: 'mstyle.residents.read',
+    scope: 'mstyle.resident.context.read',
   },
   {
     method: 'PATCH',

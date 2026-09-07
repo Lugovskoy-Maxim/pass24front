@@ -80,6 +80,17 @@ describe('mstyle-v2 helpers', () => {
     expect(rule?.scope).toBe(MSTYLE_AUTH_SCOPE);
   });
 
+  it('requires the dedicated context scope for resident context', () => {
+    const rule = ROUTE_SCOPES.find(
+      (item) =>
+        item.method === 'GET' &&
+        item.match.test(
+          '/api/internal/integrations/mstyle/v2/residents/usr_test/context',
+        ),
+    );
+    expect(rule?.scope).toBe('mstyle.resident.context.read');
+  });
+
   it('formats problem+json', () => {
     const err = new ProblemException(401, 'INVALID_CREDENTIALS');
     const body = err.toBody('req_test');

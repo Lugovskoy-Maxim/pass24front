@@ -47,7 +47,7 @@
 скоупы интеграции, например в серверном `.env`:
 
 ```dotenv
-MSTYLE_CLIENT_SCOPES="mstyle.resident.authenticate mstyle.residents.read mstyle.residents.write mstyle.profiles.read mstyle.profiles.write mstyle.memberships.read mstyle.memberships.write mstyle.contacts.read mstyle.contacts.write mstyle.consents.read mstyle.consents.write mstyle.private-data.read mstyle.private-data.write mstyle.guests.read mstyle.guests.write mstyle.admin.search"
+MSTYLE_CLIENT_SCOPES="mstyle.resident.authenticate mstyle.resident.context.read mstyle.residents.read mstyle.residents.write mstyle.profiles.read mstyle.profiles.write mstyle.memberships.read mstyle.memberships.write mstyle.contacts.read mstyle.contacts.write mstyle.consents.read mstyle.consents.write mstyle.private-data.read mstyle.private-data.write mstyle.guests.read mstyle.guests.write mstyle.admin.search"
 ```
 
 `mstyle.changes.read` остаётся у reconcile-клиента. Новые имена скоупов не вводились.

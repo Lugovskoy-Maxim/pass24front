@@ -145,7 +145,7 @@ export class SmsService {
       if (status === 1) return true;
       // An accepted verify request may still await the final provider status.
       if (status === 0 || status === 3 || status === 8) {
-        return this.isMobileAuthVerified(requestId);
+        return this.waitForMobileAuthVerified(requestId);
       }
       return false;
     }
@@ -188,6 +188,17 @@ export class SmsService {
       `Mobile ID status: id=${requestId}, status=${status}, authType=${String(data.authType ?? '?')}`,
     );
     return status === 1;
+  }
+
+  /** SMS Aero may publish the final callback shortly after accepting OTP. */
+  private async waitForMobileAuthVerified(requestId: number): Promise<boolean> {
+    for (let attempt = 0; attempt < 3; attempt += 1) {
+      if (await this.isMobileAuthVerified(requestId)) return true;
+      if (attempt < 2) {
+        await new Promise((resolve) => setTimeout(resolve, 500));
+      }
+    }
+    return false;
   }
 
   /** Callback от SMS Aero (статусы доставки) — достаточно 200 OK. */
