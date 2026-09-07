@@ -209,12 +209,10 @@ export class MstyleAuthService {
       challengeId,
     });
 
-    setTimeout(() => {
-      void this.challenges.updateOne(
-        { challengeId, status: 'dispatch_pending' },
-        { $set: { status: 'awaiting_code' } },
-      );
-    }, 200);
+    await this.challenges.updateOne(
+      { challengeId, status: 'dispatch_pending' },
+      { $set: { status: 'awaiting_code' } },
+    );
 
     return new MstyleResult(this.challengeDto(challenge), 202, {
       'Cache-Control': 'no-store',
@@ -320,12 +318,10 @@ export class MstyleAuthService {
       challengeId: challenge.challengeId,
     });
 
-    setTimeout(() => {
-      void this.challenges.updateOne(
-        { challengeId, status: 'dispatch_pending' },
-        { $set: { status: 'awaiting_code' } },
-      );
-    }, 200);
+    await this.challenges.updateOne(
+      { challengeId, status: 'dispatch_pending' },
+      { $set: { status: 'awaiting_code' } },
+    );
     return new MstyleResult(this.challengeDto(challenge), 202, {
       'Cache-Control': 'no-store',
     });

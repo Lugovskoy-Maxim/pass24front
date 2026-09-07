@@ -13,6 +13,34 @@ describe('MstyleAuthService SMS Aero Mobile ID', () => {
   beforeEach(() => jest.useFakeTimers());
   afterEach(() => jest.useRealTimers());
 
+  it('executes the lazy status update on start and resend', async () => {
+    const fixture = createFixture();
+    const execute = jest.fn(async () => undefined);
+    // Mongoose queries do nothing until awaited or executed.
+    fixture.challenges.updateOne.mockImplementation(
+      () =>
+        ({
+          then: (
+            resolve: (value: unknown) => unknown,
+            reject: (error: unknown) => unknown,
+          ) => execute().then(resolve, reject),
+        }) as any,
+    );
+    await fixture.service.startCodeChallenge(
+      challengeDto(),
+      'mstyle-backend-prod',
+      '192.0.2.10',
+    );
+    expect(execute).toHaveBeenCalledTimes(1);
+    fixture.challenge().resendAfter = new Date(Date.now() - 1);
+    await fixture.service.resend(
+      fixture.challenge().challengeId,
+      'mstyle-backend-prod',
+      '192.0.2.10',
+    );
+    expect(execute).toHaveBeenCalledTimes(2);
+  });
+
   it('registers a Telegram code with the phone and challenge expiry', async () => {
     const fixture = createFixture();
     fixture.telegramGateway.isConfigured.mockReturnValue(true);

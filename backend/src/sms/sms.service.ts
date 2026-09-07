@@ -106,7 +106,7 @@ export class SmsService {
   }
 
   /**
-   * Проверка: SIM-PUSH уже verified (status=3) или OTP через mobile-id/verify.
+   * Проверка: Mobile ID завершён (status=1) или OTP через mobile-id/verify.
    */
   async verifyMobileAuth(requestId: number, code: string): Promise<boolean> {
     if (!this.isConfigured()) {
@@ -134,7 +134,7 @@ export class SmsService {
       sign,
     });
 
-    if (response.success) {
+    if (response.success === true) {
       const data = (
         response.data && typeof response.data === 'object' ? response.data : {}
       ) as Record<string, unknown>;
@@ -142,7 +142,12 @@ export class SmsService {
       this.logger.log(
         `Mobile ID verify ok: id=${requestId}, status=${status ?? '?'}, authType=${data.authType ?? '?'}`,
       );
-      return true;
+      if (status === 1) return true;
+      // An accepted verify request may still await the final provider status.
+      if (status === 0 || status === 3 || status === 8) {
+        return this.isMobileAuthVerified(requestId);
+      }
+      return false;
     }
 
     const payload = JSON.stringify(response);
@@ -150,13 +155,13 @@ export class SmsService {
     return false;
   }
 
-  /** Успешная Mobile ID-проверка возвращает status=1 (в некоторых версиях API — 3). */
+  /** Mobile ID: 1 = authenticated; 3 = OTP required, never authenticated. */
   async isMobileAuthVerified(requestId: number): Promise<boolean> {
     const response = await this.requestForm('mobile-id/status', {
       id: requestId,
     });
     if (
-      !response.success ||
+      response.success !== true ||
       !response.data ||
       typeof response.data !== 'object'
     ) {
@@ -170,9 +175,7 @@ export class SmsService {
     this.logger.log(
       `Mobile ID status: id=${requestId}, status=${status}, authType=${String(data.authType ?? '?')}`,
     );
-    // Текущий API SMS Aero возвращает status=1 для подтверждённого SIM-PUSH.
-    // Status=3 оставляем для совместимости с ответами, описанными в старых SDK.
-    return status === 1 || status === 3;
+    return status === 1;
   }
 
   /** Callback от SMS Aero (статусы доставки) — достаточно 200 OK. */
