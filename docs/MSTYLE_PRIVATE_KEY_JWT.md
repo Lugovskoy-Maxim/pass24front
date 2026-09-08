@@ -5,7 +5,7 @@
 | Клиент                  | Назначение                                                          | Разрешённые scopes             |
 | ----------------------- | ------------------------------------------------------------------- | ------------------------------ |
 | `mstyle-backend-prod`   | внешняя авторизация, резиденты, профили, контакты, гости, изменения | полный набор scopes Mstyle API |
-| `mstyle-reconcile-prod` | чтение ленты изменений                                              | только `mstyle.changes.read`   |
+| `mstyle-reconcile-prod` | чтение ленты изменений                                              | `mstyle.integration.reconcile` |
 
 `MSTYLE_CLIENT_SCOPES` задаёт разрешённый список прав для
 `mstyle-backend-prod`. В каждом запросе A-01 параметр `scope` должен содержать
@@ -38,7 +38,7 @@ MSTYLE_CLIENT_ID=mstyle-backend-prod
 MSTYLE_CLIENT_AUTH=private_key_jwt
 MSTYLE_CLIENT_KID=mstyle-backend-prod-20260823-01
 MSTYLE_CLIENT_PUBLIC_KEY_FILE=/app/config/oauth-public-keys/mstyle-backend-prod-20260823-01-public.pem
-MSTYLE_CLIENT_SCOPES=mstyle.resident.authenticate mstyle.resident.context.read mstyle.residents.read mstyle.residents.write mstyle.profiles.read mstyle.profiles.write mstyle.memberships.read mstyle.memberships.write mstyle.contacts.read mstyle.contacts.write mstyle.consents.read mstyle.consents.write mstyle.private-data.read mstyle.private-data.write mstyle.guests.read mstyle.guests.write mstyle.admin.search mstyle.changes.read
+MSTYLE_CLIENT_SCOPES=mstyle.guest.booking.confirm mstyle.guest.create mstyle.integration.admin.members.read mstyle.integration.admin.profile.read mstyle.resident.authenticate mstyle.resident.consent.read mstyle.resident.consent.write mstyle.resident.contact.read mstyle.resident.contact.write mstyle.resident.context.read mstyle.resident.identity.write mstyle.resident.members.read mstyle.resident.members.write mstyle.resident.private.reveal mstyle.resident.private.status.read mstyle.resident.private.write mstyle.resident.profile.read mstyle.resident.profile.write mstyle.resident.snapshot.create mstyle.snapshot.operation.bind
 
 MSTYLE_RECONCILE_CLIENT_ID=mstyle-reconcile-prod
 MSTYLE_RECONCILE_CLIENT_AUTH=private_key_jwt
@@ -54,8 +54,8 @@ MSTYLE_CLIENT_PUBLIC_KEY="-----BEGIN PUBLIC KEY-----\n...\n-----END PUBLIC KEY--
 MSTYLE_RECONCILE_CLIENT_PUBLIC_KEY="-----BEGIN PUBLIC KEY-----\n...\n-----END PUBLIC KEY-----"
 ```
 
-Reconcile-клиент программно ограничен `mstyle.changes.read`, даже если запросит
-другие scopes. Токен этого клиента подходит для:
+Reconcile-клиент программно ограничен `mstyle.integration.reconcile`; старое
+имя `mstyle.changes.read` принимается на время миграции. Токен подходит для:
 
 ```http
 GET /api/internal/integrations/mstyle/v2/changes?after=<cursor>&limit=50
@@ -85,7 +85,7 @@ MSTYLE_MOCK_OTP=1234
 
 - A-03 запускает SIM-PUSH с SMS fallback;
 - A-04 проверяет статус SIM-PUSH и при подтверждении возвращает
-  `status: consumed` вместе с `authentication`;
+  provider-neutral `status: consumed`; результат входа возвращает A-06;
 - A-05 создаёт новый запрос Mobile ID;
 - A-06 проверяет четырёхзначный SMS-код через SMS Aero.
 
@@ -111,8 +111,8 @@ scope=mstyle.resident.authenticate
 ```
 
 Для проверки других M0 endpoint нужно получать отдельный токен с нужным одним
-scope, например `mstyle.profiles.read`, `mstyle.contacts.write` или
-`mstyle.guests.write`.
+scope, например `mstyle.resident.profile.read`,
+`mstyle.resident.contact.write` или `mstyle.guest.create`.
 
 ## Проверка и логи Docker на сервере
 

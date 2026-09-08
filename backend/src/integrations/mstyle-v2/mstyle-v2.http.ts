@@ -12,7 +12,7 @@ import {
 import { Reflector } from '@nestjs/core';
 import type { Request, Response } from 'express';
 import { Observable, map } from 'rxjs';
-import { ROUTE_SCOPES } from './mstyle-v2.constants';
+import { expandMstyleScopes, ROUTE_SCOPES } from './mstyle-v2.constants';
 import { MstyleV2Config } from './mstyle-v2.config';
 import { Ids } from './mstyle-v2.ids';
 import {
@@ -82,13 +82,19 @@ export class MstyleServiceTokenGuard implements CanActivate {
       problem(401, 'INVALID_SERVICE_TOKEN');
     }
     req.mstyleClientId = row.clientId;
-    req.mstyleScopes = row.scopes || [];
+    req.mstyleScopes = expandMstyleScopes(row.scopes || []);
     const path = (req.originalUrl || req.url || '').split('?')[0];
     const method = (req.method || 'GET').toUpperCase();
     const needed = ROUTE_SCOPES.find(
       (rule) => rule.method === method && rule.match.test(path),
     );
-    if (!needed || !req.mstyleScopes.includes(needed.scope)) {
+    const acceptedScopes = needed
+      ? [needed.scope, ...(needed.alternatives || [])]
+      : [];
+    if (
+      !needed ||
+      !acceptedScopes.some((scope) => req.mstyleScopes!.includes(scope))
+    ) {
       problem(403, 'INSUFFICIENT_SCOPE');
     }
     return true;

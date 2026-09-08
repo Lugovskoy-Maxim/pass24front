@@ -107,7 +107,7 @@ describe('MstyleAuthService SMS Aero Mobile ID', () => {
     ).rejects.toMatchObject({ problemCode: 'UPSTREAM_UNAVAILABLE' });
   });
 
-  it('starts Mobile ID for A-03 and stores the provider request', async () => {
+  it('keeps the A-03 DTO provider-neutral while storing Mobile ID state', async () => {
     const fixture = createFixture();
 
     const result = await fixture.service.startCodeChallenge(
@@ -124,16 +124,11 @@ describe('MstyleAuthService SMS Aero Mobile ID', () => {
       mobileIdAuthType: 'SIM-PUSH',
     });
     expect(result.status).toBe(202);
-    expect(result.body).toMatchObject({
-      codeLength: 4,
-      delivery: {
-        provider: 'smsaero',
-        type: 'mobile_id',
-      },
-    });
+    expect(result.body).toMatchObject({ codeLength: 4, channel: 'sms' });
+    expect(result.body).not.toHaveProperty('delivery');
   });
 
-  it('completes authentication from an approved SIM-PUSH in A-04', async () => {
+  it('reports consumed without embedding authentication in A-04', async () => {
     const fixture = createFixture();
     await fixture.service.startCodeChallenge(
       challengeDto(),
@@ -151,12 +146,9 @@ describe('MstyleAuthService SMS Aero Mobile ID', () => {
     expect(result.body).toMatchObject({
       status: 'consumed',
       codeLength: 4,
-      authentication: {
-        subject: 'usr_sms_aero',
-        identityStatus: 'active',
-        authenticationMethod: 'sms',
-      },
     });
+    expect(result.body).not.toHaveProperty('authentication');
+    expect(fixture.challenge().consumedAuthJson).toContain('usr_sms_aero');
   });
 
   it('starts a new Mobile ID request when A-05 resends', async () => {

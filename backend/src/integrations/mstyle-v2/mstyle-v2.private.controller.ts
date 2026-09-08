@@ -80,7 +80,7 @@ export class MstylePrivateController {
     private readonly idempotency: MstyleIdempotencyService,
   ) {}
 
-  @Post('auth/residents/password-verify')
+  @Post(['auth/residents/password:verify', 'auth/residents/password-verify'])
   @NeedRequestId()
   @Idempotent()
   async passwordVerify(

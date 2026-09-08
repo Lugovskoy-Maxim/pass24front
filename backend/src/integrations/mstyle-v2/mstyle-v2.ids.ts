@@ -44,7 +44,7 @@ export const Ids = {
   request: () => newId('req'),
   changeRequest: () => newId('crq'),
   deletion: () => newId('del'),
-  grant: () => newId('grn'),
+  grant: () => newId('grt'),
   token: () => `svc_${ulid()}${ulid().slice(0, 10)}`,
   jti: () => newId('jti'),
 };

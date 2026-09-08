@@ -47,9 +47,11 @@
 скоупы интеграции, например в серверном `.env`:
 
 ```dotenv
-MSTYLE_CLIENT_SCOPES="mstyle.resident.authenticate mstyle.resident.context.read mstyle.residents.read mstyle.residents.write mstyle.profiles.read mstyle.profiles.write mstyle.memberships.read mstyle.memberships.write mstyle.contacts.read mstyle.contacts.write mstyle.consents.read mstyle.consents.write mstyle.private-data.read mstyle.private-data.write mstyle.guests.read mstyle.guests.write mstyle.admin.search"
+MSTYLE_CLIENT_SCOPES="mstyle.guest.booking.confirm mstyle.guest.create mstyle.integration.admin.members.read mstyle.integration.admin.profile.read mstyle.resident.authenticate mstyle.resident.consent.read mstyle.resident.consent.write mstyle.resident.contact.read mstyle.resident.contact.write mstyle.resident.context.read mstyle.resident.identity.write mstyle.resident.members.read mstyle.resident.members.write mstyle.resident.private.reveal mstyle.resident.private.status.read mstyle.resident.private.write mstyle.resident.profile.read mstyle.resident.profile.write mstyle.resident.snapshot.create mstyle.snapshot.operation.bind"
 ```
 
-`mstyle.changes.read` остаётся у reconcile-клиента. Новые имена скоупов не вводились.
+Для reconcile-клиента используется `mstyle.integration.reconcile`; старое имя
+`mstyle.changes.read` принимается на время миграции. Backend также разворачивает
+прежний production allowlist в гранулярные scopes из acceptance-контракта.
 После изменения `.env` пересоздайте backend; после установки исправлений запросите
 новые challenge и проверьте, что SMS-статус не становится `consumed` до подтверждения.

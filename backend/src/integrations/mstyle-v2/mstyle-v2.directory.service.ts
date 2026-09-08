@@ -107,6 +107,7 @@ export class MstyleDirectoryService {
 
   async getContext(subject: string): Promise<MstyleResult> {
     const identity = await this.requireIdentity(subject);
+    const identityContactMasks = await this.contactMasks(subject);
     const memberships = await this.memberships.find({ subject }).lean();
     const profiles: Record<string, unknown>[] = [];
     for (const membership of memberships) {
@@ -183,7 +184,10 @@ export class MstyleDirectoryService {
         subject: identity.subject,
         identityStatus: identity.identityStatus,
         authVersion: identity.authVersion,
-        identityDisplay: identity.displayName || undefined,
+        identityDisplay: {
+          displayName: identity.displayName || '',
+          contactMasks: identityContactMasks,
+        },
         profiles,
         physicalAccessFacts: {
           revision: accessRevision,
@@ -1423,11 +1427,16 @@ export class MstyleDirectoryService {
   }
 
   private async contactMasks(subject: string) {
-    const rows = await this.contacts.find({ subject }).lean();
-    return rows.map((row) => ({
-      type: row.type as 'phone' | 'email',
-      masked: row.masked,
-    }));
+    const rows = await this.contacts
+      .find({ subject })
+      .sort({ revision: -1 })
+      .lean();
+    const masks = new Map<'phone' | 'email', string>();
+    for (const row of rows) {
+      const type = row.type as 'phone' | 'email';
+      if (!masks.has(type) && row.masked) masks.set(type, row.masked);
+    }
+    return [...masks].map(([type, masked]) => ({ type, masked }));
   }
 
   private async profileContactMasks(profileId: string) {

@@ -22,7 +22,7 @@
           "  reconcile: {",
           "    clientId: 'mstyle-reconcile-prod',",
           "    kid: 'mstyle-reconcile-prod-20260823-01',",
-          "    scope: 'mstyle.changes.read',",
+          "    scope: 'mstyle.integration.reconcile',",
           "    privateKeyVar: 'reconcile_private_key_pem'",
           "  }",
           "};",

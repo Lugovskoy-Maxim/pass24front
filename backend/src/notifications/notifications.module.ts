@@ -2,6 +2,8 @@ import { Global, Module } from '@nestjs/common';
 import { ConfigModule } from '@nestjs/config';
 import { AuthDatabaseModule } from '../database/auth-database.module';
 import {
+  NativePushDevice,
+  NativePushDeviceSchema,
   PushSubscription,
   PushSubscriptionSchema,
   User,
@@ -18,6 +20,7 @@ import { NotificationsService } from './notifications.service';
     ConfigModule,
     AuthDatabaseModule.forFeature([
       { name: PushSubscription.name, schema: PushSubscriptionSchema },
+      { name: NativePushDevice.name, schema: NativePushDeviceSchema },
       { name: User.name, schema: UserSchema },
       { name: VapidConfig.name, schema: VapidConfigSchema },
     ]),

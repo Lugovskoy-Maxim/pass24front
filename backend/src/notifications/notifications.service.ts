@@ -6,6 +6,8 @@ import { createHash, randomBytes } from 'crypto';
 import * as webPush from 'web-push';
 import { AUTH_CONNECTION } from '../database/auth-database.constants';
 import {
+  NativePushDevice,
+  NativePushDeviceDocument,
   PushSubscription,
   PushSubscriptionDocument,
   User,
@@ -14,6 +16,7 @@ import {
   VapidConfigDocument,
 } from '../schemas';
 import { SavePushSubscriptionDto } from './dto/save-push-subscription.dto';
+import { SaveNativePushTokenDto } from './dto/save-native-push-token.dto';
 import { RenewPushSubscriptionDto } from './dto/renew-push-subscription.dto';
 
 type GuestArrival = {
@@ -34,6 +37,8 @@ export class NotificationsService implements OnModuleInit {
   constructor(
     @InjectModel(PushSubscription.name, AUTH_CONNECTION)
     private readonly subscriptionModel: Model<PushSubscriptionDocument>,
+    @InjectModel(NativePushDevice.name, AUTH_CONNECTION)
+    private readonly nativeDeviceModel: Model<NativePushDeviceDocument>,
     @InjectModel(User.name, AUTH_CONNECTION)
     private readonly userModel: Model<UserDocument>,
     @InjectModel(VapidConfig.name, AUTH_CONNECTION)
@@ -144,6 +149,26 @@ export class NotificationsService implements OnModuleInit {
     return { subscribed: false };
   }
 
+  async saveNativeToken(userId: string, dto: SaveNativePushTokenDto) {
+    const provider = dto.provider === 'fcm' || dto.provider === 'google'
+      ? 'firebase'
+      : dto.provider === 'rustore'
+        ? 'rustore'
+        : 'firebase';
+    await this.nativeDeviceModel.findOneAndUpdate(
+      { token: dto.token },
+      {
+        $set: {
+          userId: new Types.ObjectId(userId),
+          provider,
+          token: dto.token,
+        },
+      },
+      { upsert: true, new: true },
+    );
+    return { registered: true, provider };
+  }
+
   private async pushToTenant(
     tenantId: string,
     message: {
@@ -155,7 +180,6 @@ export class NotificationsService implements OnModuleInit {
       topic?: string;
     },
   ) {
-    if (!this.enabled) return;
     const recipients = await this.userModel
       .find({
         $or: [
@@ -169,6 +193,10 @@ export class NotificationsService implements OnModuleInit {
       .lean();
     const recipientIds = recipients.map((recipient) => recipient._id);
     if (!recipientIds.length) return;
+    if (!this.enabled) {
+      await this.pushToNativeDevices(recipientIds, message);
+      return;
+    }
     const subscriptions = await this.subscriptionModel
       .find({ userId: { $in: recipientIds } })
       .select('+p256dh +auth')
@@ -224,6 +252,109 @@ export class NotificationsService implements OnModuleInit {
         }
       }),
     );
+    await this.pushToNativeDevices(recipientIds, message);
+  }
+
+  private async pushToNativeDevices(
+    recipientIds: Types.ObjectId[],
+    message: {
+      title: string;
+      body: string;
+      tag: string;
+      url: string;
+      extra?: Record<string, unknown>;
+    },
+  ) {
+    const devices = await this.nativeDeviceModel
+      .find({ userId: { $in: recipientIds } })
+      .lean();
+    if (!devices.length) return;
+    await Promise.allSettled(
+      devices.map((device) =>
+        device.provider === 'firebase'
+          ? this.sendFirebase(device.token, message)
+          : this.sendRuStore(device.token, message),
+      ),
+    );
+  }
+
+  private async sendFirebase(
+    token: string,
+    message: {
+      title: string;
+      body: string;
+      tag: string;
+      url: string;
+      extra?: Record<string, unknown>;
+    },
+  ) {
+    const serverKey = this.config.get<string>('FCM_SERVER_KEY')?.trim();
+    if (!serverKey) return;
+    const response = await fetch('https://fcm.googleapis.com/fcm/send', {
+      method: 'POST',
+      headers: {
+        Authorization: `key=${serverKey}`,
+        'Content-Type': 'application/json',
+      },
+      body: JSON.stringify({
+        to: token,
+        priority: 'high',
+        notification: { title: message.title, body: message.body },
+        data: {
+          title: message.title,
+          body: message.body,
+          tag: message.tag,
+          url: message.url,
+          ...(message.extra || {}),
+        },
+      }),
+    });
+    if (!response.ok && [400, 404].includes(response.status)) {
+      await this.nativeDeviceModel.deleteOne({ token, provider: 'firebase' });
+    }
+  }
+
+  private async sendRuStore(
+    token: string,
+    message: {
+      title: string;
+      body: string;
+      tag: string;
+      url: string;
+      extra?: Record<string, unknown>;
+    },
+  ) {
+    const projectId = this.config.get<string>('RUSTORE_PUSH_PROJECT_ID')?.trim();
+    const serviceToken = this.config
+      .get<string>('RUSTORE_PUSH_SERVICE_TOKEN')
+      ?.trim();
+    if (!projectId || !serviceToken) return;
+    const response = await fetch(
+      `https://vkpns.rustore.ru/v1/projects/${encodeURIComponent(projectId)}/messages`,
+      {
+        method: 'POST',
+        headers: {
+          Authorization: `Bearer ${serviceToken}`,
+          'Content-Type': 'application/json',
+        },
+        body: JSON.stringify({
+          tokens: [token],
+          message: {
+            notification: { title: message.title, body: message.body },
+            data: {
+              title: message.title,
+              body: message.body,
+              tag: message.tag,
+              url: message.url,
+              ...(message.extra || {}),
+            },
+          },
+        }),
+      },
+    );
+    if (!response.ok && [400, 404].includes(response.status)) {
+      await this.nativeDeviceModel.deleteOne({ token, provider: 'rustore' });
+    }
   }
 
   private hashRenewalToken(token: string) {
@@ -252,7 +383,7 @@ export class NotificationsService implements OnModuleInit {
   }
 
   async notifyGuestArrival(pass: GuestArrival): Promise<void> {
-    if (!this.enabled || !pass.createdBy) return;
+    if (!pass.createdBy) return;
 
     try {
       const creator = await this.userModel

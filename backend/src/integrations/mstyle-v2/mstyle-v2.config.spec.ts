@@ -1,4 +1,5 @@
 import { ConfigService } from '@nestjs/config';
+import { MSTYLE_REQUIRED_M0_SCOPES } from './mstyle-v2.constants';
 import { MstyleV2Config } from './mstyle-v2.config';
 
 describe('MstyleV2Config OAuth clients', () => {
@@ -50,7 +51,11 @@ describe('MstyleV2Config OAuth clients', () => {
         'mstyle-backend-prod-20260827-01':
           '-----BEGIN PUBLIC KEY-----\nprimary\n-----END PUBLIC KEY-----',
       },
-      scopes: ['mstyle.resident.authenticate', 'mstyle.residents.read'],
+      scopes: [
+        'mstyle.resident.authenticate',
+        'mstyle.residents.read',
+        'mstyle.integration.admin.identity.read',
+      ],
     });
     expect(config.oauthClient('mstyle-reconcile-prod')).toEqual({
       clientId: 'mstyle-reconcile-prod',
@@ -61,9 +66,38 @@ describe('MstyleV2Config OAuth clients', () => {
         'mstyle-reconcile-prod-20260827-01':
           '-----BEGIN PUBLIC KEY-----\nreconcile\n-----END PUBLIC KEY-----',
       },
-      scopes: ['mstyle.changes.read'],
+      scopes: ['mstyle.changes.read', 'mstyle.integration.reconcile'],
     });
     expect(() => config.assertReady()).not.toThrow();
+  });
+
+  it('expands the legacy production allowlist to every PHP M0 scope', () => {
+    const config = createConfig({
+      MSTYLE_CLIENT_SCOPES: [
+        'mstyle.resident.authenticate',
+        'mstyle.resident.context.read',
+        'mstyle.residents.read',
+        'mstyle.residents.write',
+        'mstyle.profiles.read',
+        'mstyle.profiles.write',
+        'mstyle.memberships.read',
+        'mstyle.memberships.write',
+        'mstyle.contacts.read',
+        'mstyle.contacts.write',
+        'mstyle.consents.read',
+        'mstyle.consents.write',
+        'mstyle.private-data.read',
+        'mstyle.private-data.write',
+        'mstyle.guests.read',
+        'mstyle.guests.write',
+        'mstyle.admin.search',
+        'mstyle.changes.read',
+      ].join(' '),
+    });
+
+    expect(config.defaultScopes()).toEqual(
+      expect.arrayContaining([...MSTYLE_REQUIRED_M0_SCOPES]),
+    );
   });
 
   it('rejects a private PEM accidentally configured on Pass', () => {

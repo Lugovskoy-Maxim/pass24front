@@ -435,15 +435,6 @@ export class MstyleAuthService {
       body.telegramAction =
         challenge.telegramAction || this.telegramAction(challenge.challengeId);
     }
-    if (this.isSmsAeroChallenge(challenge)) {
-      body.delivery = {
-        provider: 'smsaero',
-        type: 'mobile_id',
-      };
-    }
-    if (challenge.status === 'consumed' && challenge.consumedAuthJson) {
-      body.authentication = JSON.parse(challenge.consumedAuthJson);
-    }
     return body;
   }
 

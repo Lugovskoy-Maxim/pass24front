@@ -63,6 +63,7 @@ const REQUIRED_TOP_LEVEL: Record<string, string[]> = {
     'subject',
     'identityStatus',
     'authVersion',
+    'identityDisplay',
     'profiles',
     'physicalAccessFacts',
     'contextRevision',
@@ -498,6 +499,26 @@ describe('Mstyle v2 contract mocks', () => {
       expect(createMstyleMockResponse({ id }).body.codeLength).toBe(4);
     },
   );
+
+  it.each(['A-03', 'A-04', 'A-05'])(
+    '%s keeps the strict provider-neutral challenge shape',
+    (id) => {
+      expect(Object.keys(createMstyleMockResponse({ id }).body).sort()).toEqual(
+        [...REQUIRED_TOP_LEVEL[id]].sort(),
+      );
+    },
+  );
+
+  it('uses the safe identity display object required by R-01', () => {
+    expect(
+      createMstyleMockResponse({ id: 'R-01' }).body.identityDisplay,
+    ).toEqual(
+      expect.objectContaining({
+        displayName: expect.any(String),
+        contactMasks: expect.any(Array),
+      }),
+    );
+  });
 
   it('returns selected private fields and complete snapshot metadata', () => {
     const reveal = createMstyleMockResponse({

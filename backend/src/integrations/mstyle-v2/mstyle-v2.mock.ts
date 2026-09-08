@@ -243,7 +243,7 @@ const ASSIGNMENT = {
 };
 
 const ACCESS_GRANT = {
-  grantId: 'acc_01J5Q8K2M7N4P6R9T1V3X5Z7CK',
+  grantId: 'grt_01J5Q8K2M7N4P6R9T1V3X5Z7CK',
   profileId: MOCK_PROFILE_ID,
   resource: {
     type: 'office',
@@ -454,10 +454,6 @@ export function createMstyleMockResponse(
           status: input.id === 'A-04' ? 'awaiting_code' : 'dispatch_pending',
           channel: 'email',
           codeLength: 4,
-          delivery: {
-            provider: 'mock',
-            type: 'code',
-          },
           expiresAt:
             input.id === 'A-05'
               ? '2026-08-14T10:10:00Z'
@@ -477,7 +473,10 @@ export function createMstyleMockResponse(
           subject,
           identityStatus: 'active',
           authVersion: 3,
-          identityDisplay: SAFE_IDENTITY.displayName,
+          identityDisplay: {
+            displayName: SAFE_IDENTITY.displayName,
+            contactMasks: SAFE_IDENTITY.contactMasks,
+          },
           profiles: [
             {
               profileId,

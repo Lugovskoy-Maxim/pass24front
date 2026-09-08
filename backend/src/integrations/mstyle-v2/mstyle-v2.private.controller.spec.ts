@@ -1,4 +1,5 @@
 import 'reflect-metadata';
+import { PATH_METADATA } from '@nestjs/common/constants';
 import { REQUIRE_IDEMPOTENCY, REQUIRE_REQUEST_ID } from './mstyle-v2.http';
 import { MstylePrivateController } from './mstyle-v2.private.controller';
 
@@ -7,6 +8,18 @@ describe('MstylePrivateController metadata', () => {
     expect(
       Reflect.getMetadata(REQUIRE_REQUEST_ID, MstylePrivateController),
     ).toBe(true);
+  });
+
+  it('serves the canonical PHP password route and the legacy alias', () => {
+    expect(
+      Reflect.getMetadata(
+        PATH_METADATA,
+        MstylePrivateController.prototype.passwordVerify,
+      ),
+    ).toEqual([
+      'auth/residents/password:verify',
+      'auth/residents/password-verify',
+    ]);
   });
 
   it.each([

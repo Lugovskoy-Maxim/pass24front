@@ -129,10 +129,6 @@ const CHALLENGE = {
   status: 'awaiting_code',
   channel: 'sms',
   codeLength: 4,
-  delivery: {
-    provider: 'smsaero',
-    type: 'mobile_id',
-  },
   expiresAt: '2026-08-14T10:05:00Z',
   resendAfter: '2026-08-14T10:01:00Z',
   pollAfterMs: 1500,
@@ -323,7 +319,12 @@ const MSTYLE_V2_CATALOG_BASE: CatalogEndpoint[] = [
       body: {
         schemaVersion: SCHEMA,
         subject: IDENTITY.subject,
-        identity: IDENTITY,
+        identityStatus: IDENTITY.identityStatus,
+        authVersion: IDENTITY.authVersion,
+        identityDisplay: {
+          displayName: IDENTITY.displayName,
+          contactMasks: IDENTITY.contactMasks,
+        },
         profiles: [
           {
             profileId: PROFILE.id,
@@ -338,8 +339,20 @@ const MSTYLE_V2_CATALOG_BASE: CatalogEndpoint[] = [
             privateDataComplete: true,
             display: { label: 'ООО Пример' },
             memberPolicy: { employeeLimit: 3 },
+            snapshotSources: {
+              primary: {
+                profile: 2,
+                profileContactAssignments: { phone: 1, email: null },
+                contactIdentity: 4,
+                identityContacts: { phone: 1, email: null },
+                privateData: 1,
+              },
+            },
           },
         ],
+        physicalAccessFacts: { revision: 1, grants: [] },
+        contextRevision: 5,
+        generatedAt: '2026-08-14T10:00:00Z',
       },
     },
   }),
@@ -538,7 +551,7 @@ const MSTYLE_V2_CATALOG_BASE: CatalogEndpoint[] = [
         schemaVersion: SCHEMA,
         items: [
           {
-            grantId: 'acc_01J5',
+            grantId: 'grt_01J5Q8K2M7N4P6R9T1V3X5Z7AQ',
             profileId: PROFILE.id,
             resource: {
               type: 'office',

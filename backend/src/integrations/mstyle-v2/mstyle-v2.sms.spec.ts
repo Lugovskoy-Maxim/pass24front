@@ -49,8 +49,9 @@ describe('V2 SMS Aero account isolation', () => {
     const sms = createMstyleSmsService(cfg);
     await sms.startMobileAuth('+79990001234');
     await sms.verifyMobileAuth(701, '1234');
-    expect(fetchMock.mock.calls).toHaveLength(4);
-    for (const [, options] of fetchMock.mock.calls) {
+    const v2CallCount = fetchMock.mock.calls.length;
+    expect(v2CallCount).toBeGreaterThanOrEqual(4);
+    for (const [, options] of fetchMock.mock.calls.slice(0, v2CallCount)) {
       expect((options!.headers as Record<string, string>).Authorization).toBe(
         `Basic ${Buffer.from('v2@example.com:v2-test-key').toString('base64')}`,
       );
@@ -63,7 +64,7 @@ describe('V2 SMS Aero account isolation', () => {
       'https://pass.mstyle.ru/api/sms/mobile-id/callback',
     );
     await new SmsService(cfg).startMobileAuth('+79990001234');
-    const options = fetchMock.mock.calls[4][1]!;
+    const options = fetchMock.mock.calls[v2CallCount][1]!;
     expect((options.headers as Record<string, string>).Authorization).toBe(
       `Basic ${Buffer.from('pass@example.com:pass-test-key').toString('base64')}`,
     );

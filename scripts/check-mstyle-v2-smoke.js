@@ -15,14 +15,24 @@ const backendClient = {
   clientId: process.env.MSTYLE_CLIENT_ID || "mstyle-backend-prod",
   kid: process.env.MSTYLE_CLIENT_KID || "mstyle-backend-prod-20260823-01",
 };
-backendClient.privateKeyPath = process.env.MSTYLE_CLIENT_PRIVATE_KEY_FILE || `${keyDir}/${backendClient.kid}-private.pem`;
-backendClient.publicKeyPath = process.env.MSTYLE_CLIENT_PUBLIC_KEY_FILE || `${keyDir}/${backendClient.kid}-public.pem`;
+backendClient.privateKeyPath =
+  process.env.MSTYLE_CLIENT_PRIVATE_KEY_FILE ||
+  `${keyDir}/${backendClient.kid}-private.pem`;
+backendClient.publicKeyPath =
+  process.env.MSTYLE_CLIENT_PUBLIC_KEY_FILE ||
+  `${keyDir}/${backendClient.kid}-public.pem`;
 const reconcileClient = {
   clientId: process.env.MSTYLE_RECONCILE_CLIENT_ID || "mstyle-reconcile-prod",
-  kid: process.env.MSTYLE_RECONCILE_CLIENT_KID || "mstyle-reconcile-prod-20260823-01",
+  kid:
+    process.env.MSTYLE_RECONCILE_CLIENT_KID ||
+    "mstyle-reconcile-prod-20260823-01",
 };
-reconcileClient.privateKeyPath = process.env.MSTYLE_RECONCILE_CLIENT_PRIVATE_KEY_FILE || `${keyDir}/${reconcileClient.kid}-private.pem`;
-reconcileClient.publicKeyPath = process.env.MSTYLE_RECONCILE_CLIENT_PUBLIC_KEY_FILE || `${keyDir}/${reconcileClient.kid}-public.pem`;
+reconcileClient.privateKeyPath =
+  process.env.MSTYLE_RECONCILE_CLIENT_PRIVATE_KEY_FILE ||
+  `${keyDir}/${reconcileClient.kid}-private.pem`;
+reconcileClient.publicKeyPath =
+  process.env.MSTYLE_RECONCILE_CLIENT_PUBLIC_KEY_FILE ||
+  `${keyDir}/${reconcileClient.kid}-public.pem`;
 const schemaVersion = "2.0";
 const apiPrefix = "/internal/integrations/mstyle/v2";
 const stamp = Date.now().toString(36);
@@ -41,15 +51,15 @@ const state = {
 const steps = [
   {
     id: "T-01",
-    title: "OAuth token, changes.read",
-    scope: "mstyle.changes.read",
+    title: "OAuth token, integration.reconcile",
+    scope: "mstyle.integration.reconcile",
     client: reconcileClient,
-    request: () => tokenFor("mstyle.changes.read", reconcileClient),
+    request: () => tokenFor("mstyle.integration.reconcile", reconcileClient),
   },
   {
     id: "R-03",
     title: "Change feed",
-    scope: "mstyle.changes.read",
+    scope: "mstyle.integration.reconcile",
     client: reconcileClient,
     method: "GET",
     path: "/changes?limit=5",
@@ -57,7 +67,7 @@ const steps = [
   {
     id: "R-06",
     title: "Search profiles",
-    scope: "mstyle.admin.search",
+    scope: "mstyle.integration.admin.profile.read",
     method: "POST",
     path: "/resident-profiles/search",
     body: () => ({
@@ -69,7 +79,7 @@ const steps = [
   {
     id: "R-08",
     title: "Onboard profile",
-    scope: "mstyle.profiles.write",
+    scope: "mstyle.integration.admin.onboarding.write",
     method: "POST",
     path: "/resident-onboarding",
     body: () => ({
@@ -95,7 +105,7 @@ const steps = [
   {
     id: "R-04",
     title: "Get profile",
-    scope: "mstyle.profiles.read",
+    scope: "mstyle.resident.profile.read",
     method: "GET",
     path: () => `/resident-profiles/${state.profileId}`,
     after: ({ headers }) => {
@@ -105,7 +115,7 @@ const steps = [
   {
     id: "R-05",
     title: "Patch profile with If-Match",
-    scope: "mstyle.profiles.write",
+    scope: "mstyle.resident.profile.write",
     method: "PATCH",
     path: () => `/resident-profiles/${state.profileId}`,
     headers: () => ({ "If-Match": state.profileEtag }),
@@ -121,7 +131,7 @@ const steps = [
   {
     id: "M-01",
     title: "List memberships",
-    scope: "mstyle.memberships.read",
+    scope: "mstyle.resident.members.read",
     method: "GET",
     path: () => `/resident-profiles/${state.profileId}/memberships`,
     after: ({ headers }) => {
@@ -131,7 +141,7 @@ const steps = [
   {
     id: "G-01",
     title: "Create guest party",
-    scope: "mstyle.guests.write",
+    scope: "mstyle.guest.create",
     method: "POST",
     path: "/guest-parties",
     body: () => ({
@@ -146,7 +156,7 @@ const steps = [
   {
     id: "G-04",
     title: "Guest status",
-    scope: "mstyle.guests.read",
+    scope: "mstyle.guest.read",
     method: "GET",
     path: () => `/guest-parties/${state.guestPartyId}/status`,
     after: ({ headers }) => {
@@ -156,7 +166,7 @@ const steps = [
   {
     id: "G-11",
     title: "Claim guest with If-Match",
-    scope: "mstyle.guests.write",
+    scope: "mstyle.guest.claim",
     method: "POST",
     path: () => `/guest-parties/${state.guestPartyId}/claim`,
     headers: () => ({ "If-Match": state.guestEtag }),
@@ -316,10 +326,14 @@ function parseJson(value) {
 function redact(body) {
   if (Array.isArray(body)) return body.map(redact);
   if (!body || typeof body !== "object") return body;
-  return Object.fromEntries(Object.entries(body).map(([key, value]) => [
-    key,
-    /token|assertion|secret|password|code/i.test(key) ? "hidden" : redact(value),
-  ]));
+  return Object.fromEntries(
+    Object.entries(body).map(([key, value]) => [
+      key,
+      /token|assertion|secret|password|code/i.test(key)
+        ? "hidden"
+        : redact(value),
+    ]),
+  );
 }
 
 function pick(obj, key) {

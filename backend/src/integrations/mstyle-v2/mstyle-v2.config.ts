@@ -5,6 +5,7 @@ import {
   CODE_LENGTH,
   DEFAULT_DATA_SCOPES,
   DEFAULT_TOKEN_TTL_SEC,
+  expandMstyleScopes,
   MSTYLE_TOKEN_AUD,
 } from './mstyle-v2.constants';
 
@@ -104,7 +105,7 @@ export class MstyleV2Config {
           this.reconcileClientKeyKid(),
           publicKey,
         ),
-        scopes: ['mstyle.changes.read'],
+        scopes: expandMstyleScopes(['mstyle.changes.read']),
       };
     }
     return undefined;
@@ -122,10 +123,12 @@ export class MstyleV2Config {
   defaultScopes(): string[] {
     const raw = this.config.get<string>('MSTYLE_CLIENT_SCOPES');
     if (raw?.trim()) {
-      return raw
-        .split(/[,\s]+/)
-        .map((s) => s.trim())
-        .filter(Boolean);
+      return expandMstyleScopes(
+        raw
+          .split(/[,\s]+/)
+          .map((s) => s.trim())
+          .filter(Boolean),
+      );
     }
     return [...DEFAULT_DATA_SCOPES];
   }

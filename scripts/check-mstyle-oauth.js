@@ -12,23 +12,26 @@ const checkClients = splitList(process.env.MSTYLE_CHECK_CLIENTS || "all");
 const backendScopes = splitScopes(
   process.env.MSTYLE_CLIENT_SCOPES ||
     [
+      "mstyle.guest.booking.confirm",
+      "mstyle.guest.create",
+      "mstyle.integration.admin.members.read",
+      "mstyle.integration.admin.profile.read",
       "mstyle.resident.authenticate",
-      "mstyle.residents.read",
-      "mstyle.residents.write",
-      "mstyle.profiles.read",
-      "mstyle.profiles.write",
-      "mstyle.memberships.read",
-      "mstyle.memberships.write",
-      "mstyle.contacts.read",
-      "mstyle.contacts.write",
-      "mstyle.consents.read",
-      "mstyle.consents.write",
-      "mstyle.private-data.read",
-      "mstyle.private-data.write",
-      "mstyle.guests.read",
-      "mstyle.guests.write",
-      "mstyle.admin.search",
-      "mstyle.changes.read",
+      "mstyle.resident.consent.read",
+      "mstyle.resident.consent.write",
+      "mstyle.resident.contact.read",
+      "mstyle.resident.contact.write",
+      "mstyle.resident.context.read",
+      "mstyle.resident.identity.write",
+      "mstyle.resident.members.read",
+      "mstyle.resident.members.write",
+      "mstyle.resident.private.reveal",
+      "mstyle.resident.private.status.read",
+      "mstyle.resident.private.write",
+      "mstyle.resident.profile.read",
+      "mstyle.resident.profile.write",
+      "mstyle.resident.snapshot.create",
+      "mstyle.snapshot.operation.bind",
     ].join(" "),
 );
 
@@ -52,7 +55,8 @@ const clients = [
       process.env.MSTYLE_RECONCILE_CLIENT_KID ||
       "mstyle-reconcile-prod-20260823-01",
     scopes: splitScopes(
-      process.env.MSTYLE_RECONCILE_CLIENT_SCOPES || "mstyle.changes.read",
+      process.env.MSTYLE_RECONCILE_CLIENT_SCOPES ||
+        "mstyle.integration.reconcile",
     ),
     privateKeyPath:
       process.env.MSTYLE_RECONCILE_CLIENT_PRIVATE_KEY_FILE ||

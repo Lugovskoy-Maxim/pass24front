@@ -73,7 +73,30 @@ export const PRIVATE_EDIT_POLICIES = [
   'locked',
 ] as const;
 
-export const DEFAULT_DATA_SCOPES = [
+export const MSTYLE_REQUIRED_M0_SCOPES = [
+  'mstyle.guest.booking.confirm',
+  'mstyle.guest.create',
+  'mstyle.integration.admin.members.read',
+  'mstyle.integration.admin.profile.read',
+  MSTYLE_AUTH_SCOPE,
+  'mstyle.resident.consent.read',
+  'mstyle.resident.consent.write',
+  'mstyle.resident.contact.read',
+  'mstyle.resident.contact.write',
+  'mstyle.resident.context.read',
+  'mstyle.resident.identity.write',
+  'mstyle.resident.members.read',
+  'mstyle.resident.members.write',
+  'mstyle.resident.private.reveal',
+  'mstyle.resident.private.status.read',
+  'mstyle.resident.private.write',
+  'mstyle.resident.profile.read',
+  'mstyle.resident.profile.write',
+  'mstyle.resident.snapshot.create',
+  'mstyle.snapshot.operation.bind',
+] as const;
+
+export const LEGACY_DATA_SCOPES = [
   MSTYLE_AUTH_SCOPE,
   'mstyle.resident.context.read',
   'mstyle.residents.read',
@@ -94,15 +117,102 @@ export const DEFAULT_DATA_SCOPES = [
   'mstyle.changes.read',
 ] as const;
 
+/**
+ * Scope names used before the granular Mstyle contract was introduced.
+ * Keep accepting them during migration, but authorize the canonical scopes
+ * expected by the PHP adapter and acceptance kit.
+ */
+export const LEGACY_SCOPE_ALIASES: Readonly<Record<string, readonly string[]>> =
+  {
+    'mstyle.residents.read': ['mstyle.integration.admin.identity.read'],
+    'mstyle.residents.write': ['mstyle.resident.identity.write'],
+    'mstyle.profiles.read': [
+      'mstyle.resident.profile.read',
+      'mstyle.resident.physical_access.read',
+      'mstyle.resident.change_request.read',
+      'mstyle.integration.admin.profile.read',
+      'mstyle.integration.admin.physical_access.read',
+    ],
+    'mstyle.profiles.write': [
+      'mstyle.resident.profile.write',
+      'mstyle.resident.change_request.write',
+      'mstyle.integration.admin.onboarding.write',
+      'mstyle.integration.admin.profile.write',
+      'mstyle.integration.admin.change_request.decide',
+    ],
+    'mstyle.memberships.read': [
+      'mstyle.resident.members.read',
+      'mstyle.integration.admin.members.read',
+    ],
+    'mstyle.memberships.write': ['mstyle.resident.members.write'],
+    'mstyle.contacts.read': ['mstyle.resident.contact.read'],
+    'mstyle.contacts.write': ['mstyle.resident.contact.write'],
+    'mstyle.consents.read': ['mstyle.resident.consent.read'],
+    'mstyle.consents.write': ['mstyle.resident.consent.write'],
+    'mstyle.private-data.read': [
+      'mstyle.resident.private.status.read',
+      'mstyle.resident.private.reveal',
+      'mstyle.resident.snapshot.private.reveal',
+      'mstyle.resident.snapshot.contact.reveal',
+    ],
+    'mstyle.private-data.write': [
+      'mstyle.resident.private.write',
+      'mstyle.resident.snapshot.create',
+      'mstyle.snapshot.operation.bind',
+    ],
+    'mstyle.guests.read': [
+      'mstyle.guest.read',
+      'mstyle.guest.contact.read',
+      'mstyle.guest.private.status.read',
+      'mstyle.guest.private.reveal',
+      'mstyle.guest.consent.read',
+      'mstyle.integration.admin.guest.read',
+    ],
+    'mstyle.guests.write': [
+      'mstyle.guest.create',
+      'mstyle.guest.contact.verify',
+      'mstyle.guest.private.write',
+      'mstyle.guest.snapshot.create',
+      'mstyle.guest.booking.confirm',
+      'mstyle.guest.claim',
+      'mstyle.guest.consent.write',
+    ],
+    'mstyle.admin.search': [
+      'mstyle.integration.admin.profile.read',
+      'mstyle.integration.admin.members.read',
+      'mstyle.integration.admin.guest.read',
+    ],
+    'mstyle.changes.read': ['mstyle.integration.reconcile'],
+  };
+
+export function expandMstyleScopes(scopes: readonly string[]): string[] {
+  const expanded = new Set<string>();
+  for (const raw of scopes) {
+    const scope = raw.trim();
+    if (!scope) continue;
+    expanded.add(scope);
+    for (const alias of LEGACY_SCOPE_ALIASES[scope] || []) {
+      expanded.add(alias);
+    }
+  }
+  return [...expanded];
+}
+
+export const DEFAULT_DATA_SCOPES = expandMstyleScopes([
+  ...MSTYLE_REQUIRED_M0_SCOPES,
+  ...LEGACY_DATA_SCOPES,
+]);
+
 /** Маршрут → нужный scope. A-02..A-06 — только authenticate. */
 export const ROUTE_SCOPES: Array<{
   method: string;
   match: RegExp;
   scope: string;
+  alternatives?: readonly string[];
 }> = [
   {
     method: 'POST',
-    match: /\/auth\/residents\/password-verify$/,
+    match: /\/auth\/residents\/password(?::verify|-verify)$/,
     scope: MSTYLE_AUTH_SCOPE,
   },
   {
@@ -125,16 +235,20 @@ export const ROUTE_SCOPES: Array<{
     match: /\/auth\/residents\/code-challenges\/[^/]+\/verify$/,
     scope: MSTYLE_AUTH_SCOPE,
   },
-  { method: 'GET', match: /\/changes$/, scope: 'mstyle.changes.read' },
+  {
+    method: 'GET',
+    match: /\/changes$/,
+    scope: 'mstyle.integration.reconcile',
+  },
   {
     method: 'POST',
     match: /\/resident-profiles\/search$/,
-    scope: 'mstyle.admin.search',
+    scope: 'mstyle.integration.admin.profile.read',
   },
   {
     method: 'POST',
     match: /\/guest-parties\/search$/,
-    scope: 'mstyle.admin.search',
+    scope: 'mstyle.integration.admin.guest.read',
   },
   {
     method: 'GET',
@@ -144,161 +258,229 @@ export const ROUTE_SCOPES: Array<{
   {
     method: 'PATCH',
     match: /\/residents\/[^/]+\/identity$/,
-    scope: 'mstyle.residents.write',
+    scope: 'mstyle.resident.identity.write',
   },
   {
     method: 'POST',
     match: /\/residents\/[^/]+\/contacts\/reveal$/,
-    scope: 'mstyle.contacts.read',
+    scope: 'mstyle.resident.contact.read',
   },
   {
     method: 'POST',
     match: /\/residents\/[^/]+\/contacts\//,
-    scope: 'mstyle.contacts.write',
+    scope: 'mstyle.resident.contact.write',
   },
   {
     method: 'GET',
     match: /\/residents\/[^/]+\/consents$/,
-    scope: 'mstyle.consents.read',
+    scope: 'mstyle.resident.consent.read',
   },
   {
     method: 'POST',
     match: /\/residents\/[^/]+\/consents\//,
-    scope: 'mstyle.consents.write',
+    scope: 'mstyle.resident.consent.write',
   },
   {
     method: 'GET',
     match: /\/identities\/[^/]+$/,
-    scope: 'mstyle.residents.read',
+    scope: 'mstyle.integration.admin.identity.read',
   },
   {
     method: 'POST',
     match: /\/resident-onboarding$/,
-    scope: 'mstyle.profiles.write',
+    scope: 'mstyle.integration.admin.onboarding.write',
   },
   {
     method: 'GET',
     match: /\/resident-profiles\/[^/]+\/memberships$/,
-    scope: 'mstyle.memberships.read',
+    scope: 'mstyle.resident.members.read',
+    alternatives: ['mstyle.integration.admin.members.read'],
   },
   {
     method: 'POST',
     match: /\/resident-profiles\/[^/]+\/memberships$/,
-    scope: 'mstyle.memberships.write',
+    scope: 'mstyle.resident.members.write',
   },
   {
     method: 'POST',
     match: /\/resident-profiles\/[^/]+\/owner-transfer$/,
-    scope: 'mstyle.memberships.write',
+    scope: 'mstyle.resident.members.write',
   },
   {
     method: 'GET',
     match: /\/resident-profiles\/[^/]+\/contact-assignments$/,
-    scope: 'mstyle.contacts.read',
+    scope: 'mstyle.resident.contact.read',
+    alternatives: ['mstyle.integration.admin.profile.read'],
   },
   {
     method: 'PATCH',
     match: /\/resident-profiles\/[^/]+\/contact-assignments$/,
-    scope: 'mstyle.contacts.write',
+    scope: 'mstyle.resident.contact.write',
   },
   {
     method: 'POST',
     match: /\/resident-profiles\/[^/]+\/contacts\/reveal$/,
-    scope: 'mstyle.contacts.read',
+    scope: 'mstyle.resident.contact.read',
   },
   {
     method: 'GET',
     match: /\/resident-profiles\/[^/]+\/private-data\/status$/,
-    scope: 'mstyle.private-data.read',
+    scope: 'mstyle.resident.private.status.read',
   },
   {
     method: 'POST',
     match: /\/resident-profiles\/[^/]+\/private-data\/reveal$/,
-    scope: 'mstyle.private-data.read',
+    scope: 'mstyle.resident.private.reveal',
   },
   {
     method: 'PATCH',
     match: /\/resident-profiles\/[^/]+\/private-data$/,
-    scope: 'mstyle.private-data.write',
+    scope: 'mstyle.resident.private.write',
   },
   {
     method: 'POST',
     match: /\/resident-profiles\/[^/]+\/private-data\/snapshots$/,
-    scope: 'mstyle.private-data.write',
+    scope: 'mstyle.resident.snapshot.create',
   },
   {
     method: 'GET',
     match: /\/resident-profiles\/[^/]+\/physical-access$/,
-    scope: 'mstyle.profiles.read',
+    scope: 'mstyle.resident.physical_access.read',
+    alternatives: ['mstyle.integration.admin.physical_access.read'],
   },
   {
     method: 'GET',
     match: /\/resident-profiles\/[^/]+\/change-requests\/current$/,
-    scope: 'mstyle.profiles.read',
+    scope: 'mstyle.resident.change_request.read',
   },
   {
     method: 'POST',
     match: /\/resident-profiles\/[^/]+\/change-requests$/,
-    scope: 'mstyle.profiles.write',
+    scope: 'mstyle.resident.change_request.write',
   },
   {
     method: 'POST',
     match: /\/resident-profiles\/[^/]+\/lifecycle-transitions$/,
-    scope: 'mstyle.profiles.write',
+    scope: 'mstyle.integration.admin.profile.write',
   },
   {
     method: 'POST',
     match: /\/resident-profiles\/[^/]+\/deletion-requests$/,
-    scope: 'mstyle.profiles.write',
+    scope: 'mstyle.integration.admin.profile.write',
   },
   {
     method: 'GET',
     match: /\/resident-profiles\/[^/]+$/,
-    scope: 'mstyle.profiles.read',
+    scope: 'mstyle.resident.profile.read',
+    alternatives: ['mstyle.integration.admin.profile.read'],
   },
   {
     method: 'PATCH',
     match: /\/resident-profiles\/[^/]+$/,
-    scope: 'mstyle.profiles.write',
+    scope: 'mstyle.resident.profile.write',
   },
   {
     method: 'PATCH',
     match: /\/resident-memberships\/[^/]+$/,
-    scope: 'mstyle.memberships.write',
+    scope: 'mstyle.resident.members.write',
   },
   {
     method: 'POST',
     match: /\/resident-memberships\/[^/]+\/revoke$/,
-    scope: 'mstyle.memberships.write',
+    scope: 'mstyle.resident.members.write',
   },
   {
     method: 'POST',
-    match: /\/resident-profile-change-requests\//,
-    scope: 'mstyle.profiles.write',
+    match: /\/resident-profile-change-requests\/[^/]+\/decisions$/,
+    scope: 'mstyle.integration.admin.change_request.decide',
+  },
+  {
+    method: 'POST',
+    match: /\/resident-profile-change-requests\/[^/]+\/cancel$/,
+    scope: 'mstyle.resident.change_request.write',
   },
   {
     method: 'GET',
     match: /\/deletion-requests\//,
-    scope: 'mstyle.profiles.read',
+    scope: 'mstyle.integration.admin.profile.read',
   },
   {
     method: 'POST',
     match: /\/private-data-snapshots\/[^/]+\/operation-bindings$/,
-    scope: 'mstyle.private-data.write',
+    scope: 'mstyle.snapshot.operation.bind',
   },
   {
     method: 'POST',
-    match: /\/private-data-snapshots\//,
-    scope: 'mstyle.private-data.read',
+    match: /\/private-data-snapshots\/[^/]+\/contacts\/reveal$/,
+    scope: 'mstyle.resident.snapshot.contact.reveal',
+    alternatives: ['mstyle.guest.snapshot.contact.reveal'],
+  },
+  {
+    method: 'POST',
+    match: /\/private-data-snapshots\/[^/]+\/reveal$/,
+    scope: 'mstyle.resident.snapshot.private.reveal',
+    alternatives: ['mstyle.guest.snapshot.private.reveal'],
   },
   {
     method: 'POST',
     match: /\/guest-parties$/,
-    scope: 'mstyle.guests.write',
+    scope: 'mstyle.guest.create',
   },
-  { method: 'GET', match: /\/guest-parties\//, scope: 'mstyle.guests.read' },
-  { method: 'POST', match: /\/guest-parties\//, scope: 'mstyle.guests.write' },
-  { method: 'PATCH', match: /\/guest-parties\//, scope: 'mstyle.guests.write' },
+  {
+    method: 'POST',
+    match: /\/guest-parties\/[^/]+\/contact-challenges(?:\/[^/]+\/verify)?$/,
+    scope: 'mstyle.guest.contact.verify',
+  },
+  {
+    method: 'GET',
+    match: /\/guest-parties\/[^/]+\/status$/,
+    scope: 'mstyle.guest.read',
+  },
+  {
+    method: 'POST',
+    match: /\/guest-parties\/[^/]+\/contacts\/reveal$/,
+    scope: 'mstyle.guest.contact.read',
+  },
+  {
+    method: 'GET',
+    match: /\/guest-parties\/[^/]+\/private-data\/status$/,
+    scope: 'mstyle.guest.private.status.read',
+  },
+  {
+    method: 'POST',
+    match: /\/guest-parties\/[^/]+\/private-data\/reveal$/,
+    scope: 'mstyle.guest.private.reveal',
+  },
+  {
+    method: 'PATCH',
+    match: /\/guest-parties\/[^/]+\/private-data$/,
+    scope: 'mstyle.guest.private.write',
+  },
+  {
+    method: 'POST',
+    match: /\/guest-parties\/[^/]+\/snapshots$/,
+    scope: 'mstyle.guest.snapshot.create',
+  },
+  {
+    method: 'POST',
+    match: /\/guest-parties\/[^/]+\/booking-confirmations$/,
+    scope: 'mstyle.guest.booking.confirm',
+  },
+  {
+    method: 'POST',
+    match: /\/guest-parties\/[^/]+\/claim$/,
+    scope: 'mstyle.guest.claim',
+  },
+  {
+    method: 'GET',
+    match: /\/guest-parties\/[^/]+\/consents$/,
+    scope: 'mstyle.guest.consent.read',
+  },
+  {
+    method: 'POST',
+    match: /\/guest-parties\/[^/]+\/consents\//,
+    scope: 'mstyle.guest.consent.write',
+  },
 ];
 
 export const RESIDENT_PRIVATE_FIELDS = [

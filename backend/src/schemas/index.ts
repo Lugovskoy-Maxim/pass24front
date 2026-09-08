@@ -1,6 +1,7 @@
 export * from './enums';
 export * from './property.schema';
 export * from './push-subscription.schema';
+export * from './native-push-device.schema';
 export * from './vapid-config.schema';
 export * from './office.schema';
 export * from './user.schema';

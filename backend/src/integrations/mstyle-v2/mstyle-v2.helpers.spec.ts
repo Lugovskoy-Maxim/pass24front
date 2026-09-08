@@ -1,6 +1,8 @@
 import {
   ALLOWED_AUTH_PAIRS,
+  expandMstyleScopes,
   MSTYLE_AUTH_SCOPE,
+  MSTYLE_REQUIRED_M0_SCOPES,
   ROUTE_SCOPES,
 } from './mstyle-v2.constants';
 import {
@@ -21,6 +23,7 @@ describe('mstyle-v2 helpers', () => {
     expect(ulid()).toHaveLength(26);
     expect(Ids.subject()).toMatch(/^usr_[0-9A-HJKMNP-TV-Z]{26}$/);
     expect(Ids.challenge()).toMatch(/^ach_/);
+    expect(Ids.grant()).toMatch(/^grt_[0-9A-HJKMNP-TV-Z]{26}$/);
   });
 
   it('canonical json is stable', () => {
@@ -89,6 +92,41 @@ describe('mstyle-v2 helpers', () => {
         ),
     );
     expect(rule?.scope).toBe('mstyle.resident.context.read');
+  });
+
+  it('exposes the exact M0 scopes required by the PHP acceptance kit', () => {
+    expect(MSTYLE_REQUIRED_M0_SCOPES).toEqual([
+      'mstyle.guest.booking.confirm',
+      'mstyle.guest.create',
+      'mstyle.integration.admin.members.read',
+      'mstyle.integration.admin.profile.read',
+      'mstyle.resident.authenticate',
+      'mstyle.resident.consent.read',
+      'mstyle.resident.consent.write',
+      'mstyle.resident.contact.read',
+      'mstyle.resident.contact.write',
+      'mstyle.resident.context.read',
+      'mstyle.resident.identity.write',
+      'mstyle.resident.members.read',
+      'mstyle.resident.members.write',
+      'mstyle.resident.private.reveal',
+      'mstyle.resident.private.status.read',
+      'mstyle.resident.private.write',
+      'mstyle.resident.profile.read',
+      'mstyle.resident.profile.write',
+      'mstyle.resident.snapshot.create',
+      'mstyle.snapshot.operation.bind',
+    ]);
+  });
+
+  it('maps legacy scopes to canonical route scopes during migration', () => {
+    expect(expandMstyleScopes(['mstyle.guests.write'])).toEqual(
+      expect.arrayContaining([
+        'mstyle.guests.write',
+        'mstyle.guest.create',
+        'mstyle.guest.booking.confirm',
+      ]),
+    );
   });
 
   it('formats problem+json', () => {
