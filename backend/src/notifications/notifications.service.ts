@@ -230,7 +230,9 @@ export class NotificationsService implements OnModuleInit {
             );
             return;
           } catch (error: any) {
-            if ([404, 410].includes(error?.statusCode)) {
+            // 404/410 = endpoint gone. 401/403 = VAPID mismatch or revoked
+            // FCM token; retrying these on every guest arrival only spams logs.
+            if ([401, 403, 404, 410].includes(error?.statusCode)) {
               await this.subscriptionModel.deleteOne({
                 _id: subscription._id,
               });
