@@ -31,6 +31,11 @@ const TITLES: Record<string, string> = {
   UPSTREAM_UNAVAILABLE: 'Upstream unavailable',
   PRECONDITION_FAILED: 'Precondition failed',
   CONFLICT: 'Conflict',
+  INVALID_CURSOR: 'Invalid cursor',
+  CURSOR_EXPIRED: 'Cursor expired',
+  CONTACT_OWNERSHIP_NOT_CONFIRMED: 'Contact ownership not confirmed',
+  ROOT_USER_CONFLICT: 'Root user conflict',
+  ALREADY_BOUND_TO_OTHER_PARENT: 'Already bound to another parent',
 };
 
 function slug(code: string): string {

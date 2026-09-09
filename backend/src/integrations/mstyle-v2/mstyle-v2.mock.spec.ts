@@ -523,9 +523,9 @@ describe('Mstyle v2 contract mocks', () => {
   it('returns selected private fields and complete snapshot metadata', () => {
     const reveal = createMstyleMockResponse({
       id: 'P-02',
-      body: { fieldCodes: ['inn'] },
+      body: { fieldCodes: ['company.inn'] },
     }).body;
-    expect(reveal.values).toEqual({ inn: '7700000000' });
+    expect(reveal.values).toEqual({ company: { inn: '7700000000' } });
 
     const snapshot = createMstyleMockResponse({ id: 'P-04' }).body;
     expect(snapshot.contentDigest).toMatchObject({

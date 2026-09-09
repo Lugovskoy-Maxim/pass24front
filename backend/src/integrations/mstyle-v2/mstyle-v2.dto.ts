@@ -1,9 +1,11 @@
 import { Type } from 'class-transformer';
 import {
   ArrayMaxSize,
+  ArrayMinSize,
   IsArray,
   IsIn,
   IsInt,
+  IsISO8601,
   IsNotEmpty,
   IsObject,
   IsOptional,
@@ -122,19 +124,46 @@ export class PatchIdentityDto extends SchemaVersionDto {
   };
 }
 
+export class UpdatedAtSortDto {
+  @IsIn(['updatedAt'])
+  field: 'updatedAt';
+
+  @IsIn(['asc', 'desc'])
+  direction: 'asc' | 'desc';
+}
+
+export class SearchQueryDto {
+  @IsIn(['profileId', 'email', 'phone', 'text'])
+  type: 'profileId' | 'email' | 'phone' | 'text';
+
+  @IsString()
+  @IsNotEmpty()
+  @MaxLength(256)
+  value: string;
+}
+
+export class ProfileSearchFiltersDto {
+  @IsArray()
+  @ArrayMinSize(1)
+  @ArrayMaxSize(100)
+  @IsString({ each: true })
+  profileIds: string[];
+}
+
 export class SearchProfilesDto extends SchemaVersionDto {
   @IsOptional()
-  @IsObject()
-  query?: {
-    phone?: string;
-    email?: string;
-    label?: string;
-    profileId?: string;
-  };
+  @ValidateNested()
+  @Type(() => SearchQueryDto)
+  query?: SearchQueryDto;
+
+  @IsOptional()
+  @ValidateNested()
+  @Type(() => ProfileSearchFiltersDto)
+  filters?: ProfileSearchFiltersDto;
 
   @IsOptional()
   @IsString()
-  cursor?: string;
+  cursor?: string | null;
 
   @IsOptional()
   @Type(() => Number)
@@ -142,29 +171,47 @@ export class SearchProfilesDto extends SchemaVersionDto {
   @Min(1)
   @Max(100)
   limit?: number;
+
+  @IsOptional()
+  @ValidateNested()
+  @Type(() => UpdatedAtSortDto)
+  sort?: UpdatedAtSortDto;
+}
+
+export class OnboardingInvitationDto {
+  @IsString()
+  @IsNotEmpty()
+  @MaxLength(200)
+  displayName: string;
+
+  @IsOptional()
+  @IsString()
+  @MaxLength(32)
+  phone?: string;
+
+  @IsOptional()
+  @IsString()
+  @MaxLength(254)
+  email?: string;
 }
 
 export class OnboardingOwnerDto {
   @ValidateNested()
-  @Type(() => IdentifierDto)
-  identifier: IdentifierDto;
-
-  @IsOptional()
-  @IsString()
-  displayName?: string;
-
-  @IsOptional()
-  @IsObject()
-  name?: {
-    lastName?: string | null;
-    firstName?: string | null;
-    middleName?: string | null;
-  };
+  @Type(() => OnboardingInvitationDto)
+  invitation: OnboardingInvitationDto;
 }
 
-export class OnboardingDto extends SchemaVersionDto {
+export class MemberPolicyDto {
+  @IsOptional()
+  @Type(() => Number)
+  @IsInt()
+  @Min(0)
+  employeeLimit?: number | null;
+}
+
+export class OnboardingProfileDto {
   @IsIn(['individual', 'company'])
-  profileType: 'individual' | 'company';
+  type: 'individual' | 'company';
 
   @IsOptional()
   @IsIn(['ip', 'ooo'])
@@ -176,48 +223,130 @@ export class OnboardingDto extends SchemaVersionDto {
   label: string;
 
   @IsOptional()
-  @IsString()
-  companyShortName?: string | null;
+  @ValidateNested()
+  @Type(() => MemberPolicyDto)
+  memberPolicy?: MemberPolicyDto;
 
+  @IsOptional()
+  @IsString()
+  @MaxLength(200)
+  companyShortName?: string | null;
+}
+
+export class PrivateDataInputDto {
+  @IsIn(['individual', 'company'])
+  profileType: 'individual' | 'company';
+
+  @IsOptional()
+  @IsIn(['ip', 'ooo'])
+  legalForm?: 'ip' | 'ooo' | null;
+
+  @IsObject()
+  data: Record<string, unknown>;
+}
+
+export class OnboardingContactSourceDto {
+  @IsIn(['owner_invitation_contact'])
+  kind: 'owner_invitation_contact';
+
+  @IsIn(['phone', 'email'])
+  contactType: 'phone' | 'email';
+}
+
+export class OnboardingContactAssignmentDto {
+  @IsIn(['primary', 'contract', 'billing'])
+  purpose: 'primary' | 'contract' | 'billing';
+
+  @ValidateNested()
+  @Type(() => OnboardingContactSourceDto)
+  source: OnboardingContactSourceDto;
+
+  @Type(() => Number)
+  @IsInt()
+  @Min(1)
+  priority: number;
+}
+
+export class SourceLinkDto {
+  @IsIn(['mstyle-wordpress'])
+  sourceSystem: string;
+
+  @IsString()
+  @IsNotEmpty()
+  environment: string;
+
+  @IsIn(['resident'])
+  entityType: string;
+
+  @IsString()
+  @IsNotEmpty()
+  externalId: string;
+}
+
+export class OnboardingDto extends SchemaVersionDto {
   @ValidateNested()
   @Type(() => OnboardingOwnerDto)
   owner: OnboardingOwnerDto;
+
+  @ValidateNested()
+  @Type(() => OnboardingProfileDto)
+  profile: OnboardingProfileDto;
+
+  @ValidateNested()
+  @Type(() => PrivateDataInputDto)
+  privateData: PrivateDataInputDto;
+
+  @IsArray()
+  @ArrayMaxSize(6)
+  @ValidateNested({ each: true })
+  @Type(() => OnboardingContactAssignmentDto)
+  initialContactAssignments: OnboardingContactAssignmentDto[];
+
+  @ValidateNested()
+  @Type(() => SourceLinkDto)
+  sourceLink: SourceLinkDto;
 }
 
 export class LifecycleDto extends SchemaVersionDto {
-  @IsIn(['activate', 'suspend', 'close'])
-  transition: 'activate' | 'suspend' | 'close';
+  @IsIn(['active', 'suspended', 'closed'])
+  targetStatus: 'active' | 'suspended' | 'closed';
+
+  @IsString()
+  @IsNotEmpty()
+  reasonCode: string;
 }
 
 export class DeletionRequestDto extends SchemaVersionDto {
-  @IsArray()
-  @IsString({ each: true })
-  @ArrayMaxSize(20)
-  reasonCodes: string[];
+  @IsIn(['anonymize', 'delete'])
+  mode: 'anonymize' | 'delete';
+
+  @IsString()
+  @IsNotEmpty()
+  reasonCode: string;
 }
 
 export class ChangeRequestDto extends SchemaVersionDto {
-  @IsArray()
-  @IsString({ each: true })
-  @ArrayMaxSize(50)
-  fieldCodes: string[];
-
-  @IsOptional()
-  @IsObject()
-  values?: Record<string, unknown>;
-
-  @IsOptional()
   @IsString()
-  reasonCode?: string;
+  @IsNotEmpty()
+  reasonCode: string;
+
+  @Type(() => Number)
+  @IsInt()
+  @Min(1)
+  expectedPrivateDataRevision: number;
+
+  @ValidateNested()
+  @Type(() => PrivateDataInputDto)
+  privateData: PrivateDataInputDto;
 }
 
 export class ChangeDecisionDto extends SchemaVersionDto {
   @IsIn(['approve', 'reject'])
   decision: 'approve' | 'reject';
 
-  @IsOptional()
   @IsString()
-  reasonCode?: string;
+  @IsNotEmpty()
+  reasonCode: string;
 }
 
 export class CreateMembershipDto extends SchemaVersionDto {
@@ -236,18 +365,42 @@ export class PatchMembershipDto extends SchemaVersionDto {
   status?: 'active' | 'suspended';
 
   @IsOptional()
-  @IsString()
+  @IsISO8601({ strict: true })
   validFrom?: string | null;
 
   @IsOptional()
-  @IsString()
+  @IsISO8601({ strict: true })
   validUntil?: string | null;
+
+  @IsString()
+  @IsNotEmpty()
+  reasonCode: string;
 }
 
 export class OwnerTransferDto extends SchemaVersionDto {
   @IsString()
   @IsNotEmpty()
   newOwnerSubject: string;
+
+  @Type(() => Number)
+  @IsInt()
+  @Min(1)
+  expectedProfileRevision: number;
+
+  @Type(() => Number)
+  @IsInt()
+  @Min(1)
+  expectedMembershipSetRevision: number;
+
+  @IsString()
+  @IsNotEmpty()
+  reasonCode: string;
+}
+
+export class ReasonCodeDto extends SchemaVersionDto {
+  @IsString()
+  @IsNotEmpty()
+  reasonCode: string;
 }
 
 export class ContactChallengeDto extends SchemaVersionDto {
@@ -321,10 +474,40 @@ export class ConsentAcceptDto extends SchemaVersionDto {
 
 export class RevealDto extends SchemaVersionDto {
   @IsArray()
+  @ArrayMinSize(1)
   @IsString({ each: true })
   @ArrayMaxSize(50)
   fieldCodes: string[];
 }
+
+export class ProfileContactsRevealDto extends RevealDto {
+  @IsIn(['primary', 'contract', 'billing'])
+  contactPurpose: 'primary' | 'contract' | 'billing';
+}
+
+export class OperationRefDto {
+  @IsIn(['mstyle'])
+  sourceSystem: string;
+
+  @IsString()
+  @IsNotEmpty()
+  environment: string;
+
+  @IsIn(['booking'])
+  operationType: string;
+
+  @IsString()
+  @IsNotEmpty()
+  operationId: string;
+}
+
+export class SnapshotRevealDto extends RevealDto {
+  @ValidateNested()
+  @Type(() => OperationRefDto)
+  operationRef: OperationRefDto;
+}
+
+export class SnapshotContactsRevealDto extends SnapshotRevealDto {}
 
 export class PatchPrivateDataDto extends SchemaVersionDto {
   @IsObject()
@@ -338,9 +521,9 @@ export class CreateSnapshotDto extends SchemaVersionDto {
 }
 
 export class BindSnapshotDto extends SchemaVersionDto {
-  @IsString()
-  @IsNotEmpty()
-  operationRef: string;
+  @ValidateNested()
+  @Type(() => OperationRefDto)
+  operationRef: OperationRefDto;
 }
 
 export class CreateGuestDto extends SchemaVersionDto {
@@ -353,14 +536,14 @@ export class CreateGuestDto extends SchemaVersionDto {
   role?: 'primary' | 'participant';
 
   @IsOptional()
-  @IsString()
+  @IsISO8601({ strict: true })
   expiresAt?: string;
 }
 
 export class ConfirmBookingDto extends SchemaVersionDto {
-  @IsString()
-  @IsNotEmpty()
-  operationRef: string;
+  @ValidateNested()
+  @Type(() => OperationRefDto)
+  operationRef: OperationRefDto;
 
   @IsString()
   @IsNotEmpty()
@@ -370,21 +553,33 @@ export class ConfirmBookingDto extends SchemaVersionDto {
 export class ClaimGuestDto extends SchemaVersionDto {
   @IsString()
   @IsNotEmpty()
-  subject: string;
+  profileId: string;
 
-  @IsOptional()
+  @Type(() => Number)
+  @IsInt()
+  @Min(1)
+  expectedGuestPartyRevision: number;
+}
+
+export class GuestSearchQueryDto {
+  @IsIn(['guestPartyId', 'email', 'phone'])
+  type: 'guestPartyId' | 'email' | 'phone';
+
   @IsString()
-  claimedProfileId?: string;
+  @IsNotEmpty()
+  @MaxLength(256)
+  value: string;
 }
 
 export class SearchGuestsDto extends SchemaVersionDto {
   @IsOptional()
-  @IsObject()
-  query?: { guestPartyId?: string; phone?: string; email?: string };
+  @ValidateNested()
+  @Type(() => GuestSearchQueryDto)
+  query?: GuestSearchQueryDto;
 
   @IsOptional()
   @IsString()
-  cursor?: string;
+  cursor?: string | null;
 
   @IsOptional()
   @Type(() => Number)
@@ -392,4 +587,9 @@ export class SearchGuestsDto extends SchemaVersionDto {
   @Min(1)
   @Max(100)
   limit?: number;
+
+  @IsOptional()
+  @ValidateNested()
+  @Type(() => UpdatedAtSortDto)
+  sort?: UpdatedAtSortDto;
 }

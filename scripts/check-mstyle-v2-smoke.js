@@ -1,19 +1,19 @@
 #!/usr/bin/env node
 
-const crypto = require("crypto");
-const fs = require("fs");
-const https = require("https");
+const crypto = require('crypto');
+const fs = require('fs');
+const https = require('https');
 
 const baseUrl = trimRight(
-  process.env.MSTYLE_API_BASE_URL || "https://pass.mstyle.ru/api",
-  "/",
+  process.env.MSTYLE_API_BASE_URL || 'https://pass.mstyle.ru/api',
+  '/',
 );
 const tokenUrl = process.env.MSTYLE_TOKEN_URL || `${baseUrl}/oauth2/token`;
 const keyDir =
-  process.env.MSTYLE_KEYS_DIR || "/Users/tomilo/Downloads/production-4";
+  process.env.MSTYLE_KEYS_DIR || '/Users/tomilo/Downloads/production-4';
 const backendClient = {
-  clientId: process.env.MSTYLE_CLIENT_ID || "mstyle-backend-prod",
-  kid: process.env.MSTYLE_CLIENT_KID || "mstyle-backend-prod-20260823-01",
+  clientId: process.env.MSTYLE_CLIENT_ID || 'mstyle-backend-prod',
+  kid: process.env.MSTYLE_CLIENT_KID || 'mstyle-backend-prod-20260823-01',
 };
 backendClient.privateKeyPath =
   process.env.MSTYLE_CLIENT_PRIVATE_KEY_FILE ||
@@ -22,10 +22,10 @@ backendClient.publicKeyPath =
   process.env.MSTYLE_CLIENT_PUBLIC_KEY_FILE ||
   `${keyDir}/${backendClient.kid}-public.pem`;
 const reconcileClient = {
-  clientId: process.env.MSTYLE_RECONCILE_CLIENT_ID || "mstyle-reconcile-prod",
+  clientId: process.env.MSTYLE_RECONCILE_CLIENT_ID || 'mstyle-reconcile-prod',
   kid:
     process.env.MSTYLE_RECONCILE_CLIENT_KID ||
-    "mstyle-reconcile-prod-20260823-01",
+    'mstyle-reconcile-prod-20260823-01',
 };
 reconcileClient.privateKeyPath =
   process.env.MSTYLE_RECONCILE_CLIENT_PRIVATE_KEY_FILE ||
@@ -33,92 +33,123 @@ reconcileClient.privateKeyPath =
 reconcileClient.publicKeyPath =
   process.env.MSTYLE_RECONCILE_CLIENT_PUBLIC_KEY_FILE ||
   `${keyDir}/${reconcileClient.kid}-public.pem`;
-const schemaVersion = "2.0";
-const apiPrefix = "/internal/integrations/mstyle/v2";
+const schemaVersion = '2.0';
+const apiPrefix = '/internal/integrations/mstyle/v2';
 const stamp = Date.now().toString(36);
-const emailChallengeAddress = process.env.MSTYLE_V2_EMAIL || "";
+const emailChallengeAddress = process.env.MSTYLE_V2_EMAIL || '';
 
 const state = {
   tokens: new Map(),
-  profileId: "",
-  subject: "",
-  profileEtag: "",
-  membershipsEtag: "",
-  guestPartyId: "",
-  guestEtag: "",
+  profileId: '',
+  subject: '',
+  profileEtag: '',
+  membershipsEtag: '',
+  guestPartyId: '',
+  guestEtag: '',
 };
 
 const steps = [
   {
-    id: "T-01",
-    title: "OAuth token, integration.reconcile",
-    scope: "mstyle.integration.reconcile",
+    id: 'T-01',
+    title: 'OAuth token, integration.reconcile',
+    scope: 'mstyle.integration.reconcile',
     client: reconcileClient,
-    request: () => tokenFor("mstyle.integration.reconcile", reconcileClient),
+    request: () => tokenFor('mstyle.integration.reconcile', reconcileClient),
   },
   {
-    id: "R-03",
-    title: "Change feed",
-    scope: "mstyle.integration.reconcile",
+    id: 'R-03',
+    title: 'Change feed',
+    scope: 'mstyle.integration.reconcile',
     client: reconcileClient,
-    method: "GET",
-    path: "/changes?limit=5",
+    method: 'GET',
+    path: '/changes?limit=5',
+    actor: 'reconcile',
   },
   {
-    id: "R-06",
-    title: "Search profiles",
-    scope: "mstyle.integration.admin.profile.read",
-    method: "POST",
-    path: "/resident-profiles/search",
+    id: 'R-06',
+    title: 'Search profiles',
+    scope: 'mstyle.integration.admin.profile.read',
+    method: 'POST',
+    path: '/resident-profiles/search',
+    actor: 'admin-review',
     body: () => ({
       schemaVersion,
-      query: { label: `smoke-${stamp}` },
+      query: { type: 'text', value: `smoke-${stamp}` },
+      sort: { field: 'updatedAt', direction: 'desc' },
       limit: 5,
     }),
   },
   {
-    id: "R-08",
-    title: "Onboard profile",
-    scope: "mstyle.integration.admin.onboarding.write",
-    method: "POST",
-    path: "/resident-onboarding",
+    id: 'R-08',
+    title: 'Onboard profile',
+    scope: 'mstyle.integration.admin.onboarding.write',
+    method: 'POST',
+    path: '/resident-onboarding',
+    actor: 'admin-onboarding',
     body: () => ({
       schemaVersion,
-      profileType: "company",
-      legalForm: "ooo",
-      label: `smoke-${stamp}`,
-      companyShortName: `smoke-${stamp}`,
       owner: {
-        identifier: {
-          type: "email",
-          value: `smoke-owner-${stamp}@pass24.test`,
+        invitation: {
+          email: `smoke-owner-${stamp}@pass24.test`,
+          displayName: `Smoke Owner ${stamp}`,
         },
-        displayName: `Smoke Owner ${stamp}`,
+      },
+      profile: {
+        type: 'company',
+        legalForm: 'ooo',
+        label: `smoke-${stamp}`,
+        companyShortName: `smoke-${stamp}`,
+        memberPolicy: { employeeLimit: 5 },
+      },
+      privateData: {
+        profileType: 'company',
+        legalForm: 'ooo',
+        data: {
+          fullName: `Smoke ${stamp}`,
+          inn: '7700000000',
+          ogrn: '1027700000000',
+        },
+      },
+      initialContactAssignments: [
+        {
+          purpose: 'primary',
+          source: {
+            kind: 'owner_invitation_contact',
+            contactType: 'email',
+          },
+          priority: 1,
+        },
+      ],
+      sourceLink: {
+        sourceSystem: 'mstyle-wordpress',
+        environment: 'production',
+        entityType: 'resident',
+        externalId: `smoke:${stamp}`,
       },
     }),
     after: ({ body, headers }) => {
-      state.profileId = pick(body, "profileId");
-      state.subject = pick(body, "subject");
-      state.profileEtag = headers.etag || "";
+      state.profileId = pick(body, 'profileId');
+      state.subject = pick(body, 'subject');
+      state.profileEtag = headers.etag || '';
     },
   },
   {
-    id: "R-04",
-    title: "Get profile",
-    scope: "mstyle.resident.profile.read",
-    method: "GET",
+    id: 'R-04',
+    title: 'Get profile',
+    scope: 'mstyle.resident.profile.read',
+    method: 'GET',
     path: () => `/resident-profiles/${state.profileId}`,
     after: ({ headers }) => {
       state.profileEtag = headers.etag || state.profileEtag;
     },
   },
   {
-    id: "R-05",
-    title: "Patch profile with If-Match",
-    scope: "mstyle.resident.profile.write",
-    method: "PATCH",
+    id: 'R-05',
+    title: 'Patch profile with If-Match',
+    scope: 'mstyle.resident.profile.write',
+    method: 'PATCH',
     path: () => `/resident-profiles/${state.profileId}`,
-    headers: () => ({ "If-Match": state.profileEtag }),
+    headers: () => ({ 'If-Match': state.profileEtag }),
     body: () => ({
       schemaVersion,
       label: `smoke-${stamp}-updated`,
@@ -129,69 +160,72 @@ const steps = [
     },
   },
   {
-    id: "M-01",
-    title: "List memberships",
-    scope: "mstyle.resident.members.read",
-    method: "GET",
+    id: 'M-01',
+    title: 'List memberships',
+    scope: 'mstyle.resident.members.read',
+    method: 'GET',
     path: () => `/resident-profiles/${state.profileId}/memberships`,
     after: ({ headers }) => {
-      state.membershipsEtag = headers.etag || "";
+      state.membershipsEtag = headers.etag || '';
     },
   },
   {
-    id: "G-01",
-    title: "Create guest party",
-    scope: "mstyle.guest.create",
-    method: "POST",
-    path: "/guest-parties",
+    id: 'G-01',
+    title: 'Create guest party',
+    scope: 'mstyle.guest.create',
+    method: 'POST',
+    path: '/guest-parties',
     body: () => ({
       schemaVersion,
-      purpose: `smoke-${stamp}`,
-      role: "primary",
+      purpose: 'mstyle_booking',
+      role: 'primary',
     }),
     after: ({ body }) => {
-      state.guestPartyId = pick(body, "guestPartyId");
+      state.guestPartyId = pick(body, 'guestPartyId');
     },
   },
   {
-    id: "G-04",
-    title: "Guest status",
-    scope: "mstyle.guest.read",
-    method: "GET",
+    id: 'G-04',
+    title: 'Guest status',
+    scope: 'mstyle.guest.read',
+    method: 'GET',
     path: () => `/guest-parties/${state.guestPartyId}/status`,
     after: ({ headers }) => {
-      state.guestEtag = headers.etag || "";
+      state.guestEtag = headers.etag || '';
     },
   },
   {
-    id: "G-11",
-    title: "Claim guest with If-Match",
-    scope: "mstyle.guest.claim",
-    method: "POST",
+    id: 'G-11',
+    title: 'Claim guest with If-Match',
+    scope: 'mstyle.guest.claim',
+    method: 'POST',
     path: () => `/guest-parties/${state.guestPartyId}/claim`,
-    headers: () => ({ "If-Match": state.guestEtag }),
+    actor: 'resident',
+    expectedStatuses: [403, 404],
     body: () => ({
       schemaVersion,
-      subject: state.subject,
-      claimedProfileId: state.profileId,
+      profileId: state.profileId,
+      expectedGuestPartyRevision: Number(
+        String(state.guestEtag).replace(/\D/g, ''),
+      ),
     }),
   },
   ...(emailChallengeAddress
     ? [
         {
-          id: "A-03-email",
-          title: "Email code challenge",
-          scope: "mstyle.resident.authenticate",
-          method: "POST",
-          path: "/auth/residents/code-challenges",
+          id: 'A-03-email',
+          title: 'Email code challenge',
+          scope: 'mstyle.resident.authenticate',
+          method: 'POST',
+          path: '/auth/residents/code-challenges',
           body: () => ({
             schemaVersion,
-            identifier: { type: "email", value: emailChallengeAddress },
-            channel: "email",
+            identifier: { type: 'email', value: emailChallengeAddress },
+            channel: 'email',
             context: {
-              ipAddress: "198.51.100.22",
-              userAgent: "pass24-v2-smoke/1.0",
-              locale: "ru-RU",
+              ipAddress: '198.51.100.22',
+              userAgent: 'pass24-v2-smoke/1.0',
+              locale: 'ru-RU',
             },
           }),
         },
@@ -207,19 +241,19 @@ function trimRight(value, char) {
 
 function b64url(input) {
   return Buffer.from(input)
-    .toString("base64")
-    .replace(/=/g, "")
-    .replace(/\+/g, "-")
-    .replace(/\//g, "_");
+    .toString('base64')
+    .replace(/=/g, '')
+    .replace(/\+/g, '-')
+    .replace(/\//g, '_');
 }
 
 function sha256Hex(buffer) {
-  return crypto.createHash("sha256").update(buffer).digest("hex");
+  return crypto.createHash('sha256').update(buffer).digest('hex');
 }
 
 function makeAssertion(client) {
   const now = Math.floor(Date.now() / 1000);
-  const header = { alg: "RS256", typ: "JWT", kid: client.kid };
+  const header = { alg: 'RS256', typ: 'JWT', kid: client.kid };
   const payload = {
     iss: client.clientId,
     sub: client.clientId,
@@ -232,7 +266,7 @@ function makeAssertion(client) {
     JSON.stringify(payload),
   )}`;
   const signature = crypto.sign(
-    "RSA-SHA256",
+    'RSA-SHA256',
     Buffer.from(signingInput),
     fs.readFileSync(client.privateKeyPath),
   );
@@ -243,10 +277,10 @@ async function tokenFor(scope, client = backendClient) {
   const tokenKey = `${client.clientId}:${scope}`;
   if (state.tokens.has(tokenKey)) return state.tokens.get(tokenKey);
   const response = await postForm(tokenUrl, {
-    grant_type: "client_credentials",
+    grant_type: 'client_credentials',
     client_id: client.clientId,
     client_assertion_type:
-      "urn:ietf:params:oauth:client-assertion-type:jwt-bearer",
+      'urn:ietf:params:oauth:client-assertion-type:jwt-bearer',
     client_assertion: makeAssertion(client),
     scope,
   });
@@ -269,10 +303,10 @@ async function tokenFor(scope, client = backendClient) {
 
 function postForm(url, body) {
   return request(
-    "POST",
+    'POST',
     url,
     {
-      "content-type": "application/x-www-form-urlencoded",
+      'content-type': 'application/x-www-form-urlencoded',
     },
     new URLSearchParams(body).toString(),
   );
@@ -286,19 +320,19 @@ function request(method, url, headers = {}, body) {
       {
         method,
         headers: {
-          accept: "application/json",
+          accept: 'application/json',
           ...headers,
           ...(payload == null
             ? {}
-            : { "content-length": Buffer.byteLength(payload) }),
+            : { 'content-length': Buffer.byteLength(payload) }),
         },
       },
       (res) => {
-        let responseBody = "";
-        res.on("data", (chunk) => {
+        let responseBody = '';
+        res.on('data', (chunk) => {
           responseBody += chunk;
         });
-        res.on("end", () => {
+        res.on('end', () => {
           resolve({
             status: res.statusCode || 0,
             headers: res.headers,
@@ -307,7 +341,7 @@ function request(method, url, headers = {}, body) {
         });
       },
     );
-    req.on("error", (error) =>
+    req.on('error', (error) =>
       resolve({ status: 0, headers: {}, body: String(error) }),
     );
     if (payload != null) req.write(payload);
@@ -317,7 +351,7 @@ function request(method, url, headers = {}, body) {
 
 function parseJson(value) {
   try {
-    return JSON.parse(value || "{}");
+    return JSON.parse(value || '{}');
   } catch {
     return { raw: String(value).slice(0, 500) };
   }
@@ -325,25 +359,25 @@ function parseJson(value) {
 
 function redact(body) {
   if (Array.isArray(body)) return body.map(redact);
-  if (!body || typeof body !== "object") return body;
+  if (!body || typeof body !== 'object') return body;
   return Object.fromEntries(
     Object.entries(body).map(([key, value]) => [
       key,
       /token|assertion|secret|password|code/i.test(key)
-        ? "hidden"
+        ? 'hidden'
         : redact(value),
     ]),
   );
 }
 
 function pick(obj, key) {
-  if (!obj || typeof obj !== "object") return "";
-  if (typeof obj[key] === "string") return obj[key];
+  if (!obj || typeof obj !== 'object') return '';
+  if (typeof obj[key] === 'string') return obj[key];
   for (const value of Object.values(obj)) {
     const found = pick(value, key);
     if (found) return found;
   }
-  return "";
+  return '';
 }
 
 function ensureKeys(client) {
@@ -356,10 +390,10 @@ function ensureKeys(client) {
   }
   const privateKey = fs.readFileSync(client.privateKeyPath);
   const publicKey = fs.readFileSync(client.publicKeyPath);
-  const message = Buffer.from("pass24-mstyle-v2-smoke");
-  const signature = crypto.sign("RSA-SHA256", message, privateKey);
-  const matches = crypto.verify("RSA-SHA256", message, publicKey, signature);
-  if (!matches) throw new Error("Private/public key pair does not match");
+  const message = Buffer.from('pass24-mstyle-v2-smoke');
+  const signature = crypto.sign('RSA-SHA256', message, privateKey);
+  const matches = crypto.verify('RSA-SHA256', message, publicKey, signature);
+  if (!matches) throw new Error('Private/public key pair does not match');
   return sha256Hex(publicKey);
 }
 
@@ -372,25 +406,51 @@ async function runStep(step) {
       scope: step.scope,
       status: 200,
       ok: true,
-      note: "token received and hidden",
+      note: 'token received and hidden',
     };
   }
   const token = await tokenFor(step.scope, step.client || backendClient);
-  const path = typeof step.path === "function" ? step.path() : step.path;
+  const path = typeof step.path === 'function' ? step.path() : step.path;
   const url = `${baseUrl}${apiPrefix}${path}`;
   const json = step.body ? JSON.stringify(step.body()) : undefined;
   const headers = {
     authorization: `Bearer ${token}`,
-    "X-Request-ID": `req_${crypto.randomUUID()}`,
-    ...(step.method === "GET"
+    'X-Request-ID': `req_${crypto.randomUUID()}`,
+    ...(step.method === 'GET'
       ? {}
-      : { "Idempotency-Key": `idem_${crypto.randomUUID()}` }),
-    ...(json ? { "content-type": "application/json" } : {}),
+      : { 'Idempotency-Key': `idem_${crypto.randomUUID()}` }),
+    ...(json ? { 'content-type': 'application/json' } : {}),
     ...(step.headers ? step.headers() : {}),
+    ...(step.actor === 'reconcile'
+      ? { 'X-Actor-Ref': 'system:reconcile' }
+      : {}),
+    ...(step.actor === 'admin-review'
+      ? {
+          'X-Actor-Ref': 'wp-admin:smoke',
+          'X-Admin-Step-Up-Assertion': 'smoke-assertion',
+          'X-Purpose-Code': 'admin_support_review',
+        }
+      : {}),
+    ...(step.actor === 'admin-onboarding'
+      ? {
+          'X-Actor-Ref': 'wp-admin:smoke',
+          'X-Admin-Step-Up-Assertion': 'smoke-assertion',
+          'X-Purpose-Code': 'resident_onboarding',
+        }
+      : {}),
+    ...(step.actor === 'resident'
+      ? {
+          'X-Resident-Subject': state.subject,
+          'X-Actor-Ref': `resident:${state.subject}`,
+          'X-Step-Up-Authentication-ID': 'aut_smoke',
+        }
+      : {}),
   };
   const response = await request(step.method, url, headers, json);
   const body = parseJson(response.body);
-  const ok = response.status >= 200 && response.status < 300;
+  const ok = step.expectedStatuses
+    ? step.expectedStatuses.includes(response.status)
+    : response.status >= 200 && response.status < 300;
   if (ok && step.after) step.after({ body, headers: response.headers });
   return {
     id: step.id,
@@ -400,7 +460,7 @@ async function runStep(step) {
     scope: step.scope,
     status: response.status,
     ok,
-    requestId: response.headers["x-request-id"],
+    requestId: response.headers['x-request-id'],
     etag: response.headers.etag,
     body: redact(body),
   };
@@ -416,7 +476,7 @@ async function main() {
         tokenUrl,
         clientId: backendClient.clientId,
         kid: backendClient.kid,
-        alg: "RS256",
+        alg: 'RS256',
         publicPemSha256,
         privateKeyFile: backendClient.privateKeyPath,
         publicKeyFile: backendClient.publicKeyPath,

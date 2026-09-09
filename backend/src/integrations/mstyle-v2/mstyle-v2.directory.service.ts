@@ -15,6 +15,7 @@ import {
   hmacHex,
   maskContact,
   normalizeEmail,
+  safeEqualHex,
 } from './mstyle-v2.crypto';
 import type {
   ChangeDecisionDto,
@@ -31,6 +32,7 @@ import type {
   PatchIdentityDto,
   PatchMembershipDto,
   PatchProfileDto,
+  ReasonCodeDto,
   SearchProfilesDto,
 } from './mstyle-v2.dto';
 import { MstyleEventsService } from './mstyle-v2.events';
@@ -115,30 +117,32 @@ export class MstyleDirectoryService {
         profileId: membership.profileId,
       });
       if (!profile) continue;
-      const phoneAssign = await this.assignments.findOne({
-        profileId: profile.profileId,
-        contactType: 'phone',
-        status: 'active',
-      });
-      const emailAssign = await this.assignments.findOne({
-        profileId: profile.profileId,
-        contactType: 'email',
-        status: 'active',
-      });
+      const phoneAssign = await this.assignments
+        .findOne({
+          profileId: profile.profileId,
+          purpose: 'primary',
+          contactType: 'phone',
+          status: 'active',
+        })
+        .sort({ priority: 1, updatedAt: -1 });
+      const emailAssign = await this.assignments
+        .findOne({
+          profileId: profile.profileId,
+          purpose: 'primary',
+          contactType: 'email',
+          status: 'active',
+        })
+        .sort({ priority: 1, updatedAt: -1 });
       const phoneContact = phoneAssign
         ? await this.contacts.findOne({ contactId: phoneAssign.contactId })
         : null;
       const emailContact = emailAssign
         ? await this.contacts.findOne({ contactId: emailAssign.contactId })
         : null;
-      const identityPhone = await this.contacts.findOne({
-        subject,
-        type: 'phone',
-      });
-      const identityEmail = await this.contacts.findOne({
-        subject,
-        type: 'email',
-      });
+      const contactSubject = phoneAssign?.subject || emailAssign?.subject;
+      const contactIdentity = contactSubject
+        ? await this.identityModel.findOne({ subject: contactSubject })
+        : null;
       profiles.push({
         profileId: profile.profileId,
         membershipId: membership.membershipId,
@@ -156,13 +160,13 @@ export class MstyleDirectoryService {
           primary: {
             profile: profile.revision,
             profileContactAssignments: {
+              phone: phoneAssign?.revision ?? null,
+              email: emailAssign?.revision ?? null,
+            },
+            contactIdentity: contactIdentity?.revision ?? null,
+            identityContacts: {
               phone: phoneContact?.revision ?? null,
               email: emailContact?.revision ?? null,
-            },
-            contactIdentity: identity.revision,
-            identityContacts: {
-              phone: identityPhone?.revision ?? null,
-              email: identityEmail?.revision ?? null,
             },
             privateData: profile.privateDataRevision,
           },
@@ -228,7 +232,11 @@ export class MstyleDirectoryService {
     const eventIds = [
       await this.events.emit({
         type: 'identity.updated',
-        aggregate: { type: 'identity', id: subject },
+        aggregate: {
+          type: 'identity',
+          id: subject,
+          revision: identity.revision,
+        },
         subject,
       }),
     ];
@@ -275,7 +283,11 @@ export class MstyleDirectoryService {
     const eventIds = [
       await this.events.emit({
         type: 'profile.updated',
-        aggregate: { type: 'profile', id: profileId },
+        aggregate: {
+          type: 'resident_profile',
+          id: profileId,
+          revision: profile.revision,
+        },
         profileId,
       }),
     ];
@@ -292,16 +304,27 @@ export class MstyleDirectoryService {
   }
 
   async searchProfiles(dto: SearchProfilesDto): Promise<MstyleResult> {
-    const limit = dto.limit || 20;
+    const limit = dto.limit || 100;
     const filter: Record<string, unknown> = {};
-    if (dto.query?.profileId) filter.profileId = dto.query.profileId;
-    if (dto.query?.label) {
-      filter.label = { $regex: dto.query.label, $options: 'i' };
+    if (dto.filters?.profileIds) {
+      filter.profileId = { $in: dto.filters.profileIds };
     }
-    let profileIds: string[] | null = null;
-    if (dto.query?.phone || dto.query?.email) {
-      const type = dto.query.phone ? 'phone' : 'email';
-      const raw = type === 'phone' ? dto.query.phone! : dto.query.email!;
+    if (dto.query?.type === 'profileId') {
+      filter.profileId = dto.filters?.profileIds
+        ? {
+            $in: dto.filters.profileIds.filter((id) => id === dto.query!.value),
+          }
+        : dto.query.value;
+    }
+    if (dto.query?.type === 'text') {
+      filter.label = {
+        $regex: escapeRegex(dto.query.value),
+        $options: 'i',
+      };
+    }
+    if (dto.query?.type === 'phone' || dto.query?.type === 'email') {
+      const type = dto.query.type;
+      const raw = dto.query.value;
       const normalized =
         type === 'phone' ? normalizeRuMobilePhone(raw) : normalizeEmail(raw);
       if (!normalized) {
@@ -310,21 +333,51 @@ export class MstyleDirectoryService {
         );
       }
       const valueHash = hmacHex(this.cfg.piiSecret(), `${type}:${normalized}`);
-      const contact = await this.contacts.findOne({ type, valueHash });
-      if (!contact) {
+      const contacts = await this.contacts.find({ type, valueHash }).lean();
+      if (!contacts.length) {
         return new MstyleResult(
           schema({ items: [], nextCursor: null, generatedAt: nowIso() }),
         );
       }
       const assigns = await this.assignments
-        .find({ contactId: contact.contactId })
+        .find({ contactId: { $in: contacts.map((item) => item.contactId) } })
         .lean();
-      profileIds = assigns.map((a) => a.profileId);
-      filter.profileId = { $in: profileIds };
+      const matchedIds = [...new Set(assigns.map((a) => a.profileId))];
+      const allowedIds = dto.filters?.profileIds
+        ? matchedIds.filter((id) => dto.filters!.profileIds.includes(id))
+        : matchedIds;
+      filter.profileId = { $in: allowedIds };
+    }
+
+    const direction = dto.sort?.direction === 'asc' ? 1 : -1;
+    const cursorContext = profileSearchCursorContext(this.cfg, dto, direction);
+    const cursor = decodeListCursor(
+      dto.cursor,
+      direction,
+      cursorContext,
+      this.cfg.idempotencySecret(),
+    );
+    if (cursor) {
+      filter.$or =
+        direction === 1
+          ? [
+              { updatedAt: { $gt: new Date(cursor.updatedAt) } },
+              {
+                updatedAt: new Date(cursor.updatedAt),
+                profileId: { $gt: cursor.id },
+              },
+            ]
+          : [
+              { updatedAt: { $lt: new Date(cursor.updatedAt) } },
+              {
+                updatedAt: new Date(cursor.updatedAt),
+                profileId: { $lt: cursor.id },
+              },
+            ];
     }
     const rows = await this.profiles
       .find(filter)
-      .sort({ updatedAt: -1 })
+      .sort({ updatedAt: direction, profileId: direction })
       .limit(limit + 1)
       .lean();
     const hasMore = rows.length > limit;
@@ -348,58 +401,272 @@ export class MstyleDirectoryService {
     return new MstyleResult(
       schema({
         items,
-        nextCursor: hasMore ? slice[slice.length - 1].profileId : null,
+        nextCursor: hasMore
+          ? encodeListCursor(
+              (slice[slice.length - 1] as any).updatedAt,
+              slice[slice.length - 1].profileId,
+              direction,
+              cursorContext,
+              this.cfg.idempotencySecret(),
+            )
+          : null,
         generatedAt: nowIso(),
       }),
     );
   }
 
   async onboard(dto: OnboardingDto): Promise<MstyleResult> {
-    const identity = await this.identities.ensureStandalone({
-      identifierType: dto.owner.identifier.type,
-      identifierValue: dto.owner.identifier.value,
-      displayName: dto.owner.displayName,
-      name: dto.owner.name,
-      status: 'invited',
-    });
-    await this.identities.syncContact(
-      identity.subject,
-      dto.owner.identifier.type,
-      dto.owner.identifier.value,
+    const invitation = dto.owner.invitation;
+    if (!invitation.phone && !invitation.email) {
+      problem(422, 'VALIDATION_FAILED', {
+        errors: [
+          {
+            field: 'owner.invitation',
+            code: 'contact_required',
+            message: 'At least one owner contact is required',
+          },
+        ],
+      });
+    }
+    if (
+      dto.privateData.profileType !== dto.profile.type ||
+      (dto.profile.type === 'company' &&
+        (!dto.profile.legalForm ||
+          dto.privateData.legalForm !== dto.profile.legalForm)) ||
+      (dto.profile.type === 'individual' &&
+        (dto.profile.legalForm != null || dto.privateData.legalForm != null))
+    ) {
+      problem(422, 'VALIDATION_FAILED', {
+        errors: [
+          {
+            field: 'privateData',
+            code: 'profile_type_mismatch',
+            message: 'privateData must match profile type and legal form',
+          },
+        ],
+      });
+    }
+    const suppliedContactTypes = new Set(
+      [
+        invitation.phone ? 'phone' : null,
+        invitation.email ? 'email' : null,
+      ].filter(Boolean),
     );
+    const missingAssignmentContact = dto.initialContactAssignments.find(
+      (item) => !suppliedContactTypes.has(item.source.contactType),
+    );
+    if (missingAssignmentContact) {
+      problem(422, 'VALIDATION_FAILED', {
+        errors: [
+          {
+            field: 'initialContactAssignments',
+            code: 'contact_not_supplied',
+            message: missingAssignmentContact.source.contactType,
+          },
+        ],
+      });
+    }
+    const linked = await this.profiles.findOne({
+      sourceLinks: {
+        $elemMatch: {
+          sourceSystem: dto.sourceLink.sourceSystem,
+          environment: dto.sourceLink.environment,
+          entityType: dto.sourceLink.entityType,
+          externalId: dto.sourceLink.externalId,
+        },
+      },
+    });
+    if (linked) {
+      problem(409, 'CONFLICT', {
+        title: 'Source link is already assigned',
+        errors: [
+          {
+            field: 'sourceLink.externalId',
+            code: 'source_link_conflict',
+            message: linked.profileId,
+          },
+        ],
+      });
+    }
+
+    const phoneIdentity = invitation.phone
+      ? await this.findIdentityByVerifiedContact('phone', invitation.phone)
+      : null;
+    const emailIdentity = invitation.email
+      ? await this.findIdentityByVerifiedContact('email', invitation.email)
+      : null;
+    if (
+      phoneIdentity &&
+      emailIdentity &&
+      phoneIdentity.subject !== emailIdentity.subject
+    ) {
+      problem(409, 'CONFLICT', {
+        title: 'Owner contacts belong to different identities',
+        errors: [
+          {
+            field: 'owner.invitation',
+            code: 'identity_contact_conflict',
+            message: 'phone and email resolve to different identities',
+          },
+        ],
+      });
+    }
+    const existingIdentity = phoneIdentity || emailIdentity;
+    const primaryType = invitation.phone ? 'phone' : 'email';
+    const primaryValue = invitation.phone || invitation.email!;
+    const identity =
+      existingIdentity ||
+      (await this.identities.ensureStandalone({
+        identifierType: primaryType,
+        identifierValue: primaryValue,
+        displayName: invitation.displayName,
+        status: 'invited',
+      }));
+    if (!identity.displayName) {
+      identity.displayName = invitation.displayName;
+      await identity.save();
+    }
+    const contactByType = new Map<string, MstyleContactDocument>();
+    for (const [type, value] of [
+      ['phone', invitation.phone],
+      ['email', invitation.email],
+    ] as const) {
+      if (!value) continue;
+      const before = await this.contacts.findOne({
+        subject: identity.subject,
+        type,
+        valueHash: hmacHex(
+          this.cfg.piiSecret(),
+          `${type}:${
+            type === 'phone'
+              ? normalizeRuMobilePhone(value)
+              : normalizeEmail(value)
+          }`,
+        ),
+      });
+      const contact = await this.identities.syncContact(
+        identity.subject,
+        type,
+        value,
+      );
+      if (!contact) problem(422, 'VALIDATION_FAILED');
+      if (!before && !existingIdentity) {
+        contact.verifiedAt = null;
+        await contact.save();
+      }
+      contactByType.set(type, contact);
+    }
     const profile = await this.profiles.create({
       profileId: Ids.profile(),
-      type: dto.profileType,
-      legalForm:
-        dto.legalForm ?? (dto.profileType === 'company' ? 'ooo' : null),
-      status: 'draft',
-      label: dto.label,
-      companyShortName: dto.companyShortName ?? null,
+      type: dto.profile.type,
+      legalForm: dto.profile.legalForm ?? null,
+      status: identity.identityStatus === 'active' ? 'active' : 'draft',
+      label: dto.profile.label,
+      companyShortName: dto.profile.companyShortName ?? null,
       revision: 1,
-      privateDataRevision: null,
-      privateDataComplete: false,
-      memberPolicy: { employeeLimit: null },
+      privateDataRevision: 1,
+      privateDataComplete: privateDataIsComplete(
+        dto.privateData.data,
+        dto.profile.type,
+        dto.profile.legalForm,
+      ),
+      memberPolicy: {
+        employeeLimit: dto.profile.memberPolicy?.employeeLimit ?? null,
+      },
+      sourceLinks: [{ ...dto.sourceLink, linkedAt: nowIso() }],
+      assignmentSetRevision: 1,
+      membershipSetRevision: 1,
     });
     const membership = await this.memberships.create({
       membershipId: Ids.membership(),
       subject: identity.subject,
       profileId: profile.profileId,
       role: 'owner',
-      status: 'invited',
+      status: identity.identityStatus === 'active' ? 'active' : 'invited',
       validFrom: nowIso(),
       validUntil: null,
       revision: 1,
     });
+    await this.privateData.create({
+      partyType: 'resident_profile',
+      partyId: profile.profileId,
+      profileType: dto.privateData.profileType,
+      legalForm: dto.privateData.legalForm ?? null,
+      revision: 1,
+      editPolicy: 'request_only',
+      valuesEnc: encryptJson(this.cfg.piiSecret(), dto.privateData.data),
+    });
+    for (const item of dto.initialContactAssignments) {
+      const contact = contactByType.get(item.source.contactType);
+      if (!contact) {
+        problem(422, 'VALIDATION_FAILED', {
+          errors: [
+            {
+              field: 'initialContactAssignments',
+              code: 'contact_not_supplied',
+              message: item.source.contactType,
+            },
+          ],
+        });
+      }
+      await this.assignments.create({
+        assignmentId: Ids.assignment(),
+        profileId: profile.profileId,
+        purpose: item.purpose,
+        subject: identity.subject,
+        contactId: contact.contactId,
+        contactType: contact.type,
+        contactMask: contact.masked,
+        contactVerified: !!contact.verifiedAt,
+        priority: item.priority,
+        status: contact.verifiedAt ? 'active' : 'pending',
+        revision: 1,
+      });
+    }
     identity.contextRevision += 1;
     await identity.save();
-    const eventIds = [
-      await this.events.emit({
-        type: 'resident.onboarded',
-        aggregate: { type: 'profile', id: profile.profileId },
+    const eventIds = await Promise.all([
+      this.events.emit({
+        type: 'profile.updated',
+        aggregate: {
+          type: 'resident_profile',
+          id: profile.profileId,
+          revision: profile.revision,
+        },
         subject: identity.subject,
         profileId: profile.profileId,
       }),
-    ];
+      this.events.emit({
+        type: 'resident_membership.updated',
+        aggregate: {
+          type: 'resident_membership',
+          id: membership.membershipId,
+          revision: membership.revision,
+        },
+        subject: identity.subject,
+        profileId: profile.profileId,
+      }),
+      this.events.emit({
+        type: 'resident_private_data.updated',
+        aggregate: {
+          type: 'resident_private_data',
+          id: profile.profileId,
+          revision: 1,
+        },
+        subject: identity.subject,
+        profileId: profile.profileId,
+      }),
+      this.events.emit({
+        type: 'resident_contact_assignments.updated',
+        aggregate: {
+          type: 'resident_contact_assignment_set',
+          id: profile.profileId,
+          revision: profile.assignmentSetRevision,
+        },
+        subject: identity.subject,
+        profileId: profile.profileId,
+      }),
+    ]);
     return new MstyleResult(
       schema({
         subject: identity.subject,
@@ -409,8 +676,8 @@ export class MstyleDirectoryService {
         profileRevision: profile.revision,
         membershipRevision: membership.revision,
         assignmentSetRevision: profile.assignmentSetRevision,
-        privateDataRevision: profile.privateDataRevision,
-        invitationStatus: 'invited',
+        privateDataRevision: 1,
+        invitationStatus: existingIdentity ? 'existing_identity' : 'pending',
         contextRevision: identity.contextRevision,
         eventIds,
       }),
@@ -421,21 +688,58 @@ export class MstyleDirectoryService {
 
   async lifecycle(profileId: string, dto: LifecycleDto, ifMatch?: string) {
     const profile = await this.requireProfile(profileId);
-    this.assertMatch(ifMatch, 'profile', profile.revision);
-    const next =
-      dto.transition === 'activate'
-        ? 'active'
-        : dto.transition === 'suspend'
-          ? 'suspended'
-          : 'closed';
-    profile.status = next;
+    this.assertRequiredMatch(ifMatch, 'profile', profile.revision);
+    if (profile.status === dto.targetStatus) {
+      return new MstyleResult(
+        schema({
+          profileId,
+          profileStatus: profile.status,
+          profileRevision: profile.revision,
+          contextRevision: await this.ownerContextRevision(profileId),
+          eventIds: [],
+        }),
+        200,
+        { ETag: etag('profile', profile.revision) },
+      );
+    }
+    const allowed: Record<string, readonly string[]> = {
+      draft: ['active', 'closed'],
+      active: ['suspended', 'closed'],
+      suspended: ['active', 'closed'],
+    };
+    if (!allowed[profile.status]?.includes(dto.targetStatus)) {
+      problem(409, 'CONFLICT', {
+        title: 'Invalid profile lifecycle transition',
+      });
+    }
+    if (dto.targetStatus === 'active') {
+      const owner = await this.memberships.findOne({
+        profileId,
+        role: 'owner',
+        status: 'active',
+      });
+      if (!owner || !profile.privateDataComplete) {
+        problem(409, 'CONFLICT', {
+          title: 'Profile is not ready for activation',
+        });
+      }
+    }
+    profile.status = dto.targetStatus;
     profile.revision += 1;
     await profile.save();
     const eventIds = [
       await this.events.emit({
-        type: `profile.${dto.transition}`,
-        aggregate: { type: 'profile', id: profileId },
+        type: 'profile.updated',
+        aggregate: {
+          type: 'resident_profile',
+          id: profileId,
+          revision: profile.revision,
+        },
         profileId,
+        payload: {
+          status: profile.status,
+          reasonCode: dto.reasonCode,
+        },
       }),
     ];
     const contextRevision = await this.bumpMembersContext(profileId);
@@ -452,30 +756,59 @@ export class MstyleDirectoryService {
     );
   }
 
-  async requestDeletion(profileId: string, dto: DeletionRequestDto) {
-    await this.requireProfile(profileId);
+  async requestDeletion(
+    profileId: string,
+    dto: DeletionRequestDto,
+    ifMatch?: string,
+  ) {
+    const profile = await this.requireProfile(profileId);
+    this.assertRequiredMatch(ifMatch, 'profile', profile.revision);
+    const pending = await this.deletions.findOne({
+      profileId,
+      status: { $in: ['pending', 'blocked'] },
+    });
+    if (pending) {
+      problem(409, 'CONFLICT', {
+        title: 'Deletion request is already being processed',
+        errors: [
+          {
+            field: 'profileId',
+            code: 'deletion_request_exists',
+            message: pending.deletionRequestId,
+          },
+        ],
+      });
+    }
     const createdAt = nowIso();
-    const eventIds = [
-      await this.events.emit({
-        type: 'profile.deletion_requested',
-        aggregate: { type: 'profile', id: profileId },
-        profileId,
-        payload: { reasonCodes: dto.reasonCodes },
-      }),
-    ];
     const row = await this.deletions.create({
       deletionRequestId: Ids.deletion(),
       profileId,
+      mode: dto.mode,
+      reasonCode: dto.reasonCode,
       status: 'pending',
-      reasonCodes: dto.reasonCodes,
+      reasonCodes: [],
       deletionRequestRevision: 1,
       createdAtIso: createdAt,
-      latestEventId: eventIds[0],
     });
+    const eventIds = [
+      await this.events.emit({
+        type: 'resident_deletion_request.updated',
+        aggregate: {
+          type: 'resident_deletion_request',
+          id: row.deletionRequestId,
+          revision: row.deletionRequestRevision,
+        },
+        profileId,
+        payload: { status: row.status },
+      }),
+    ];
+    row.latestEventId = eventIds[0];
+    await row.save();
     return new MstyleResult(
       schema({
         deletionRequestId: row.deletionRequestId,
         profileId,
+        mode: row.mode,
         status: 'pending',
         deletionRequestRevision: 1,
         eventIds,
@@ -492,6 +825,8 @@ export class MstyleDirectoryService {
       schema({
         deletionRequestId: row.deletionRequestId,
         profileId: row.profileId,
+        mode: row.mode,
+        reasonCode: row.reasonCode,
         status: row.status,
         reasonCodes: row.reasonCodes,
         deletionRequestRevision: row.deletionRequestRevision,
@@ -502,34 +837,92 @@ export class MstyleDirectoryService {
     );
   }
 
-  async createChangeRequest(profileId: string, dto: ChangeRequestDto) {
+  async createChangeRequest(
+    profileId: string,
+    dto: ChangeRequestDto,
+    ifMatch: string | undefined,
+    authorSubject: string,
+  ) {
     const profile = await this.requireProfile(profileId);
+    this.assertRequiredMatch(ifMatch, 'profile', profile.revision);
+    await this.assertActiveOwner(authorSubject, profileId);
+    const currentPrivate = await this.privateData.findOne({
+      partyType: 'resident_profile',
+      partyId: profileId,
+    });
+    if (
+      !currentPrivate ||
+      currentPrivate.editPolicy !== 'request_only' ||
+      currentPrivate.revision !== dto.expectedPrivateDataRevision
+    ) {
+      problem(412, 'PRECONDITION_FAILED');
+    }
+    if (
+      dto.privateData.profileType !== profile.type ||
+      (profile.type === 'company' &&
+        dto.privateData.legalForm !== profile.legalForm) ||
+      (profile.type === 'individual' && dto.privateData.legalForm != null)
+    ) {
+      problem(422, 'VALIDATION_FAILED', {
+        errors: [
+          {
+            field: 'privateData',
+            code: 'profile_type_mismatch',
+            message: 'privateData must match the current profile',
+          },
+        ],
+      });
+    }
+    const changedFieldCodes = privateFieldCodesForInput(
+      dto.privateData.data,
+      dto.privateData.profileType,
+      dto.privateData.legalForm,
+    );
+    if (!changedFieldCodes.length) {
+      problem(422, 'VALIDATION_FAILED', {
+        errors: [
+          {
+            field: 'privateData.data',
+            code: 'empty',
+            message: 'At least one proposed field is required',
+          },
+        ],
+      });
+    }
     const existing = await this.changeRequests.findOne({
       profileId,
       status: 'pending',
     });
     if (existing) problem(409, 'CONFLICT', { title: 'Pending request exists' });
     const expiresAt = new Date(Date.now() + 7 * 86400000).toISOString();
-    const eventIds = [
-      await this.events.emit({
-        type: 'profile.change_requested',
-        aggregate: { type: 'profile', id: profileId },
-        profileId,
-      }),
-    ];
     const row = await this.changeRequests.create({
       changeRequestId: Ids.changeRequest(),
       profileId,
       status: 'pending',
       changeRequestRevision: 1,
       profileRevisionAtRequest: profile.revision,
-      changedFieldCodes: dto.fieldCodes,
-      valuesEnc: dto.values
-        ? encryptJson(this.cfg.piiSecret(), dto.values)
-        : undefined,
-      reasonCode: dto.reasonCode || '',
+      privateDataRevisionAtRequest: currentPrivate.revision,
+      changedFieldCodes,
+      valuesEnc: encryptJson(this.cfg.piiSecret(), dto.privateData.data),
+      profileType: dto.privateData.profileType,
+      legalForm: dto.privateData.legalForm ?? null,
+      reasonCode: dto.reasonCode,
       expiresAt,
+      authorSubject,
     });
+    const eventIds = [
+      await this.events.emit({
+        type: 'resident_change_request.updated',
+        aggregate: {
+          type: 'resident_change_request',
+          id: row.changeRequestId,
+          revision: row.changeRequestRevision,
+        },
+        subject: authorSubject,
+        profileId,
+        payload: { status: row.status },
+      }),
+    ];
     return new MstyleResult(
       schema({
         changeRequestId: row.changeRequestId,
@@ -545,13 +938,18 @@ export class MstyleDirectoryService {
     );
   }
 
-  async currentChangeRequest(profileId: string) {
+  async currentChangeRequest(profileId: string, residentSubject: string) {
     await this.requireProfile(profileId);
-    const row = await this.changeRequests.findOne({
-      profileId,
-      status: 'pending',
-    });
+    await this.assertActiveOwner(residentSubject, profileId);
+    const row = await this.changeRequests
+      .findOne({ profileId })
+      .sort({ createdAt: -1 });
     if (!row) problem(404, 'NOT_FOUND');
+    if (row.status === 'pending' && Date.parse(row.expiresAt) <= Date.now()) {
+      row.status = 'expired';
+      row.changeRequestRevision += 1;
+      await row.save();
+    }
     return new MstyleResult(
       schema({
         changeRequestId: row.changeRequestId,
@@ -569,64 +967,93 @@ export class MstyleDirectoryService {
     );
   }
 
-  async decideChange(changeRequestId: string, dto: ChangeDecisionDto) {
+  async decideChange(
+    changeRequestId: string,
+    dto: ChangeDecisionDto,
+    ifMatch?: string,
+  ) {
     const row = await this.changeRequests.findOne({ changeRequestId });
-    if (!row || row.status !== 'pending') problem(404, 'NOT_FOUND');
+    if (!row) problem(404, 'NOT_FOUND');
+    this.assertRequiredMatch(
+      ifMatch,
+      'change-request',
+      row.changeRequestRevision,
+    );
+    if (row.status !== 'pending') {
+      problem(409, 'CONFLICT', { title: 'Change request is already final' });
+    }
+    if (Date.parse(row.expiresAt) <= Date.now()) {
+      row.status = 'expired';
+      row.changeRequestRevision += 1;
+      await row.save();
+      problem(409, 'CONFLICT', { title: 'Change request expired' });
+    }
     row.status = dto.decision === 'approve' ? 'approved' : 'rejected';
     row.changeRequestRevision += 1;
-    const eventIds = [
-      await this.events.emit({
-        type: `profile.change_${row.status}`,
-        aggregate: { type: 'change_request', id: changeRequestId },
-        profileId: row.profileId,
-      }),
-    ];
+    row.decisionReasonCode = dto.reasonCode;
+    const eventIds: string[] = [];
     const extra: Record<string, unknown> = {};
     if (dto.decision === 'approve') {
       const profile = await this.requireProfile(row.profileId);
-      if (row.valuesEnc) {
-        const values = decryptJson<Record<string, unknown>>(
-          this.cfg.piiSecret(),
-          row.valuesEnc,
-        );
-        const current = await this.privateData.findOne({
-          partyType: 'resident_profile',
-          partyId: row.profileId,
-        });
-        const merged = {
-          ...(current
-            ? decryptJson<Record<string, unknown>>(
-                this.cfg.piiSecret(),
-                current.valuesEnc,
-              )
-            : {}),
-          ...values,
-        };
-        if (current) {
-          current.valuesEnc = encryptJson(this.cfg.piiSecret(), merged);
-          current.revision += 1;
-          await current.save();
-          profile.privateDataRevision = current.revision;
-        } else {
-          const created = await this.privateData.create({
-            partyType: 'resident_profile',
-            partyId: row.profileId,
-            profileType: profile.type,
-            legalForm: profile.legalForm,
-            revision: 1,
-            editPolicy: 'self_service',
-            valuesEnc: encryptJson(this.cfg.piiSecret(), merged),
-          });
-          profile.privateDataRevision = created.revision;
-        }
-        extra.privateDataRevision = profile.privateDataRevision;
+      const current = await this.privateData.findOne({
+        partyType: 'resident_profile',
+        partyId: row.profileId,
+      });
+      if (
+        !current ||
+        profile.revision !== row.profileRevisionAtRequest ||
+        current.revision !== row.privateDataRevisionAtRequest
+      ) {
+        problem(412, 'PRECONDITION_FAILED');
       }
-      profile.revision += 1;
+      const values = decryptJson<Record<string, unknown>>(
+        this.cfg.piiSecret(),
+        row.valuesEnc!,
+      );
+      const merged = mergeObjects(
+        decryptJson<Record<string, unknown>>(
+          this.cfg.piiSecret(),
+          current.valuesEnc,
+        ),
+        values,
+      );
+      current.valuesEnc = encryptJson(this.cfg.piiSecret(), merged);
+      current.revision += 1;
+      await current.save();
+      profile.privateDataRevision = current.revision;
       await profile.save();
       extra.profileRevision = profile.revision;
-      extra.contextRevision = await this.bumpMembersContext(row.profileId);
+      extra.privateDataRevision = current.revision;
+      extra.contextRevision = await this.bumpMembersContext(
+        row.profileId,
+        row.authorSubject,
+      );
+      eventIds.push(
+        await this.events.emit({
+          type: 'resident_private_data.updated',
+          aggregate: {
+            type: 'resident_private_data',
+            id: row.profileId,
+            revision: current.revision,
+          },
+          profileId: row.profileId,
+        }),
+      );
     }
     await row.save();
+    eventIds.push(
+      await this.events.emit({
+        type: 'resident_change_request.updated',
+        aggregate: {
+          type: 'resident_change_request',
+          id: changeRequestId,
+          revision: row.changeRequestRevision,
+        },
+        subject: row.authorSubject,
+        profileId: row.profileId,
+        payload: { status: row.status },
+      }),
+    );
     return new MstyleResult(
       schema({
         changeRequestId,
@@ -640,17 +1067,38 @@ export class MstyleDirectoryService {
     );
   }
 
-  async cancelChange(changeRequestId: string) {
+  async cancelChange(
+    changeRequestId: string,
+    dto: ReasonCodeDto,
+    ifMatch: string | undefined,
+    residentSubject: string,
+  ) {
     const row = await this.changeRequests.findOne({ changeRequestId });
-    if (!row || row.status !== 'pending') problem(404, 'NOT_FOUND');
+    if (!row) problem(404, 'NOT_FOUND');
+    if (row.authorSubject !== residentSubject) problem(404, 'NOT_FOUND');
+    this.assertRequiredMatch(
+      ifMatch,
+      'change-request',
+      row.changeRequestRevision,
+    );
+    if (row.status !== 'pending') {
+      problem(409, 'CONFLICT', { title: 'Change request is already final' });
+    }
     row.status = 'cancelled';
+    row.decisionReasonCode = dto.reasonCode;
     row.changeRequestRevision += 1;
     await row.save();
     const eventIds = [
       await this.events.emit({
-        type: 'profile.change_cancelled',
-        aggregate: { type: 'change_request', id: changeRequestId },
+        type: 'resident_change_request.updated',
+        aggregate: {
+          type: 'resident_change_request',
+          id: changeRequestId,
+          revision: row.changeRequestRevision,
+        },
+        subject: residentSubject,
         profileId: row.profileId,
+        payload: { status: row.status },
       }),
     ];
     return new MstyleResult(
@@ -665,8 +1113,11 @@ export class MstyleDirectoryService {
     );
   }
 
-  async physicalAccess(profileId: string) {
+  async physicalAccess(profileId: string, residentSubject?: string) {
     const profile = await this.requireProfile(profileId);
+    if (residentSubject) {
+      await this.assertActiveMembership(residentSubject, profileId);
+    }
     const grants = await this.grants.find({ profileId }).lean();
     return new MstyleResult(
       schema({
@@ -765,8 +1216,12 @@ export class MstyleDirectoryService {
     await profile.save();
     const eventIds = [
       await this.events.emit({
-        type: 'membership.invited',
-        aggregate: { type: 'membership', id: membership.membershipId },
+        type: 'resident_membership.updated',
+        aggregate: {
+          type: 'resident_membership',
+          id: membership.membershipId,
+          revision: membership.revision,
+        },
         subject: identity.subject,
         profileId,
       }),
@@ -794,11 +1249,55 @@ export class MstyleDirectoryService {
     membershipId: string,
     dto: PatchMembershipDto,
     ifMatch?: string,
+    residentSubject?: string,
   ) {
     const membership = await this.memberships.findOne({ membershipId });
     if (!membership || membership.role === 'owner') problem(404, 'NOT_FOUND');
     const profile = await this.requireProfile(membership.profileId);
-    this.assertMatch(ifMatch, 'memberships', profile.membershipSetRevision);
+    this.assertRequiredMatch(
+      ifMatch,
+      'memberships',
+      profile.membershipSetRevision,
+    );
+    await this.assertActiveOwner(residentSubject!, membership.profileId);
+    if (
+      dto.validFrom &&
+      dto.validUntil &&
+      Date.parse(dto.validUntil) <= Date.parse(dto.validFrom)
+    ) {
+      problem(422, 'VALIDATION_FAILED', {
+        errors: [
+          {
+            field: 'validUntil',
+            code: 'invalid_range',
+            message: 'validUntil must be later than validFrom',
+          },
+        ],
+      });
+    }
+    if (dto.status === 'active') {
+      const identity = await this.requireIdentity(membership.subject);
+      const effectiveValidUntil =
+        dto.validUntil !== undefined ? dto.validUntil : membership.validUntil;
+      if (
+        identity.identityStatus !== 'active' ||
+        profile.status !== 'active' ||
+        membership.status === 'revoked' ||
+        (effectiveValidUntil != null &&
+          Date.parse(effectiveValidUntil) <= Date.now())
+      ) {
+        problem(409, 'CONFLICT', {
+          title: 'Membership cannot be activated',
+        });
+      }
+      await this.assertCanBeEmployee(
+        membership.subject,
+        membership.profileId,
+        membership.membershipId,
+      );
+      if (membership.status !== 'active')
+        await this.assertEmployeeLimit(profile);
+    }
     if (dto.status) membership.status = dto.status;
     if (dto.validFrom !== undefined) membership.validFrom = dto.validFrom;
     if (dto.validUntil !== undefined) membership.validUntil = dto.validUntil;
@@ -811,17 +1310,27 @@ export class MstyleDirectoryService {
     await identity.save();
     const eventIds = [
       await this.events.emit({
-        type: 'membership.updated',
-        aggregate: { type: 'membership', id: membershipId },
+        type: 'resident_membership.updated',
+        aggregate: {
+          type: 'resident_membership',
+          id: membershipId,
+          revision: membership.revision,
+        },
         subject: membership.subject,
         profileId: membership.profileId,
+        payload: { reasonCode: dto.reasonCode },
       }),
     ];
     return new MstyleResult(
       schema({
         membership: membershipDto(membership),
         membershipSetRevision: profile.membershipSetRevision,
-        contextRevisions: [identity.contextRevision],
+        contextRevisions: [
+          {
+            subject: identity.subject,
+            contextRevision: identity.contextRevision,
+          },
+        ],
         eventIds,
       }),
       200,
@@ -829,11 +1338,21 @@ export class MstyleDirectoryService {
     );
   }
 
-  async revokeMembership(membershipId: string, ifMatch?: string) {
+  async revokeMembership(
+    membershipId: string,
+    dto: ReasonCodeDto,
+    ifMatch?: string,
+    residentSubject?: string,
+  ) {
     const membership = await this.memberships.findOne({ membershipId });
     if (!membership || membership.role === 'owner') problem(404, 'NOT_FOUND');
     const profile = await this.requireProfile(membership.profileId);
-    this.assertMatch(ifMatch, 'memberships', profile.membershipSetRevision);
+    this.assertRequiredMatch(
+      ifMatch,
+      'memberships',
+      profile.membershipSetRevision,
+    );
+    await this.assertActiveOwner(residentSubject!, membership.profileId);
     membership.status = 'revoked';
     membership.revision += 1;
     await membership.save();
@@ -844,17 +1363,27 @@ export class MstyleDirectoryService {
     await identity.save();
     const eventIds = [
       await this.events.emit({
-        type: 'membership.revoked',
-        aggregate: { type: 'membership', id: membershipId },
+        type: 'resident_membership.updated',
+        aggregate: {
+          type: 'resident_membership',
+          id: membershipId,
+          revision: membership.revision,
+        },
         subject: membership.subject,
         profileId: membership.profileId,
+        payload: { status: membership.status, reasonCode: dto.reasonCode },
       }),
     ];
     return new MstyleResult(
       schema({
         membership: membershipDto(membership),
         membershipSetRevision: profile.membershipSetRevision,
-        contextRevisions: [identity.contextRevision],
+        contextRevisions: [
+          {
+            subject: identity.subject,
+            contextRevision: identity.contextRevision,
+          },
+        ],
         eventIds,
       }),
       200,
@@ -865,21 +1394,33 @@ export class MstyleDirectoryService {
   async transferOwner(
     profileId: string,
     dto: OwnerTransferDto,
-    ifMatch?: string,
+    residentSubject: string,
   ) {
     const profile = await this.requireProfile(profileId);
-    this.assertMatch(ifMatch, 'memberships', profile.membershipSetRevision);
+    if (
+      profile.revision !== dto.expectedProfileRevision ||
+      profile.membershipSetRevision !== dto.expectedMembershipSetRevision
+    ) {
+      problem(412, 'PRECONDITION_FAILED');
+    }
     const current = await this.memberships.findOne({
       profileId,
       role: 'owner',
-      status: { $ne: 'revoked' },
+      status: 'active',
     });
     if (!current) problem(404, 'NOT_FOUND');
+    if (current.subject !== residentSubject) problem(404, 'NOT_FOUND');
     const incoming = await this.memberships.findOne({
       profileId,
       subject: dto.newOwnerSubject,
     });
-    if (!incoming || incoming.status === 'revoked') problem(404, 'NOT_FOUND');
+    if (
+      !incoming ||
+      incoming.role !== 'employee' ||
+      incoming.status !== 'active'
+    ) {
+      problem(404, 'NOT_FOUND');
+    }
     await this.assertCanBeEmployee(
       current.subject,
       profileId,
@@ -905,16 +1446,44 @@ export class MstyleDirectoryService {
         const identity = await this.requireIdentity(subject);
         identity.contextRevision += 1;
         await identity.save();
-        return identity.contextRevision;
+        return {
+          subject,
+          contextRevision: identity.contextRevision,
+        };
       }),
     );
-    const eventIds = [
-      await this.events.emit({
-        type: 'membership.owner_transferred',
-        aggregate: { type: 'profile', id: profileId },
+    const eventIds = await Promise.all([
+      this.events.emit({
+        type: 'profile.updated',
+        aggregate: {
+          type: 'resident_profile',
+          id: profileId,
+          revision: profile.revision,
+        },
+        profileId,
+        payload: { reasonCode: dto.reasonCode },
+      }),
+      this.events.emit({
+        type: 'resident_membership.updated',
+        aggregate: {
+          type: 'resident_membership',
+          id: current.membershipId,
+          revision: current.revision,
+        },
+        subject: current.subject,
         profileId,
       }),
-    ];
+      this.events.emit({
+        type: 'resident_membership.updated',
+        aggregate: {
+          type: 'resident_membership',
+          id: incoming.membershipId,
+          revision: incoming.revision,
+        },
+        subject: incoming.subject,
+        profileId,
+      }),
+    ]);
     return new MstyleResult(
       schema({
         profileId,
@@ -968,8 +1537,12 @@ export class MstyleDirectoryService {
     });
     const eventIds = [
       await this.events.emit({
-        type: 'contact.challenge_started',
-        aggregate: { type: 'identity', id: subject },
+        type: 'identity.updated',
+        aggregate: {
+          type: 'identity',
+          id: subject,
+          revision: (await this.requireIdentity(subject)).revision,
+        },
         subject,
       }),
     ];
@@ -1026,8 +1599,12 @@ export class MstyleDirectoryService {
     await challenge.save();
     const eventIds = [
       await this.events.emit({
-        type: 'contact.verified',
-        aggregate: { type: 'identity', id: subject },
+        type: 'identity.updated',
+        aggregate: {
+          type: 'identity',
+          id: subject,
+          revision: identity.revision,
+        },
         subject,
       }),
     ];
@@ -1144,8 +1721,12 @@ export class MstyleDirectoryService {
     const contextRevision = await this.bumpMembersContext(profileId);
     const eventIds = [
       await this.events.emit({
-        type: 'contact_assignments.replaced',
-        aggregate: { type: 'profile', id: profileId },
+        type: 'resident_contact_assignments.updated',
+        aggregate: {
+          type: 'resident_contact_assignment_set',
+          id: profileId,
+          revision: profile.assignmentSetRevision,
+        },
         profileId,
       }),
     ];
@@ -1289,8 +1870,15 @@ export class MstyleDirectoryService {
     }
     const eventIds = [
       await this.events.emit({
-        type: status === 'accepted' ? 'consent.accepted' : 'consent.withdrawn',
-        aggregate: { type: partyType, id: partyId },
+        type:
+          partyType === 'resident'
+            ? 'resident_consent.updated'
+            : 'guest_consent.updated',
+        aggregate: {
+          type: partyType === 'resident' ? 'resident_consent' : 'guest_consent',
+          id: `${partyId}:${documentCode}`,
+          revision: row.revision,
+        },
         subject: partyType === 'resident' ? partyId : undefined,
         guestPartyId: partyType === 'guest' ? partyId : undefined,
         payload: { documentCode },
@@ -1320,7 +1908,7 @@ export class MstyleDirectoryService {
     const used = await this.memberships.countDocuments({
       profileId: profile.profileId,
       role: 'employee',
-      status: { $ne: 'revoked' },
+      status: 'active',
     });
     if (used >= limit) {
       problem(409, 'CONFLICT', { title: 'Employee limit reached' });
@@ -1334,7 +1922,7 @@ export class MstyleDirectoryService {
   ) {
     const memberships = await this.memberships.find({
       subject,
-      status: { $ne: 'revoked' },
+      status: 'active',
       ...(ignoreMembershipId
         ? { membershipId: { $ne: ignoreMembershipId } }
         : {}),
@@ -1378,7 +1966,7 @@ export class MstyleDirectoryService {
       subject,
       role: 'employee',
       profileId: { $ne: profileId },
-      status: { $ne: 'revoked' },
+      status: 'active',
       ...(ignoreMembershipId
         ? { membershipId: { $ne: ignoreMembershipId } }
         : {}),
@@ -1403,6 +1991,33 @@ export class MstyleDirectoryService {
     return identity;
   }
 
+  private async findIdentityByVerifiedContact(
+    type: 'phone' | 'email',
+    rawValue: string,
+  ) {
+    const normalized =
+      type === 'phone'
+        ? normalizeRuMobilePhone(rawValue)
+        : normalizeEmail(rawValue);
+    if (!normalized) return null;
+    const contact = await this.contacts.findOne({
+      type,
+      valueHash: hmacHex(this.cfg.piiSecret(), `${type}:${normalized}`),
+      verifiedAt: { $ne: null },
+    });
+    if (!contact) return null;
+    const identity = await this.identityModel.findOne({
+      subject: contact.subject,
+      isDummy: { $ne: true },
+    });
+    if (!identity) return null;
+    const currentValue =
+      type === 'phone'
+        ? normalizeRuMobilePhone(identity.phone || '')
+        : normalizeEmail(identity.email || '');
+    return currentValue === normalized ? identity : null;
+  }
+
   private async requireProfile(profileId: string) {
     const profile = await this.profiles.findOne({ profileId });
     if (!profile) problem(404, 'NOT_FOUND');
@@ -1418,6 +2033,51 @@ export class MstyleDirectoryService {
     if (parsed && (parsed.kind !== kind || parsed.revision !== revision)) {
       problem(412, 'PRECONDITION_FAILED');
     }
+  }
+
+  private assertRequiredMatch(
+    ifMatch: string | undefined,
+    kind: string,
+    revision: number,
+  ) {
+    const parsed = parseIfMatch(ifMatch);
+    if (!parsed || parsed.kind !== kind || parsed.revision !== revision) {
+      problem(412, 'PRECONDITION_FAILED');
+    }
+  }
+
+  private async assertActiveMembership(subject: string, profileId: string) {
+    const membership = await this.memberships.findOne({
+      subject,
+      profileId,
+      status: 'active',
+    });
+    if (!membership) problem(404, 'NOT_FOUND');
+    return membership;
+  }
+
+  private async assertActiveOwner(subject: string, profileId: string) {
+    const membership = await this.memberships.findOne({
+      subject,
+      profileId,
+      role: 'owner',
+      status: 'active',
+    });
+    if (!membership) problem(404, 'NOT_FOUND');
+    return membership;
+  }
+
+  private async ownerContextRevision(profileId: string): Promise<number> {
+    const owner = await this.memberships.findOne({
+      profileId,
+      role: 'owner',
+      status: 'active',
+    });
+    if (!owner) return 0;
+    const identity = await this.identityModel.findOne({
+      subject: owner.subject,
+    });
+    return identity?.contextRevision || 0;
   }
 
   private async identityWithMasks(identity: MstyleIdentityDocument) {
@@ -1447,9 +2107,16 @@ export class MstyleDirectoryService {
     }));
   }
 
-  private async bumpMembersContext(profileId: string): Promise<number> {
-    const members = await this.memberships.find({ profileId }).lean();
+  private async bumpMembersContext(
+    profileId: string,
+    preferredSubject?: string,
+  ): Promise<number> {
+    const members = await this.memberships
+      .find({ profileId, status: 'active' })
+      .lean();
     let last = 0;
+    let ownerRevision: number | undefined;
+    let preferredRevision: number | undefined;
     for (const member of members) {
       const identity = await this.identityModel.findOne({
         subject: member.subject,
@@ -1458,7 +2125,226 @@ export class MstyleDirectoryService {
       identity.contextRevision += 1;
       await identity.save();
       last = identity.contextRevision;
+      if (member.role === 'owner') ownerRevision = identity.contextRevision;
+      if (member.subject === preferredSubject) {
+        preferredRevision = identity.contextRevision;
+      }
     }
-    return last;
+    return preferredRevision ?? ownerRevision ?? last;
   }
+}
+
+function escapeRegex(value: string): string {
+  return value.replace(/[.*+?^$()|[\]\\]/g, '\\$&');
+}
+
+function encodeListCursor(
+  updatedAt: unknown,
+  id: string,
+  direction: 1 | -1,
+  context: string,
+  secret: string,
+): string {
+  const date =
+    updatedAt instanceof Date
+      ? updatedAt.toISOString()
+      : typeof updatedAt === 'string'
+        ? updatedAt
+        : nowIso();
+  const payload = Buffer.from(
+    JSON.stringify({ v: 1, date, id, direction, context }),
+  ).toString('base64url');
+  return `${payload}.${hmacHex(secret, `mstyle-profile-search:${payload}`)}`;
+}
+
+function decodeListCursor(
+  raw: string | null | undefined,
+  direction: 1 | -1,
+  context: string,
+  secret: string,
+): { updatedAt: string; id: string } | null {
+  if (!raw) return null;
+  try {
+    const [payload, signature, extra] = raw.split('.');
+    if (
+      !payload ||
+      !signature ||
+      extra ||
+      !safeEqualHex(
+        signature,
+        hmacHex(secret, `mstyle-profile-search:${payload}`),
+      )
+    ) {
+      problem(422, 'INVALID_CURSOR');
+    }
+    const value = JSON.parse(
+      Buffer.from(payload, 'base64url').toString('utf8'),
+    ) as {
+      v?: number;
+      date?: string;
+      id?: string;
+      direction?: number;
+      context?: string;
+    };
+    if (
+      value.v !== 1 ||
+      !value.date ||
+      !value.id ||
+      value.direction !== direction ||
+      value.context !== context ||
+      !Number.isFinite(Date.parse(value.date))
+    ) {
+      problem(422, 'INVALID_CURSOR');
+    }
+    return { updatedAt: value.date, id: value.id };
+  } catch {
+    problem(422, 'INVALID_CURSOR');
+  }
+}
+
+function profileSearchCursorContext(
+  cfg: MstyleV2Config,
+  dto: SearchProfilesDto,
+  direction: 1 | -1,
+): string {
+  return hmacHex(
+    cfg.idempotencySecret(),
+    JSON.stringify({
+      query: dto.query
+        ? { type: dto.query.type, value: dto.query.value }
+        : null,
+      profileIds: dto.filters?.profileIds
+        ? [...dto.filters.profileIds].sort()
+        : null,
+      direction,
+    }),
+  );
+}
+
+function leafFieldCodes(value: Record<string, unknown>, prefix = ''): string[] {
+  const out: string[] = [];
+  for (const [key, item] of Object.entries(value)) {
+    const path = prefix ? `${prefix}.${key}` : key;
+    if (
+      item &&
+      typeof item === 'object' &&
+      !Array.isArray(item) &&
+      Object.keys(item as Record<string, unknown>).length
+    ) {
+      out.push(...leafFieldCodes(item as Record<string, unknown>, path));
+    } else {
+      out.push(path);
+    }
+  }
+  return out;
+}
+
+function mergeObjects(
+  base: Record<string, unknown>,
+  patch: Record<string, unknown>,
+): Record<string, unknown> {
+  const result: Record<string, unknown> = { ...base };
+  for (const [key, value] of Object.entries(patch)) {
+    if (
+      value &&
+      typeof value === 'object' &&
+      !Array.isArray(value) &&
+      result[key] &&
+      typeof result[key] === 'object' &&
+      !Array.isArray(result[key])
+    ) {
+      result[key] = mergeObjects(
+        result[key] as Record<string, unknown>,
+        value as Record<string, unknown>,
+      );
+    } else {
+      result[key] = value;
+    }
+  }
+  return result;
+}
+
+function privateFieldCodesForInput(
+  data: Record<string, unknown>,
+  profileType: 'individual' | 'company',
+  legalForm?: 'ip' | 'ooo' | null,
+): string[] {
+  return leafFieldCodes(data).map((field) => {
+    if (
+      field.startsWith('company.') ||
+      field.startsWith('entrepreneur.') ||
+      field.startsWith('individual.') ||
+      field.startsWith('representative.') ||
+      field.startsWith('bank.')
+    ) {
+      return field;
+    }
+    if (profileType === 'company') {
+      return `${legalForm === 'ip' ? 'entrepreneur' : 'company'}.${field}`;
+    }
+    const passportAliases: Record<string, string> = {
+      fullName: 'fullName',
+      displayName: 'fullName',
+      gender: 'gender',
+      documentNumber: 'number',
+      documentCode: 'departmentCode',
+      documentIssuedAt: 'issuedDate',
+      documentIssuedBy: 'issuedBy',
+    };
+    return passportAliases[field]
+      ? `individual.passport.${passportAliases[field]}`
+      : `individual.${field}`;
+  });
+}
+
+function privateDataIsComplete(
+  data: Record<string, unknown>,
+  profileType: 'individual' | 'company',
+  legalForm?: 'ip' | 'ooo' | null,
+): boolean {
+  if (profileType === 'company') {
+    const required =
+      legalForm === 'ip' ? ['inn', 'ogrnip'] : ['fullName', 'inn', 'ogrn'];
+    return required.every((field) => hasPrivateInputValue(data, field));
+  }
+  return (
+    hasPrivateInputValue(data, 'birthDate') &&
+    (hasPrivateInputValue(data, 'fullName') ||
+      hasValueAtPath(data, 'passport.fullName') ||
+      hasValueAtPath(data, 'individual.passport.fullName'))
+  );
+}
+
+function hasValueAtPath(data: Record<string, unknown>, path: string): boolean {
+  let value: unknown = data;
+  for (const part of path.split('.')) {
+    if (!value || typeof value !== 'object' || Array.isArray(value))
+      return false;
+    value = (value as Record<string, unknown>)[part];
+  }
+  return value !== undefined && value !== null && String(value).trim() !== '';
+}
+
+function hasPrivateInputValue(
+  data: Record<string, unknown>,
+  field: string,
+): boolean {
+  const direct = data[field];
+  if (direct !== undefined && direct !== null && String(direct).trim()) {
+    return true;
+  }
+  for (const root of ['company', 'entrepreneur', 'individual']) {
+    const value = data[root];
+    if (
+      value &&
+      typeof value === 'object' &&
+      !Array.isArray(value) &&
+      (value as Record<string, unknown>)[field] !== undefined &&
+      (value as Record<string, unknown>)[field] !== null &&
+      String((value as Record<string, unknown>)[field]).trim()
+    ) {
+      return true;
+    }
+  }
+  return false;
 }

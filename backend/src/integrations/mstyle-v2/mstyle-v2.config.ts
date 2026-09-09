@@ -6,6 +6,7 @@ import {
   DEFAULT_DATA_SCOPES,
   DEFAULT_TOKEN_TTL_SEC,
   expandMstyleScopes,
+  MSTYLE_RECONCILE_SCOPES,
   MSTYLE_TOKEN_AUD,
 } from './mstyle-v2.constants';
 
@@ -105,7 +106,7 @@ export class MstyleV2Config {
           this.reconcileClientKeyKid(),
           publicKey,
         ),
-        scopes: expandMstyleScopes(['mstyle.changes.read']),
+        scopes: [...MSTYLE_RECONCILE_SCOPES],
       };
     }
     return undefined;
@@ -128,6 +129,12 @@ export class MstyleV2Config {
           .split(/[,\s]+/)
           .map((s) => s.trim())
           .filter(Boolean),
+      ).filter(
+        (scope) =>
+          scope !== 'mstyle.changes.read' &&
+          !MSTYLE_RECONCILE_SCOPES.includes(
+            scope as (typeof MSTYLE_RECONCILE_SCOPES)[number],
+          ),
       );
     }
     return [...DEFAULT_DATA_SCOPES];

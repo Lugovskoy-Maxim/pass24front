@@ -1258,15 +1258,280 @@ const MSTYLE_V2_CATALOG_BASE: CatalogEndpoint[] = [
   }),
 ];
 
+const ADMIN = {
+  ...AUTH,
+  'X-Actor-Ref': 'wp-admin:42',
+  'X-Admin-Step-Up-Assertion': '{signed_admin_assertion}',
+};
+const ADMIN_REVIEW = {
+  ...ADMIN,
+  'X-Purpose-Code': 'admin_support_review',
+};
+const RESIDENT = {
+  ...AUTH,
+  'X-Resident-Subject': IDENTITY.subject,
+  'X-Actor-Ref': `resident:${IDENTITY.subject}`,
+  'X-Step-Up-Authentication-ID': 'aut_01J5Q8K2M7N4P6R9T1V3X5Z7A1',
+};
+const DELIVERY = {
+  ...AUTH,
+  'X-Actor-Ref': 'system:delivery',
+  'X-Purpose-Code': 'booking_document_render',
+};
+const OPERATION_REF = {
+  sourceSystem: 'mstyle',
+  environment: 'production',
+  operationType: 'booking',
+  operationId: 'booking:107',
+};
+
+type M1M2CatalogOverride = {
+  path?: string;
+  headers?: Record<string, string>;
+  request?: unknown;
+};
+
+/** Final M1/M2 contract overlays the older 58-route draft catalog. */
+const M1_M2_CATALOG_OVERRIDES: Record<string, M1M2CatalogOverride> = {
+  'A-02': {
+    path: `${PRIVATE}/auth/residents/password:verify`,
+    headers: IDEM,
+  },
+  'R-03': {
+    path: `${PRIVATE}/changes?after={cursor}&limit=100`,
+    headers: { ...AUTH, 'X-Actor-Ref': 'system:reconcile' },
+  },
+  'R-06': {
+    headers: ADMIN_REVIEW,
+    request: {
+      schemaVersion: SCHEMA,
+      cursor: null,
+      limit: 100,
+      sort: { field: 'updatedAt', direction: 'desc' },
+      query: { type: 'email', value: 'ninzak@ya.ru' },
+    },
+  },
+  'R-08': {
+    headers: {
+      ...ADMIN,
+      'X-Purpose-Code': 'resident_onboarding',
+      'Idempotency-Key': 'idem_01TESTKEY',
+    },
+    request: {
+      schemaVersion: SCHEMA,
+      owner: {
+        invitation: {
+          displayName: 'Вадим тест',
+          phone: '+79990001234',
+          email: 'ninzak@ya.ru',
+        },
+      },
+      profile: {
+        type: 'company',
+        legalForm: 'ooo',
+        label: 'Вадим тест',
+        companyShortName: 'Вадим тест',
+        memberPolicy: { employeeLimit: 5 },
+      },
+      privateData: {
+        profileType: 'company',
+        legalForm: 'ooo',
+        data: {
+          fullName: 'Вадим тест',
+          inn: '7700000000',
+          kpp: '770001001',
+          ogrn: '1027700000000',
+          legalAddress: 'Москва',
+          actualAddress: 'Москва',
+          generalDirector: 'Вадим тест',
+        },
+      },
+      initialContactAssignments: [
+        {
+          purpose: 'primary',
+          source: {
+            kind: 'owner_invitation_contact',
+            contactType: 'email',
+          },
+          priority: 1,
+        },
+      ],
+      sourceLink: {
+        sourceSystem: 'mstyle-wordpress',
+        environment: 'production',
+        entityType: 'resident',
+        externalId: 'mstyle-user:107',
+      },
+    },
+  },
+  'R-09': {
+    headers: {
+      ...ADMIN,
+      'If-Match': '"profile-2"',
+      'Idempotency-Key': 'idem_01TESTKEY',
+    },
+    request: {
+      schemaVersion: SCHEMA,
+      targetStatus: 'suspended',
+      reasonCode: 'admin_suspension',
+    },
+  },
+  'R-10': {
+    headers: {
+      ...ADMIN,
+      'If-Match': '"profile-2"',
+      'Idempotency-Key': 'idem_01TESTKEY',
+    },
+    request: {
+      schemaVersion: SCHEMA,
+      mode: 'anonymize',
+      reasonCode: 'resident_request',
+    },
+  },
+  'R-11': {
+    headers: {
+      ...RESIDENT,
+      'X-Purpose-Code': 'profile_change_request',
+      'If-Match': '"profile-2"',
+      'Idempotency-Key': 'idem_01TESTKEY',
+    },
+    request: {
+      schemaVersion: SCHEMA,
+      reasonCode: 'requisites_update',
+      expectedPrivateDataRevision: 1,
+      privateData: {
+        profileType: 'company',
+        legalForm: 'ooo',
+        data: { legalAddress: 'Новый адрес' },
+      },
+    },
+  },
+  'R-12': { headers: RESIDENT },
+  'R-13': { headers: RESIDENT },
+  'R-14': { headers: ADMIN },
+  'R-15': {
+    headers: {
+      ...ADMIN_REVIEW,
+      'If-Match': '"change-request-1"',
+      'Idempotency-Key': 'idem_01TESTKEY',
+    },
+    request: {
+      schemaVersion: SCHEMA,
+      decision: 'approve',
+      reasonCode: 'documents_verified',
+    },
+  },
+  'R-16': {
+    headers: {
+      ...RESIDENT,
+      'If-Match': '"change-request-1"',
+      'Idempotency-Key': 'idem_01TESTKEY',
+    },
+    request: { schemaVersion: SCHEMA, reasonCode: 'author_cancelled' },
+  },
+  'R-17': { headers: ADMIN },
+  'M-03': {
+    headers: {
+      ...RESIDENT,
+      'If-Match': '"memberships-2"',
+      'Idempotency-Key': 'idem_01TESTKEY',
+    },
+    request: {
+      schemaVersion: SCHEMA,
+      status: 'suspended',
+      validFrom: null,
+      validUntil: null,
+      reasonCode: 'temporary_suspension',
+    },
+  },
+  'M-04': {
+    headers: {
+      ...RESIDENT,
+      'If-Match': '"memberships-2"',
+      'Idempotency-Key': 'idem_01TESTKEY',
+    },
+    request: {
+      schemaVersion: SCHEMA,
+      reasonCode: 'owner_removed_employee',
+    },
+  },
+  'M-05': {
+    headers: { ...RESIDENT, 'Idempotency-Key': 'idem_01TESTKEY' },
+    request: {
+      schemaVersion: SCHEMA,
+      newOwnerSubject: 'usr_01NEWOWNER',
+      expectedProfileRevision: 2,
+      expectedMembershipSetRevision: 2,
+      reasonCode: 'owner_transfer',
+    },
+  },
+  'P-05': {
+    headers: { ...RESIDENT, 'X-Purpose-Code': 'account_profile_view' },
+    request: {
+      schemaVersion: SCHEMA,
+      contactPurpose: 'primary',
+      fieldCodes: ['displayName', 'phone', 'email'],
+    },
+  },
+  'P-06': {
+    headers: DELIVERY,
+    request: {
+      schemaVersion: SCHEMA,
+      operationRef: OPERATION_REF,
+      fieldCodes: ['company.fullName', 'company.inn'],
+    },
+  },
+  'P-07': {
+    headers: DELIVERY,
+    request: {
+      schemaVersion: SCHEMA,
+      operationRef: OPERATION_REF,
+      fieldCodes: ['displayName', 'phone', 'email'],
+    },
+  },
+  'G-05': {
+    headers: ADMIN_REVIEW,
+    request: { schemaVersion: SCHEMA, fieldCodes: ['phone', 'email'] },
+  },
+  'G-07': {
+    headers: ADMIN_REVIEW,
+    request: {
+      schemaVersion: SCHEMA,
+      fieldCodes: ['displayName', 'individual.inn'],
+    },
+  },
+  'G-11': {
+    headers: { ...RESIDENT, 'Idempotency-Key': 'idem_01TESTKEY' },
+    request: {
+      schemaVersion: SCHEMA,
+      profileId: PROFILE.id,
+      expectedGuestPartyRevision: 4,
+    },
+  },
+  'G-12': {
+    headers: ADMIN_REVIEW,
+    request: {
+      schemaVersion: SCHEMA,
+      cursor: null,
+      limit: 100,
+      sort: { field: 'updatedAt', direction: 'desc' },
+      query: { type: 'email', value: 'ninzak@ya.ru' },
+    },
+  },
+};
+
 /**
  * Каталог и фактический dev/mock-режим используют один набор ответов.
  * Это не даёт примерам в админке разойтись с тем, что получает Mstyle.
  */
 export const MSTYLE_V2_CATALOG: CatalogEndpoint[] = MSTYLE_V2_CATALOG_BASE.map(
   (endpoint) => {
+    const contract = M1_M2_CATALOG_OVERRIDES[endpoint.id] || {};
     const mock = createMstyleMockResponse({ id: endpoint.id });
     return {
       ...endpoint,
+      ...contract,
+      headers: contract.headers || endpoint.headers,
       milestone:
         MSTYLE_MOCK_MILESTONES[
           endpoint.id as keyof typeof MSTYLE_MOCK_MILESTONES

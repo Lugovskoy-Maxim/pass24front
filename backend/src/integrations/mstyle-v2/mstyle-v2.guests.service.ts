@@ -16,6 +16,7 @@ import {
   hmacHex,
   maskContact,
   normalizeEmail,
+  safeEqualHex,
   sha256Hex,
 } from './mstyle-v2.crypto';
 import type {
@@ -44,10 +45,16 @@ import {
   MstyleChallengeDocument,
   MstyleConsent,
   MstyleConsentDocument,
+  MstyleContact,
+  MstyleContactDocument,
   MstyleGuestContact,
   MstyleGuestContactDocument,
   MstyleGuestParty,
   MstyleGuestPartyDocument,
+  MstyleMembership,
+  MstyleMembershipDocument,
+  MstyleProfile,
+  MstyleProfileDocument,
   MstyleSnapshot,
   MstyleSnapshotDocument,
 } from './mstyle-v2.schemas';
@@ -69,6 +76,12 @@ export class MstyleGuestsService {
     private readonly consents: Model<MstyleConsentDocument>,
     @InjectModel(MstyleSnapshot.name)
     private readonly snapshots: Model<MstyleSnapshotDocument>,
+    @InjectModel(MstyleProfile.name)
+    private readonly profiles: Model<MstyleProfileDocument>,
+    @InjectModel(MstyleMembership.name)
+    private readonly memberships: Model<MstyleMembershipDocument>,
+    @InjectModel(MstyleContact.name)
+    private readonly identityContacts: Model<MstyleContactDocument>,
   ) {}
 
   async create(dto: CreateGuestDto) {
@@ -80,15 +93,16 @@ export class MstyleGuestsService {
     const token = isPrimary ? Ids.token() : undefined;
     const eventIds = [
       await this.events.emit({
-        type: 'guest.created',
-        aggregate: { type: 'guest_party', id: guestPartyId },
+        type: 'guest_party.updated',
+        aggregate: { type: 'guest_party', id: guestPartyId, revision: 1 },
         guestPartyId,
+        payload: { status: 'draft' },
       }),
     ];
     await this.guests.create({
       guestPartyId,
       status: 'draft',
-      purpose: dto.purpose || 'booking',
+      purpose: dto.purpose || 'mstyle_booking',
       role: dto.role || 'primary',
       privateDataRevision: null,
       revision: 1,
@@ -148,9 +162,14 @@ export class MstyleGuestsService {
     });
     const eventIds = [
       await this.events.emit({
-        type: 'guest.contact_challenge',
-        aggregate: { type: 'guest_party', id: guestPartyId },
+        type: 'guest_party.updated',
+        aggregate: {
+          type: 'guest_party',
+          id: guestPartyId,
+          revision: guest.revision + 1,
+        },
         guestPartyId,
+        payload: { status: guest.status },
       }),
     ];
     guest.revision += 1;
@@ -199,11 +218,9 @@ export class MstyleGuestsService {
     );
     const type = challenge.contactType as 'phone' | 'email';
     const valueHash = hmacHex(this.cfg.piiSecret(), `${type}:${value}`);
-    let contact = await this.guestContacts.findOne({
-      guestPartyId,
-      type,
-      valueHash,
-    });
+    let contact = await this.guestContacts
+      .findOne({ guestPartyId, type })
+      .sort({ updatedAt: -1, revision: -1 });
     if (!contact) {
       contact = await this.guestContacts.create({
         contactId: Ids.contact(),
@@ -216,6 +233,9 @@ export class MstyleGuestsService {
         revision: 1,
       });
     } else {
+      contact.masked = maskContact(type, value);
+      contact.valueEnc = encryptJson(this.cfg.piiSecret(), value);
+      contact.valueHash = valueHash;
       contact.verifiedAt = nowIso();
       contact.revision += 1;
       await contact.save();
@@ -232,8 +252,12 @@ export class MstyleGuestsService {
     await challenge.save();
     const eventIds = [
       await this.events.emit({
-        type: 'guest.contact_verified',
-        aggregate: { type: 'guest_party', id: guestPartyId },
+        type: 'guest_contact.updated',
+        aggregate: {
+          type: 'guest_contact',
+          id: contact.contactId,
+          revision: contact.revision,
+        },
         guestPartyId,
       }),
     ];
@@ -279,10 +303,14 @@ export class MstyleGuestsService {
     await guest.save();
     const eventIds = [
       await this.events.emit({
-        type: 'guest.booked',
-        aggregate: { type: 'guest_party', id: guestPartyId },
+        type: 'guest_party.updated',
+        aggregate: {
+          type: 'guest_party',
+          id: guestPartyId,
+          revision: guest.revision,
+        },
         guestPartyId,
-        payload: { operationRef: dto.operationRef },
+        payload: { status: guest.status, operationRef: dto.operationRef },
       }),
     ];
     return new MstyleResult(
@@ -298,31 +326,108 @@ export class MstyleGuestsService {
     );
   }
 
-  async claim(guestPartyId: string, dto: ClaimGuestDto, ifMatch?: string) {
+  async claim(
+    guestPartyId: string,
+    dto: ClaimGuestDto,
+    residentSubject: string,
+  ) {
     const guest = await this.requireGuest(guestPartyId);
-    this.assertMatch(ifMatch, guest.revision);
-    const identity = await this.identities.findIdentityBySubject(dto.subject);
-    if (!identity) problem(404, 'NOT_FOUND');
+    if (
+      guest.claimedBySubject ||
+      guest.claimedProfileId ||
+      guest.status === 'claimed'
+    ) {
+      if (
+        guest.claimedBySubject === residentSubject &&
+        guest.claimedProfileId === dto.profileId
+      ) {
+        return new MstyleResult(
+          schema({
+            guestPartyId,
+            status: 'claimed',
+            claimedBySubject: residentSubject,
+            claimedProfileId: dto.profileId,
+            revision: guest.revision,
+            eventIds: [],
+          }),
+          200,
+          { ETag: etag('guest', guest.revision) },
+        );
+      }
+      problem(409, 'CONFLICT', { title: 'Guest is already claimed' });
+    }
+    if (guest.revision !== dto.expectedGuestPartyRevision) {
+      problem(412, 'PRECONDITION_FAILED');
+    }
+    if (guest.purpose !== 'mstyle_booking') {
+      problem(409, 'CONFLICT', {
+        title: 'Only a booking party can be claimed',
+      });
+    }
+    const identity =
+      await this.identities.findIdentityBySubject(residentSubject);
+    if (!identity || identity.identityStatus !== 'active') {
+      problem(404, 'NOT_FOUND');
+    }
+    const profile = await this.profiles.findOne({
+      profileId: dto.profileId,
+      status: 'active',
+    });
+    const owner = await this.memberships.findOne({
+      profileId: dto.profileId,
+      subject: residentSubject,
+      role: 'owner',
+      status: 'active',
+    });
+    if (!profile || !owner) problem(404, 'NOT_FOUND');
+    const allGuestContacts = await this.guestContacts
+      .find({ guestPartyId, verifiedAt: { $ne: null } })
+      .sort({ updatedAt: -1, revision: -1 });
+    const currentByType = new Map<string, MstyleGuestContactDocument>();
+    for (const contact of allGuestContacts) {
+      if (!currentByType.has(contact.type)) {
+        currentByType.set(contact.type, contact);
+      }
+    }
+    const guestContacts = [...currentByType.values()];
+    const matchingContact = guestContacts.length
+      ? await this.identityContacts.findOne({
+          subject: residentSubject,
+          verifiedAt: { $ne: null },
+          $or: guestContacts.map((contact) => ({
+            type: contact.type,
+            valueHash: contact.valueHash,
+          })),
+        })
+      : null;
+    if (!matchingContact) {
+      problem(403, 'CONTACT_OWNERSHIP_NOT_CONFIRMED');
+    }
     guest.status = 'claimed';
-    guest.claimedBySubject = dto.subject;
-    guest.claimedProfileId = dto.claimedProfileId || null;
+    guest.claimedBySubject = residentSubject;
+    guest.claimedProfileId = dto.profileId;
     guest.revision += 1;
     await guest.save();
     const eventIds = [
       await this.events.emit({
-        type: 'guest.claimed',
-        aggregate: { type: 'guest_party', id: guestPartyId },
+        type: 'guest_party.updated',
+        aggregate: {
+          type: 'guest_party',
+          id: guestPartyId,
+          revision: guest.revision,
+        },
         guestPartyId,
-        subject: dto.subject,
-        profileId: dto.claimedProfileId,
+        subject: residentSubject,
+        profileId: dto.profileId,
+        payload: { status: 'claimed' },
       }),
     ];
     return new MstyleResult(
       schema({
         guestPartyId,
         status: 'claimed',
-        claimedBySubject: dto.subject,
-        claimedProfileId: guest.claimedProfileId,
+        claimedBySubject: residentSubject,
+        claimedProfileId: dto.profileId,
         revision: guest.revision,
         eventIds,
       }),
@@ -332,12 +437,14 @@ export class MstyleGuestsService {
   }
 
   async search(dto: SearchGuestsDto) {
-    const limit = dto.limit || 20;
+    const limit = dto.limit || 100;
     const filter: Record<string, unknown> = {};
-    if (dto.query?.guestPartyId) filter.guestPartyId = dto.query.guestPartyId;
-    if (dto.query?.phone || dto.query?.email) {
-      const type = dto.query.phone ? 'phone' : 'email';
-      const raw = type === 'phone' ? dto.query.phone! : dto.query.email!;
+    if (dto.query?.type === 'guestPartyId') {
+      filter.guestPartyId = dto.query.value;
+    }
+    if (dto.query?.type === 'phone' || dto.query?.type === 'email') {
+      const type = dto.query.type;
+      const raw = dto.query.value;
       const normalized =
         type === 'phone' ? normalizeRuMobilePhone(raw) : normalizeEmail(raw);
       if (!normalized) {
@@ -346,17 +453,47 @@ export class MstyleGuestsService {
         );
       }
       const valueHash = hmacHex(this.cfg.piiSecret(), `${type}:${normalized}`);
-      const contact = await this.guestContacts.findOne({ type, valueHash });
-      if (!contact) {
+      const contacts = await this.guestContacts
+        .find({ type, valueHash })
+        .lean();
+      if (!contacts.length) {
         return new MstyleResult(
           schema({ items: [], nextCursor: null, generatedAt: nowIso() }),
         );
       }
-      filter.guestPartyId = contact.guestPartyId;
+      filter.guestPartyId = {
+        $in: [...new Set(contacts.map((contact) => contact.guestPartyId))],
+      };
+    }
+    const direction = dto.sort?.direction === 'asc' ? 1 : -1;
+    const cursorContext = guestSearchCursorContext(this.cfg, dto, direction);
+    const cursor = decodeGuestCursor(
+      dto.cursor,
+      direction,
+      cursorContext,
+      this.cfg.idempotencySecret(),
+    );
+    if (cursor) {
+      filter.$or =
+        direction === 1
+          ? [
+              { updatedAt: { $gt: new Date(cursor.updatedAt) } },
+              {
+                updatedAt: new Date(cursor.updatedAt),
+                guestPartyId: { $gt: cursor.id },
+              },
+            ]
+          : [
+              { updatedAt: { $lt: new Date(cursor.updatedAt) } },
+              {
+                updatedAt: new Date(cursor.updatedAt),
+                guestPartyId: { $lt: cursor.id },
+              },
+            ];
     }
     const rows = await this.guests
       .find(filter)
-      .sort({ updatedAt: -1 })
+      .sort({ updatedAt: direction, guestPartyId: direction })
       .limit(limit + 1)
       .lean();
     const hasMore = rows.length > limit;
@@ -365,21 +502,31 @@ export class MstyleGuestsService {
     for (const row of slice) {
       const contacts = await this.guestContacts
         .find({ guestPartyId: row.guestPartyId })
+        .sort({ updatedAt: -1, revision: -1 })
         .lean();
+      const masks = new Map<string, string>();
+      for (const contact of contacts) {
+        if (!masks.has(contact.type)) masks.set(contact.type, contact.masked);
+      }
       items.push({
         guestPartyId: row.guestPartyId,
         status: row.status,
         revision: row.revision,
-        contactMasks: contacts.map((c) => ({
-          type: c.type,
-          masked: c.masked,
-        })),
+        contactMasks: [...masks].map(([type, masked]) => ({ type, masked })),
       });
     }
     return new MstyleResult(
       schema({
         items,
-        nextCursor: hasMore ? slice[slice.length - 1].guestPartyId : null,
+        nextCursor: hasMore
+          ? encodeGuestCursor(
+              (slice[slice.length - 1] as any).updatedAt,
+              slice[slice.length - 1].guestPartyId,
+              direction,
+              cursorContext,
+              this.cfg.idempotencySecret(),
+            )
+          : null,
         generatedAt: nowIso(),
       }),
     );
@@ -463,4 +610,84 @@ export class MstyleGuestsService {
       problem(412, 'PRECONDITION_FAILED');
     }
   }
+}
+
+function encodeGuestCursor(
+  updatedAt: unknown,
+  id: string,
+  direction: 1 | -1,
+  context: string,
+  secret: string,
+): string {
+  const date =
+    updatedAt instanceof Date
+      ? updatedAt.toISOString()
+      : typeof updatedAt === 'string'
+        ? updatedAt
+        : nowIso();
+  const payload = Buffer.from(
+    JSON.stringify({ v: 1, date, id, direction, context }),
+  ).toString('base64url');
+  return `${payload}.${hmacHex(secret, `mstyle-guest-search:${payload}`)}`;
+}
+
+function decodeGuestCursor(
+  raw: string | null | undefined,
+  direction: 1 | -1,
+  context: string,
+  secret: string,
+): { updatedAt: string; id: string } | null {
+  if (!raw) return null;
+  try {
+    const [payload, signature, extra] = raw.split('.');
+    if (
+      !payload ||
+      !signature ||
+      extra ||
+      !safeEqualHex(
+        signature,
+        hmacHex(secret, `mstyle-guest-search:${payload}`),
+      )
+    ) {
+      problem(422, 'INVALID_CURSOR');
+    }
+    const value = JSON.parse(
+      Buffer.from(payload, 'base64url').toString('utf8'),
+    ) as {
+      v?: number;
+      date?: string;
+      id?: string;
+      direction?: number;
+      context?: string;
+    };
+    if (
+      value.v !== 1 ||
+      !value.date ||
+      !value.id ||
+      value.direction !== direction ||
+      value.context !== context ||
+      !Number.isFinite(Date.parse(value.date))
+    ) {
+      problem(422, 'INVALID_CURSOR');
+    }
+    return { updatedAt: value.date, id: value.id };
+  } catch {
+    problem(422, 'INVALID_CURSOR');
+  }
+}
+
+function guestSearchCursorContext(
+  cfg: MstyleV2Config,
+  dto: SearchGuestsDto,
+  direction: 1 | -1,
+): string {
+  return hmacHex(
+    cfg.idempotencySecret(),
+    JSON.stringify({
+      query: dto.query
+        ? { type: dto.query.type, value: dto.query.value }
+        : null,
+      direction,
+    }),
+  );
 }

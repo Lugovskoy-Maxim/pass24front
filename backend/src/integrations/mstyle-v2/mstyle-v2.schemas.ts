@@ -8,6 +8,13 @@ export type EncryptedBlob = {
   ciphertext: string;
 };
 
+export type OperationReference = {
+  sourceSystem: string;
+  environment: string;
+  operationType: string;
+  operationId: string;
+};
+
 @Schema({ collection: 'mstyle_v2_service_tokens', timestamps: true })
 export class MstyleServiceToken {
   @Prop({ required: true, unique: true })
@@ -138,7 +145,7 @@ export class MstyleProfile {
     sourceSystem: string;
     environment: string;
     entityType: string;
-    sourceId: string;
+    externalId: string;
     linkedAt: string;
   }>;
 
@@ -153,6 +160,20 @@ export class MstyleProfile {
 }
 export type MstyleProfileDocument = MstyleProfile & Document;
 export const MstyleProfileSchema = SchemaFactory.createForClass(MstyleProfile);
+MstyleProfileSchema.index(
+  {
+    'sourceLinks.sourceSystem': 1,
+    'sourceLinks.environment': 1,
+    'sourceLinks.entityType': 1,
+    'sourceLinks.externalId': 1,
+  },
+  {
+    unique: true,
+    partialFilterExpression: {
+      'sourceLinks.externalId': { $type: 'string' },
+    },
+  },
+);
 
 @Schema({ collection: 'mstyle_v2_memberships', timestamps: true })
 export class MstyleMembership {
@@ -187,6 +208,20 @@ export type MstyleMembershipDocument = MstyleMembership & Document;
 export const MstyleMembershipSchema =
   SchemaFactory.createForClass(MstyleMembership);
 MstyleMembershipSchema.index({ profileId: 1, subject: 1 }, { unique: true });
+MstyleMembershipSchema.index(
+  { profileId: 1 },
+  {
+    unique: true,
+    partialFilterExpression: { role: 'owner', status: 'active' },
+  },
+);
+MstyleMembershipSchema.index(
+  { subject: 1 },
+  {
+    unique: true,
+    partialFilterExpression: { role: 'employee', status: 'active' },
+  },
+);
 
 @Schema({ collection: 'mstyle_v2_contacts', timestamps: true })
 export class MstyleContact {
@@ -478,7 +513,7 @@ export class MstyleGuestParty {
 
   @Prop({ type: Object })
   operationLink?: {
-    operationRef: string;
+    operationRef: OperationReference;
     snapshotId: string;
     bindingRevision: number;
   };
@@ -562,8 +597,8 @@ export class MstyleSnapshotBinding {
   @Prop({ required: true, index: true })
   snapshotId: string;
 
-  @Prop({ required: true })
-  operationRef: string;
+  @Prop({ type: Object, required: true })
+  operationRef: OperationReference;
 
   @Prop({ default: 1 })
   bindingRevision: number;
@@ -578,10 +613,7 @@ export type MstyleSnapshotBindingDocument = MstyleSnapshotBinding & Document;
 export const MstyleSnapshotBindingSchema = SchemaFactory.createForClass(
   MstyleSnapshotBinding,
 );
-MstyleSnapshotBindingSchema.index(
-  { snapshotId: 1, operationRef: 1 },
-  { unique: true },
-);
+MstyleSnapshotBindingSchema.index({ snapshotId: 1 }, { unique: true });
 
 @Schema({ collection: 'mstyle_v2_idempotency', timestamps: true })
 export class MstyleIdempotency {
@@ -638,7 +670,7 @@ export class MstyleChangeEvent {
   occurredAt: string;
 
   @Prop({ type: Object, required: true })
-  aggregate: { type: string; id: string };
+  aggregate: { type: string; id: string; revision: number };
 
   @Prop()
   subject?: string;
@@ -657,6 +689,19 @@ export const MstyleChangeEventSchema =
   SchemaFactory.createForClass(MstyleChangeEvent);
 MstyleChangeEventSchema.index({ sequence: 1 }, { unique: true });
 
+@Schema({ collection: 'mstyle_v2_sequence_counters', timestamps: true })
+export class MstyleSequenceCounter {
+  @Prop({ required: true, unique: true })
+  name: string;
+
+  @Prop({ required: true, default: 0 })
+  value: number;
+}
+export type MstyleSequenceCounterDocument = MstyleSequenceCounter & Document;
+export const MstyleSequenceCounterSchema = SchemaFactory.createForClass(
+  MstyleSequenceCounter,
+);
+
 @Schema({ collection: 'mstyle_v2_change_requests', timestamps: true })
 export class MstyleChangeRequest {
   @Prop({ required: true, unique: true })
@@ -674,11 +719,20 @@ export class MstyleChangeRequest {
   @Prop({ required: true })
   profileRevisionAtRequest: number;
 
+  @Prop({ required: true })
+  privateDataRevisionAtRequest: number;
+
   @Prop({ type: [String], default: [] })
   changedFieldCodes: string[];
 
   @Prop({ type: Object })
   valuesEnc?: EncryptedBlob;
+
+  @Prop({ required: true, enum: ['individual', 'company'] })
+  profileType: string;
+
+  @Prop({ type: String, default: null })
+  legalForm?: string | null;
 
   @Prop({ default: '' })
   reasonCode: string;
@@ -688,10 +742,17 @@ export class MstyleChangeRequest {
 
   @Prop()
   authorSubject?: string;
+
+  @Prop()
+  decisionReasonCode?: string;
 }
 export type MstyleChangeRequestDocument = MstyleChangeRequest & Document;
 export const MstyleChangeRequestSchema =
   SchemaFactory.createForClass(MstyleChangeRequest);
+MstyleChangeRequestSchema.index(
+  { profileId: 1, status: 1 },
+  { unique: true, partialFilterExpression: { status: 'pending' } },
+);
 
 @Schema({ collection: 'mstyle_v2_deletion_requests', timestamps: true })
 export class MstyleDeletionRequest {
@@ -700,6 +761,12 @@ export class MstyleDeletionRequest {
 
   @Prop({ required: true, index: true })
   profileId: string;
+
+  @Prop({ required: true, enum: ['anonymize', 'delete'] })
+  mode: string;
+
+  @Prop({ required: true })
+  reasonCode: string;
 
   @Prop({ required: true })
   status: string;
@@ -722,6 +789,13 @@ export class MstyleDeletionRequest {
 export type MstyleDeletionRequestDocument = MstyleDeletionRequest & Document;
 export const MstyleDeletionRequestSchema = SchemaFactory.createForClass(
   MstyleDeletionRequest,
+);
+MstyleDeletionRequestSchema.index(
+  { profileId: 1, status: 1 },
+  {
+    unique: true,
+    partialFilterExpression: { status: { $in: ['pending', 'blocked'] } },
+  },
 );
 
 @Schema({ collection: 'mstyle_v2_access_grants', timestamps: true })
@@ -783,6 +857,7 @@ export const MSTYLE_MODELS = [
   { name: MstyleSnapshotBinding.name, schema: MstyleSnapshotBindingSchema },
   { name: MstyleIdempotency.name, schema: MstyleIdempotencySchema },
   { name: MstyleChangeEvent.name, schema: MstyleChangeEventSchema },
+  { name: MstyleSequenceCounter.name, schema: MstyleSequenceCounterSchema },
   { name: MstyleChangeRequest.name, schema: MstyleChangeRequestSchema },
   { name: MstyleDeletionRequest.name, schema: MstyleDeletionRequestSchema },
   { name: MstyleAccessGrant.name, schema: MstyleAccessGrantSchema },

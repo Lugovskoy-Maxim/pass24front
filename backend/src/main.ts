@@ -26,7 +26,7 @@ async function bootstrap() {
     credentials: true,
     methods: 'GET,HEAD,PUT,PATCH,POST,DELETE,OPTIONS',
     allowedHeaders:
-      'Content-Type, Accept, Authorization, X-Request-ID, Idempotency-Key, If-Match, If-None-Match',
+      'Content-Type, Accept, Authorization, X-Request-ID, Idempotency-Key, If-Match, If-None-Match, X-Resident-Subject, X-Actor-Ref, X-Step-Up-Authentication-ID, X-Admin-Step-Up-Assertion, X-Purpose-Code',
     // Нужно для скачивания CSV (Content-Disposition)
     exposedHeaders:
       'Content-Disposition, Content-Type, Content-Length, ETag, Retry-After, X-Request-ID',

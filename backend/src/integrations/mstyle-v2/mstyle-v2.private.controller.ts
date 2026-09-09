@@ -48,11 +48,16 @@ import {
   SearchProfilesDto,
   VerifyCodeDto,
   BindSnapshotDto,
+  ProfileContactsRevealDto,
+  ReasonCodeDto,
+  SnapshotContactsRevealDto,
+  SnapshotRevealDto,
 } from './mstyle-v2.dto';
 import {
   MstyleEnabledGuard,
   MstyleProblemFilter,
   MstyleRequestGuard,
+  MstyleRouteContextGuard,
   MstyleResultInterceptor,
   MstyleServiceTokenGuard,
   REQUIRE_IDEMPOTENCY,
@@ -66,7 +71,12 @@ const NeedRequestId = () => SetMetadata(REQUIRE_REQUEST_ID, true);
 
 @ApiExcludeController()
 @UseFilters(MstyleProblemFilter)
-@UseGuards(MstyleEnabledGuard, MstyleServiceTokenGuard, MstyleRequestGuard)
+@UseGuards(
+  MstyleEnabledGuard,
+  MstyleServiceTokenGuard,
+  MstyleRequestGuard,
+  MstyleRouteContextGuard,
+)
 @UseInterceptors(MstyleResultInterceptor, MstyleMockResponseInterceptor)
 @NeedRequestId()
 @Controller(MSTYLE_PRIVATE_PREFIX)
@@ -298,7 +308,7 @@ export class MstylePrivateController {
 
   @Get('changes')
   changes(@Query('after') after?: string, @Query('limit') limit?: string) {
-    return this.events.list(after, limit ? Number(limit) : 50);
+    return this.events.list(after, limit ? Number(limit) : 100);
   }
 
   @Post('resident-onboarding')
@@ -340,15 +350,19 @@ export class MstylePrivateController {
   transfer(
     @Param('profileId') profileId: string,
     @Body() dto: OwnerTransferDto,
-    @Headers('if-match') ifMatch: string | undefined,
     @Req() req: MstyleRequest,
   ) {
     return this.withIdempotency(
       req,
       'POST',
       `/resident-profiles/${profileId}/owner-transfer`,
-      { dto, ifMatch },
-      () => this.directory.transferOwner(profileId, dto, ifMatch),
+      dto,
+      () =>
+        this.directory.transferOwner(
+          profileId,
+          dto,
+          req.mstyleResidentSubject!,
+        ),
     );
   }
 
@@ -417,18 +431,32 @@ export class MstylePrivateController {
   }
 
   @Post('resident-profiles/:profileId/contacts/reveal')
-  revealProfileContacts(@Param('profileId') profileId: string) {
-    return this.privateData.revealProfileContacts(profileId);
+  revealProfileContacts(
+    @Param('profileId') profileId: string,
+    @Body() dto: ProfileContactsRevealDto,
+    @Req() req: MstyleRequest,
+  ) {
+    return this.privateData.revealProfileContacts(
+      profileId,
+      dto,
+      req.mstyleResidentSubject,
+    );
   }
 
   @Get('resident-profiles/:profileId/physical-access')
-  access(@Param('profileId') profileId: string) {
-    return this.directory.physicalAccess(profileId);
+  access(@Param('profileId') profileId: string, @Req() req: MstyleRequest) {
+    return this.directory.physicalAccess(profileId, req.mstyleResidentSubject);
   }
 
   @Get('resident-profiles/:profileId/change-requests/current')
-  currentChange(@Param('profileId') profileId: string) {
-    return this.directory.currentChangeRequest(profileId);
+  currentChange(
+    @Param('profileId') profileId: string,
+    @Req() req: MstyleRequest,
+  ) {
+    return this.directory.currentChangeRequest(
+      profileId,
+      req.mstyleResidentSubject!,
+    );
   }
 
   @Post('resident-profiles/:profileId/change-requests')
@@ -436,14 +464,21 @@ export class MstylePrivateController {
   createChange(
     @Param('profileId') profileId: string,
     @Body() dto: ChangeRequestDto,
+    @Headers('if-match') ifMatch: string | undefined,
     @Req() req: MstyleRequest,
   ) {
     return this.withIdempotency(
       req,
       'POST',
       `/resident-profiles/${profileId}/change-requests`,
-      dto,
-      () => this.directory.createChangeRequest(profileId, dto),
+      { dto, ifMatch },
+      () =>
+        this.directory.createChangeRequest(
+          profileId,
+          dto,
+          ifMatch,
+          req.mstyleResidentSubject!,
+        ),
     );
   }
 
@@ -469,14 +504,15 @@ export class MstylePrivateController {
   deletion(
     @Param('profileId') profileId: string,
     @Body() dto: DeletionRequestDto,
+    @Headers('if-match') ifMatch: string | undefined,
     @Req() req: MstyleRequest,
   ) {
     return this.withIdempotency(
       req,
       'POST',
       `/resident-profiles/${profileId}/deletion-requests`,
-      dto,
-      () => this.directory.requestDeletion(profileId, dto),
+      { dto, ifMatch },
+      () => this.directory.requestDeletion(profileId, dto, ifMatch),
     );
   }
 
@@ -515,7 +551,13 @@ export class MstylePrivateController {
       'PATCH',
       `/resident-memberships/${membershipId}`,
       { dto, ifMatch },
-      () => this.directory.patchMembership(membershipId, dto, ifMatch),
+      () =>
+        this.directory.patchMembership(
+          membershipId,
+          dto,
+          ifMatch,
+          req.mstyleResidentSubject!,
+        ),
     );
   }
 
@@ -523,6 +565,7 @@ export class MstylePrivateController {
   @Idempotent()
   revokeMembership(
     @Param('membershipId') membershipId: string,
+    @Body() dto: ReasonCodeDto,
     @Headers('if-match') ifMatch: string | undefined,
     @Req() req: MstyleRequest,
   ) {
@@ -530,8 +573,14 @@ export class MstylePrivateController {
       req,
       'POST',
       `/resident-memberships/${membershipId}/revoke`,
-      { ifMatch },
-      () => this.directory.revokeMembership(membershipId, ifMatch),
+      { dto, ifMatch },
+      () =>
+        this.directory.revokeMembership(
+          membershipId,
+          dto,
+          ifMatch,
+          req.mstyleResidentSubject!,
+        ),
     );
   }
 
@@ -540,14 +589,15 @@ export class MstylePrivateController {
   decide(
     @Param('changeRequestId') changeRequestId: string,
     @Body() dto: ChangeDecisionDto,
+    @Headers('if-match') ifMatch: string | undefined,
     @Req() req: MstyleRequest,
   ) {
     return this.withIdempotency(
       req,
       'POST',
       `/resident-profile-change-requests/${changeRequestId}/decisions`,
-      dto,
-      () => this.directory.decideChange(changeRequestId, dto),
+      { dto, ifMatch },
+      () => this.directory.decideChange(changeRequestId, dto, ifMatch),
     );
   }
 
@@ -555,14 +605,22 @@ export class MstylePrivateController {
   @Idempotent()
   cancel(
     @Param('changeRequestId') changeRequestId: string,
+    @Body() dto: ReasonCodeDto,
+    @Headers('if-match') ifMatch: string | undefined,
     @Req() req: MstyleRequest,
   ) {
     return this.withIdempotency(
       req,
       'POST',
       `/resident-profile-change-requests/${changeRequestId}/cancel`,
-      {},
-      () => this.directory.cancelChange(changeRequestId),
+      { dto, ifMatch },
+      () =>
+        this.directory.cancelChange(
+          changeRequestId,
+          dto,
+          ifMatch,
+          req.mstyleResidentSubject!,
+        ),
     );
   }
 
@@ -574,14 +632,27 @@ export class MstylePrivateController {
   @Post('private-data-snapshots/:snapshotId/reveal')
   revealSnapshot(
     @Param('snapshotId') snapshotId: string,
-    @Body() dto: RevealDto,
+    @Body() dto: SnapshotRevealDto,
+    @Req() req: MstyleRequest,
   ) {
-    return this.privateData.revealSnapshot(snapshotId, dto);
+    return this.privateData.revealSnapshot(
+      snapshotId,
+      dto,
+      req.mstyleScopes || [],
+    );
   }
 
   @Post('private-data-snapshots/:snapshotId/contacts/reveal')
-  revealSnapshotContacts(@Param('snapshotId') snapshotId: string) {
-    return this.privateData.revealSnapshotContacts(snapshotId);
+  revealSnapshotContacts(
+    @Param('snapshotId') snapshotId: string,
+    @Body() dto: SnapshotContactsRevealDto,
+    @Req() req: MstyleRequest,
+  ) {
+    return this.privateData.revealSnapshotContacts(
+      snapshotId,
+      dto,
+      req.mstyleScopes || [],
+    );
   }
 
   @Post('private-data-snapshots/:snapshotId/operation-bindings')
@@ -654,8 +725,11 @@ export class MstylePrivateController {
   }
 
   @Post('guest-parties/:guestPartyId/contacts/reveal')
-  guestRevealContacts(@Param('guestPartyId') guestPartyId: string) {
-    return this.privateData.revealGuestContacts(guestPartyId);
+  guestRevealContacts(
+    @Param('guestPartyId') guestPartyId: string,
+    @Body() dto: RevealDto,
+  ) {
+    return this.privateData.revealGuestContacts(guestPartyId, dto);
   }
 
   @Get('guest-parties/:guestPartyId/private-data/status')
@@ -725,15 +799,14 @@ export class MstylePrivateController {
   guestClaim(
     @Param('guestPartyId') guestPartyId: string,
     @Body() dto: ClaimGuestDto,
-    @Headers('if-match') ifMatch: string | undefined,
     @Req() req: MstyleRequest,
   ) {
     return this.withIdempotency(
       req,
       'POST',
       `/guest-parties/${guestPartyId}/claim`,
-      { dto, ifMatch },
-      () => this.guests.claim(guestPartyId, dto, ifMatch),
+      dto,
+      () => this.guests.claim(guestPartyId, dto, req.mstyleResidentSubject!),
     );
   }
 
@@ -785,12 +858,20 @@ export class MstylePrivateController {
     replayWindow = false,
   ) {
     const key = String(req.headers['idempotency-key'] || '');
+    const fingerprintBody = {
+      body,
+      actorRef: req.mstyleActorRef || null,
+      residentSubject: req.mstyleResidentSubject || null,
+      purposeCode: req.mstylePurposeCode || null,
+      stepUpAuthenticationId:
+        String(req.headers['x-step-up-authentication-id'] || '') || null,
+    };
     const replay = await this.idempotency.replayOrThrow({
       clientId: req.mstyleClientId!,
       idempotencyKey: key,
       method,
       route,
-      body,
+      body: fingerprintBody,
       replayExpiredCode,
     });
     if (replay) return replay;
@@ -800,7 +881,7 @@ export class MstylePrivateController {
       idempotencyKey: key,
       method,
       route,
-      body,
+      body: fingerprintBody,
       result,
       replayWindow,
     });

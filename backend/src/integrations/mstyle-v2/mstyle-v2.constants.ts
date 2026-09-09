@@ -96,6 +96,33 @@ export const MSTYLE_REQUIRED_M0_SCOPES = [
   'mstyle.snapshot.operation.bind',
 ] as const;
 
+/**
+ * Additional scopes required by the mandatory M1/M2 routes. R-03 is kept
+ * separate because it belongs exclusively to mstyle-reconcile-prod.
+ */
+export const MSTYLE_REQUIRED_M1_M2_SCOPES = [
+  'mstyle.guest.claim',
+  'mstyle.guest.contact.read',
+  'mstyle.guest.private.reveal',
+  'mstyle.guest.snapshot.contact.reveal',
+  'mstyle.guest.snapshot.private.reveal',
+  'mstyle.integration.admin.change_request.decide',
+  'mstyle.integration.admin.guest.read',
+  'mstyle.integration.admin.identity.read',
+  'mstyle.integration.admin.onboarding.write',
+  'mstyle.integration.admin.physical_access.read',
+  'mstyle.integration.admin.profile.write',
+  'mstyle.resident.change_request.read',
+  'mstyle.resident.change_request.write',
+  'mstyle.resident.physical_access.read',
+  'mstyle.resident.snapshot.contact.reveal',
+  'mstyle.resident.snapshot.private.reveal',
+] as const;
+
+export const MSTYLE_RECONCILE_SCOPES = [
+  'mstyle.integration.reconcile',
+] as const;
+
 export const LEGACY_DATA_SCOPES = [
   MSTYLE_AUTH_SCOPE,
   'mstyle.resident.context.read',
@@ -114,7 +141,6 @@ export const LEGACY_DATA_SCOPES = [
   'mstyle.guests.read',
   'mstyle.guests.write',
   'mstyle.admin.search',
-  'mstyle.changes.read',
 ] as const;
 
 /**
@@ -165,6 +191,8 @@ export const LEGACY_SCOPE_ALIASES: Readonly<Record<string, readonly string[]>> =
       'mstyle.guest.contact.read',
       'mstyle.guest.private.status.read',
       'mstyle.guest.private.reveal',
+      'mstyle.guest.snapshot.contact.reveal',
+      'mstyle.guest.snapshot.private.reveal',
       'mstyle.guest.consent.read',
       'mstyle.integration.admin.guest.read',
     ],
@@ -200,6 +228,7 @@ export function expandMstyleScopes(scopes: readonly string[]): string[] {
 
 export const DEFAULT_DATA_SCOPES = expandMstyleScopes([
   ...MSTYLE_REQUIRED_M0_SCOPES,
+  ...MSTYLE_REQUIRED_M1_M2_SCOPES,
   ...LEGACY_DATA_SCOPES,
 ]);
 
@@ -484,6 +513,34 @@ export const ROUTE_SCOPES: Array<{
 ];
 
 export const RESIDENT_PRIVATE_FIELDS = [
+  'company.fullName',
+  'company.inn',
+  'company.kpp',
+  'company.ogrn',
+  'company.legalAddress',
+  'company.actualAddress',
+  'company.generalDirector',
+  'representative.fullName',
+  'representative.birthDate',
+  'bank.name',
+  'bank.bik',
+  'bank.accountNumber',
+  'bank.correspondentAccountNumber',
+  'entrepreneur.inn',
+  'entrepreneur.ogrnip',
+  'entrepreneur.registrationAddress',
+  'individual.birthDate',
+  'individual.inn',
+  'individual.registrationAddress',
+  'individual.passport.fullName',
+  'individual.passport.gender',
+  'individual.passport.birthDate',
+  'individual.passport.number',
+  'individual.passport.departmentCode',
+  'individual.passport.issuedDate',
+  'individual.passport.issuedBy',
+  // Legacy M0 field codes remain readable while clients migrate to the
+  // structured M1/M2 field paths above.
   'lastName',
   'firstName',
   'middleName',
@@ -510,6 +567,16 @@ export const RESIDENT_PRIVATE_FIELDS = [
 
 export const GUEST_PRIVATE_FIELDS = [
   'displayName',
+  'individual.birthDate',
+  'individual.inn',
+  'individual.registrationAddress',
+  'individual.passport.fullName',
+  'individual.passport.gender',
+  'individual.passport.birthDate',
+  'individual.passport.number',
+  'individual.passport.departmentCode',
+  'individual.passport.issuedDate',
+  'individual.passport.issuedBy',
   'lastName',
   'firstName',
   'middleName',
@@ -520,16 +587,18 @@ export const GUEST_PRIVATE_FIELDS = [
 ] as const;
 
 export const REQUIRED_INDIVIDUAL_FIELDS = [
-  'lastName',
-  'firstName',
-  'birthDate',
+  'individual.birthDate',
+  'individual.passport.fullName',
 ] as const;
 export const REQUIRED_COMPANY_FIELDS = [
-  'companyFullName',
-  'inn',
-  'ogrn',
+  'company.fullName',
+  'company.inn',
+  'company.ogrn',
 ] as const;
-export const REQUIRED_GUEST_FIELDS = ['lastName', 'firstName'] as const;
+export const REQUIRED_GUEST_FIELDS = [
+  'displayName',
+  'individual.birthDate',
+] as const;
 
 export const AUTH_SUCCESS_REPLAY_MS = 60_000;
 export const CHALLENGE_TTL_MS = 5 * 60_000;

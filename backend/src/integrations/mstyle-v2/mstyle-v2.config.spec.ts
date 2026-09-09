@@ -66,7 +66,7 @@ describe('MstyleV2Config OAuth clients', () => {
         'mstyle-reconcile-prod-20260827-01':
           '-----BEGIN PUBLIC KEY-----\nreconcile\n-----END PUBLIC KEY-----',
       },
-      scopes: ['mstyle.changes.read', 'mstyle.integration.reconcile'],
+      scopes: ['mstyle.integration.reconcile'],
     });
     expect(() => config.assertReady()).not.toThrow();
   });
@@ -97,6 +97,10 @@ describe('MstyleV2Config OAuth clients', () => {
 
     expect(config.defaultScopes()).toEqual(
       expect.arrayContaining([...MSTYLE_REQUIRED_M0_SCOPES]),
+    );
+    expect(config.defaultScopes()).not.toContain('mstyle.changes.read');
+    expect(config.defaultScopes()).not.toContain(
+      'mstyle.integration.reconcile',
     );
   });
 

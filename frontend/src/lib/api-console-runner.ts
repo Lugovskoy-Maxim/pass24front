@@ -377,6 +377,12 @@ export async function runV2ApiCycle(
   const empEmail = `probe-emp-${stamp}@pass24.test`;
   const guestEmail = `probe-gst-${stamp}@pass24.test`;
   const phone = `+7999${String(Date.now()).slice(-7)}`;
+  const operationRef = {
+    sourceSystem: 'mstyle',
+    environment: 'production',
+    operationType: 'booking',
+    operationId: `probe-booking:${stamp}`,
+  };
   const step = makeStep(onStep);
   let svc = '';
 
@@ -389,6 +395,52 @@ export async function runV2ApiCycle(
   ) => {
     const { idempotent, ...rest } = opts || {};
     const headers = { ...(rest.headers || {}) };
+    const adminIds = new Set([
+      'R-06',
+      'R-08',
+      'R-09',
+      'R-10',
+      'R-14',
+      'R-15',
+      'R-17',
+      'G-05',
+      'G-07',
+      'G-12',
+    ]);
+    const residentIds = new Set([
+      'R-11',
+      'R-11b',
+      'R-12',
+      'R-13',
+      'R-16',
+      'M-03',
+      'M-04',
+      'M-05',
+      'P-05',
+      'G-11',
+    ]);
+    if (adminIds.has(id)) {
+      headers['X-Actor-Ref'] = 'wp-admin:api-console';
+      headers['X-Admin-Step-Up-Assertion'] = adminJwt || 'api-console-step-up';
+    }
+    if (['R-06', 'R-15', 'G-05', 'G-07', 'G-12'].includes(id)) {
+      headers['X-Purpose-Code'] = 'admin_support_review';
+    }
+    if (id === 'R-08') headers['X-Purpose-Code'] = 'resident_onboarding';
+    if (residentIds.has(id)) {
+      headers['X-Resident-Subject'] = subject || 'usr_probe_missing';
+      headers['X-Actor-Ref'] = `resident:${subject || 'usr_probe_missing'}`;
+      headers['X-Step-Up-Authentication-ID'] = 'aut_api_console_probe';
+    }
+    if (['R-11', 'R-11b'].includes(id)) {
+      headers['X-Purpose-Code'] = 'profile_change_request';
+    }
+    if (id === 'P-05') headers['X-Purpose-Code'] = 'account_profile_view';
+    if (['P-06', 'P-07'].includes(id)) {
+      headers['X-Actor-Ref'] = 'system:delivery';
+      headers['X-Purpose-Code'] = 'booking_document_render';
+    }
+    if (id === 'R-03') headers['X-Actor-Ref'] = 'system:reconcile';
     if (idempotent || (idempotent !== false && method !== 'GET')) {
       headers['Idempotency-Key'] = idem();
     }
@@ -446,7 +498,7 @@ export async function runV2ApiCycle(
       'A-02',
       'verify password',
       'POST',
-      '/auth/residents/password-verify',
+      '/auth/residents/password:verify',
       {
         idempotent: true,
         body: {
@@ -466,13 +518,43 @@ export async function runV2ApiCycle(
       {
         body: {
           schemaVersion: SV,
-          profileType: 'company',
-          legalForm: 'ooo',
-          label: `probe-${stamp}`,
           owner: {
-            identifier: { type: 'email', value: v2Email },
-            displayName: `Probe ${stamp}`,
-            name: { lastName: 'Probe', firstName: 'V2' },
+            invitation: {
+              email: v2Email,
+              displayName: `Probe ${stamp}`,
+            },
+          },
+          profile: {
+            type: 'company',
+            legalForm: 'ooo',
+            label: `probe-${stamp}`,
+            companyShortName: `probe-${stamp}`,
+            memberPolicy: { employeeLimit: 5 },
+          },
+          privateData: {
+            profileType: 'company',
+            legalForm: 'ooo',
+            data: {
+              fullName: `ООО Probe ${stamp}`,
+              inn: '7700000000',
+              ogrn: '1027700000000',
+            },
+          },
+          initialContactAssignments: [
+            {
+              purpose: 'primary',
+              source: {
+                kind: 'owner_invitation_contact',
+                contactType: 'email',
+              },
+              priority: 1,
+            },
+          ],
+          sourceLink: {
+            sourceSystem: 'mstyle-wordpress',
+            environment: 'production',
+            entityType: 'resident',
+            externalId: `probe:${stamp}`,
           },
         },
       },
@@ -548,7 +630,15 @@ export async function runV2ApiCycle(
       },
     );
     await v2('R-14', 'get identity', 'GET', `/identities/${subject}`);
-    await v2('R-03', 'change feed', 'GET', '/changes?limit=20');
+    await v2(
+      'R-03',
+      'change feed (requires reconcile client)',
+      'GET',
+      '/changes?limit=20',
+      {
+        okStatuses: [403],
+      },
+    );
     await v2(
       'R-05',
       'patch profile',
@@ -570,7 +660,12 @@ export async function runV2ApiCycle(
       'POST',
       `/resident-profiles/${profileId}/lifecycle-transitions`,
       {
-        body: { schemaVersion: SV, transition: 'activate' },
+        headers: { 'If-Match': '"profile-2"' },
+        body: {
+          schemaVersion: SV,
+          targetStatus: 'active',
+          reasonCode: 'probe_activation',
+        },
       },
     );
     await v2(
@@ -582,7 +677,8 @@ export async function runV2ApiCycle(
     await v2('R-06', 'search profiles', 'POST', '/resident-profiles/search', {
       body: {
         schemaVersion: SV,
-        query: { label: `probe-${stamp}` },
+        query: { type: 'text', value: `probe-${stamp}` },
+        sort: { field: 'updatedAt', direction: 'desc' },
         limit: 20,
       },
     });
@@ -618,7 +714,12 @@ export async function runV2ApiCycle(
       'PATCH',
       `/resident-memberships/${employeeMembershipId}`,
       {
-        body: { schemaVersion: SV, status: 'active' },
+        headers: { 'If-Match': '"memberships-2"' },
+        body: {
+          schemaVersion: SV,
+          status: 'active',
+          reasonCode: 'probe_activation',
+        },
       },
     );
     const transfer = await v2(
@@ -626,7 +727,15 @@ export async function runV2ApiCycle(
       'transfer owner',
       'POST',
       `/resident-profiles/${profileId}/owner-transfer`,
-      { body: { schemaVersion: SV, newOwnerSubject: employeeSubject } },
+      {
+        body: {
+          schemaVersion: SV,
+          newOwnerSubject: employeeSubject,
+          expectedProfileRevision: 3,
+          expectedMembershipSetRevision: 3,
+          reasonCode: 'owner_transfer',
+        },
+      },
     );
     const revokeId = transfer.ok ? ownerMembershipId : employeeMembershipId;
     await v2(
@@ -634,6 +743,13 @@ export async function runV2ApiCycle(
       'revoke membership',
       'POST',
       `/resident-memberships/${revokeId}/revoke`,
+      {
+        headers: { 'If-Match': '"memberships-4"' },
+        body: {
+          schemaVersion: SV,
+          reasonCode: 'owner_removed_employee',
+        },
+      },
     );
 
     const cch = await v2(
@@ -759,10 +875,24 @@ export async function runV2ApiCycle(
     );
     snapshotId = pick(snap.body, 'snapshotId') || 'snp_probe_missing';
     await v2(
+      'P-08',
+      'bind snapshot',
+      'POST',
+      `/private-data-snapshots/${snapshotId}/operation-bindings`,
+      { body: { schemaVersion: SV, operationRef } },
+    );
+    await v2(
       'P-05',
       'reveal profile contacts',
       'POST',
       `/resident-profiles/${profileId}/contacts/reveal`,
+      {
+        body: {
+          schemaVersion: SV,
+          contactPurpose: 'primary',
+          fieldCodes: ['displayName', 'phone', 'email'],
+        },
+      },
     );
     await v2(
       'P-06',
@@ -770,7 +900,11 @@ export async function runV2ApiCycle(
       'POST',
       `/private-data-snapshots/${snapshotId}/reveal`,
       {
-        body: { schemaVersion: SV, fieldCodes: ['inn', 'ogrn'] },
+        body: {
+          schemaVersion: SV,
+          operationRef,
+          fieldCodes: ['company.inn', 'company.ogrn'],
+        },
       },
     );
     await v2(
@@ -778,14 +912,12 @@ export async function runV2ApiCycle(
       'reveal snapshot contacts',
       'POST',
       `/private-data-snapshots/${snapshotId}/contacts/reveal`,
-    );
-    await v2(
-      'P-08',
-      'bind snapshot',
-      'POST',
-      `/private-data-snapshots/${snapshotId}/operation-bindings`,
       {
-        body: { schemaVersion: SV, operationRef: `op_probe_${stamp}` },
+        body: {
+          schemaVersion: SV,
+          operationRef,
+          fieldCodes: ['displayName', 'phone', 'email'],
+        },
       },
     );
 
@@ -797,10 +929,15 @@ export async function runV2ApiCycle(
       {
         body: {
           schemaVersion: SV,
-          fieldCodes: ['companyShortName'],
-          values: { companyShortName: `probe-${stamp}-cr` },
           reasonCode: 'probe_cycle',
+          expectedPrivateDataRevision: 2,
+          privateData: {
+            profileType: 'company',
+            legalForm: 'ooo',
+            data: { legalAddress: `probe-${stamp}-cr` },
+          },
         },
+        headers: { 'If-Match': '"profile-3"' },
       },
     );
     changeRequestId = pick(cr1.body, 'changeRequestId') || 'crq_probe_missing';
@@ -815,6 +952,10 @@ export async function runV2ApiCycle(
       'cancel change request',
       'POST',
       `/resident-profile-change-requests/${changeRequestId}/cancel`,
+      {
+        headers: { 'If-Match': '"change-request-1"' },
+        body: { schemaVersion: SV, reasonCode: 'author_cancelled' },
+      },
     );
     const cr2 = await v2(
       'R-11b',
@@ -824,10 +965,15 @@ export async function runV2ApiCycle(
       {
         body: {
           schemaVersion: SV,
-          fieldCodes: ['inn'],
-          values: { inn: '7700000001' },
           reasonCode: 'probe_cycle',
+          expectedPrivateDataRevision: 2,
+          privateData: {
+            profileType: 'company',
+            legalForm: 'ooo',
+            data: { inn: '7700000001' },
+          },
         },
+        headers: { 'If-Match': '"profile-3"' },
       },
     );
     const cr2Id = pick(cr2.body, 'changeRequestId') || 'crq_probe_missing_2';
@@ -836,11 +982,22 @@ export async function runV2ApiCycle(
       'decide change request',
       'POST',
       `/resident-profile-change-requests/${cr2Id}/decisions`,
-      { body: { schemaVersion: SV, decision: 'approve' } },
+      {
+        headers: { 'If-Match': '"change-request-1"' },
+        body: {
+          schemaVersion: SV,
+          decision: 'approve',
+          reasonCode: 'documents_verified',
+        },
+      },
     );
 
     const guest = await v2('G-01', 'create guest', 'POST', '/guest-parties', {
-      body: { schemaVersion: SV, purpose: `probe-${stamp}`, role: 'primary' },
+      body: {
+        schemaVersion: SV,
+        purpose: 'mstyle_booking',
+        role: 'primary',
+      },
     });
     guestId =
       pick(guest.body, 'guestPartyId') ||
@@ -868,6 +1025,7 @@ export async function runV2ApiCycle(
       'reveal guest contacts',
       'POST',
       `/guest-parties/${guestId}/contacts/reveal`,
+      { body: { schemaVersion: SV, fieldCodes: ['phone', 'email'] } },
     );
     await v2(
       'G-08',
@@ -878,9 +1036,12 @@ export async function runV2ApiCycle(
         body: {
           schemaVersion: SV,
           values: {
-            lastName: 'Probe',
-            firstName: 'Guest',
             displayName: `Probe Guest ${stamp}`,
+            individual: {
+              birthDate: '1990-01-15',
+              inn: '770000000000',
+              passport: { fullName: `Probe Guest ${stamp}` },
+            },
           },
         },
       },
@@ -899,7 +1060,7 @@ export async function runV2ApiCycle(
       {
         body: {
           schemaVersion: SV,
-          fieldCodes: ['lastName', 'firstName', 'displayName'],
+          fieldCodes: ['displayName', 'individual.inn'],
         },
       },
     );
@@ -918,7 +1079,7 @@ export async function runV2ApiCycle(
       {
         body: {
           schemaVersion: SV,
-          operationRef: `book_probe_${stamp}`,
+          operationRef,
           snapshotId: guestSnapshotId,
         },
       },
@@ -926,10 +1087,8 @@ export async function runV2ApiCycle(
     await v2('G-11', 'claim guest', 'POST', `/guest-parties/${guestId}/claim`, {
       body: {
         schemaVersion: SV,
-        subject,
-        claimedProfileId: profileId.startsWith('prf_probe_missing')
-          ? undefined
-          : profileId,
+        profileId,
+        expectedGuestPartyRevision: 5,
       },
     });
     await v2(
@@ -959,7 +1118,12 @@ export async function runV2ApiCycle(
       `/guest-parties/${guestId}/consents/guest_pdn/withdraw`,
     );
     await v2('G-12', 'search guests', 'POST', '/guest-parties/search', {
-      body: { schemaVersion: SV, query: { guestPartyId: guestId }, limit: 20 },
+      body: {
+        schemaVersion: SV,
+        query: { type: 'guestPartyId', value: guestId },
+        sort: { field: 'updatedAt', direction: 'desc' },
+        limit: 20,
+      },
     });
 
     const del = await v2(
@@ -967,7 +1131,14 @@ export async function runV2ApiCycle(
       'deletion request',
       'POST',
       `/resident-profiles/${profileId}/deletion-requests`,
-      { body: { schemaVersion: SV, reasonCodes: ['probe_cycle'] } },
+      {
+        headers: { 'If-Match': '"profile-4"' },
+        body: {
+          schemaVersion: SV,
+          mode: 'anonymize',
+          reasonCode: 'probe_cycle',
+        },
+      },
     );
     deletionRequestId =
       pick(del.body, 'deletionRequestId') || 'del_probe_missing';

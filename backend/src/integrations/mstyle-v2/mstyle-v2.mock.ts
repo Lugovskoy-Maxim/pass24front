@@ -277,25 +277,45 @@ const GUEST_SOURCE_REVISIONS = {
 };
 
 const RESIDENT_PRIVATE_VALUES: Record<string, unknown> = {
-  companyFullName: 'Общество с ограниченной ответственностью «Пример»',
-  companyShortName: 'ООО «Пример»',
-  inn: '7700000000',
-  kpp: '770001001',
-  ogrn: '1027700000000',
-  legalAddress: '123456, г. Москва, ул. Примерная, д. 1',
-  actualAddress: '123456, г. Москва, ул. Примерная, д. 1',
-  ceoName: 'Иванов Иван Иванович',
+  company: {
+    fullName: 'Общество с ограниченной ответственностью «Пример»',
+    inn: '7700000000',
+    kpp: '770001001',
+    ogrn: '1027700000000',
+    legalAddress: '123456, г. Москва, ул. Примерная, д. 1',
+    actualAddress: '123456, г. Москва, ул. Примерная, д. 1',
+    generalDirector: 'Иванов Иван Иванович',
+  },
 };
 
 const GUEST_PRIVATE_VALUES: Record<string, unknown> = {
   displayName: 'Петров Пётр Петрович',
-  lastName: 'Петров',
-  firstName: 'Пётр',
-  middleName: 'Петрович',
-  birthDate: '1990-01-15',
-  documentType: 'passport_rf',
-  documentSeries: '4510',
-  documentNumber: '123456',
+  individual: {
+    birthDate: '1990-01-15',
+    inn: '770000000000',
+    passport: {
+      fullName: 'Петров Пётр Петрович',
+      birthDate: '1990-01-15',
+      number: '4510 123456',
+    },
+  },
+};
+
+const RESIDENT_CONTACT_VALUES: Record<string, unknown> = {
+  displayName: SAFE_IDENTITY.displayName,
+  phone: '+79990001234',
+  email: 'ivanov@example.test',
+};
+
+const GUEST_CONTACT_VALUES: Record<string, unknown> = {
+  email: 'guest@example.test',
+};
+
+const OPERATION_REF = {
+  sourceSystem: 'mstyle',
+  environment: 'production',
+  operationType: 'booking',
+  operationId: 'booking:107',
 };
 
 function schema(extra: Record<string, unknown>) {
@@ -319,18 +339,59 @@ function bodyString(input: MstyleMockInput, name: string, fallback: string) {
   return typeof value === 'string' && value ? value : fallback;
 }
 
+function bodyObject<T extends Record<string, unknown>>(
+  input: MstyleMockInput,
+  name: string,
+  fallback: T,
+): Record<string, unknown> {
+  const value = input.body?.[name];
+  return value && typeof value === 'object' && !Array.isArray(value)
+    ? (value as Record<string, unknown>)
+    : fallback;
+}
+
 function selectedValues(
   input: MstyleMockInput,
   values: Record<string, unknown>,
 ) {
   const codes = input.body?.fieldCodes;
   if (!Array.isArray(codes) || !codes.length) return { ...values };
-  return Object.fromEntries(
-    codes
-      .filter((code): code is string => typeof code === 'string')
-      .filter((code) => code in values)
-      .map((code) => [code, values[code]]),
-  );
+  const selected: Record<string, unknown> = {};
+  for (const code of codes.filter(
+    (item): item is string => typeof item === 'string',
+  )) {
+    const value = getNestedValue(values, code);
+    if (value !== undefined) setNestedValue(selected, code, value);
+  }
+  return selected;
+}
+
+function getNestedValue(
+  source: Record<string, unknown>,
+  path: string,
+): unknown {
+  let value: unknown = source;
+  for (const part of path.split('.')) {
+    if (!value || typeof value !== 'object' || Array.isArray(value)) {
+      return undefined;
+    }
+    value = (value as Record<string, unknown>)[part];
+  }
+  return value;
+}
+
+function setNestedValue(
+  target: Record<string, unknown>,
+  path: string,
+  value: unknown,
+) {
+  const parts = path.split('.');
+  let cursor = target;
+  for (const part of parts.slice(0, -1)) {
+    if (!cursor[part] || typeof cursor[part] !== 'object') cursor[part] = {};
+    cursor = cursor[part] as Record<string, unknown>;
+  }
+  cursor[parts[parts.length - 1]] = value;
 }
 
 function consent(input: MstyleMockInput, status: 'accepted' | 'withdrawn') {
@@ -503,16 +564,20 @@ export function createMstyleMockResponse(
       return {
         status: 200,
         body: schema({
-          streamName: 'mstyle-resident-sync',
+          streamName: 'mstyle-production',
           items: [
             schema({
-              streamName: 'mstyle-resident-sync',
-              environment: 'staging',
+              streamName: 'mstyle-production',
+              environment: 'production',
               sequence: 42,
               eventId: eventId('7CQ'),
               type: 'profile.updated',
               occurredAt: UPDATED_AT,
-              aggregate: { type: 'profile', id: profileId, revision: 2 },
+              aggregate: {
+                type: 'resident_profile',
+                id: profileId,
+                revision: 2,
+              },
               subject,
               profileId,
               payload: { changedFieldCodes: ['companyShortName'] },
@@ -589,8 +654,8 @@ export function createMstyleMockResponse(
           profileRevision: 1,
           membershipRevision: 1,
           assignmentSetRevision: 1,
-          privateDataRevision: null,
-          invitationStatus: 'invited',
+          privateDataRevision: 1,
+          invitationStatus: 'pending',
           contextRevision: 1,
           eventIds: [eventId('7CT')],
         }),
@@ -601,7 +666,7 @@ export function createMstyleMockResponse(
         status: 200,
         body: schema({
           profileId,
-          profileStatus: 'active',
+          profileStatus: bodyString(input, 'targetStatus', 'active'),
           profileRevision: 3,
           contextRevision: 6,
           eventIds: [eventId('7CU')],
@@ -643,8 +708,8 @@ export function createMstyleMockResponse(
           status: 'pending',
           changeRequestRevision: 1,
           profileRevisionAtRequest: 2,
-          changedFieldCodes: ['companyShortName'],
-          reasonCode: 'resident_request',
+          changedFieldCodes: ['company.legalAddress'],
+          reasonCode: 'requisites_update',
           expiresAt: EXPIRES_AT,
           createdAt: UPDATED_AT,
         }),
@@ -762,7 +827,10 @@ export function createMstyleMockResponse(
           membership: {
             ...EMPLOYEE_MEMBERSHIP,
             id: membershipId,
-            status: input.id === 'M-04' ? 'revoked' : 'active',
+            status:
+              input.id === 'M-04'
+                ? 'revoked'
+                : bodyString(input, 'status', 'active'),
             revision: 2,
           },
           membershipSetRevision: 4,
@@ -890,7 +958,12 @@ export function createMstyleMockResponse(
           profileType: 'company',
           legalForm: 'ooo',
           revision: 1,
-          sourceRevisions: RESIDENT_SOURCE_REVISIONS,
+          sourceRevisions: {
+            profileContactAssignments:
+              RESIDENT_SOURCE_REVISIONS.profileContactAssignments,
+            contactIdentity: RESIDENT_SOURCE_REVISIONS.contactIdentity,
+            identityContacts: RESIDENT_SOURCE_REVISIONS.identityContacts,
+          },
           values: selectedValues(input, RESIDENT_PRIVATE_VALUES),
         }),
       };
@@ -915,12 +988,13 @@ export function createMstyleMockResponse(
         body: schema({
           partyType: 'resident_profile',
           partyId: profileId,
-          sourceRevisions: RESIDENT_SOURCE_REVISIONS,
-          values: {
-            displayName: SAFE_IDENTITY.displayName,
-            phone: '+79990001234',
-            email: 'ivanov@example.test',
+          sourceRevisions: {
+            profileContactAssignments:
+              RESIDENT_SOURCE_REVISIONS.profileContactAssignments,
+            contactIdentity: RESIDENT_SOURCE_REVISIONS.contactIdentity,
+            identityContacts: RESIDENT_SOURCE_REVISIONS.identityContacts,
           },
+          values: selectedValues(input, RESIDENT_CONTACT_VALUES),
         }),
       };
     case 'P-06':
@@ -944,11 +1018,7 @@ export function createMstyleMockResponse(
           partyId: profileId,
           snapshotRevision: 1,
           sourceRevisions: RESIDENT_SOURCE_REVISIONS,
-          values: {
-            displayName: SAFE_IDENTITY.displayName,
-            phone: '+79990001234',
-            email: 'ivanov@example.test',
-          },
+          values: selectedValues(input, RESIDENT_CONTACT_VALUES),
         }),
       };
     case 'P-08':
@@ -958,7 +1028,7 @@ export function createMstyleMockResponse(
           bindingId: 'bnd_01J5Q8K2M7N4P6R9T1V3X5Z7D9',
           bindingRevision: 1,
           snapshotId,
-          operationRef: bodyString(input, 'operationRef', 'booking:107'),
+          operationRef: bodyObject(input, 'operationRef', OPERATION_REF),
           status: 'bound',
           boundAt: UPDATED_AT,
           eventIds: [eventId('7D9')],
@@ -1035,7 +1105,7 @@ export function createMstyleMockResponse(
           sourceRevisions: {
             guestContacts: GUEST_SOURCE_REVISIONS.guestContacts,
           },
-          values: { email: 'guest@example.test' },
+          values: selectedValues(input, GUEST_CONTACT_VALUES),
         }),
       };
     case 'G-06':
@@ -1050,7 +1120,10 @@ export function createMstyleMockResponse(
           partyType: 'guest_party',
           partyId: guestPartyId,
           revision: 1,
-          sourceRevisions: GUEST_SOURCE_REVISIONS,
+          sourceRevisions: {
+            guestParty: GUEST_SOURCE_REVISIONS.guestParty,
+            privateData: GUEST_SOURCE_REVISIONS.privateData,
+          },
           values: selectedValues(input, GUEST_PRIVATE_VALUES),
         }),
       };
@@ -1077,7 +1150,7 @@ export function createMstyleMockResponse(
           status: 'booked',
           revision: 5,
           operationLink: {
-            operationRef: bodyString(input, 'operationRef', 'booking:107'),
+            operationRef: bodyObject(input, 'operationRef', OPERATION_REF),
             snapshotId: bodyString(input, 'snapshotId', MOCK_GUEST_SNAPSHOT_ID),
             bindingRevision: 1,
           },
@@ -1091,12 +1164,8 @@ export function createMstyleMockResponse(
         body: schema({
           guestPartyId,
           status: 'claimed',
-          claimedBySubject: bodyString(input, 'subject', MOCK_SUBJECT),
-          claimedProfileId: bodyString(
-            input,
-            'claimedProfileId',
-            MOCK_PROFILE_ID,
-          ),
+          claimedBySubject: MOCK_SUBJECT,
+          claimedProfileId: bodyString(input, 'profileId', MOCK_PROFILE_ID),
           revision: 6,
           eventIds: [eventId('7DF')],
         }),
@@ -1169,7 +1238,9 @@ export function matchMstyleMockEndpoint(
   for (const endpoint of endpoints) {
     if (endpoint.method !== method.toUpperCase()) continue;
     const names: string[] = [];
-    const endpointPath = endpoint.path.split('?')[0];
+    const endpointPath = endpoint.path
+      .split('?')[0]
+      .replace(/password:verify/g, 'password-verify');
     const segments = endpointPath.split('/').map((segment) => {
       const placeholder = segment.match(/^\{([^}]+)\}$/);
       if (placeholder) {

@@ -34,6 +34,9 @@ export type MstyleRequest = Request & {
   mstyleRequestId: string;
   mstyleClientId?: string;
   mstyleScopes?: string[];
+  mstyleResidentSubject?: string;
+  mstyleActorRef?: string;
+  mstylePurposeCode?: string;
 };
 
 export const REQUIRE_IDEMPOTENCY = 'mstyle:idempotency';
@@ -142,6 +145,211 @@ export class MstyleRequestGuard implements CanActivate {
   }
 }
 
+/**
+ * Enforces the actor context defined by the M1/M2 contract. The cryptographic
+ * format of X-Admin-Step-Up-Assertion is intentionally owned by the Pass admin
+ * authentication layer; until that verifier is wired here we still reject a
+ * missing assertion and never treat X-Actor-Ref alone as authorization.
+ */
+@Injectable()
+export class MstyleRouteContextGuard implements CanActivate {
+  constructor(private readonly cfg: MstyleV2Config) {}
+
+  canActivate(ctx: ExecutionContext): boolean {
+    const req = ctx.switchToHttp().getRequest<MstyleRequest>();
+    const path = (req.originalUrl || req.url || '').split('?')[0];
+    const method = (req.method || 'GET').toUpperCase();
+    const isChanges = method === 'GET' && /\/changes$/.test(path);
+    const reconcileClientId = this.cfg.reconcileClientId();
+
+    if (isChanges) {
+      if (!reconcileClientId || req.mstyleClientId !== reconcileClientId) {
+        problem(403, 'INSUFFICIENT_SCOPE');
+      }
+    } else if (reconcileClientId && req.mstyleClientId === reconcileClientId) {
+      problem(403, 'INSUFFICIENT_SCOPE');
+    }
+
+    const actor = header(req, 'x-actor-ref');
+    const purpose = header(req, 'x-purpose-code');
+    req.mstyleActorRef = actor || undefined;
+    req.mstylePurposeCode = purpose || undefined;
+
+    if (isChanges) {
+      requireHeaderValue('X-Actor-Ref', actor, 'system:reconcile');
+      return true;
+    }
+
+    const policy = m1m2ContextPolicy(method, path, actor);
+    if (!policy) return true;
+
+    if (policy.actor === 'resident') {
+      const subject = header(req, 'x-resident-subject');
+      requireHeader('X-Resident-Subject', subject);
+      requireHeaderValue('X-Actor-Ref', actor, `resident:${subject}`);
+      requireHeader(
+        'X-Step-Up-Authentication-ID',
+        header(req, 'x-step-up-authentication-id'),
+      );
+      if (policy.purposes) requirePurpose(purpose, policy.purposes);
+      req.mstyleResidentSubject = subject;
+      return true;
+    }
+
+    if (policy.actor === 'admin') {
+      if (!/^wp-admin:[^:\s]+$/.test(actor)) {
+        validationError('X-Actor-Ref', 'must identify a wp-admin actor');
+      }
+      requireHeader(
+        'X-Admin-Step-Up-Assertion',
+        header(req, 'x-admin-step-up-assertion'),
+      );
+      if (policy.purposes) requirePurpose(purpose, policy.purposes);
+      return true;
+    }
+
+    requireHeaderValue('X-Actor-Ref', actor, 'system:delivery');
+    requirePurpose(purpose, policy.purposes || []);
+    return true;
+  }
+}
+
+type ContextPolicy = {
+  actor: 'resident' | 'admin' | 'delivery';
+  purposes?: readonly string[];
+};
+
+function m1m2ContextPolicy(
+  method: string,
+  path: string,
+  actor: string,
+): ContextPolicy | null {
+  const adminOnly =
+    (method === 'POST' && /\/resident-profiles\/search$/.test(path)) ||
+    (method === 'POST' && /\/resident-onboarding$/.test(path)) ||
+    (method === 'POST' &&
+      /\/resident-profiles\/[^/]+\/lifecycle-transitions$/.test(path)) ||
+    (method === 'POST' &&
+      /\/resident-profiles\/[^/]+\/deletion-requests$/.test(path)) ||
+    (method === 'GET' && /\/identities\/[^/]+$/.test(path)) ||
+    (method === 'POST' &&
+      /\/resident-profile-change-requests\/[^/]+\/decisions$/.test(path)) ||
+    (method === 'GET' && /\/deletion-requests\/[^/]+$/.test(path)) ||
+    (method === 'POST' && /\/guest-parties\/search$/.test(path)) ||
+    (method === 'POST' &&
+      /\/guest-parties\/[^/]+\/(?:contacts|private-data)\/reveal$/.test(path));
+  if (adminOnly) {
+    if (/\/resident-onboarding$/.test(path)) {
+      return { actor: 'admin', purposes: ['resident_onboarding'] };
+    }
+    if (/\/identities\/[^/]+$/.test(path)) {
+      return { actor: 'admin' };
+    }
+    if (
+      /\/resident-profiles\/search$/.test(path) ||
+      /\/resident-profile-change-requests\/[^/]+\/decisions$/.test(path) ||
+      /\/guest-parties\/(?:search|[^/]+\/(?:contacts|private-data)\/reveal)$/.test(
+        path,
+      )
+    ) {
+      return {
+        actor: 'admin',
+        purposes: /\/decisions$/.test(path)
+          ? ['admin_support_review', 'profile_change_request']
+          : ['admin_support_review'],
+      };
+    }
+    return { actor: 'admin' };
+  }
+
+  if (
+    method === 'GET' &&
+    /\/resident-profiles\/[^/]+\/physical-access$/.test(path)
+  ) {
+    return actor.startsWith('wp-admin:')
+      ? { actor: 'admin' }
+      : { actor: 'resident' };
+  }
+  if (
+    method === 'POST' &&
+    /\/resident-profiles\/[^/]+\/contacts\/reveal$/.test(path)
+  ) {
+    return actor.startsWith('wp-admin:')
+      ? { actor: 'admin', purposes: ['admin_support_review'] }
+      : { actor: 'resident', purposes: ['account_profile_view'] };
+  }
+  if (
+    method === 'POST' &&
+    /\/private-data-snapshots\/[^/]+\/reveal$/.test(path)
+  ) {
+    return actor.startsWith('wp-admin:')
+      ? { actor: 'admin', purposes: ['admin_support_review'] }
+      : { actor: 'delivery', purposes: ['booking_document_render'] };
+  }
+  if (
+    method === 'POST' &&
+    /\/private-data-snapshots\/[^/]+\/contacts\/reveal$/.test(path)
+  ) {
+    return {
+      actor: 'delivery',
+      purposes: [
+        'booking_document_render',
+        'payment_receipt_delivery',
+        'booking_notification_delivery',
+      ],
+    };
+  }
+
+  const residentOnly =
+    (method === 'POST' &&
+      /\/resident-profiles\/[^/]+\/change-requests$/.test(path)) ||
+    (method === 'GET' &&
+      /\/resident-profiles\/[^/]+\/change-requests\/current$/.test(path)) ||
+    (method === 'POST' &&
+      /\/resident-profile-change-requests\/[^/]+\/cancel$/.test(path)) ||
+    (method === 'PATCH' && /\/resident-memberships\/[^/]+$/.test(path)) ||
+    (method === 'POST' &&
+      /\/resident-memberships\/[^/]+\/revoke$/.test(path)) ||
+    (method === 'POST' &&
+      /\/resident-profiles\/[^/]+\/owner-transfer$/.test(path)) ||
+    (method === 'POST' && /\/guest-parties\/[^/]+\/claim$/.test(path));
+  if (!residentOnly) return null;
+  return {
+    actor: 'resident',
+    purposes: /\/change-requests$/.test(path)
+      ? ['profile_change_request']
+      : undefined,
+  };
+}
+
+function header(req: Request, name: string): string {
+  return String(req.headers[name] || '').trim();
+}
+
+function requireHeader(name: string, value: string): void {
+  if (!value) validationError(name, 'Required');
+}
+
+function requireHeaderValue(
+  name: string,
+  value: string,
+  expected: string,
+): void {
+  if (value !== expected) validationError(name, `must be ${expected}`);
+}
+
+function requirePurpose(value: string, allowed: readonly string[]): void {
+  if (!allowed.includes(value)) {
+    validationError('X-Purpose-Code', `must be one of: ${allowed.join(', ')}`);
+  }
+}
+
+function validationError(field: string, message: string): never {
+  problem(422, 'VALIDATION_FAILED', {
+    errors: [{ field, code: 'invalid', message }],
+  });
+}
+
 @Injectable()
 export class MstyleResultInterceptor implements NestInterceptor {
   intercept(
@@ -181,6 +389,7 @@ export class MstyleProblemFilter implements ExceptionFilter {
     const res = ctx.getResponse<Response>();
     const requestId = req.mstyleRequestId || Ids.request();
     res.setHeader('X-Request-ID', requestId);
+    res.setHeader('Cache-Control', 'no-store');
 
     if (exception instanceof OAuthException) {
       return res.status(exception.getStatus()).json(exception.toBody());

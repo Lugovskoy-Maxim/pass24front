@@ -13,6 +13,7 @@ import { MstyleGuestsService } from './mstyle-v2.guests.service';
 import {
   MstyleEnabledGuard,
   MstyleRequestGuard,
+  MstyleRouteContextGuard,
   MstyleServiceTokenGuard,
 } from './mstyle-v2.http';
 import { MstyleIdempotencyService } from './mstyle-v2.idempotency';
@@ -53,6 +54,7 @@ import { MSTYLE_MODELS } from './mstyle-v2.schemas';
     MstyleEnabledGuard,
     MstyleServiceTokenGuard,
     MstyleRequestGuard,
+    MstyleRouteContextGuard,
   ],
 })
 export class MstyleV2Module {}
