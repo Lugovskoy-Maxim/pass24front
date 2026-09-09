@@ -1,10 +1,13 @@
 import type { ExecutionContext } from '@nestjs/common';
+import { createAdminAssertion } from './mstyle-v2.assertions';
 import {
   MstyleRouteContextGuard,
   MstyleServiceTokenGuard,
   type MstyleRequest,
 } from './mstyle-v2.http';
 import { ProblemException } from './mstyle-v2.problem';
+
+const ADMIN_SECRET = 'test-admin-assertion';
 
 describe('MstyleServiceTokenGuard scopes', () => {
   const tokenRow = {
@@ -36,31 +39,52 @@ describe('MstyleServiceTokenGuard scopes', () => {
 });
 
 describe('MstyleRouteContextGuard M1/M2 context', () => {
-  const guard = new MstyleRouteContextGuard({
-    reconcileClientId: () => 'mstyle-reconcile-prod',
-  } as any);
+  const authentications = {
+    findOne: jest.fn(async (query: { authenticationId: string; subject: string }) =>
+      query.authenticationId === 'aut_1' && query.subject === 'usr_1'
+        ? { expiresAt: new Date(Date.now() + 60_000) }
+        : null,
+    ),
+  };
+  const adminAssertions = {
+    create: jest.fn(async (value: unknown) => value),
+  };
+  const guard = new MstyleRouteContextGuard(
+    {
+      reconcileClientId: () => 'mstyle-reconcile-prod',
+      adminAssertionSecret: () => ADMIN_SECRET,
+      jwtSecret: () => 'unused-jwt',
+    } as any,
+    authentications as any,
+    adminAssertions as any,
+  );
 
-  it('allows only the reconcile client and actor on R-03', () => {
-    expect(
+  beforeEach(() => {
+    authentications.findOne.mockClear();
+    adminAssertions.create.mockClear();
+  });
+
+  it('allows only the reconcile client and actor on R-03', async () => {
+    await expect(
       guard.canActivate(
         contextFor('GET', '/api/internal/integrations/mstyle/v2/changes', {
           clientId: 'mstyle-reconcile-prod',
           actorRef: 'system:reconcile',
         }),
       ),
-    ).toBe(true);
-    expect(() =>
+    ).resolves.toBe(true);
+    await expect(
       guard.canActivate(
         contextFor('GET', '/api/internal/integrations/mstyle/v2/changes', {
           clientId: 'mstyle-backend-prod',
           actorRef: 'system:reconcile',
         }),
       ),
-    ).toThrow(ProblemException);
+    ).rejects.toBeInstanceOf(ProblemException);
   });
 
-  it('rejects the reconcile client on non-R-03 routes', () => {
-    expect(() =>
+  it('rejects the reconcile client on non-R-03 routes', async () => {
+    await expect(
       guard.canActivate(
         contextFor(
           'POST',
@@ -68,18 +92,18 @@ describe('MstyleRouteContextGuard M1/M2 context', () => {
           {
             clientId: 'mstyle-reconcile-prod',
             actorRef: 'wp-admin:7',
-            adminAssertion: 'signed',
+            adminAssertion: signedAdmin('wp-admin:7', 'admin_support_review'),
             purposeCode: 'admin_support_review',
           },
         ),
       ),
-    ).toThrow(ProblemException);
+    ).rejects.toBeInstanceOf(ProblemException);
   });
 
-  it('requires a matching resident actor and step-up authentication', () => {
+  it('requires a matching resident actor and stored step-up authentication', async () => {
     const route =
       '/api/internal/integrations/mstyle/v2/resident-memberships/mem_1';
-    expect(
+    await expect(
       guard.canActivate(
         contextFor('PATCH', route, {
           clientId: 'mstyle-backend-prod',
@@ -88,8 +112,8 @@ describe('MstyleRouteContextGuard M1/M2 context', () => {
           stepUpId: 'aut_1',
         }),
       ),
-    ).toBe(true);
-    expect(() =>
+    ).resolves.toBe(true);
+    await expect(
       guard.canActivate(
         contextFor('PATCH', route, {
           clientId: 'mstyle-backend-prod',
@@ -98,36 +122,56 @@ describe('MstyleRouteContextGuard M1/M2 context', () => {
           stepUpId: 'aut_1',
         }),
       ),
-    ).toThrow(ProblemException);
+    ).rejects.toBeInstanceOf(ProblemException);
+    await expect(
+      guard.canActivate(
+        contextFor('PATCH', route, {
+          clientId: 'mstyle-backend-prod',
+          residentSubject: 'usr_1',
+          actorRef: 'resident:usr_1',
+          stepUpId: 'aut_missing',
+        }),
+      ),
+    ).rejects.toMatchObject({ problemCode: 'STEP_UP_REQUIRED' });
   });
 
-  it('requires admin proof and route-specific purpose', () => {
+  it('requires a signed admin assertion and route-specific purpose', async () => {
     const route =
       '/api/internal/integrations/mstyle/v2/resident-profiles/search';
-    expect(
+    await expect(
       guard.canActivate(
         contextFor('POST', route, {
           clientId: 'mstyle-backend-prod',
           actorRef: 'wp-admin:7',
-          adminAssertion: 'signed',
+          adminAssertion: signedAdmin('wp-admin:7', 'admin_support_review'),
           purposeCode: 'admin_support_review',
         }),
       ),
-    ).toBe(true);
-    expect(() =>
+    ).resolves.toBe(true);
+    await expect(
       guard.canActivate(
         contextFor('POST', route, {
           clientId: 'mstyle-backend-prod',
           actorRef: 'wp-admin:7',
-          adminAssertion: 'signed',
+          adminAssertion: signedAdmin('wp-admin:7', 'admin_support_review'),
           purposeCode: 'resident_onboarding',
         }),
       ),
-    ).toThrow(ProblemException);
+    ).rejects.toBeInstanceOf(ProblemException);
+    await expect(
+      guard.canActivate(
+        contextFor('POST', route, {
+          clientId: 'mstyle-backend-prod',
+          actorRef: 'wp-admin:7',
+          adminAssertion: 'smoke-assertion',
+          purposeCode: 'admin_support_review',
+        }),
+      ),
+    ).rejects.toMatchObject({ problemCode: 'INVALID_ADMIN_ASSERTION' });
   });
 
-  it('accepts R-14 without a purpose header', () => {
-    expect(
+  it('accepts R-14 without a purpose header', async () => {
+    await expect(
       guard.canActivate(
         contextFor(
           'GET',
@@ -135,13 +179,17 @@ describe('MstyleRouteContextGuard M1/M2 context', () => {
           {
             clientId: 'mstyle-backend-prod',
             actorRef: 'wp-admin:7',
-            adminAssertion: 'signed',
+            adminAssertion: signedAdmin('wp-admin:7'),
           },
         ),
       ),
-    ).toBe(true);
+    ).resolves.toBe(true);
   });
 });
+
+function signedAdmin(actor: string, purpose?: string): string {
+  return createAdminAssertion(ADMIN_SECRET, { actor, purpose, jti: `jti_${Math.random()}` });
+}
 
 function contextFor(
   method: string,

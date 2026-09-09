@@ -31,6 +31,8 @@ const TITLES: Record<string, string> = {
   UPSTREAM_UNAVAILABLE: 'Upstream unavailable',
   PRECONDITION_FAILED: 'Precondition failed',
   CONFLICT: 'Conflict',
+  INVALID_ADMIN_ASSERTION: 'Invalid admin step-up assertion',
+  STEP_UP_REQUIRED: 'Step-up authentication required',
   INVALID_CURSOR: 'Invalid cursor',
   CURSOR_EXPIRED: 'Cursor expired',
   CONTACT_OWNERSHIP_NOT_CONFIRMED: 'Contact ownership not confirmed',

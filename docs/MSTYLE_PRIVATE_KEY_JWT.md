@@ -38,13 +38,24 @@ MSTYLE_CLIENT_ID=mstyle-backend-prod
 MSTYLE_CLIENT_AUTH=private_key_jwt
 MSTYLE_CLIENT_KID=mstyle-backend-prod-20260823-01
 MSTYLE_CLIENT_PUBLIC_KEY_FILE=/app/config/oauth-public-keys/mstyle-backend-prod-20260823-01-public.pem
-MSTYLE_CLIENT_SCOPES=mstyle.guest.booking.confirm mstyle.guest.create mstyle.integration.admin.members.read mstyle.integration.admin.profile.read mstyle.resident.authenticate mstyle.resident.consent.read mstyle.resident.consent.write mstyle.resident.contact.read mstyle.resident.contact.write mstyle.resident.context.read mstyle.resident.identity.write mstyle.resident.members.read mstyle.resident.members.write mstyle.resident.private.reveal mstyle.resident.private.status.read mstyle.resident.private.write mstyle.resident.profile.read mstyle.resident.profile.write mstyle.resident.snapshot.create mstyle.snapshot.operation.bind
+MSTYLE_CLIENT_SCOPES=mstyle.guest.booking.confirm mstyle.guest.create mstyle.guest.read mstyle.guest.claim mstyle.guest.contact.read mstyle.guest.private.reveal mstyle.guest.snapshot.contact.reveal mstyle.guest.snapshot.private.reveal mstyle.integration.admin.members.read mstyle.integration.admin.profile.read mstyle.integration.admin.profile.write mstyle.integration.admin.identity.read mstyle.integration.admin.physical_access.read mstyle.integration.admin.change_request.decide mstyle.integration.admin.guest.read mstyle.integration.admin.onboarding.write mstyle.resident.authenticate mstyle.resident.consent.read mstyle.resident.consent.write mstyle.resident.contact.read mstyle.resident.contact.write mstyle.resident.context.read mstyle.resident.identity.write mstyle.resident.members.read mstyle.resident.members.write mstyle.resident.private.reveal mstyle.resident.private.status.read mstyle.resident.private.write mstyle.resident.profile.read mstyle.resident.profile.write mstyle.resident.snapshot.create mstyle.resident.snapshot.contact.reveal mstyle.resident.snapshot.private.reveal mstyle.resident.physical_access.read mstyle.resident.change_request.read mstyle.resident.change_request.write mstyle.snapshot.operation.bind
+MSTYLE_ADMIN_ASSERTION_SECRET=
 
 MSTYLE_RECONCILE_CLIENT_ID=mstyle-reconcile-prod
 MSTYLE_RECONCILE_CLIENT_AUTH=private_key_jwt
 MSTYLE_RECONCILE_CLIENT_KID=mstyle-reconcile-prod-20260823-01
 MSTYLE_RECONCILE_CLIENT_PUBLIC_KEY_FILE=/app/config/oauth-public-keys/mstyle-reconcile-prod-20260823-01-public.pem
 ```
+
+`X-Admin-Step-Up-Assertion` для административных маршрутов M1/M2 — HMAC
+`v1.<base64url(json)>.<hmac-sha256-hex>`. JSON: `v=1`, `actor` (тот же, что
+`X-Actor-Ref`), необязательный `purpose`, `iat`, `exp` (не дольше 300 с),
+`jti`. Подпись: HMAC-SHA-256 от `mstyle-admin-assertion:<payload>` секретом
+`MSTYLE_ADMIN_ASSERTION_SECRET` или `MSTYLE_IDEMPOTENCY_SECRET`. Повтор `jti`
+отклоняется. Консоль Pass может вместо этого передать JWT администратора.
+
+`X-Step-Up-Authentication-ID` должен быть `aut_…` из успешного A-02/A-06 и
+принадлежать `X-Resident-Subject`. Срок — 12 часов.
 
 Если используются `*_PUBLIC_KEY_FILE`, публичные файлы нужно смонтировать в
 backend-контейнер read-only. Альтернатива без mount:

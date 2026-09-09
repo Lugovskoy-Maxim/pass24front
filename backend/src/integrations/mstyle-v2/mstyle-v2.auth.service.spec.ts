@@ -4,6 +4,7 @@ jest.mock('./mstyle-v2.identities', () => ({
 }));
 jest.mock('./mstyle-v2.schemas', () => ({
   MstyleChallenge: class MstyleChallenge {},
+  MstyleAuthentication: class MstyleAuthentication {},
 }));
 
 import { MstyleAuthService } from './mstyle-v2.auth.service';
@@ -301,11 +302,15 @@ function createFixture() {
     registerPendingOtp: jest.fn(async () => true),
     sendOtp: jest.fn(async () => true),
   };
+  const authentications = {
+    create: jest.fn(async (value: unknown) => value),
+  };
   const service = new MstyleAuthService(
     config as any,
     identities as any,
     rates as any,
     challenges as any,
+    authentications as any,
     sms as any,
     mail as any,
     telegramGateway as any,

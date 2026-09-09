@@ -1,5 +1,8 @@
 import { ConfigService } from '@nestjs/config';
-import { MSTYLE_REQUIRED_M0_SCOPES } from './mstyle-v2.constants';
+import {
+  MSTYLE_REQUIRED_M0_SCOPES,
+  MSTYLE_REQUIRED_M1_M2_SCOPES,
+} from './mstyle-v2.constants';
 import { MstyleV2Config } from './mstyle-v2.config';
 
 describe('MstyleV2Config OAuth clients', () => {
@@ -96,7 +99,10 @@ describe('MstyleV2Config OAuth clients', () => {
     });
 
     expect(config.defaultScopes()).toEqual(
-      expect.arrayContaining([...MSTYLE_REQUIRED_M0_SCOPES]),
+      expect.arrayContaining([
+        ...MSTYLE_REQUIRED_M0_SCOPES,
+        ...MSTYLE_REQUIRED_M1_M2_SCOPES,
+      ]),
     );
     expect(config.defaultScopes()).not.toContain('mstyle.changes.read');
     expect(config.defaultScopes()).not.toContain(

@@ -12,6 +12,7 @@ import {
   ALLOWED_AUTH_PAIRS,
   AUTH_SUCCESS_REPLAY_MS,
   CHALLENGE_TTL_MS,
+  STEP_UP_TTL_MS,
   CODE_LENGTH,
   MAX_VERIFY_ATTEMPTS,
   POLL_AFTER_MS,
@@ -27,7 +28,12 @@ import {
 import { nowIso, schema } from './mstyle-v2.present';
 import { MstyleResult, problem } from './mstyle-v2.problem';
 import { MstyleRateLimitService } from './mstyle-v2.rate-limit';
-import { MstyleChallenge, MstyleChallengeDocument } from './mstyle-v2.schemas';
+import {
+  MstyleAuthentication,
+  MstyleAuthenticationDocument,
+  MstyleChallenge,
+  MstyleChallengeDocument,
+} from './mstyle-v2.schemas';
 import type {
   CodeChallengeDto,
   PasswordVerifyDto,
@@ -44,6 +50,8 @@ export class MstyleAuthService {
     private readonly rates: MstyleRateLimitService,
     @InjectModel(MstyleChallenge.name)
     private readonly challenges: Model<MstyleChallengeDocument>,
+    @InjectModel(MstyleAuthentication.name)
+    private readonly authentications: Model<MstyleAuthenticationDocument>,
     @Inject(MSTYLE_SMS_SERVICE) private readonly sms: SmsService,
     private readonly mail: MailService,
     private readonly telegramGateway: TelegramGatewayService,
@@ -75,18 +83,12 @@ export class MstyleAuthService {
     if (identity.identityStatus !== 'active') {
       problem(401, 'INVALID_CREDENTIALS');
     }
-    return new MstyleResult(
-      schema({
-        authenticationId: Ids.authentication(),
-        subject: identity.subject,
-        identityStatus: identity.identityStatus,
-        authVersion: identity.authVersion,
-        authenticatedAt: nowIso(),
-        authenticationMethod: 'password',
-      }),
-      200,
-      { 'Cache-Control': 'no-store' },
+    const body = await this.issueAuthentication(
+      identity.subject,
+      identity.authVersion,
+      'password',
     );
+    return new MstyleResult(body, 200, { 'Cache-Control': 'no-store' });
   }
 
   async startCodeChallenge(
@@ -474,18 +476,40 @@ export class MstyleAuthService {
       await identity.save();
     }
 
-    const body = schema({
-      authenticationId: Ids.authentication(),
-      subject: identity.subject,
-      identityStatus: identity.identityStatus,
-      authVersion: identity.authVersion,
-      authenticatedAt: nowIso(),
-      authenticationMethod: challenge.channel || 'sms',
-    });
+    const body = await this.issueAuthentication(
+      identity.subject,
+      identity.authVersion,
+      challenge.channel || 'sms',
+    );
     challenge.status = 'consumed';
     challenge.consumedAt = new Date();
     challenge.consumedAuthJson = JSON.stringify(body);
     await challenge.save();
+    return body;
+  }
+
+  private async issueAuthentication(
+    subject: string,
+    authVersion: number,
+    method: string,
+  ) {
+    const authenticatedAt = nowIso();
+    const body = schema({
+      authenticationId: Ids.authentication(),
+      subject,
+      identityStatus: 'active',
+      authVersion,
+      authenticatedAt,
+      authenticationMethod: method,
+    });
+    await this.authentications.create({
+      authenticationId: body.authenticationId,
+      subject,
+      method,
+      authVersion,
+      authenticatedAt,
+      expiresAt: new Date(Date.now() + STEP_UP_TTL_MS),
+    });
     return body;
   }
 

@@ -1,6 +1,7 @@
 import { Injectable } from '@nestjs/common';
 import { InjectModel } from '@nestjs/mongoose';
 import { Model } from 'mongoose';
+import { presentChangeEvent } from './mstyle-v2.change-events';
 import { Ids } from './mstyle-v2.ids';
 import { nowIso, schema } from './mstyle-v2.present';
 import {
@@ -101,19 +102,12 @@ export class MstyleEventsService {
     const hasMore = rows.length > limit;
     const page = hasMore ? rows.slice(0, limit) : rows;
     const items = page.map((row) =>
-      schema({
-        streamName,
-        environment: this.cfg.environment(),
-        sequence: row.sequence,
-        eventId: row.eventId,
-        type: row.type,
-        occurredAt: row.occurredAt,
-        aggregate: row.aggregate,
-        subject: row.subject,
-        profileId: row.profileId,
-        guestPartyId: row.guestPartyId,
-        payload: row.payload,
-      }),
+      schema(
+        presentChangeEvent(row, {
+          streamName,
+          environment: this.cfg.environment(),
+        }),
+      ),
     );
     const nextAfter = page[page.length - 1]?.sequence || minSeq;
     const nextCursor = this.encodeCursor({

@@ -37,6 +37,47 @@ const schemaVersion = '2.0';
 const apiPrefix = '/internal/integrations/mstyle/v2';
 const stamp = Date.now().toString(36);
 const emailChallengeAddress = process.env.MSTYLE_V2_EMAIL || '';
+const adminAssertionSecret =
+  process.env.MSTYLE_ADMIN_ASSERTION_SECRET ||
+  process.env.MSTYLE_IDEMPOTENCY_SECRET ||
+  '';
+const TZ_EVENT_TYPES = new Set([
+  'identity.updated',
+  'identity.auth_version_changed',
+  'profile.updated',
+  'resident_membership.updated',
+  'resident_contact_assignments.updated',
+  'resident_private_data.updated',
+  'resident_change_request.updated',
+  'resident_deletion_request.updated',
+  'resident_consent.updated',
+  'resident_snapshot.created',
+  'guest_party.updated',
+  'guest_contact.updated',
+  'guest_private_data.updated',
+  'guest_consent.updated',
+  'guest_snapshot.created',
+  'snapshot.operation_bound',
+  'physical_access.updated',
+]);
+const M1_M2_SCOPES = [
+  'mstyle.guest.claim',
+  'mstyle.guest.contact.read',
+  'mstyle.guest.private.reveal',
+  'mstyle.guest.snapshot.contact.reveal',
+  'mstyle.guest.snapshot.private.reveal',
+  'mstyle.integration.admin.change_request.decide',
+  'mstyle.integration.admin.guest.read',
+  'mstyle.integration.admin.identity.read',
+  'mstyle.integration.admin.onboarding.write',
+  'mstyle.integration.admin.physical_access.read',
+  'mstyle.integration.admin.profile.write',
+  'mstyle.resident.change_request.read',
+  'mstyle.resident.change_request.write',
+  'mstyle.resident.physical_access.read',
+  'mstyle.resident.snapshot.contact.reveal',
+  'mstyle.resident.snapshot.private.reveal',
+];
 
 const state = {
   tokens: new Map(),
@@ -64,6 +105,22 @@ const steps = [
     method: 'GET',
     path: '/changes?limit=5',
     actor: 'reconcile',
+    after: ({ body }) => {
+      const items = body.items || [];
+      for (const item of items) {
+        const revision = item.aggregate && item.aggregate.revision;
+        if (!Number.isInteger(revision) || revision < 1) {
+          throw new Error(
+            `R-03 item seq ${item.sequence} missing aggregate.revision`,
+          );
+        }
+        if (!TZ_EVENT_TYPES.has(item.type)) {
+          throw new Error(
+            `R-03 item seq ${item.sequence} has non-contract type ${item.type}`,
+          );
+        }
+      }
+    },
   },
   {
     id: 'R-06',
@@ -134,6 +191,22 @@ const steps = [
     },
   },
   {
+    id: 'R-14',
+    title: 'Admin identity card',
+    scope: 'mstyle.integration.admin.identity.read',
+    method: 'GET',
+    path: () => `/identities/${state.subject}`,
+    actor: 'admin-review',
+  },
+  {
+    id: 'R-13',
+    title: 'Physical access',
+    scope: 'mstyle.integration.admin.physical_access.read',
+    method: 'GET',
+    path: () => `/resident-profiles/${state.profileId}/physical-access`,
+    actor: 'admin-review',
+  },
+  {
     id: 'R-04',
     title: 'Get profile',
     scope: 'mstyle.resident.profile.read',
@@ -201,7 +274,7 @@ const steps = [
     method: 'POST',
     path: () => `/guest-parties/${state.guestPartyId}/claim`,
     actor: 'resident',
-    expectedStatuses: [403, 404],
+    expectedStatuses: [401, 403, 404],
     body: () => ({
       schemaVersion,
       profileId: state.profileId,
@@ -249,6 +322,31 @@ function b64url(input) {
 
 function sha256Hex(buffer) {
   return crypto.createHash('sha256').update(buffer).digest('hex');
+}
+
+function hmacHex(secret, value) {
+  return crypto.createHmac('sha256', secret).update(value).digest('hex');
+}
+
+function adminAssertion(actor, purpose) {
+  if (!adminAssertionSecret) {
+    return 'smoke-assertion';
+  }
+  const now = Math.floor(Date.now() / 1000);
+  const payload = Buffer.from(
+    JSON.stringify({
+      v: 1,
+      actor,
+      purpose,
+      iat: now,
+      exp: now + 60,
+      jti: crypto.randomUUID(),
+    }),
+  ).toString('base64url');
+  return `v1.${payload}.${hmacHex(
+    adminAssertionSecret,
+    `mstyle-admin-assertion:${payload}`,
+  )}`;
 }
 
 function makeAssertion(client) {
@@ -427,14 +525,20 @@ async function runStep(step) {
     ...(step.actor === 'admin-review'
       ? {
           'X-Actor-Ref': 'wp-admin:smoke',
-          'X-Admin-Step-Up-Assertion': 'smoke-assertion',
+          'X-Admin-Step-Up-Assertion': adminAssertion(
+            'wp-admin:smoke',
+            'admin_support_review',
+          ),
           'X-Purpose-Code': 'admin_support_review',
         }
       : {}),
     ...(step.actor === 'admin-onboarding'
       ? {
           'X-Actor-Ref': 'wp-admin:smoke',
-          'X-Admin-Step-Up-Assertion': 'smoke-assertion',
+          'X-Admin-Step-Up-Assertion': adminAssertion(
+            'wp-admin:smoke',
+            'resident_onboarding',
+          ),
           'X-Purpose-Code': 'resident_onboarding',
         }
       : {}),
@@ -488,6 +592,23 @@ async function main() {
   );
 
   let failed = false;
+  for (const scope of M1_M2_SCOPES) {
+    try {
+      await tokenFor(scope, backendClient);
+      console.log(
+        JSON.stringify({ id: 'T-scope', scope, ok: true, status: 200 }, null, 2),
+      );
+    } catch (error) {
+      failed = true;
+      console.error(
+        JSON.stringify(
+          { id: 'T-scope', scope, ok: false, error: error.message },
+          null,
+          2,
+        ),
+      );
+    }
+  }
   for (const step of steps) {
     try {
       const result = await runStep(step);

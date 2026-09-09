@@ -155,6 +155,17 @@ export class MstyleV2Config {
     );
   }
 
+  adminAssertionSecret(): string {
+    return (
+      this.config.get<string>('MSTYLE_ADMIN_ASSERTION_SECRET') ||
+      this.idempotencySecret()
+    );
+  }
+
+  jwtSecret(): string {
+    return this.config.get<string>('JWT_SECRET') || 'dev-secret';
+  }
+
   rateLimitSecret(): string {
     return (
       this.config.get<string>('MSTYLE_RATE_LIMIT_SECRET') ||

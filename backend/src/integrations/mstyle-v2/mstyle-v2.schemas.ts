@@ -53,6 +53,55 @@ export const MstyleOauthJtiSchema =
   SchemaFactory.createForClass(MstyleOauthJti);
 MstyleOauthJtiSchema.index({ expiresAt: 1 }, { expireAfterSeconds: 0 });
 
+@Schema({ collection: 'mstyle_v2_authentications', timestamps: true })
+export class MstyleAuthentication {
+  @Prop({ required: true, unique: true })
+  authenticationId: string;
+
+  @Prop({ required: true, index: true })
+  subject: string;
+
+  @Prop({ required: true })
+  method: string;
+
+  @Prop({ required: true })
+  authVersion: number;
+
+  @Prop({ required: true })
+  authenticatedAt: string;
+
+  @Prop({ required: true })
+  expiresAt: Date;
+}
+export type MstyleAuthenticationDocument = MstyleAuthentication & Document;
+export const MstyleAuthenticationSchema =
+  SchemaFactory.createForClass(MstyleAuthentication);
+MstyleAuthenticationSchema.index(
+  { expiresAt: 1 },
+  { expireAfterSeconds: 0 },
+);
+
+@Schema({ collection: 'mstyle_v2_admin_assertion_jti', timestamps: true })
+export class MstyleAdminAssertionJti {
+  @Prop({ required: true, unique: true })
+  jti: string;
+
+  @Prop({ required: true })
+  actor: string;
+
+  @Prop({ required: true })
+  expiresAt: Date;
+}
+export type MstyleAdminAssertionJtiDocument = MstyleAdminAssertionJti &
+  Document;
+export const MstyleAdminAssertionJtiSchema = SchemaFactory.createForClass(
+  MstyleAdminAssertionJti,
+);
+MstyleAdminAssertionJtiSchema.index(
+  { expiresAt: 1 },
+  { expireAfterSeconds: 0 },
+);
+
 @Schema({ collection: 'mstyle_v2_identities', timestamps: true })
 export class MstyleIdentity {
   @Prop({ required: true, unique: true })
@@ -840,6 +889,11 @@ export const MstyleAccessGrantSchema =
 export const MSTYLE_MODELS = [
   { name: MstyleServiceToken.name, schema: MstyleServiceTokenSchema },
   { name: MstyleOauthJti.name, schema: MstyleOauthJtiSchema },
+  { name: MstyleAuthentication.name, schema: MstyleAuthenticationSchema },
+  {
+    name: MstyleAdminAssertionJti.name,
+    schema: MstyleAdminAssertionJtiSchema,
+  },
   { name: MstyleIdentity.name, schema: MstyleIdentitySchema },
   { name: MstyleProfile.name, schema: MstyleProfileSchema },
   { name: MstyleMembership.name, schema: MstyleMembershipSchema },

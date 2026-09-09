@@ -21,10 +21,16 @@ import {
   ProblemException,
   problem,
 } from './mstyle-v2.problem';
+import { verify as verifyJwt } from 'jsonwebtoken';
+import { verifyAdminAssertion } from './mstyle-v2.assertions';
 import { sha256Hex } from './mstyle-v2.crypto';
 import { InjectModel } from '@nestjs/mongoose';
 import { Model } from 'mongoose';
 import {
+  MstyleAdminAssertionJti,
+  MstyleAdminAssertionJtiDocument,
+  MstyleAuthentication,
+  MstyleAuthenticationDocument,
   MstyleServiceToken,
   MstyleServiceTokenDocument,
 } from './mstyle-v2.schemas';
@@ -146,16 +152,20 @@ export class MstyleRequestGuard implements CanActivate {
 }
 
 /**
- * Enforces the actor context defined by the M1/M2 contract. The cryptographic
- * format of X-Admin-Step-Up-Assertion is intentionally owned by the Pass admin
- * authentication layer; until that verifier is wired here we still reject a
- * missing assertion and never treat X-Actor-Ref alone as authorization.
+ * Enforces the actor context defined by the M1/M2 contract, including a
+ * signed admin assertion and a stored resident step-up authentication.
  */
 @Injectable()
 export class MstyleRouteContextGuard implements CanActivate {
-  constructor(private readonly cfg: MstyleV2Config) {}
+  constructor(
+    private readonly cfg: MstyleV2Config,
+    @InjectModel(MstyleAuthentication.name)
+    private readonly authentications: Model<MstyleAuthenticationDocument>,
+    @InjectModel(MstyleAdminAssertionJti.name)
+    private readonly adminAssertions: Model<MstyleAdminAssertionJtiDocument>,
+  ) {}
 
-  canActivate(ctx: ExecutionContext): boolean {
+  async canActivate(ctx: ExecutionContext): Promise<boolean> {
     const req = ctx.switchToHttp().getRequest<MstyleRequest>();
     const path = (req.originalUrl || req.url || '').split('?')[0];
     const method = (req.method || 'GET').toUpperCase();
@@ -187,11 +197,16 @@ export class MstyleRouteContextGuard implements CanActivate {
       const subject = header(req, 'x-resident-subject');
       requireHeader('X-Resident-Subject', subject);
       requireHeaderValue('X-Actor-Ref', actor, `resident:${subject}`);
-      requireHeader(
-        'X-Step-Up-Authentication-ID',
-        header(req, 'x-step-up-authentication-id'),
-      );
+      const stepUpId = header(req, 'x-step-up-authentication-id');
+      requireHeader('X-Step-Up-Authentication-ID', stepUpId);
       if (policy.purposes) requirePurpose(purpose, policy.purposes);
+      const session = await this.authentications.findOne({
+        authenticationId: stepUpId,
+        subject,
+      });
+      if (!session || session.expiresAt.getTime() <= Date.now()) {
+        problem(401, 'STEP_UP_REQUIRED');
+      }
       req.mstyleResidentSubject = subject;
       return true;
     }
@@ -200,17 +215,51 @@ export class MstyleRouteContextGuard implements CanActivate {
       if (!/^wp-admin:[^:\s]+$/.test(actor)) {
         validationError('X-Actor-Ref', 'must identify a wp-admin actor');
       }
-      requireHeader(
-        'X-Admin-Step-Up-Assertion',
-        header(req, 'x-admin-step-up-assertion'),
-      );
+      const assertion = header(req, 'x-admin-step-up-assertion');
+      requireHeader('X-Admin-Step-Up-Assertion', assertion);
       if (policy.purposes) requirePurpose(purpose, policy.purposes);
+      await this.assertAdminProof(assertion, actor, purpose || undefined);
       return true;
     }
 
     requireHeaderValue('X-Actor-Ref', actor, 'system:delivery');
     requirePurpose(purpose, policy.purposes || []);
     return true;
+  }
+
+  private async assertAdminProof(
+    assertion: string,
+    actor: string,
+    purpose?: string,
+  ) {
+    if (assertion.startsWith('v1.')) {
+      const verified = verifyAdminAssertion(
+        this.cfg.adminAssertionSecret(),
+        assertion,
+        { actor, purpose },
+      );
+      try {
+        await this.adminAssertions.create({
+          jti: verified.jti,
+          actor,
+          expiresAt: new Date(verified.exp * 1000),
+        });
+      } catch {
+        problem(401, 'INVALID_ADMIN_ASSERTION');
+      }
+      return;
+    }
+    try {
+      const payload = verifyJwt(assertion, this.cfg.jwtSecret()) as {
+        role?: string;
+        exp?: number;
+      };
+      if (payload?.role !== 'admin') {
+        problem(401, 'INVALID_ADMIN_ASSERTION');
+      }
+    } catch {
+      problem(401, 'INVALID_ADMIN_ASSERTION');
+    }
   }
 }
 

@@ -119,6 +119,11 @@ export const MSTYLE_REQUIRED_M1_M2_SCOPES = [
   'mstyle.resident.snapshot.private.reveal',
 ] as const;
 
+export const MSTYLE_DOCUMENTED_BACKEND_SCOPES = [
+  ...MSTYLE_REQUIRED_M0_SCOPES,
+  ...MSTYLE_REQUIRED_M1_M2_SCOPES,
+] as const;
+
 export const MSTYLE_RECONCILE_SCOPES = [
   'mstyle.integration.reconcile',
 ] as const;
@@ -601,6 +606,7 @@ export const REQUIRED_GUEST_FIELDS = [
 ] as const;
 
 export const AUTH_SUCCESS_REPLAY_MS = 60_000;
+export const STEP_UP_TTL_MS = 12 * 60 * 60_000;
 export const CHALLENGE_TTL_MS = 5 * 60_000;
 export const RESEND_MIN_MS = 60_000;
 export const MAX_VERIFY_ATTEMPTS = 5;

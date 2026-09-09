@@ -342,7 +342,21 @@ export class MstyleDirectoryService {
       const assigns = await this.assignments
         .find({ contactId: { $in: contacts.map((item) => item.contactId) } })
         .lean();
-      const matchedIds = [...new Set(assigns.map((a) => a.profileId))];
+      const subjects = [
+        ...new Set(contacts.map((item) => item.subject).filter(Boolean)),
+      ];
+      const memberships = subjects.length
+        ? await this.memberships
+            .find({ subject: { $in: subjects } })
+            .select({ profileId: 1 })
+            .lean()
+        : [];
+      const matchedIds = [
+        ...new Set([
+          ...assigns.map((row) => row.profileId),
+          ...memberships.map((row) => row.profileId),
+        ]),
+      ];
       const allowedIds = dto.filters?.profileIds
         ? matchedIds.filter((id) => dto.filters!.profileIds.includes(id))
         : matchedIds;
