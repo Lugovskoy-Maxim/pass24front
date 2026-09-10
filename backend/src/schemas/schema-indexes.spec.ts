@@ -1,4 +1,7 @@
-import { MstyleIdentitySchema } from '../integrations/mstyle-v2/mstyle-v2.schemas';
+import {
+  MstyleIdentitySchema,
+  MstyleSnapshotBindingSchema,
+} from '../integrations/mstyle-v2/mstyle-v2.schemas';
 import { UserSchema } from './user.schema';
 
 function duplicateIndexNames(schema: { indexes: () => Array<[Record<string, unknown>]> }) {
@@ -20,5 +23,18 @@ describe('Mongoose schema indexes', () => {
     ['MstyleIdentity', MstyleIdentitySchema],
   ])('%s does not declare an index twice', (_name, schema) => {
     expect(duplicateIndexNames(schema)).toEqual([]);
+  });
+
+  it('excludes legacy string operation references from the structured unique index', () => {
+    const index = MstyleSnapshotBindingSchema.indexes().find(
+      ([, options]) => options.name === 'one_snapshot_per_operation',
+    );
+
+    expect(index?.[1]).toMatchObject({
+      unique: true,
+      partialFilterExpression: {
+        'operationRef.operationId': { $type: 'string' },
+      },
+    });
   });
 });

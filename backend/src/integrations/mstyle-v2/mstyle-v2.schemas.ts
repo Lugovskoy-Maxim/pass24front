@@ -730,7 +730,15 @@ MstyleSnapshotBindingSchema.index(
     'operationRef.operationType': 1,
     'operationRef.operationId': 1,
   },
-  { unique: true, name: 'one_snapshot_per_operation' },
+  {
+    unique: true,
+    name: 'one_snapshot_per_operation',
+    // Legacy M1 rows stored operationRef as a string. Keep them readable while
+    // enforcing uniqueness for the structured M2 operation reference.
+    partialFilterExpression: {
+      'operationRef.operationId': { $type: 'string' },
+    },
+  },
 );
 
 @Schema({ collection: 'mstyle_v2_idempotency', timestamps: true })

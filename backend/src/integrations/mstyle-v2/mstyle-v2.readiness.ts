@@ -48,9 +48,16 @@ export class MstyleReadinessService implements OnModuleInit {
             throw new Error('Transactions require a replica set or mongos');
           for (const definition of MSTYLE_MODELS) {
             const model = this.connection.model(definition.name);
-            // createIndexes can be retried after an administrator repairs an index conflict.
+            // These collections belong exclusively to Mstyle V2. syncIndexes
+            // upgrades legacy index options (for example non-unique identity
+            // indexes) and removes obsolete M1 indexes before creating M2 ones.
             await model.createCollection();
-            await model.createIndexes();
+            const removed = await model.syncIndexes();
+            if (removed.length > 0) {
+              this.logger.warn(
+                `Synchronized ${definition.name} indexes; removed=${removed.join(',')}`,
+              );
+            }
           }
         })(),
         new Promise<never>((_, reject) => {

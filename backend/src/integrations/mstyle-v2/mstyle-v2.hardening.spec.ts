@@ -228,7 +228,7 @@ describe('integration readiness isolation', () => {
     let replica = false;
     const model = {
       createCollection: jest.fn(async () => {}),
-      createIndexes: jest.fn(async () => {}),
+      syncIndexes: jest.fn(async () => []),
     };
     const db = {
       admin: () => ({
@@ -243,7 +243,7 @@ describe('integration readiness isolation', () => {
     replica = true;
     (service as any).retryAt = 0;
     await expect(service.assertReady()).resolves.toBeUndefined();
-    expect(model.createIndexes).toHaveBeenCalled();
+    expect(model.syncIndexes).toHaveBeenCalled();
   });
 });
 
