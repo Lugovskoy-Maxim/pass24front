@@ -1,3 +1,7 @@
+import { MstyleNativeConsoleProof } from './mstyle-v2.native-console';
+import { MstyleIdentityService } from './mstyle-v2.identities';
+import { MSTYLE_ADMIN_PROBE_CLIENT_ID } from './mstyle-v2.constants';
+import { guestFlowRoute, guestWriteAllowed } from './mstyle-v2.guest-access';
 import {
   BadRequestException,
   CanActivate,
@@ -11,7 +15,10 @@ import {
 } from '@nestjs/common';
 import { Reflector } from '@nestjs/core';
 import type { Request, Response } from 'express';
-import { Observable, map } from 'rxjs';
+import { Observable, mergeMap } from 'rxjs';
+import { MstylePublicResponseService } from './mstyle-v2.public-response';
+import { membershipIsEffective } from './mstyle-v2.membership-policy';
+import { MstyleReadinessService } from './mstyle-v2.readiness';
 import { expandMstyleScopes, ROUTE_SCOPES } from './mstyle-v2.constants';
 import { MstyleV2Config } from './mstyle-v2.config';
 import { Ids } from './mstyle-v2.ids';
@@ -21,16 +28,24 @@ import {
   ProblemException,
   problem,
 } from './mstyle-v2.problem';
-import { verify as verifyJwt } from 'jsonwebtoken';
-import { verifyAdminAssertion } from './mstyle-v2.assertions';
+import {
+  AdminAssertionException,
+  ADMIN_ASSERTION_TYPE,
+  adminAssertionError,
+  verifyAdminAssertion,
+} from './mstyle-v2.assertions';
+import { jwtReplayKey } from './mstyle-v2.jwt';
 import { sha256Hex } from './mstyle-v2.crypto';
 import { InjectModel } from '@nestjs/mongoose';
 import { Model } from 'mongoose';
 import {
   MstyleAdminAssertionJti,
+  MstyleAdminAssertionAudit,
+  MstyleMembership,
   MstyleAdminAssertionJtiDocument,
   MstyleAuthentication,
   MstyleAuthenticationDocument,
+  MstyleGuestParty,
   MstyleServiceToken,
   MstyleServiceTokenDocument,
 } from './mstyle-v2.schemas';
@@ -40,7 +55,10 @@ export type MstyleRequest = Request & {
   mstyleRequestId: string;
   mstyleClientId?: string;
   mstyleScopes?: string[];
+  mstyleTokenScopes?: string[];
+  mstyleAcceptedScopes?: string[];
   mstyleResidentSubject?: string;
+  mstyleGuestPartyId?: string;
   mstyleActorRef?: string;
   mstylePurposeCode?: string;
 };
@@ -53,10 +71,14 @@ export class MstyleEnabledGuard implements CanActivate {
   constructor(
     private readonly cfg: MstyleV2Config,
     private readonly siteSettings: SiteSettingsService,
+    private readonly readiness: MstyleReadinessService,
   ) {}
 
   async canActivate(): Promise<boolean> {
-    if (this.cfg.isEnabled()) return true;
+    if (this.cfg.isEnabled()) {
+      await this.readiness.assertReady();
+      return true;
+    }
     const mockMode = await this.siteSettings.getMstyleMockResponsesEnabled(
       this.cfg.mockResponsesDefaultEnabled(),
     );
@@ -65,6 +87,7 @@ export class MstyleEnabledGuard implements CanActivate {
         hideAsNotFound: true,
       });
     }
+    await this.readiness.assertReady();
     return true;
   }
 }
@@ -75,15 +98,48 @@ export class MstyleServiceTokenGuard implements CanActivate {
     private readonly cfg: MstyleV2Config,
     @InjectModel(MstyleServiceToken.name)
     private readonly tokens: Model<MstyleServiceTokenDocument>,
+    @InjectModel(MstyleGuestParty.name)
+    private readonly guests?: Model<MstyleGuestParty>,
   ) {}
 
   async canActivate(ctx: ExecutionContext): Promise<boolean> {
     const req = ctx.switchToHttp().getRequest<MstyleRequest>();
+    validateHeaderEnvelope(req);
     const header = String(req.headers.authorization || '');
     const match = header.match(/^Bearer\s+(.+)$/i);
     if (!match) problem(401, 'INVALID_SERVICE_TOKEN');
     const token = match[1].trim();
-    const row = await this.tokens.findOne({ tokenHash: sha256Hex(token) });
+    let row: MstyleServiceTokenDocument | null;
+    try {
+      row = await this.tokens.findOne({ tokenHash: sha256Hex(token) });
+    } catch {
+      problem(503, 'UPSTREAM_UNAVAILABLE', { retryable: true });
+    }
+    const path = (req.originalUrl || req.url || '').split('?')[0];
+    const method = (req.method || 'GET').toUpperCase();
+    const guestId = guestFlowRoute(method, path);
+    if (!row && this.guests) {
+      const guest = await this.guests.findOne({
+        guestFlowAccessTokenHash: sha256Hex(token),
+      });
+      if (!guest || guest.expiresAt.getTime() <= Date.now())
+        problem(401, 'INVALID_SERVICE_TOKEN');
+      if (!guestId || guestId !== guest.guestPartyId)
+        problem(403, 'INSUFFICIENT_SCOPE');
+      if (method !== 'GET' && !guestWriteAllowed(guest.status))
+        problem(409, 'CONFLICT');
+      const scope = ROUTE_SCOPES.find(
+        (rule) => rule.method === method && rule.match.test(path),
+      )?.scope;
+      if (!scope) problem(403, 'INSUFFICIENT_SCOPE');
+      req.mstyleGuestPartyId = guestId;
+      req.mstyleClientId = `guest-flow:${guestId}`;
+      req.mstyleTokenScopes =
+        req.mstyleScopes =
+        req.mstyleAcceptedScopes =
+          [scope];
+      return true;
+    }
     if (!row || row.expiresAt.getTime() <= Date.now()) {
       problem(401, 'INVALID_SERVICE_TOKEN');
     }
@@ -91,15 +147,16 @@ export class MstyleServiceTokenGuard implements CanActivate {
       problem(401, 'INVALID_SERVICE_TOKEN');
     }
     req.mstyleClientId = row.clientId;
+    req.mstyleTokenScopes = [...(row.scopes || [])];
     req.mstyleScopes = expandMstyleScopes(row.scopes || []);
-    const path = (req.originalUrl || req.url || '').split('?')[0];
-    const method = (req.method || 'GET').toUpperCase();
+    if (guestId) problem(403, 'INSUFFICIENT_SCOPE');
     const needed = ROUTE_SCOPES.find(
       (rule) => rule.method === method && rule.match.test(path),
     );
     const acceptedScopes = needed
       ? [needed.scope, ...(needed.alternatives || [])]
       : [];
+    req.mstyleAcceptedScopes = acceptedScopes;
     if (
       !needed ||
       !acceptedScopes.some((scope) => req.mstyleScopes!.includes(scope))
@@ -163,6 +220,12 @@ export class MstyleRouteContextGuard implements CanActivate {
     private readonly authentications: Model<MstyleAuthenticationDocument>,
     @InjectModel(MstyleAdminAssertionJti.name)
     private readonly adminAssertions: Model<MstyleAdminAssertionJtiDocument>,
+    @InjectModel(MstyleAdminAssertionAudit.name)
+    private readonly assertionAudit: Model<MstyleAdminAssertionAudit>,
+    private readonly identities: MstyleIdentityService,
+    @InjectModel(MstyleMembership.name)
+    private readonly memberships: Model<MstyleMembership>,
+    private readonly nativeConsole?: MstyleNativeConsoleProof,
   ) {}
 
   async canActivate(ctx: ExecutionContext): Promise<boolean> {
@@ -185,13 +248,51 @@ export class MstyleRouteContextGuard implements CanActivate {
     req.mstyleActorRef = actor || undefined;
     req.mstylePurposeCode = purpose || undefined;
 
+    if (req.mstyleGuestPartyId) {
+      requireHeaderValue(
+        'X-Actor-Ref',
+        actor,
+        `guest:${req.mstyleGuestPartyId}`,
+      );
+      if (
+        Object.keys(req.headers).some(
+          (name) =>
+            name.startsWith('x-resident-') ||
+            name === 'x-step-up-authentication-id' ||
+            name === 'x-admin-step-up-assertion',
+        )
+      )
+        validationError('X-Actor-Ref', 'Mixed actor contexts');
+      if (/\/snapshots$/.test(path))
+        requirePurpose(purpose, ['booking_snapshot_create']);
+      else if (method === 'PATCH' || /\/contact-challenges/.test(path))
+        requirePurpose(purpose, ['guest_booking_registration']);
+      else if (purpose) validationError('X-Purpose-Code', 'must be absent');
+      return true;
+    }
+    if (method === 'POST' && /\/guest-parties$/.test(path)) {
+      requireHeaderValue('X-Actor-Ref', actor, 'guest:booking');
+      requirePurpose(purpose, ['guest_booking_registration']);
+      return true;
+    }
     if (isChanges) {
       requireHeaderValue('X-Actor-Ref', actor, 'system:reconcile');
       return true;
     }
 
     const policy = m1m2ContextPolicy(method, path, actor);
-    if (!policy) return true;
+    if (!policy) {
+      if (
+        actor.startsWith('wp-admin:') ||
+        header(req, 'x-admin-step-up-assertion')
+      )
+        problem(403, 'INSUFFICIENT_SCOPE');
+      return true;
+    }
+    if (policy.actor === 'outbox') {
+      requireHeaderValue('X-Actor-Ref', actor, 'system:outbox');
+      return true;
+    }
 
     if (policy.actor === 'resident') {
       const subject = header(req, 'x-resident-subject');
@@ -207,18 +308,54 @@ export class MstyleRouteContextGuard implements CanActivate {
       if (!session || session.expiresAt.getTime() <= Date.now()) {
         problem(401, 'STEP_UP_REQUIRED');
       }
+      const identity = await this.identities.findIdentityBySubject(subject);
+      if (
+        !identity ||
+        identity.identityStatus !== 'active' ||
+        identity.authVersion !== session.authVersion
+      )
+        problem(401, 'STEP_UP_REQUIRED');
+      if (req.params.subject && req.params.subject !== subject)
+        problem(404, 'NOT_FOUND');
+      if (req.params.profileId) {
+        const owner = await this.memberships.findOne({
+          profileId: req.params.profileId,
+          subject,
+          ...(policy.owner ? { role: 'owner' } : {}),
+          status: 'active',
+        });
+        if (!membershipIsEffective(owner)) problem(404, 'NOT_FOUND');
+      }
       req.mstyleResidentSubject = subject;
       return true;
     }
 
     if (policy.actor === 'admin') {
-      if (!/^wp-admin:[^:\s]+$/.test(actor)) {
-        validationError('X-Actor-Ref', 'must identify a wp-admin actor');
+      if (
+        actor === 'wp-admin:api-console' &&
+        req.mstyleClientId === MSTYLE_ADMIN_PROBE_CLIENT_ID &&
+        this.nativeConsole
+      ) {
+        if (policy.purposes) requirePurpose(purpose, policy.purposes);
+        const nativeId = await this.nativeConsole.verify(
+          header(req, 'x-admin-step-up-assertion'),
+        );
+        await this.assertionAudit.create({
+          clientId: req.mstyleClientId,
+          actorRef: `pass-admin:${nativeId}`,
+          route: method + ' ' + (req.route?.path || path),
+          purpose,
+          requestId: req.mstyleRequestId,
+          result: 'accepted',
+          detail: 'native-console',
+        });
+        return true;
       }
-      const assertion = header(req, 'x-admin-step-up-assertion');
-      requireHeader('X-Admin-Step-Up-Assertion', assertion);
+      if (!/^wp-admin:[1-9][0-9]*$/.test(actor))
+        validationError('X-Actor-Ref', 'must identify a wp-admin actor');
       if (policy.purposes) requirePurpose(purpose, policy.purposes);
-      await this.assertAdminProof(assertion, actor, purpose || undefined);
+      else if (purpose) validationError('X-Purpose-Code', 'must be absent');
+      await this.assertAdminProof(req, actor, purpose);
       return true;
     }
 
@@ -228,43 +365,90 @@ export class MstyleRouteContextGuard implements CanActivate {
   }
 
   private async assertAdminProof(
-    assertion: string,
+    req: MstyleRequest,
     actor: string,
-    purpose?: string,
+    purpose: string,
   ) {
-    if (assertion.startsWith('v1.')) {
-      const verified = verifyAdminAssertion(
-        this.cfg.adminAssertionSecret(),
-        assertion,
-        { actor, purpose },
-      );
+    let nonce: string | undefined;
+    let result = 'accepted';
+    let detail = 'verified';
+    try {
+      const assertion = header(req, 'x-admin-step-up-assertion');
+      if (!assertion) adminAssertionError('required');
+      const client = this.cfg.oauthClient(req.mstyleClientId!);
+      const scopes = req.mstyleTokenScopes || [];
+      if (
+        !client ||
+        !client.adminAllowed ||
+        scopes.length !== 1 ||
+        !req.mstyleAcceptedScopes?.includes(scopes[0])
+      )
+        adminAssertionError('invalid');
+      const claims = verifyAdminAssertion(assertion, client, {
+        actor,
+        audience: this.cfg.privateApiBase(),
+        scope: scopes[0],
+        purpose,
+        method: req.method.toUpperCase(),
+        target: req.originalUrl || req.url,
+        requestId: req.mstyleRequestId,
+      });
+      nonce = claims.jti;
       try {
-        await this.adminAssertions.create({
-          jti: verified.jti,
-          actor,
-          expiresAt: new Date(verified.exp * 1000),
+        await this.adminAssertions.create(
+          [
+            {
+              jti: jwtReplayKey(claims.iss, ADMIN_ASSERTION_TYPE, claims.jti),
+              issuer: claims.iss,
+              tokenType: ADMIN_ASSERTION_TYPE,
+              nonce: claims.jti,
+              actor,
+              expiresAt: new Date((claims.exp + 5) * 1000),
+            },
+          ],
+          { w: 'majority' },
+        );
+      } catch (error) {
+        if ((error as { code?: number }).code === 11000)
+          adminAssertionError('replayed');
+        problem(503, 'UPSTREAM_UNAVAILABLE', { retryable: true });
+      }
+    } catch (error) {
+      if (error instanceof AdminAssertionException) {
+        detail = error.detail;
+        nonce = nonce || error.jti;
+      } else detail = 'infrastructure';
+      result =
+        error instanceof ProblemException
+          ? error.errors[0]?.code || error.problemCode
+          : 'UPSTREAM_UNAVAILABLE';
+      if (error instanceof ProblemException) throw error;
+      problem(503, 'UPSTREAM_UNAVAILABLE', { retryable: true });
+    } finally {
+      try {
+        await this.assertionAudit.create({
+          clientId: req.mstyleClientId,
+          actorRef: actor,
+          route:
+            req.method +
+            ' ' +
+            (req.route?.path || (req.originalUrl || req.url).split('?')[0]),
+          purpose,
+          requestId: req.mstyleRequestId,
+          jti: nonce,
+          result,
+          detail,
         });
       } catch {
-        problem(401, 'INVALID_ADMIN_ASSERTION');
+        problem(503, 'UPSTREAM_UNAVAILABLE', { retryable: true });
       }
-      return;
-    }
-    try {
-      const payload = verifyJwt(assertion, this.cfg.jwtSecret()) as {
-        role?: string;
-        exp?: number;
-      };
-      if (payload?.role !== 'admin') {
-        problem(401, 'INVALID_ADMIN_ASSERTION');
-      }
-    } catch {
-      problem(401, 'INVALID_ADMIN_ASSERTION');
     }
   }
 }
 
 type ContextPolicy = {
-  actor: 'resident' | 'admin' | 'delivery';
+  actor: 'resident' | 'admin' | 'delivery' | 'outbox';
+  owner?: boolean;
   purposes?: readonly string[];
 };
 
@@ -273,6 +457,76 @@ function m1m2ContextPolicy(
   path: string,
   actor: string,
 ): ContextPolicy | null {
+  if (
+    method === 'GET' &&
+    /\/resident-profiles\/[^/]+(?:\/memberships|\/contact-assignments)?$/.test(
+      path,
+    )
+  ) {
+    return actor.startsWith('wp-admin:')
+      ? { actor: 'admin' }
+      : { actor: 'resident', owner: /\/memberships$/.test(path) };
+  }
+  if (
+    method === 'POST' &&
+    /(?:\/private-data-snapshots\/[^/]+\/operation-bindings|\/guest-parties\/[^/]+\/booking-confirmations)$/.test(
+      path,
+    )
+  )
+    return { actor: 'outbox' };
+  if (
+    method === 'POST' &&
+    /\/resident-profiles\/[^/]+\/memberships$/.test(path)
+  )
+    return {
+      actor: 'resident',
+      owner: true,
+      purposes: ['membership_invitation'],
+    };
+  if (
+    method === 'PATCH' &&
+    /\/resident-profiles\/[^/]+\/contact-assignments$/.test(path)
+  )
+    return {
+      actor: 'resident',
+      owner: true,
+      purposes: ['account_profile_edit'],
+    };
+  if (
+    method === 'POST' &&
+    /\/residents\/[^/]+\/contacts\/challenges(?:\/[^/]+\/verify)?$/.test(path)
+  )
+    return { actor: 'resident' };
+  if (method === 'POST' && /\/residents\/[^/]+\/contacts\/reveal$/.test(path))
+    return { actor: 'resident', purposes: ['account_contact_view'] };
+  if (
+    method === 'GET' &&
+    /\/resident-profiles\/[^/]+\/private-data\/status$/.test(path)
+  )
+    return { actor: 'resident' };
+  if (
+    method === 'POST' &&
+    /\/resident-profiles\/[^/]+\/private-data\/reveal$/.test(path)
+  )
+    return {
+      actor: 'resident',
+      owner: true,
+      purposes: ['account_profile_view'],
+    };
+  if (
+    method === 'PATCH' &&
+    /\/resident-profiles\/[^/]+\/private-data$/.test(path)
+  )
+    return {
+      actor: 'resident',
+      owner: true,
+      purposes: ['account_profile_edit'],
+    };
+  if (
+    method === 'POST' &&
+    /\/resident-profiles\/[^/]+\/private-data\/snapshots$/.test(path)
+  )
+    return { actor: 'resident', purposes: ['booking_snapshot_create'] };
   const adminOnly =
     (method === 'POST' && /\/resident-profiles\/search$/.test(path)) ||
     (method === 'POST' && /\/resident-onboarding$/.test(path)) ||
@@ -349,6 +603,10 @@ function m1m2ContextPolicy(
     };
   }
 
+  if (
+    /\/residents\/[^/]+\/consents(?:\/[^/]+\/(?:accept|withdraw))?$/.test(path)
+  )
+    return { actor: 'resident' };
   const residentOnly =
     (method === 'POST' &&
       /\/resident-profiles\/[^/]+\/change-requests$/.test(path)) ||
@@ -369,6 +627,48 @@ function m1m2ContextPolicy(
       ? ['profile_change_request']
       : undefined,
   };
+}
+
+export function validateHeaderEnvelope(req: MstyleRequest): void {
+  const protectedNames = new Set([
+    'authorization',
+    'x-actor-ref',
+    'x-admin-step-up-assertion',
+    'x-request-id',
+    'x-purpose-code',
+    'if-match',
+    'idempotency-key',
+  ]);
+  const seen = new Set<string>();
+  for (let index = 0; index < (req.rawHeaders || []).length; index += 2) {
+    const name = req.rawHeaders[index].toLowerCase();
+    if (protectedNames.has(name) && seen.has(name))
+      validationError(name, 'Duplicate header');
+    seen.add(name);
+  }
+  for (const name of protectedNames)
+    if (Array.isArray(req.headers[name]))
+      validationError(name, 'Duplicate header');
+  const actor = String(req.headers['x-actor-ref'] || '');
+  const admin =
+    actor.startsWith('wp-admin:') || !!req.headers['x-admin-step-up-assertion'];
+  if (
+    admin &&
+    Object.keys(req.headers).some(
+      (name) =>
+        name.startsWith('x-resident-') ||
+        name.startsWith('x-guest-') ||
+        name === 'x-step-up-authentication-id',
+    )
+  )
+    validationError('X-Actor-Ref', 'Mixed actor contexts');
+  if (
+    req.headers['x-admin-step-up-assertion'] &&
+    !actor.startsWith('wp-admin:')
+  )
+    validationError('X-Actor-Ref', 'Mixed actor contexts');
+  req.mstyleRequestId =
+    String(req.headers['x-request-id'] || '').trim() || Ids.request();
 }
 
 function header(req: Request, name: string): string {
@@ -401,6 +701,7 @@ function validationError(field: string, message: string): never {
 
 @Injectable()
 export class MstyleResultInterceptor implements NestInterceptor {
+  constructor(private readonly responses: MstylePublicResponseService) {}
   intercept(
     ctx: ExecutionContext,
     next: { handle: () => Observable<unknown> },
@@ -408,7 +709,7 @@ export class MstyleResultInterceptor implements NestInterceptor {
     const req = ctx.switchToHttp().getRequest<MstyleRequest>();
     const res = ctx.switchToHttp().getResponse<Response>();
     return next.handle().pipe(
-      map((value) => {
+      mergeMap(async (value) => {
         const requestId = req.mstyleRequestId || Ids.request();
         res.setHeader('X-Request-ID', requestId);
         if (value instanceof MstyleResult) {
@@ -419,12 +720,15 @@ export class MstyleResultInterceptor implements NestInterceptor {
           if (!res.getHeader('Cache-Control')) {
             res.setHeader('Cache-Control', 'no-store');
           }
-          return value.body;
+          return this.responses.present(
+            value.body,
+            req.originalUrl || req.url || '',
+          );
         }
         if (!res.getHeader('Cache-Control')) {
           res.setHeader('Cache-Control', 'no-store');
         }
-        return value;
+        return this.responses.present(value, req.originalUrl || req.url || '');
       }),
     );
   }

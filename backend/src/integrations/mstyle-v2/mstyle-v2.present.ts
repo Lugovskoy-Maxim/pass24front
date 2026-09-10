@@ -1,3 +1,8 @@
+import {
+  publicContactId,
+  publicAssignmentId,
+  publicSnapshotId,
+} from './mstyle-v2.ids';
 import { MSTYLE_SCHEMA_VERSION } from './mstyle-v2.constants';
 import type {
   MstyleAccessGrant,
@@ -63,6 +68,8 @@ export function safeProfile(doc: MstyleProfile) {
     memberPolicy: {
       employeeLimit: doc.memberPolicy?.employeeLimit ?? null,
     },
+    membershipSetRevision: doc.membershipSetRevision,
+    contactAssignmentSetRevision: doc.assignmentSetRevision,
     sourceLinks: doc.sourceLinks || [],
     createdAt: asIso((doc as any).createdAt) || nowIso(),
     updatedAt: asIso((doc as any).updatedAt) || nowIso(),
@@ -87,7 +94,7 @@ export function contactDto(
   value?: string,
 ) {
   return {
-    contactId: doc.contactId,
+    contactId: publicContactId(doc.contactId),
     type: doc.type,
     value: value ?? '',
     masked: doc.masked,
@@ -114,15 +121,15 @@ export function consentItem(doc: MstyleConsent) {
 
 export function assignmentDto(doc: MstyleContactAssignment) {
   return {
-    assignmentId: doc.assignmentId,
+    assignmentId: publicAssignmentId(doc.assignmentId),
     purpose: doc.purpose,
     subject: doc.subject,
-    contactId: doc.contactId,
+    contactId: publicContactId(doc.contactId),
     contactType: doc.contactType,
     contactMask: doc.contactMask,
     contactVerified: !!doc.contactVerified,
     priority: doc.priority,
-    status: doc.status,
+    status: doc.status === 'inactive' ? 'revoked' : doc.status,
     revision: doc.revision,
   };
 }
@@ -143,7 +150,7 @@ export function grantDto(doc: MstyleAccessGrant) {
 export function snapshotRef(doc: MstyleSnapshot) {
   return {
     schemaVersion: MSTYLE_SCHEMA_VERSION,
-    snapshotId: doc.snapshotId,
+    snapshotId: publicSnapshotId(doc.snapshotId, doc.partyType),
     partyType: doc.partyType,
     partyId: doc.partyId,
     snapshotRevision: 1 as const,

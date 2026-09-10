@@ -1,91 +1,138 @@
-import { hmacHex, safeEqualHex } from './mstyle-v2.crypto';
-import { Ids } from './mstyle-v2.ids';
-import { problem } from './mstyle-v2.problem';
+import type { MstyleOauthClient } from './mstyle-v2.config';
+import { verifyRegisteredJwt } from './mstyle-v2.jwt';
+import { ProblemException } from './mstyle-v2.problem';
 
-export const ADMIN_ASSERTION_MAX_TTL_SEC = 300;
-
+export const ADMIN_ASSERTION_TYPE = 'mstyle-admin-step-up+jwt';
+export const ADMIN_ASSERTION_MAX_TTL_SEC = 60;
+export const ADMIN_ASSERTION_FIELDS = [
+  'iss',
+  'sub',
+  'aud',
+  'iat',
+  'exp',
+  'jti',
+  'auth_context',
+  'scope',
+  'purpose',
+  'method',
+  'target',
+  'requestId',
+] as const;
 export type AdminAssertionClaims = {
-  v: 1;
-  actor: string;
-  purpose?: string;
+  iss: string;
+  sub: string;
+  aud: string;
   iat: number;
   exp: number;
   jti: string;
+  auth_context: string;
+  scope: string;
+  purpose: string;
+  method: string;
+  target: string;
+  requestId: string;
 };
-
-export function createAdminAssertion(
-  secret: string,
-  input: {
-    actor: string;
-    purpose?: string;
-    ttlSec?: number;
-    now?: number;
-    jti?: string;
-  },
-): string {
-  const now = input.now ?? Math.floor(Date.now() / 1000);
-  const ttl = Math.min(
-    input.ttlSec ?? ADMIN_ASSERTION_MAX_TTL_SEC,
-    ADMIN_ASSERTION_MAX_TTL_SEC,
-  );
-  const claims: AdminAssertionClaims = {
-    v: 1,
-    actor: input.actor,
-    iat: now,
-    exp: now + Math.max(1, ttl),
-    jti: input.jti || Ids.jti(),
+export type AdminAssertionReason =
+  'required' | 'invalid' | 'expired' | 'replayed';
+export class AdminAssertionException extends ProblemException {
+  constructor(
+    reason: AdminAssertionReason,
+    message: string,
+    public readonly detail: string,
+    public readonly jti?: string,
+  ) {
+    super(403, 'ADMIN_ASSERTION_INVALID', {
+      retryable: false,
+      errors: [{ field: 'X-Admin-Step-Up-Assertion', code: reason, message }],
+    });
+  }
+}
+export function adminAssertionError(
+  reason: AdminAssertionReason,
+  detail = reason as string,
+  jti?: string,
+): never {
+  const messages = {
+    required: 'Administrative assertion is required',
+    invalid: 'Administrative assertion is invalid',
+    expired: 'Administrative assertion has expired',
+    replayed: 'Administrative assertion has already been used',
   };
-  if (input.purpose) claims.purpose = input.purpose;
-  const body = Buffer.from(JSON.stringify(claims)).toString('base64url');
-  return `v1.${body}.${hmacHex(secret, assertionMaterial(body))}`;
+  throw new AdminAssertionException(reason, messages[reason], detail, jti);
 }
-
 export function verifyAdminAssertion(
-  secret: string,
   raw: string,
-  expected: { actor: string; purpose?: string },
+  client: MstyleOauthClient,
+  expected: {
+    actor: string;
+    audience: string;
+    scope: string;
+    purpose: string;
+    method: string;
+    target: string;
+    requestId: string;
+  },
   now = Math.floor(Date.now() / 1000),
-): { jti: string; exp: number } {
-  const [version, body, signature, extra] = String(raw || '').split('.');
-  if (version !== 'v1' || !body || !signature || extra) {
-    problem(401, 'INVALID_ADMIN_ASSERTION');
-  }
-  const expectedSignature = hmacHex(secret, assertionMaterial(body));
-  if (!safeEqualHex(signature, expectedSignature)) {
-    problem(401, 'INVALID_ADMIN_ASSERTION');
-  }
-  let claims: AdminAssertionClaims;
+): AdminAssertionClaims {
+  if (!raw) adminAssertionError('required');
+  let claims: AdminAssertionClaims | undefined;
   try {
-    claims = JSON.parse(
-      Buffer.from(body, 'base64url').toString('utf8'),
+    claims = verifyRegisteredJwt(
+      raw,
+      client,
+      ADMIN_ASSERTION_TYPE,
+      ADMIN_ASSERTION_FIELDS,
     ) as AdminAssertionClaims;
-  } catch {
-    problem(401, 'INVALID_ADMIN_ASSERTION');
+    if (
+      !client.adminAllowed ||
+      ADMIN_ASSERTION_FIELDS.some(
+        (field) =>
+          typeof claims?.[field] !==
+          (field === 'iat' || field === 'exp' ? 'number' : 'string'),
+      ) ||
+      !Number.isSafeInteger(claims.iat) ||
+      !Number.isSafeInteger(claims.exp) ||
+      claims.iss !== client.clientId ||
+      claims.sub !== expected.actor ||
+      !/^wp-admin:[1-9][0-9]*$/.test(claims.sub) ||
+      claims.aud !== expected.audience ||
+      claims.auth_context !== 'wp_session' ||
+      claims.scope !== expected.scope ||
+      !client.scopes.includes(claims.scope) ||
+      claims.purpose !== expected.purpose ||
+      claims.method !== expected.method ||
+      claims.target !== expected.target ||
+      claims.requestId !== expected.requestId ||
+      !/^[A-Za-z0-9_-]{32}$/.test(claims.jti) ||
+      claims.exp - claims.iat <= 0 ||
+      claims.exp - claims.iat > 60 ||
+      claims.iat > now + 5
+    )
+      throw new Error('claims');
+  } catch (error) {
+    const detail = [
+      'size',
+      'format',
+      'encoding',
+      'json',
+      'duplicate',
+      'fields',
+      'profile',
+      'key',
+      'signature',
+      'claims',
+    ].includes((error as Error).message)
+      ? (error as Error).message
+      : 'verification';
+    adminAssertionError(
+      'invalid',
+      detail,
+      typeof claims?.jti === 'string' && /^[A-Za-z0-9_-]{32}$/.test(claims.jti)
+        ? claims.jti
+        : undefined,
+    );
   }
-  if (
-    claims.v !== 1 ||
-    claims.actor !== expected.actor ||
-    typeof claims.jti !== 'string' ||
-    !claims.jti ||
-    !Number.isInteger(claims.iat) ||
-    !Number.isInteger(claims.exp) ||
-    claims.exp <= now ||
-    claims.iat > now + 5 ||
-    claims.exp - claims.iat > ADMIN_ASSERTION_MAX_TTL_SEC ||
-    claims.exp - claims.iat < 1
-  ) {
-    problem(401, 'INVALID_ADMIN_ASSERTION');
-  }
-  if (
-    expected.purpose &&
-    claims.purpose &&
-    claims.purpose !== expected.purpose
-  ) {
-    problem(401, 'INVALID_ADMIN_ASSERTION');
-  }
-  return { jti: claims.jti, exp: claims.exp };
-}
-
-function assertionMaterial(body: string): string {
-  return `mstyle-admin-assertion:${body}`;
+  if (now >= claims.exp + 5)
+    adminAssertionError('expired', 'expired', claims.jti);
+  return claims;
 }

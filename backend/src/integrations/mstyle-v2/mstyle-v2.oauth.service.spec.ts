@@ -40,7 +40,7 @@ describe('MstyleOauthService', () => {
     const service = new MstyleOauthService(
       configStub(),
       { create: async (doc: unknown) => created.push(doc) } as any,
-      { create: async () => undefined } as any,
+      { create: async () => undefined, findOne: async () => null } as any,
       {
         getMstyleMockResponsesEnabled: async () => ({
           enabled: false,
@@ -73,7 +73,7 @@ describe('MstyleOauthService', () => {
       {
         create: async (doc: Record<string, unknown>) => created.push(doc),
       } as any,
-      { create: async () => undefined } as any,
+      { create: async () => undefined, findOne: async () => null } as any,
       {} as any,
     );
 
@@ -91,8 +91,8 @@ describe('MstyleOauthService', () => {
   it('rejects unknown client', async () => {
     const service = new MstyleOauthService(
       configStub(),
-      { create: async () => undefined } as any,
-      { create: async () => undefined } as any,
+      { create: async () => undefined, findOne: async () => null } as any,
+      { create: async () => undefined, findOne: async () => null } as any,
       {
         getMstyleMockResponsesEnabled: async () => ({
           enabled: false,
@@ -111,8 +111,8 @@ describe('MstyleOauthService', () => {
   it('issues a token when the private API flag is off but admin mock mode is on', async () => {
     const service = new MstyleOauthService(
       configStub({ isEnabled: () => false }),
-      { create: async () => undefined } as any,
-      { create: async () => undefined } as any,
+      { create: async () => undefined, findOne: async () => null } as any,
+      { create: async () => undefined, findOne: async () => null } as any,
       {
         getMstyleMockResponsesEnabled: async () => ({
           enabled: true,
@@ -164,7 +164,7 @@ describe('MstyleOauthService', () => {
       {
         create: async (doc: Record<string, unknown>) => created.push(doc),
       } as any,
-      { create: async () => undefined } as any,
+      { create: async () => undefined, findOne: async () => null } as any,
       {
         getMstyleMockResponsesEnabled: async () => ({
           enabled: false,
@@ -203,8 +203,8 @@ describe('MstyleOauthService', () => {
               }
             : undefined,
       }),
-      { create: async () => undefined } as any,
-      { create: async () => undefined } as any,
+      { create: async () => undefined, findOne: async () => null } as any,
+      { create: async () => undefined, findOne: async () => null } as any,
       {
         getMstyleMockResponsesEnabled: async () => ({
           enabled: false,
@@ -258,8 +258,8 @@ describe('MstyleOauthService', () => {
               }
             : undefined,
       }),
-      { create: async () => undefined } as any,
-      { create: async () => undefined } as any,
+      { create: async () => undefined, findOne: async () => null } as any,
+      { create: async () => undefined, findOne: async () => null } as any,
       {
         getMstyleMockResponsesEnabled: async () => ({
           enabled: false,
@@ -278,7 +278,7 @@ describe('MstyleOauthService', () => {
       }),
     ).rejects.toMatchObject({
       oauthError: 'invalid_client',
-      oauthDescription: 'Unknown assertion kid',
+      oauthDescription: 'Invalid client assertion',
     });
   });
 
@@ -296,8 +296,8 @@ describe('MstyleOauthService', () => {
               }
             : undefined,
       }),
-      { create: async () => undefined } as any,
-      { create: async () => undefined } as any,
+      { create: async () => undefined, findOne: async () => null } as any,
+      { create: async () => undefined, findOne: async () => null } as any,
       {
         getMstyleMockResponsesEnabled: async () => ({
           enabled: false,
@@ -327,6 +327,89 @@ describe('MstyleOauthService', () => {
         scope: 'mstyle.residents.read',
       }),
     ).rejects.toMatchObject({ oauthError: 'invalid_scope' });
+  });
+});
+
+describe('A-01 replay storage', () => {
+  const keys = generateKeyPairSync('rsa', { modulusLength: 2048 });
+  const clientId = 'mstyle-backend-prod';
+  const config = configStub({
+    oauthClient: () => ({
+      clientId,
+      auth: 'private_key_jwt',
+      algorithm: 'RS256',
+      publicKey: '',
+      scopes: ['mstyle.resident.authenticate'],
+      publicKeysByKid: {
+        test: keys.publicKey.export({ type: 'spki', format: 'pem' }).toString(),
+      },
+    }),
+  });
+  const form = () => ({
+    grant_type: 'client_credentials',
+    client_id: clientId,
+    scope: 'mstyle.resident.authenticate',
+    client_assertion_type:
+      'urn:ietf:params:oauth:client-assertion-type:jwt-bearer',
+    client_assertion: signAssertion(keys.privateKey, {
+      kid: 'test',
+      iss: clientId,
+      sub: clientId,
+      aud: 'https://pass.example/api/oauth2/token',
+    }),
+  });
+  it('rejects replay across independent service instances', async () => {
+    const stored = new Set<string>();
+    const rows = {
+      findOne: async () => null,
+      create: async (values: { jti: string }[]) => {
+        if (stored.has(values[0].jti)) throw { code: 11000 };
+        stored.add(values[0].jti);
+      },
+    };
+    const tokens = { create: jest.fn() };
+    const settings = {
+      getMstyleMockResponsesEnabled: async () => ({ enabled: false }),
+    };
+    const first = new MstyleOauthService(
+      config,
+      tokens as any,
+      rows as any,
+      settings as any,
+    );
+    const second = new MstyleOauthService(
+      config,
+      tokens as any,
+      rows as any,
+      settings as any,
+    );
+    const input = form();
+    await first.issueToken(input);
+    await expect(second.issueToken(input)).rejects.toMatchObject({
+      oauthError: 'invalid_client',
+      oauthDescription: 'Assertion already used',
+    });
+    expect(tokens.create).toHaveBeenCalledTimes(1);
+  });
+  it('returns 503 without issuing a token on replay-store failure', async () => {
+    const tokens = { create: jest.fn() };
+    const service = new MstyleOauthService(
+      config,
+      tokens as any,
+      {
+        findOne: async () => {
+          throw new Error('offline');
+        },
+      } as any,
+      {
+        getMstyleMockResponsesEnabled: async () => ({ enabled: false }),
+      } as any,
+    );
+    await expect(service.issueToken(form())).rejects.toMatchObject({
+      status: 503,
+      oauthError: 'temporarily_unavailable',
+    });
+    expect(tokens.create).not.toHaveBeenCalled();
   });
 });
 

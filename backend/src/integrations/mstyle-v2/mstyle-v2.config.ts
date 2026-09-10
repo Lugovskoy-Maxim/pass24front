@@ -16,6 +16,8 @@ export type MstyleOauthClient = {
   clientId: string;
   auth: MstyleClientAuth;
   publicKey: string;
+  algorithm?: 'RS256' | 'PS256';
+  adminAllowed?: boolean;
   publicKeysByKid?: Record<string, string>;
   scopes: string[];
 };
@@ -90,6 +92,9 @@ export class MstyleV2Config {
       const publicKey = this.clientPublicKey();
       return {
         clientId,
+        algorithm: this.clientAlgorithm(),
+        adminAllowed:
+          this.config.get<string>('MSTYLE_CLIENT_ADMIN_ALLOWED') !== 'false',
         auth: this.clientAuth(),
         publicKey,
         publicKeysByKid: this.publicKeysByKid(this.clientKeyKid(), publicKey),
@@ -100,6 +105,8 @@ export class MstyleV2Config {
       const publicKey = this.reconcileClientPublicKey();
       return {
         clientId,
+        algorithm: this.clientAlgorithm(true),
+        adminAllowed: false,
         auth: this.reconcileClientAuth(),
         publicKey,
         publicKeysByKid: this.publicKeysByKid(
@@ -110,6 +117,22 @@ export class MstyleV2Config {
       };
     }
     return undefined;
+  }
+
+  clientAlgorithm(reconcile = false): 'RS256' | 'PS256' {
+    const value =
+      this.config.get<string>(
+        reconcile ? 'MSTYLE_RECONCILE_JWT_ALG' : 'MSTYLE_CLIENT_JWT_ALG',
+      ) || 'RS256';
+    if (value !== 'RS256' && value !== 'PS256')
+      throw new Error('Mstyle client algorithm must be RS256 or PS256');
+    return value;
+  }
+  privateApiBase(): string {
+    return (
+      this.config.get<string>('MSTYLE_PRIVATE_API_BASE') ||
+      this.publicBaseUrl() + '/api/internal/integrations/mstyle/v2'
+    ).replace(/\/+$/, '');
   }
 
   tokenTtlSec(): number {

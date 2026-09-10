@@ -1,16 +1,16 @@
+import { MstyleConsentService } from './mstyle-v2.consent.service';
+import { MstylePrivateDataService } from './mstyle-v2.private-data.service';
+import { guestWriteAllowed } from './mstyle-v2.guest-access';
+import { membershipIsEffective } from './mstyle-v2.membership-policy';
+import { MstyleContactProofService } from './mstyle-v2.contact-proof';
 import { Injectable } from '@nestjs/common';
 import { InjectModel } from '@nestjs/mongoose';
-import * as bcrypt from 'bcryptjs';
 import { Model } from 'mongoose';
 import { normalizeRuMobilePhone } from '../../common/phone';
-import {
-  CHALLENGE_TTL_MS,
-  CODE_LENGTH,
-  DEFAULT_GUEST_TTL_MS,
-  RESEND_MIN_MS,
-} from './mstyle-v2.constants';
+import { DEFAULT_GUEST_TTL_MS } from './mstyle-v2.constants';
 import { MstyleV2Config } from './mstyle-v2.config';
 import {
+  canonicalJson,
   decryptJson,
   encryptJson,
   hmacHex,
@@ -82,15 +82,31 @@ export class MstyleGuestsService {
     private readonly memberships: Model<MstyleMembershipDocument>,
     @InjectModel(MstyleContact.name)
     private readonly identityContacts: Model<MstyleContactDocument>,
+    private readonly contactProof: MstyleContactProofService,
+    private readonly consentService: MstyleConsentService,
+    private readonly privateData: MstylePrivateDataService,
   ) {}
 
   async create(dto: CreateGuestDto) {
+    if (dto.partyPurpose && dto.purpose && dto.partyPurpose !== dto.purpose)
+      problem(422, 'VALIDATION_FAILED');
+    const purpose = dto.partyPurpose ?? dto.purpose ?? 'mstyle_booking';
+    if (!['mstyle_booking', 'guest_participant_declaration'].includes(purpose))
+      problem(422, 'VALIDATION_FAILED');
+    // Participant declarations need a parent operation/flow contract; do not create unbound parties.
+    if (purpose !== 'mstyle_booking' || dto.role === 'participant')
+      problem(422, 'VALIDATION_FAILED');
     const guestPartyId = Ids.guest();
     const expiresAt = dto.expiresAt
       ? new Date(dto.expiresAt)
       : new Date(Date.now() + DEFAULT_GUEST_TTL_MS);
+    if (
+      expiresAt.getTime() <= Date.now() ||
+      expiresAt.getTime() > Date.now() + DEFAULT_GUEST_TTL_MS
+    )
+      problem(422, 'VALIDATION_FAILED');
     const isPrimary = (dto.role || 'primary') === 'primary';
-    const token = isPrimary ? Ids.token() : undefined;
+    const token = isPrimary ? Ids.guestToken() : undefined;
     const eventIds = [
       await this.events.emit({
         type: 'guest_party.updated',
@@ -102,7 +118,7 @@ export class MstyleGuestsService {
     await this.guests.create({
       guestPartyId,
       status: 'draft',
-      purpose: dto.purpose || 'mstyle_booking',
+      purpose,
       role: dto.role || 'primary',
       privateDataRevision: null,
       revision: 1,
@@ -125,8 +141,10 @@ export class MstyleGuestsService {
 
   async startContact(guestPartyId: string, dto: ContactChallengeDto) {
     const guest = await this.requireGuest(guestPartyId);
+    const type = dto.contactType ?? dto.type;
+    if (type !== 'phone' && type !== 'email') problem(422, 'VALIDATION_FAILED');
     const normalized =
-      dto.type === 'phone'
+      type === 'phone'
         ? normalizeRuMobilePhone(dto.value)
         : normalizeEmail(dto.value);
     if (!normalized) {
@@ -137,47 +155,32 @@ export class MstyleGuestsService {
       });
     }
     const latest = await this.guestContacts
-      .findOne({ guestPartyId, type: dto.type })
+      .findOne({ guestPartyId, type: type })
       .sort({ revision: -1 });
-    const now = Date.now();
-    const challenge = await this.challenges.create({
-      challengeId: Ids.challenge(),
-      kind: 'guest_contact',
-      clientId: 'guest',
-      status: 'awaiting_code',
-      channel: dto.type === 'phone' ? 'sms' : 'email',
-      identifierType: dto.type,
-      subject: null,
-      isDummy: false,
-      codeHash: await bcrypt.hash(this.cfg.mockOtp(), 8),
-      codeLength: CODE_LENGTH,
-      verifyAttempts: 0,
-      expiresAt: new Date(now + CHALLENGE_TTL_MS),
-      resendAfter: new Date(now + RESEND_MIN_MS),
-      contactType: dto.type,
-      displayMasked: maskContact(dto.type, normalized),
-      expectedContactValueRevision: latest?.revision ?? 0,
-      guestPartyId,
-      pendingValueEnc: encryptJson(this.cfg.piiSecret(), normalized),
-    });
+    const challenge = await this.contactProof.start(
+      { kind: 'guest_contact', guestPartyId },
+      type,
+      normalized,
+      latest?.revision ?? 0,
+    );
+    guest.revision += 1;
+    await guest.save();
     const eventIds = [
       await this.events.emit({
         type: 'guest_party.updated',
         aggregate: {
           type: 'guest_party',
           id: guestPartyId,
-          revision: guest.revision + 1,
+          revision: guest.revision,
         },
         guestPartyId,
         payload: { status: guest.status },
       }),
     ];
-    guest.revision += 1;
-    await guest.save();
     return new MstyleResult(
       schema({
         challengeId: challenge.challengeId,
-        contactType: dto.type,
+        contactType: type,
         displayMasked: challenge.displayMasked,
         expectedContactValueRevision: challenge.expectedContactValueRevision,
         expiresAt: challenge.expiresAt.toISOString(),
@@ -188,42 +191,46 @@ export class MstyleGuestsService {
     );
   }
 
+  async prepareContactVerification(
+    guestPartyId: string,
+    challengeId: string,
+    dto: ContactVerifyDto,
+  ) {
+    await this.contactProof.verify(
+      { kind: 'guest_contact', guestPartyId },
+      challengeId,
+      dto.code,
+    );
+  }
+
   async verifyContact(
     guestPartyId: string,
     challengeId: string,
     dto: ContactVerifyDto,
   ) {
+    void dto;
     const guest = await this.requireGuest(guestPartyId);
-    const challenge = await this.challenges.findOne({
+    const challenge = await this.contactProof.consume(
+      { kind: 'guest_contact', guestPartyId },
       challengeId,
-      guestPartyId,
-      kind: 'guest_contact',
-    });
-    if (!challenge) problem(404, 'NOT_FOUND');
-    if (challenge.expiresAt.getTime() <= Date.now()) {
-      challenge.status = 'expired';
-      await challenge.save();
-      problem(410, 'CHALLENGE_EXPIRED');
-    }
-    if (challenge.status === 'consumed') problem(409, 'CHALLENGE_CONSUMED');
-    const ok = await bcrypt.compare(dto.code, challenge.codeHash);
-    challenge.verifyAttempts += 1;
-    if (!ok) {
-      await challenge.save();
-      problem(401, 'INVALID_CREDENTIALS');
-    }
+    );
     const value = decryptJson<string>(
       this.cfg.piiSecret(),
       challenge.pendingValueEnc!,
     );
     const type = challenge.contactType as 'phone' | 'email';
+    const latest = await this.guestContacts
+      .findOne({ guestPartyId, type })
+      .sort({ revision: -1 });
+    if ((latest?.revision ?? 0) !== challenge.baseContactValueRevision)
+      problem(412, 'PRECONDITION_FAILED');
     const valueHash = hmacHex(this.cfg.piiSecret(), `${type}:${value}`);
     let contact = await this.guestContacts
       .findOne({ guestPartyId, type })
       .sort({ updatedAt: -1, revision: -1 });
     if (!contact) {
       contact = await this.guestContacts.create({
-        contactId: Ids.contact(),
+        contactId: Ids.guestContact(),
         guestPartyId,
         type,
         masked: maskContact(type, value),
@@ -245,11 +252,11 @@ export class MstyleGuestsService {
       displayMasked: contact.masked,
       verifiedAt: contact.verifiedAt,
     };
-    guest.status = guest.status === 'draft' ? 'contact_verified' : guest.status;
+    guest.status = ['draft', 'contact_verified'].includes(guest.status)
+      ? 'verified'
+      : guest.status;
     guest.revision += 1;
     await guest.save();
-    challenge.status = 'consumed';
-    await challenge.save();
     const eventIds = [
       await this.events.emit({
         type: 'guest_contact.updated',
@@ -287,21 +294,42 @@ export class MstyleGuestsService {
     ifMatch?: string,
   ) {
     const guest = await this.requireGuest(guestPartyId);
+    const snapshot = await this.privateData.requireSnapshot(dto.snapshotId);
+    if (
+      snapshot.partyType !== 'guest_party' ||
+      snapshot.partyId !== guestPartyId
+    )
+      problem(404, 'NOT_FOUND');
+    if (guest.operationLink) {
+      if (
+        guest.operationLink.snapshotId !== snapshot.snapshotId ||
+        canonicalJson(guest.operationLink.operationRef) !==
+          canonicalJson(dto.operationRef)
+      )
+        problem(409, 'CONFLICT');
+      return new MstyleResult(
+        schema({
+          guestPartyId,
+          status: guest.status,
+          revision: guest.revision,
+          operationLink: guest.operationLink,
+          eventIds: guest.operationLink.eventIds || [],
+        }),
+        200,
+        { ETag: etag('guest', guest.revision) },
+      );
+    }
+    if (!guestWriteAllowed(guest.status) || guest.status === 'draft')
+      problem(409, 'CONFLICT');
     this.assertMatch(ifMatch, guest.revision);
-    const snapshot = await this.snapshots.findOne({
-      snapshotId: dto.snapshotId,
-      partyId: guestPartyId,
+    const binding = await this.privateData.bindSnapshot(snapshot.snapshotId, {
+      schemaVersion: '2.0',
+      operationRef: dto.operationRef,
     });
-    if (!snapshot) problem(404, 'NOT_FOUND');
     guest.status = 'booked';
     guest.revision += 1;
-    guest.operationLink = {
-      operationRef: dto.operationRef,
-      snapshotId: dto.snapshotId,
-      bindingRevision: 1,
-    };
-    await guest.save();
     const eventIds = [
+      ...(binding.body as any).eventIds,
       await this.events.emit({
         type: 'guest_party.updated',
         aggregate: {
@@ -313,6 +341,16 @@ export class MstyleGuestsService {
         payload: { status: guest.status, operationRef: dto.operationRef },
       }),
     ];
+    guest.operationLink = {
+      schemaVersion: '2.0',
+      id: Ids.operationLink(),
+      operationRef: dto.operationRef,
+      snapshotId: snapshot.snapshotId,
+      revision: 1,
+      createdAt: nowIso(),
+      eventIds,
+    };
+    await guest.save();
     return new MstyleResult(
       schema({
         guestPartyId,
@@ -379,7 +417,7 @@ export class MstyleGuestsService {
       role: 'owner',
       status: 'active',
     });
-    if (!profile || !owner) problem(404, 'NOT_FOUND');
+    if (!profile || !membershipIsEffective(owner)) problem(404, 'NOT_FOUND');
     const allGuestContacts = await this.guestContacts
       .find({ guestPartyId, verifiedAt: { $ne: null } })
       .sort({ updatedAt: -1, revision: -1 });
@@ -534,59 +572,39 @@ export class MstyleGuestsService {
 
   async listConsents(guestPartyId: string) {
     await this.requireGuest(guestPartyId);
-    const items = await this.consents
-      .find({ partyType: 'guest', partyId: guestPartyId })
-      .lean();
-    const revision = items.reduce((max, i) => Math.max(max, i.revision), 1);
-    return new MstyleResult(
-      schema({
-        guestPartyId,
-        consentSetRevision: revision,
-        items: items.map((item) => ({
-          documentCode: item.documentCode,
-          documentVersion: item.documentVersion,
-          documentDigest: item.documentDigest,
-          documentUrl: item.documentUrl,
-          locale: item.locale,
-          status: item.status,
-          revision: item.revision,
-          acceptedAt: item.acceptedAt,
-          withdrawnAt: item.withdrawnAt,
-          auditRef: item.auditRef,
-        })),
-      }),
-      200,
-      { ETag: etag('consents', revision), 'Cache-Control': 'no-store' },
-    );
+    return this.consentService.list('guest', guestPartyId);
   }
-
   async acceptConsent(
     guestPartyId: string,
     documentCode: string,
     dto: ConsentAcceptDto,
+    ifMatch?: string,
   ) {
     await this.requireGuest(guestPartyId);
-    return this.directory.upsertConsent(
+    return this.consentService.change(
       'guest',
       guestPartyId,
       documentCode,
-      dto,
       'accepted',
+      dto,
+      ifMatch,
     );
   }
-
-  async withdrawConsent(guestPartyId: string, documentCode: string) {
+  async withdrawConsent(
+    guestPartyId: string,
+    documentCode: string,
+    ifMatch?: string,
+    reasonCode?: string,
+  ) {
     await this.requireGuest(guestPartyId);
-    return this.directory.upsertConsent(
+    return this.consentService.change(
       'guest',
       guestPartyId,
       documentCode,
-      {
-        schemaVersion: '2.0',
-        documentVersion: '',
-        documentDigest: '',
-      },
       'withdrawn',
+      {},
+      ifMatch,
+      reasonCode,
     );
   }
 

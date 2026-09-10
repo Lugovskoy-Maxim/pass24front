@@ -39,6 +39,8 @@ MstyleServiceTokenSchema.index({ expiresAt: 1 }, { expireAfterSeconds: 0 });
 
 @Schema({ collection: 'mstyle_v2_oauth_jti', timestamps: true })
 export class MstyleOauthJti {
+  @Prop() nonce?: string;
+  @Prop() tokenType?: string;
   @Prop({ required: true, unique: true })
   jti: string;
 
@@ -76,13 +78,13 @@ export class MstyleAuthentication {
 export type MstyleAuthenticationDocument = MstyleAuthentication & Document;
 export const MstyleAuthenticationSchema =
   SchemaFactory.createForClass(MstyleAuthentication);
-MstyleAuthenticationSchema.index(
-  { expiresAt: 1 },
-  { expireAfterSeconds: 0 },
-);
+MstyleAuthenticationSchema.index({ expiresAt: 1 }, { expireAfterSeconds: 0 });
 
 @Schema({ collection: 'mstyle_v2_admin_assertion_jti', timestamps: true })
 export class MstyleAdminAssertionJti {
+  @Prop() issuer?: string;
+  @Prop() tokenType?: string;
+  @Prop() nonce?: string;
   @Prop({ required: true, unique: true })
   jti: string;
 
@@ -102,6 +104,21 @@ MstyleAdminAssertionJtiSchema.index(
   { expireAfterSeconds: 0 },
 );
 
+@Schema({ collection: 'mstyle_v2_admin_assertion_audit', timestamps: true })
+export class MstyleAdminAssertionAudit {
+  @Prop({ required: true }) clientId: string;
+  @Prop({ required: true }) actorRef: string;
+  @Prop({ required: true }) route: string;
+  @Prop({ default: '' }) purpose: string;
+  @Prop({ required: true, index: true }) requestId: string;
+  @Prop() jti?: string;
+  @Prop({ required: true }) result: string;
+  @Prop() detail?: string;
+}
+export const MstyleAdminAssertionAuditSchema = SchemaFactory.createForClass(
+  MstyleAdminAssertionAudit,
+);
+
 @Schema({ collection: 'mstyle_v2_identities', timestamps: true })
 export class MstyleIdentity {
   @Prop({ required: true, unique: true })
@@ -109,6 +126,12 @@ export class MstyleIdentity {
 
   @Prop({ unique: true, sparse: true })
   userId?: string;
+
+  // Native User owns credentials and account restrictions; business data is imported once.
+  @Prop() userSecurityStamp?: string;
+  @Prop() userSecurityStatus?: string;
+  @Prop({ type: String, default: null }) userRestrictionPreviousStatus?:
+    string | null;
 
   @Prop({
     required: true,
@@ -261,6 +284,7 @@ MstyleMembershipSchema.index(
   { profileId: 1 },
   {
     unique: true,
+    name: 'one_active_owner_per_profile',
     partialFilterExpression: { role: 'owner', status: 'active' },
   },
 );
@@ -268,6 +292,7 @@ MstyleMembershipSchema.index(
   { subject: 1 },
   {
     unique: true,
+    name: 'one_active_employee_profile',
     partialFilterExpression: { role: 'employee', status: 'active' },
   },
 );
@@ -393,6 +418,8 @@ export class MstyleConsent {
     locale: string;
     auditRef: string;
     recordedAt: string;
+    evidenceCode?: string;
+    reasonCode?: string;
   }>;
 }
 export type MstyleConsentDocument = MstyleConsent & Document;
@@ -401,6 +428,16 @@ MstyleConsentSchema.index(
   { partyType: 1, partyId: 1, documentCode: 1 },
   { unique: true },
 );
+
+@Schema({ collection: 'mstyle_v2_consent_sets', timestamps: true })
+export class MstyleConsentSet {
+  @Prop({ required: true }) partyType: string;
+  @Prop({ required: true }) partyId: string;
+  @Prop({ default: 1 }) revision: number;
+}
+export const MstyleConsentSetSchema =
+  SchemaFactory.createForClass(MstyleConsentSet);
+MstyleConsentSetSchema.index({ partyType: 1, partyId: 1 }, { unique: true });
 
 @Schema({ collection: 'mstyle_v2_private_data', timestamps: true })
 export class MstylePrivateData {
@@ -435,6 +472,7 @@ MstylePrivateDataSchema.index({ partyType: 1, partyId: 1 }, { unique: true });
 
 @Schema({ collection: 'mstyle_v2_challenges', timestamps: true })
 export class MstyleChallenge {
+  @Prop() authVersion?: number;
   @Prop({ required: true, unique: true })
   challengeId: string;
 
@@ -501,6 +539,10 @@ export class MstyleChallenge {
   @Prop({ type: Number })
   expectedContactValueRevision?: number;
 
+  @Prop({ type: Number }) baseContactValueRevision?: number;
+  @Prop({ type: Number }) contactProofVersion?: number;
+  @Prop({ type: Date }) verificationApprovedAt?: Date;
+
   @Prop()
   guestPartyId?: string;
 
@@ -557,6 +599,8 @@ export class MstyleGuestParty {
   @Prop()
   guestFlowAccessTokenHash?: string;
 
+  @Prop() displayName?: string;
+
   @Prop({ default: 1 })
   consentSetRevision: number;
 
@@ -564,12 +608,21 @@ export class MstyleGuestParty {
   operationLink?: {
     operationRef: OperationReference;
     snapshotId: string;
-    bindingRevision: number;
+    bindingRevision?: number;
+    schemaVersion?: string;
+    id?: string;
+    revision?: number;
+    createdAt?: string;
+    eventIds?: string[];
   };
 }
 export type MstyleGuestPartyDocument = MstyleGuestParty & Document;
 export const MstyleGuestPartySchema =
   SchemaFactory.createForClass(MstyleGuestParty);
+MstyleGuestPartySchema.index(
+  { guestFlowAccessTokenHash: 1 },
+  { unique: true, sparse: true },
+);
 
 @Schema({ collection: 'mstyle_v2_guest_contacts', timestamps: true })
 export class MstyleGuestContact {
@@ -606,8 +659,12 @@ export class MstyleSnapshot {
   @Prop({ required: true, unique: true })
   snapshotId: string;
 
-  @Prop({ required: true, enum: ['resident_profile', 'guest_party'] })
-  partyType: string;
+  @Prop({
+    type: String,
+    required: true,
+    enum: ['resident_profile', 'guest_party'],
+  })
+  partyType: 'resident_profile' | 'guest_party';
 
   @Prop({ required: true })
   partyId: string;
@@ -662,10 +719,28 @@ export type MstyleSnapshotBindingDocument = MstyleSnapshotBinding & Document;
 export const MstyleSnapshotBindingSchema = SchemaFactory.createForClass(
   MstyleSnapshotBinding,
 );
-MstyleSnapshotBindingSchema.index({ snapshotId: 1 }, { unique: true });
+MstyleSnapshotBindingSchema.index(
+  { snapshotId: 1 },
+  { unique: true, name: 'one_binding_per_snapshot' },
+);
+MstyleSnapshotBindingSchema.index(
+  {
+    'operationRef.sourceSystem': 1,
+    'operationRef.environment': 1,
+    'operationRef.operationType': 1,
+    'operationRef.operationId': 1,
+  },
+  { unique: true, name: 'one_snapshot_per_operation' },
+);
 
 @Schema({ collection: 'mstyle_v2_idempotency', timestamps: true })
 export class MstyleIdempotency {
+  @Prop({ type: Object }) dispatchFailure?: {
+    status: number;
+    code: string;
+    errors?: Array<{ field?: string; code?: string; message?: string }>;
+  };
+  @Prop() actorRef?: string;
   @Prop({ required: true, unique: true })
   recordKey: string;
 
@@ -709,6 +784,9 @@ export class MstyleChangeEvent {
   @Prop({ required: true, unique: true })
   eventId: string;
 
+  @Prop()
+  repairsEventId?: string;
+
   @Prop({ required: true })
   sequence: number;
 
@@ -737,6 +815,11 @@ export type MstyleChangeEventDocument = MstyleChangeEvent & Document;
 export const MstyleChangeEventSchema =
   SchemaFactory.createForClass(MstyleChangeEvent);
 MstyleChangeEventSchema.index({ sequence: 1 }, { unique: true });
+MstyleChangeEventSchema.index(
+  { repairsEventId: 1 },
+  { unique: true, sparse: true },
+);
+MstyleChangeEventSchema.index({ type: 1, sequence: 1 });
 
 @Schema({ collection: 'mstyle_v2_sequence_counters', timestamps: true })
 export class MstyleSequenceCounter {
@@ -887,6 +970,11 @@ export const MstyleAccessGrantSchema =
   SchemaFactory.createForClass(MstyleAccessGrant);
 
 export const MSTYLE_MODELS = [
+  { name: MstyleConsentSet.name, schema: MstyleConsentSetSchema },
+  {
+    name: MstyleAdminAssertionAudit.name,
+    schema: MstyleAdminAssertionAuditSchema,
+  },
   { name: MstyleServiceToken.name, schema: MstyleServiceTokenSchema },
   { name: MstyleOauthJti.name, schema: MstyleOauthJtiSchema },
   { name: MstyleAuthentication.name, schema: MstyleAuthenticationSchema },

@@ -232,6 +232,87 @@ describe('MstyleAuthService SMS Aero Mobile ID', () => {
   });
 });
 
+describe('authentication ownership boundaries', () => {
+  it.each(['password', 'authVersion', '_id'])(
+    'rejects password authentication if native %s changes during import',
+    async (field) => {
+      const fixture = createFixture();
+      const user = { _id: 'user-1', password: 'stored-hash', authVersion: 1 };
+      Object.assign(fixture.identities, {
+        findUserByLogin: jest
+          .fn()
+          .mockResolvedValueOnce(user)
+          .mockResolvedValueOnce({
+            ...user,
+            [field]: field === 'authVersion' ? 2 : 'changed',
+          }),
+        verifyUserPassword: jest.fn(async () => true),
+        ensureFromUser: jest.fn(async () => fixture.identity),
+      });
+      await expect(
+        fixture.service.verifyPassword(
+          {
+            schemaVersion: '2.0',
+            login: 'test',
+            password: 'synthetic-password',
+            context: challengeDto().context,
+          },
+          'client',
+          '192.0.2.10',
+        ),
+      ).rejects.toMatchObject({ problemCode: 'INVALID_CREDENTIALS' });
+      expect(fixture.authentications.create).not.toHaveBeenCalled();
+    },
+  );
+  it.each(['blocked', 'disabled', 'deleted'])(
+    'rejects cached authentication when linked identity is %s',
+    async (status) => {
+      const fixture = createFixture();
+      fixture.identity.identityStatus = status;
+      await expect(
+        fixture.service.validateAuthenticationReplay({
+          subject: fixture.identity.subject,
+          authVersion: fixture.identity.authVersion,
+        }),
+      ).rejects.toMatchObject({ problemCode: 'INVALID_CREDENTIALS' });
+    },
+  );
+
+  it('rejects a cached authentication from an older credential version', async () => {
+    const fixture = createFixture();
+    await expect(
+      fixture.service.validateAuthenticationReplay({
+        subject: fixture.identity.subject,
+        authVersion: 2,
+      }),
+    ).rejects.toMatchObject({ problemCode: 'INVALID_CREDENTIALS' });
+  });
+
+  it.each(['contact', 'version', 'blocked'])(
+    'does not call the provider on resend after a changed %s',
+    async (change) => {
+      const fixture = createFixture();
+      await fixture.service.startCodeChallenge(
+        challengeDto(),
+        'client',
+        '192.0.2.10',
+      );
+      fixture.challenge().resendAfter = new Date(0);
+      if (change === 'contact') fixture.identity.phone = '+79990009999';
+      if (change === 'version') fixture.identity.authVersion++;
+      if (change === 'blocked') fixture.identity.identityStatus = 'blocked';
+      await expect(
+        fixture.service.resend(
+          fixture.challenge().challengeId,
+          'client',
+          '192.0.2.10',
+        ),
+      ).rejects.toMatchObject({ problemCode: 'INVALID_CREDENTIALS' });
+      expect(fixture.sms.startMobileAuth).toHaveBeenCalledTimes(1);
+    },
+  );
+});
+
 function challengeDto() {
   return {
     schemaVersion: '2.0',
@@ -253,6 +334,7 @@ function createFixture() {
     authVersion: 3,
     revision: 1,
     phone: '+79990001234',
+    email: 'test@example.com',
     save: jest.fn(async () => undefined),
   };
   const config = {
@@ -262,6 +344,7 @@ function createFixture() {
     dispatchEnabled: () => true,
   };
   const identities = {
+    confirmLogin: jest.fn(async () => undefined),
     findUserByIdentifier: jest.fn(async () => null),
     findIdentityByIdentifier: jest.fn(async () => identity),
     findIdentityBySubject: jest.fn(async () => identity),
@@ -272,6 +355,20 @@ function createFixture() {
     identifierKey: jest.fn((value: string) => value),
   };
   const challenges = {
+    db: {
+      base: { set: jest.fn() },
+      transaction: async (run: () => Promise<unknown>) => run(),
+    },
+    findOneAndUpdate: jest.fn(async (query: any, update: any) => {
+      if (
+        !stored ||
+        stored.status !== query.status ||
+        stored.verifyAttempts >= query.verifyAttempts.$lt
+      )
+        return null;
+      stored.verifyAttempts += update.$inc.verifyAttempts;
+      return stored;
+    }),
     create: jest.fn(async (value: Record<string, unknown>) => {
       stored = {
         ...value,
@@ -282,7 +379,14 @@ function createFixture() {
     findOne: jest.fn(async ({ challengeId }: { challengeId: string }) =>
       stored?.challengeId === challengeId ? stored : null,
     ),
-    updateOne: jest.fn(async () => undefined),
+    updateOne: jest.fn(async (query: any, update: any) => {
+      if (
+        stored?.challengeId === query.challengeId &&
+        (!query.status || stored.status === query.status)
+      )
+        Object.assign(stored, update.$set || {});
+      return undefined;
+    }),
   };
   const sms = {
     isConfigured: jest.fn(() => true),
@@ -318,6 +422,9 @@ function createFixture() {
 
   return {
     service,
+    identity,
+    identities,
+    authentications,
     sms,
     mail,
     telegramGateway,

@@ -32,6 +32,7 @@ import {
   ContactChallengeDto,
   ContactVerifyDto,
   CreateGuestDto,
+  CreateSnapshotDto,
   CreateMembershipDto,
   DeletionRequestDto,
   LifecycleDto,
@@ -42,6 +43,8 @@ import {
   PatchIdentityDto,
   PatchMembershipDto,
   PatchPrivateDataDto,
+  ResidentPatchPrivateDataDto,
+  ResidentCreateSnapshotDto,
   PatchProfileDto,
   RevealDto,
   SearchGuestsDto,
@@ -179,7 +182,10 @@ export class MstylePrivateController {
       body: { schemaVersion: dto.schemaVersion, context: dto.context },
       replayExpiredCode: 'CHALLENGE_CONSUMED',
     });
-    if (replay) return replay;
+    if (replay) {
+      await this.auth.validateAuthenticationReplay(replay.body);
+      return replay;
+    }
     if (key) {
       await this.auth.rejectConsumedNewKey(challengeId, req.mstyleClientId!);
     }
@@ -255,12 +261,14 @@ export class MstylePrivateController {
       () => this.directory.verifyContactChallenge(subject, challengeId, dto),
       'CHALLENGE_CONSUMED',
       true,
+      () =>
+        this.directory.prepareContactVerification(subject, challengeId, dto),
     );
   }
 
   @Post('residents/:subject/contacts/reveal')
-  revealContacts(@Param('subject') subject: string) {
-    return this.directory.revealContacts(subject);
+  revealContacts(@Param('subject') subject: string, @Body() dto: RevealDto) {
+    return this.directory.revealContacts(subject, dto.fieldCodes);
   }
 
   @Get('residents/:subject/consents')
@@ -274,14 +282,15 @@ export class MstylePrivateController {
     @Param('subject') subject: string,
     @Param('documentCode') documentCode: string,
     @Body() dto: ConsentAcceptDto,
+    @Headers('if-match') ifMatch: string | undefined,
     @Req() req: MstyleRequest,
   ) {
     return this.withIdempotency(
       req,
       'POST',
       `/residents/${subject}/consents/${documentCode}/accept`,
-      dto,
-      () => this.directory.acceptConsent(subject, documentCode, dto),
+      { dto, ifMatch },
+      () => this.directory.acceptConsent(subject, documentCode, dto, ifMatch),
     );
   }
 
@@ -290,14 +299,22 @@ export class MstylePrivateController {
   withdrawConsent(
     @Param('subject') subject: string,
     @Param('documentCode') documentCode: string,
+    @Body() dto: ReasonCodeDto,
+    @Headers('if-match') ifMatch: string | undefined,
     @Req() req: MstyleRequest,
   ) {
     return this.withIdempotency(
       req,
       'POST',
       `/residents/${subject}/consents/${documentCode}/withdraw`,
-      {},
-      () => this.directory.withdrawConsent(subject, documentCode),
+      { dto, ifMatch },
+      () =>
+        this.directory.withdrawConsent(
+          subject,
+          documentCode,
+          ifMatch,
+          dto.reasonCode,
+        ),
     );
   }
 
@@ -334,14 +351,21 @@ export class MstylePrivateController {
   addMembership(
     @Param('profileId') profileId: string,
     @Body() dto: CreateMembershipDto,
+    @Headers('if-match') ifMatch: string | undefined,
     @Req() req: MstyleRequest,
   ) {
     return this.withIdempotency(
       req,
       'POST',
       `/resident-profiles/${profileId}/memberships`,
-      dto,
-      () => this.directory.addMembership(profileId, dto),
+      { dto, ifMatch },
+      () =>
+        this.directory.addMembership(
+          profileId,
+          dto,
+          ifMatch,
+          req.mstyleResidentSubject!,
+        ),
     );
   }
 
@@ -394,15 +418,23 @@ export class MstylePrivateController {
   }
 
   @Post('resident-profiles/:profileId/private-data/reveal')
-  revealPrivate(@Param('profileId') profileId: string, @Body() dto: RevealDto) {
-    return this.privateData.revealResident(profileId, dto);
+  revealPrivate(
+    @Param('profileId') profileId: string,
+    @Body() dto: RevealDto,
+    @Req() req: MstyleRequest,
+  ) {
+    return this.privateData.revealResident(
+      profileId,
+      dto,
+      req.mstyleResidentSubject!,
+    );
   }
 
   @Patch('resident-profiles/:profileId/private-data')
   @Idempotent()
   patchPrivate(
     @Param('profileId') profileId: string,
-    @Body() dto: PatchPrivateDataDto,
+    @Body() dto: ResidentPatchPrivateDataDto,
     @Headers('if-match') ifMatch: string | undefined,
     @Req() req: MstyleRequest,
   ) {
@@ -419,14 +451,15 @@ export class MstylePrivateController {
   @Idempotent()
   snapshotResident(
     @Param('profileId') profileId: string,
+    @Body() dto: ResidentCreateSnapshotDto,
     @Req() req: MstyleRequest,
   ) {
     return this.withIdempotency(
       req,
       'POST',
       `/resident-profiles/${profileId}/private-data/snapshots`,
-      {},
-      () => this.privateData.snapshotResident(profileId),
+      dto,
+      () => this.privateData.snapshotResident(profileId, dto),
     );
   }
 
@@ -657,7 +690,7 @@ export class MstylePrivateController {
 
   @Post('private-data-snapshots/:snapshotId/operation-bindings')
   @Idempotent()
-  bindSnapshot(
+  async bindSnapshot(
     @Param('snapshotId') snapshotId: string,
     @Body() dto: BindSnapshotDto,
     @Req() req: MstyleRequest,
@@ -665,7 +698,7 @@ export class MstylePrivateController {
     return this.withIdempotency(
       req,
       'POST',
-      `/private-data-snapshots/${snapshotId}/operation-bindings`,
+      `/private-data-snapshots/${(await this.privateData.requireSnapshot(snapshotId)).snapshotId}/operation-bindings`,
       dto,
       () => this.privateData.bindSnapshot(snapshotId, dto),
     );
@@ -716,6 +749,8 @@ export class MstylePrivateController {
       () => this.guests.verifyContact(guestPartyId, challengeId, dto),
       'CHALLENGE_CONSUMED',
       true,
+      () =>
+        this.guests.prepareContactVerification(guestPartyId, challengeId, dto),
     );
   }
 
@@ -766,20 +801,21 @@ export class MstylePrivateController {
   @Idempotent()
   guestSnapshot(
     @Param('guestPartyId') guestPartyId: string,
+    @Body() dto: CreateSnapshotDto,
     @Req() req: MstyleRequest,
   ) {
     return this.withIdempotency(
       req,
       'POST',
       `/guest-parties/${guestPartyId}/snapshots`,
-      {},
-      () => this.privateData.snapshotGuest(guestPartyId),
+      dto,
+      () => this.privateData.snapshotGuest(guestPartyId, dto),
     );
   }
 
   @Post('guest-parties/:guestPartyId/booking-confirmations')
   @Idempotent()
-  guestBook(
+  async guestBook(
     @Param('guestPartyId') guestPartyId: string,
     @Body() dto: ConfirmBookingDto,
     @Headers('if-match') ifMatch: string | undefined,
@@ -789,7 +825,14 @@ export class MstylePrivateController {
       req,
       'POST',
       `/guest-parties/${guestPartyId}/booking-confirmations`,
-      { dto, ifMatch },
+      {
+        dto: {
+          ...dto,
+          snapshotId: (await this.privateData.requireSnapshot(dto.snapshotId))
+            .snapshotId,
+        },
+        ifMatch,
+      },
       () => this.guests.confirmBooking(guestPartyId, dto, ifMatch),
     );
   }
@@ -821,14 +864,15 @@ export class MstylePrivateController {
     @Param('guestPartyId') guestPartyId: string,
     @Param('documentCode') documentCode: string,
     @Body() dto: ConsentAcceptDto,
+    @Headers('if-match') ifMatch: string | undefined,
     @Req() req: MstyleRequest,
   ) {
     return this.withIdempotency(
       req,
       'POST',
       `/guest-parties/${guestPartyId}/consents/${documentCode}/accept`,
-      dto,
-      () => this.guests.acceptConsent(guestPartyId, documentCode, dto),
+      { dto, ifMatch },
+      () => this.guests.acceptConsent(guestPartyId, documentCode, dto, ifMatch),
     );
   }
 
@@ -837,14 +881,22 @@ export class MstylePrivateController {
   guestWithdraw(
     @Param('guestPartyId') guestPartyId: string,
     @Param('documentCode') documentCode: string,
+    @Body() dto: ReasonCodeDto,
+    @Headers('if-match') ifMatch: string | undefined,
     @Req() req: MstyleRequest,
   ) {
     return this.withIdempotency(
       req,
       'POST',
       `/guest-parties/${guestPartyId}/consents/${documentCode}/withdraw`,
-      {},
-      () => this.guests.withdrawConsent(guestPartyId, documentCode),
+      { dto, ifMatch },
+      () =>
+        this.guests.withdrawConsent(
+          guestPartyId,
+          documentCode,
+          ifMatch,
+          dto.reasonCode,
+        ),
     );
   }
 
@@ -856,6 +908,7 @@ export class MstylePrivateController {
     run: () => Promise<MstyleResult>,
     replayExpiredCode?: 'IDEMPOTENCY_REPLAY_EXPIRED' | 'CHALLENGE_CONSUMED',
     replayWindow = false,
+    prepare?: () => Promise<void>,
   ) {
     const key = String(req.headers['idempotency-key'] || '');
     const fingerprintBody = {
@@ -866,25 +919,54 @@ export class MstylePrivateController {
       stepUpAuthenticationId:
         String(req.headers['x-step-up-authentication-id'] || '') || null,
     };
-    const replay = await this.idempotency.replayOrThrow({
+    const input = {
       clientId: req.mstyleClientId!,
+      actorRef: req.mstyleActorRef,
       idempotencyKey: key,
       method,
       route,
       body: fingerprintBody,
       replayExpiredCode,
-    });
-    if (replay) return replay;
-    const result = await run();
-    await this.idempotency.save({
-      clientId: req.mstyleClientId!,
-      idempotencyKey: key,
-      method,
-      route,
-      body: fingerprintBody,
-      result,
       replayWindow,
-    });
+    };
+    const atomic =
+      /^\/(?:residents|guest-parties)\/[^/]+\/consents\/[^/]+\/(?:accept|withdraw)$/.test(
+        route,
+      ) ||
+      route === '/resident-onboarding' ||
+      route === '/guest-parties' ||
+      /^\/resident-profiles\/[^/]+\/owner-transfer$/.test(route) ||
+      /^\/guest-parties\/[^/]+\/(?:claim|booking-confirmations|snapshots|private-data)$/.test(
+        route,
+      ) ||
+      /^\/(?:residents\/[^/]+\/contacts\/challenges|guest-parties\/[^/]+\/contact-challenges)\/[^/]+\/verify$/.test(
+        route,
+      ) ||
+      /^\/resident-profiles\/[^/]+\/(?:memberships|contact-assignments|private-data(?:\/snapshots)?|change-requests)$/.test(
+        route,
+      ) ||
+      /^\/resident-memberships\/[^/]+(?:\/revoke)?$/.test(route) ||
+      /^\/resident-profile-change-requests\/[^/]+\/(?:decisions|cancel)$/.test(
+        route,
+      ) ||
+      /^\/private-data-snapshots\/[^/]+\/operation-bindings$/.test(route);
+    if (
+      /^\/(?:auth\/residents\/code-challenges(?:\/[^/]+\/resend)?|residents\/[^/]+\/contacts\/challenges|guest-parties\/[^/]+\/contact-challenges)$/.test(
+        route,
+      )
+    )
+      return this.idempotency.executeDispatch(input, run);
+    if (atomic) {
+      return this.idempotency.execute(input, run, prepare);
+    }
+    const replay = await this.idempotency.replayOrThrow(input);
+    if (replay) {
+      if (route === '/auth/residents/password:verify')
+        await this.auth.validateAuthenticationReplay(replay.body);
+      return replay;
+    }
+    const result = await run();
+    await this.idempotency.save({ ...input, result });
     return result;
   }
 }

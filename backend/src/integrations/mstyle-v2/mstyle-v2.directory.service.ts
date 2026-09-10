@@ -1,19 +1,20 @@
+import { MstyleConsentService } from './mstyle-v2.consent.service';
+import { MstyleContactProofService } from './mstyle-v2.contact-proof';
+import { membershipIsEffective } from './mstyle-v2.membership-policy';
+import { MstyleContactSelectionService } from './mstyle-v2.contact-selection';
+import {
+  normalizeResidentInput,
+  validateResidentValues,
+} from './mstyle-v2.private-values';
 import { Injectable } from '@nestjs/common';
 import { InjectModel } from '@nestjs/mongoose';
-import * as bcrypt from 'bcryptjs';
 import { Model } from 'mongoose';
 import { normalizeRuMobilePhone } from '../../common/phone';
-import {
-  CHALLENGE_TTL_MS,
-  CODE_LENGTH,
-  RESEND_MIN_MS,
-} from './mstyle-v2.constants';
 import { MstyleV2Config } from './mstyle-v2.config';
 import {
   decryptJson,
   encryptJson,
   hmacHex,
-  maskContact,
   normalizeEmail,
   safeEqualHex,
 } from './mstyle-v2.crypto';
@@ -36,11 +37,10 @@ import type {
   SearchProfilesDto,
 } from './mstyle-v2.dto';
 import { MstyleEventsService } from './mstyle-v2.events';
-import { Ids } from './mstyle-v2.ids';
+import { Ids, contactIdQuery } from './mstyle-v2.ids';
 import { MstyleIdentityService } from './mstyle-v2.identities';
 import {
   assignmentDto,
-  consentItem,
   contactDto,
   etag,
   grantDto,
@@ -105,6 +105,9 @@ export class MstyleDirectoryService {
     private readonly changeRequests: Model<MstyleChangeRequestDocument>,
     @InjectModel(MstyleDeletionRequest.name)
     private readonly deletions: Model<MstyleDeletionRequestDocument>,
+    private readonly contactSelection: MstyleContactSelectionService,
+    private readonly contactProof: MstyleContactProofService,
+    private readonly consentService: MstyleConsentService,
   ) {}
 
   async getContext(subject: string): Promise<MstyleResult> {
@@ -117,37 +120,14 @@ export class MstyleDirectoryService {
         profileId: membership.profileId,
       });
       if (!profile) continue;
-      const phoneAssign = await this.assignments
-        .findOne({
-          profileId: profile.profileId,
-          purpose: 'primary',
-          contactType: 'phone',
-          status: 'active',
-        })
-        .sort({ priority: 1, updatedAt: -1 });
-      const emailAssign = await this.assignments
-        .findOne({
-          profileId: profile.profileId,
-          purpose: 'primary',
-          contactType: 'email',
-          status: 'active',
-        })
-        .sort({ priority: 1, updatedAt: -1 });
-      const phoneContact = phoneAssign
-        ? await this.contacts.findOne({ contactId: phoneAssign.contactId })
-        : null;
-      const emailContact = emailAssign
-        ? await this.contacts.findOne({ contactId: emailAssign.contactId })
-        : null;
-      const contactSubject = phoneAssign?.subject || emailAssign?.subject;
-      const contactIdentity = contactSubject
-        ? await this.identityModel.findOne({ subject: contactSubject })
-        : null;
+      const selected = await this.contactSelection.select(profile.profileId);
       profiles.push({
         profileId: profile.profileId,
         membershipId: membership.membershipId,
         membershipRole: membership.role,
         membershipStatus: membership.status,
+        membershipValidFrom: membership.validFrom ?? null,
+        membershipValidUntil: membership.validUntil ?? null,
         profileStatus: profile.status,
         profileType: profile.type,
         legalForm: profile.legalForm,
@@ -159,15 +139,7 @@ export class MstyleDirectoryService {
         snapshotSources: {
           primary: {
             profile: profile.revision,
-            profileContactAssignments: {
-              phone: phoneAssign?.revision ?? null,
-              email: emailAssign?.revision ?? null,
-            },
-            contactIdentity: contactIdentity?.revision ?? null,
-            identityContacts: {
-              phone: phoneContact?.revision ?? null,
-              email: emailContact?.revision ?? null,
-            },
+            ...selected.sourceRevisions,
             privateData: profile.privateDataRevision,
           },
         },
@@ -639,8 +611,8 @@ export class MstyleDirectoryService {
     }
     identity.contextRevision += 1;
     await identity.save();
-    const eventIds = await Promise.all([
-      this.events.emit({
+    const eventIds = [
+      await this.events.emit({
         type: 'profile.updated',
         aggregate: {
           type: 'resident_profile',
@@ -650,7 +622,7 @@ export class MstyleDirectoryService {
         subject: identity.subject,
         profileId: profile.profileId,
       }),
-      this.events.emit({
+      await this.events.emit({
         type: 'resident_membership.updated',
         aggregate: {
           type: 'resident_membership',
@@ -660,7 +632,7 @@ export class MstyleDirectoryService {
         subject: identity.subject,
         profileId: profile.profileId,
       }),
-      this.events.emit({
+      await this.events.emit({
         type: 'resident_private_data.updated',
         aggregate: {
           type: 'resident_private_data',
@@ -670,7 +642,7 @@ export class MstyleDirectoryService {
         subject: identity.subject,
         profileId: profile.profileId,
       }),
-      this.events.emit({
+      await this.events.emit({
         type: 'resident_contact_assignments.updated',
         aggregate: {
           type: 'resident_contact_assignment_set',
@@ -680,7 +652,7 @@ export class MstyleDirectoryService {
         subject: identity.subject,
         profileId: profile.profileId,
       }),
-    ]);
+    ];
     return new MstyleResult(
       schema({
         subject: identity.subject,
@@ -887,11 +859,25 @@ export class MstyleDirectoryService {
         ],
       });
     }
-    const changedFieldCodes = privateFieldCodesForInput(
+    const patch = normalizeResidentInput(
       dto.privateData.data,
-      dto.privateData.profileType,
-      dto.privateData.legalForm,
+      profile.type,
+      profile.legalForm,
     );
+    const currentValues = normalizeResidentInput(
+      decryptJson<Record<string, unknown>>(
+        this.cfg.piiSecret(),
+        currentPrivate.valuesEnc,
+      ),
+      profile.type,
+      profile.legalForm,
+    );
+    validateResidentValues(
+      mergeObjects(currentValues, patch),
+      profile.type,
+      profile.legalForm,
+    );
+    const changedFieldCodes = leafFieldCodes(patch);
     if (!changedFieldCodes.length) {
       problem(422, 'VALIDATION_FAILED', {
         errors: [
@@ -907,7 +893,10 @@ export class MstyleDirectoryService {
       profileId,
       status: 'pending',
     });
-    if (existing) problem(409, 'CONFLICT', { title: 'Pending request exists' });
+    if (existing && Date.parse(existing.expiresAt) <= Date.now()) {
+      await this.expireChangeRequest(existing);
+    } else if (existing)
+      problem(409, 'CONFLICT', { title: 'Pending request exists' });
     const expiresAt = new Date(Date.now() + 7 * 86400000).toISOString();
     const row = await this.changeRequests.create({
       changeRequestId: Ids.changeRequest(),
@@ -917,7 +906,7 @@ export class MstyleDirectoryService {
       profileRevisionAtRequest: profile.revision,
       privateDataRevisionAtRequest: currentPrivate.revision,
       changedFieldCodes,
-      valuesEnc: encryptJson(this.cfg.piiSecret(), dto.privateData.data),
+      valuesEnc: encryptJson(this.cfg.piiSecret(), patch),
       profileType: dto.privateData.profileType,
       legalForm: dto.privateData.legalForm ?? null,
       reasonCode: dto.reasonCode,
@@ -955,14 +944,16 @@ export class MstyleDirectoryService {
   async currentChangeRequest(profileId: string, residentSubject: string) {
     await this.requireProfile(profileId);
     await this.assertActiveOwner(residentSubject, profileId);
-    const row = await this.changeRequests
+    let row = await this.changeRequests
       .findOne({ profileId })
       .sort({ createdAt: -1 });
     if (!row) problem(404, 'NOT_FOUND');
     if (row.status === 'pending' && Date.parse(row.expiresAt) <= Date.now()) {
-      row.status = 'expired';
-      row.changeRequestRevision += 1;
-      await row.save();
+      this.changeRequests.db.base.set('transactionAsyncLocalStorage', true);
+      row = await this.changeRequests.db.transaction(
+        () => this.expireChangeRequest(row!),
+        { readConcern: { level: 'snapshot' }, writeConcern: { w: 'majority' } },
+      );
     }
     return new MstyleResult(
       schema({
@@ -981,6 +972,37 @@ export class MstyleDirectoryService {
     );
   }
 
+  private async expireChangeRequest(row: MstyleChangeRequestDocument) {
+    const changed = await this.changeRequests.findOneAndUpdate(
+      {
+        changeRequestId: row.changeRequestId,
+        status: 'pending',
+        changeRequestRevision: row.changeRequestRevision,
+      },
+      { $set: { status: 'expired' }, $inc: { changeRequestRevision: 1 } },
+      { new: true },
+    );
+    if (!changed) {
+      const current = await this.changeRequests.findOne({
+        changeRequestId: row.changeRequestId,
+      });
+      if (!current) problem(404, 'NOT_FOUND');
+      return current;
+    }
+    await this.events.emit({
+      type: 'resident_change_request.updated',
+      aggregate: {
+        type: 'resident_change_request',
+        id: changed.changeRequestId,
+        revision: changed.changeRequestRevision,
+      },
+      profileId: changed.profileId,
+      subject: changed.authorSubject,
+      payload: { status: 'expired' },
+    });
+    return changed;
+  }
+
   async decideChange(
     changeRequestId: string,
     dto: ChangeDecisionDto,
@@ -997,9 +1019,6 @@ export class MstyleDirectoryService {
       problem(409, 'CONFLICT', { title: 'Change request is already final' });
     }
     if (Date.parse(row.expiresAt) <= Date.now()) {
-      row.status = 'expired';
-      row.changeRequestRevision += 1;
-      await row.save();
       problem(409, 'CONFLICT', { title: 'Change request expired' });
     }
     row.status = dto.decision === 'approve' ? 'approved' : 'rejected';
@@ -1024,17 +1043,28 @@ export class MstyleDirectoryService {
         this.cfg.piiSecret(),
         row.valuesEnc!,
       );
-      const merged = mergeObjects(
-        decryptJson<Record<string, unknown>>(
-          this.cfg.piiSecret(),
-          current.valuesEnc,
+      if (current.editPolicy !== 'request_only')
+        problem(412, 'PRECONDITION_FAILED');
+      const merged = validateResidentValues(
+        mergeObjects(
+          normalizeResidentInput(
+            decryptJson<Record<string, unknown>>(
+              this.cfg.piiSecret(),
+              current.valuesEnc,
+            ),
+            profile.type,
+            profile.legalForm,
+          ),
+          normalizeResidentInput(values, profile.type, profile.legalForm),
         ),
-        values,
+        profile.type,
+        profile.legalForm,
       );
       current.valuesEnc = encryptJson(this.cfg.piiSecret(), merged);
       current.revision += 1;
       await current.save();
       profile.privateDataRevision = current.revision;
+      profile.privateDataComplete = true;
       await profile.save();
       extra.profileRevision = profile.revision;
       extra.privateDataRevision = current.revision;
@@ -1184,50 +1214,138 @@ export class MstyleDirectoryService {
     );
   }
 
-  async addMembership(profileId: string, dto: CreateMembershipDto) {
+  async addMembership(
+    profileId: string,
+    dto: CreateMembershipDto,
+    ifMatch?: string,
+    actorSubject?: string,
+  ) {
     const profile = await this.requireProfile(profileId);
-    const identity = await this.identities.ensureStandalone({
-      identifierType: dto.identifier.type,
-      identifierValue: dto.identifier.value,
-      displayName: dto.displayName,
-      status: 'invited',
-    });
+    await this.assertActiveOwner(actorSubject || '', profileId);
+    if (profile.status !== 'active')
+      problem(409, 'CONFLICT', { title: 'Profile is not active' });
+    this.assertRequiredMatch(
+      ifMatch,
+      'memberships',
+      profile.membershipSetRevision,
+    );
+    if (
+      profile.revision !== dto.expectedRevisions.profile ||
+      profile.membershipSetRevision !== dto.expectedRevisions.membershipSet
+    )
+      problem(412, 'PRECONDITION_FAILED');
+    const selected = dto.identity;
+    if (!!selected.existingSubject === !!selected.invitation) {
+      problem(422, 'VALIDATION_FAILED', {
+        errors: [
+          {
+            field: 'identity',
+            code: 'invalid',
+            message: 'Specify existingSubject or invitation',
+          },
+        ],
+      });
+    }
+    let identity: MstyleIdentityDocument;
+    let existingIdentity = false;
+    if (selected.existingSubject) {
+      identity = await this.requireIdentity(selected.existingSubject);
+      existingIdentity = true;
+    } else {
+      const invitation = selected.invitation!;
+      const email = invitation.email
+        ? normalizeEmail(invitation.email)
+        : undefined;
+      const phone = invitation.phone
+        ? normalizeRuMobilePhone(invitation.phone)
+        : undefined;
+      if (!email && !phone)
+        problem(422, 'VALIDATION_FAILED', {
+          errors: [
+            {
+              field: 'identity.invitation',
+              code: 'required',
+              message: 'Email or phone is required',
+            },
+          ],
+        });
+      const byEmail = email
+        ? await this.identities.findIdentityByIdentifier('email', email)
+        : null;
+      const byPhone = phone
+        ? await this.identities.findIdentityByIdentifier('phone', phone)
+        : null;
+      if (byEmail && byPhone && byEmail.subject !== byPhone.subject)
+        problem(409, 'CONFLICT', {
+          title: 'Contacts belong to different identities',
+        });
+      const found = byEmail || byPhone;
+      existingIdentity = !!found;
+      identity =
+        found ||
+        (await this.identities.ensureStandalone({
+          identifierType: email ? 'email' : 'phone',
+          identifierValue: (email || phone)!,
+          displayName: invitation.displayName.trim(),
+          status: 'invited',
+        }));
+      if (!found) {
+        identity.email = email;
+        identity.phone = phone || undefined;
+        await identity.save();
+        await this.identities.syncContact(
+          identity.subject,
+          'email',
+          email,
+          false,
+        );
+        await this.identities.syncContact(
+          identity.subject,
+          'phone',
+          phone,
+          false,
+        );
+      }
+    }
+    if (!['active', 'invited'].includes(identity.identityStatus))
+      problem(409, 'CONFLICT', {
+        title: 'Identity is not available for invitation',
+      });
     await this.assertCanBeEmployee(identity.subject, profileId);
     await this.assertEmployeeLimit(profile);
-    await this.identities.syncContact(
-      identity.subject,
-      dto.identifier.type,
-      dto.identifier.value,
-    );
     const existing = await this.memberships.findOne({
       profileId,
       subject: identity.subject,
     });
-    if (existing && existing.status !== 'revoked') {
+    if (existing && existing.status !== 'revoked')
       problem(409, 'CONFLICT', { title: 'Membership already exists' });
-    }
+    const status = identity.identityStatus === 'active' ? 'active' : 'invited';
     let membership = existing;
-    if (existing) {
-      existing.status = 'invited';
-      existing.role = 'employee';
-      existing.validFrom = nowIso();
-      existing.revision += 1;
-      await existing.save();
+    if (membership) {
+      membership.status = status;
+      membership.role = 'employee';
+      membership.validFrom = nowIso();
+      membership.validUntil = null;
+      membership.revision += 1;
+      await membership.save();
     } else {
       membership = await this.memberships.create({
         membershipId: Ids.membership(),
         subject: identity.subject,
         profileId,
         role: 'employee',
-        status: 'invited',
+        status,
         validFrom: nowIso(),
         validUntil: null,
         revision: 1,
       });
     }
-    if (!membership) problem(503, 'UPSTREAM_UNAVAILABLE');
     profile.membershipSetRevision += 1;
     await profile.save();
+    const contextRevisions = await this.bumpMembershipContexts(
+      profileId,
+      identity.subject,
+    );
     const eventIds = [
       await this.events.emit({
         type: 'resident_membership.updated',
@@ -1240,8 +1358,6 @@ export class MstyleDirectoryService {
         profileId,
       }),
     ];
-    identity.contextRevision += 1;
-    await identity.save();
     return new MstyleResult(
       schema({
         membership: membershipDto(membership),
@@ -1249,9 +1365,9 @@ export class MstyleDirectoryService {
           displayName: identity.displayName || '',
           contactMasks: await this.contactMasks(identity.subject),
         },
-        invitationStatus: 'invited',
+        invitationStatus: existingIdentity ? 'existing_identity' : 'pending',
         membershipSetRevision: profile.membershipSetRevision,
-        contextRevisions: [identity.contextRevision],
+        contextRevisions,
         eventIds,
       }),
       201,
@@ -1274,10 +1390,14 @@ export class MstyleDirectoryService {
       profile.membershipSetRevision,
     );
     await this.assertActiveOwner(residentSubject!, membership.profileId);
+    const validFrom =
+      dto.validFrom !== undefined ? dto.validFrom : membership.validFrom;
+    const validUntil =
+      dto.validUntil !== undefined ? dto.validUntil : membership.validUntil;
     if (
-      dto.validFrom &&
-      dto.validUntil &&
-      Date.parse(dto.validUntil) <= Date.parse(dto.validFrom)
+      validFrom != null &&
+      validUntil != null &&
+      Date.parse(validUntil) <= Date.parse(validFrom)
     ) {
       problem(422, 'VALIDATION_FAILED', {
         errors: [
@@ -1319,9 +1439,10 @@ export class MstyleDirectoryService {
     await membership.save();
     profile.membershipSetRevision += 1;
     await profile.save();
-    const identity = await this.requireIdentity(membership.subject);
-    identity.contextRevision += 1;
-    await identity.save();
+    const contextRevisions = await this.bumpMembershipContexts(
+      membership.profileId,
+      membership.subject,
+    );
     const eventIds = [
       await this.events.emit({
         type: 'resident_membership.updated',
@@ -1339,12 +1460,7 @@ export class MstyleDirectoryService {
       schema({
         membership: membershipDto(membership),
         membershipSetRevision: profile.membershipSetRevision,
-        contextRevisions: [
-          {
-            subject: identity.subject,
-            contextRevision: identity.contextRevision,
-          },
-        ],
+        contextRevisions,
         eventIds,
       }),
       200,
@@ -1372,9 +1488,10 @@ export class MstyleDirectoryService {
     await membership.save();
     profile.membershipSetRevision += 1;
     await profile.save();
-    const identity = await this.requireIdentity(membership.subject);
-    identity.contextRevision += 1;
-    await identity.save();
+    const contextRevisions = await this.bumpMembershipContexts(
+      membership.profileId,
+      membership.subject,
+    );
     const eventIds = [
       await this.events.emit({
         type: 'resident_membership.updated',
@@ -1392,12 +1509,7 @@ export class MstyleDirectoryService {
       schema({
         membership: membershipDto(membership),
         membershipSetRevision: profile.membershipSetRevision,
-        contextRevisions: [
-          {
-            subject: identity.subject,
-            contextRevision: identity.contextRevision,
-          },
-        ],
+        contextRevisions,
         eventIds,
       }),
       200,
@@ -1422,7 +1534,7 @@ export class MstyleDirectoryService {
       role: 'owner',
       status: 'active',
     });
-    if (!current) problem(404, 'NOT_FOUND');
+    if (!current || !membershipIsEffective(current)) problem(404, 'NOT_FOUND');
     if (current.subject !== residentSubject) problem(404, 'NOT_FOUND');
     const incoming = await this.memberships.findOne({
       profileId,
@@ -1431,7 +1543,7 @@ export class MstyleDirectoryService {
     if (
       !incoming ||
       incoming.role !== 'employee' ||
-      incoming.status !== 'active'
+      !membershipIsEffective(incoming)
     ) {
       problem(404, 'NOT_FOUND');
     }
@@ -1455,19 +1567,18 @@ export class MstyleDirectoryService {
     profile.revision += 1;
     profile.membershipSetRevision += 1;
     await profile.save();
-    const contextRevisions = await Promise.all(
-      [current.subject, incoming.subject].map(async (subject) => {
-        const identity = await this.requireIdentity(subject);
-        identity.contextRevision += 1;
-        await identity.save();
-        return {
-          subject,
-          contextRevision: identity.contextRevision,
-        };
-      }),
-    );
-    const eventIds = await Promise.all([
-      this.events.emit({
+    const contextRevisions: { subject: string; contextRevision: number }[] = [];
+    for (const subject of [current.subject, incoming.subject]) {
+      const identity = await this.requireIdentity(subject);
+      identity.contextRevision += 1;
+      await identity.save();
+      contextRevisions.push({
+        subject,
+        contextRevision: identity.contextRevision,
+      });
+    }
+    const eventIds = [
+      await this.events.emit({
         type: 'profile.updated',
         aggregate: {
           type: 'resident_profile',
@@ -1477,7 +1588,7 @@ export class MstyleDirectoryService {
         profileId,
         payload: { reasonCode: dto.reasonCode },
       }),
-      this.events.emit({
+      await this.events.emit({
         type: 'resident_membership.updated',
         aggregate: {
           type: 'resident_membership',
@@ -1487,7 +1598,7 @@ export class MstyleDirectoryService {
         subject: current.subject,
         profileId,
       }),
-      this.events.emit({
+      await this.events.emit({
         type: 'resident_membership.updated',
         aggregate: {
           type: 'resident_membership',
@@ -1497,7 +1608,7 @@ export class MstyleDirectoryService {
         subject: incoming.subject,
         profileId,
       }),
-    ]);
+    ];
     return new MstyleResult(
       schema({
         profileId,
@@ -1515,8 +1626,10 @@ export class MstyleDirectoryService {
 
   async startContactChallenge(subject: string, dto: ContactChallengeDto) {
     await this.requireIdentity(subject);
+    const type = dto.contactType ?? dto.type;
+    if (type !== 'phone' && type !== 'email') problem(422, 'VALIDATION_FAILED');
     const normalized =
-      dto.type === 'phone'
+      type === 'phone'
         ? normalizeRuMobilePhone(dto.value)
         : normalizeEmail(dto.value);
     if (!normalized) {
@@ -1527,28 +1640,14 @@ export class MstyleDirectoryService {
       });
     }
     const latest = await this.contacts
-      .findOne({ subject, type: dto.type })
+      .findOne({ subject, type: type })
       .sort({ revision: -1 });
-    const now = Date.now();
-    const challenge = await this.challenges.create({
-      challengeId: Ids.challenge(),
-      kind: 'contact',
-      clientId: 'session',
-      status: 'awaiting_code',
-      channel: dto.type === 'phone' ? 'sms' : 'email',
-      identifierType: dto.type,
-      subject,
-      isDummy: false,
-      codeHash: await bcrypt.hash(this.cfg.mockOtp(), 8),
-      codeLength: CODE_LENGTH,
-      verifyAttempts: 0,
-      expiresAt: new Date(now + CHALLENGE_TTL_MS),
-      resendAfter: new Date(now + RESEND_MIN_MS),
-      contactType: dto.type,
-      displayMasked: maskContact(dto.type, normalized),
-      expectedContactValueRevision: latest?.revision ?? 0,
-      pendingValueEnc: encryptJson(this.cfg.piiSecret(), normalized),
-    });
+    const challenge = await this.contactProof.start(
+      { kind: 'contact', subject },
+      type,
+      normalized,
+      latest?.revision ?? 0,
+    );
     const eventIds = [
       await this.events.emit({
         type: 'identity.updated',
@@ -1563,7 +1662,7 @@ export class MstyleDirectoryService {
     return new MstyleResult(
       schema({
         challengeId: challenge.challengeId,
-        contactType: dto.type,
+        contactType: type,
         displayMasked: challenge.displayMasked,
         expectedContactValueRevision: challenge.expectedContactValueRevision,
         expiresAt: challenge.expiresAt.toISOString(),
@@ -1574,43 +1673,49 @@ export class MstyleDirectoryService {
     );
   }
 
+  async prepareContactVerification(
+    subject: string,
+    challengeId: string,
+    dto: ContactVerifyDto,
+  ) {
+    await this.contactProof.verify(
+      { kind: 'contact', subject },
+      challengeId,
+      dto.code,
+    );
+  }
+
   async verifyContactChallenge(
     subject: string,
     challengeId: string,
     dto: ContactVerifyDto,
   ) {
+    void dto;
     const identity = await this.requireIdentity(subject);
-    const challenge = await this.challenges.findOne({ challengeId, subject });
-    if (!challenge || challenge.kind !== 'contact') problem(404, 'NOT_FOUND');
-    if (challenge.expiresAt.getTime() <= Date.now()) {
-      challenge.status = 'expired';
-      await challenge.save();
-      problem(410, 'CHALLENGE_EXPIRED');
-    }
-    if (challenge.status === 'consumed') problem(409, 'CHALLENGE_CONSUMED');
-    const ok = await bcrypt.compare(dto.code, challenge.codeHash);
-    challenge.verifyAttempts += 1;
-    if (!ok) {
-      await challenge.save();
-      problem(401, 'INVALID_CREDENTIALS');
-    }
+    const challenge = await this.contactProof.consume(
+      { kind: 'contact', subject },
+      challengeId,
+    );
     const value = decryptJson<string>(
       this.cfg.piiSecret(),
       challenge.pendingValueEnc!,
     );
     const type = challenge.contactType as 'phone' | 'email';
+    const latest = await this.contacts
+      .findOne({ subject, type })
+      .sort({ revision: -1 });
+    if ((latest?.revision ?? 0) !== challenge.baseContactValueRevision)
+      problem(412, 'PRECONDITION_FAILED');
     const contact = await this.identities.syncContact(subject, type, value);
     if (!contact) problem(422, 'VALIDATION_FAILED');
     contact.verifiedAt = nowIso();
-    contact.revision += 1;
+    contact.revision = Math.max(latest?.revision ?? 0, contact.revision) + 1;
     await contact.save();
     if (type === 'phone') identity.phone = value;
     else identity.email = value;
     identity.revision += 1;
     identity.contextRevision += 1;
     await identity.save();
-    challenge.status = 'consumed';
-    await challenge.save();
     const eventIds = [
       await this.events.emit({
         type: 'identity.updated',
@@ -1657,79 +1762,78 @@ export class MstyleDirectoryService {
     ifMatch?: string,
   ) {
     const profile = await this.requireProfile(profileId);
-    const parsed = parseIfMatch(ifMatch);
-    if (
-      parsed
-        ? parsed.kind !== 'assignments' ||
-          parsed.revision !== profile.assignmentSetRevision
-        : dto.assignmentSetRevision !== profile.assignmentSetRevision
-    ) {
-      problem(412, 'PRECONDITION_FAILED');
-    }
-    const activeKeys = new Set<string>();
-    for (const item of dto.items) {
-      if ((item.status || 'active') !== 'active') continue;
-      const key = `${item.purpose}:${item.subject}:${item.contactId}`;
-      if (activeKeys.has(key)) {
-        problem(409, 'CONFLICT', { title: 'Duplicate active assignment' });
-      }
-      activeKeys.add(key);
-    }
-    await this.assignments.deleteMany({ profileId });
-    const items: ReturnType<typeof assignmentDto>[] = [];
+    this.assertRequiredMatch(
+      ifMatch,
+      'assignments',
+      profile.assignmentSetRevision,
+    );
+    const previous = await this.assignments.find({ profileId });
+    const prepared: Record<string, unknown>[] = [];
     const activePurposeTypes = new Set<string>();
-    for (const item of dto.items) {
+    const allKeys = new Set<string>();
+    for (const item of dto.assignments) {
       const contact = await this.contacts.findOne({
-        contactId: item.contactId,
+        contactId: contactIdQuery(item.contactId),
         subject: item.subject,
       });
-      if (!contact) {
+      if (!contact || !contact.verifiedAt)
         problem(422, 'VALIDATION_FAILED', {
           errors: [
             {
               field: 'contactId',
-              code: 'not_found',
+              code: contact ? 'not_verified' : 'not_found',
               message: item.contactId,
             },
           ],
         });
-      }
-      if (!contact.verifiedAt) {
+      const member = await this.memberships.findOne({
+        profileId,
+        subject: item.subject,
+        status: 'active',
+      });
+      if (!membershipIsEffective(member))
         problem(422, 'VALIDATION_FAILED', {
           errors: [
-            {
-              field: 'contactId',
-              code: 'not_verified',
-              message: item.contactId,
-            },
+            { field: 'subject', code: 'not_member', message: item.subject },
           ],
         });
-      }
+      const key = item.purpose + ':' + contact.contactId;
+      if (allKeys.has(key))
+        problem(409, 'CONFLICT', { title: 'Duplicate assignment' });
+      allKeys.add(key);
       if ((item.status || 'active') === 'active') {
-        const purposeType = `${item.purpose}:${contact.type}`;
-        if (activePurposeTypes.has(purposeType)) {
+        const purposeType = item.purpose + ':' + contact.type;
+        if (activePurposeTypes.has(purposeType))
           problem(409, 'CONFLICT', {
             title:
               'Only one active assignment is allowed per purpose and contact type',
           });
-        }
         activePurposeTypes.add(purposeType);
       }
-      const created = await this.assignments.create({
-        assignmentId: Ids.assignment(),
+      const old = previous.find(
+        (row) =>
+          row.purpose === item.purpose && row.contactId === contact.contactId,
+      );
+      prepared.push({
+        assignmentId: old?.assignmentId || Ids.assignment(),
         profileId,
         purpose: item.purpose,
         subject: item.subject,
         contactId: contact.contactId,
         contactType: contact.type,
         contactMask: contact.masked,
-        contactVerified: !!contact.verifiedAt,
+        contactVerified: true,
         priority: item.priority ?? 1,
-        status: item.status || 'active',
-        revision: 1,
+        status:
+          item.status === 'revoked' ? 'inactive' : item.status || 'active',
+        revision:
+          Math.max(profile.assignmentSetRevision, old?.revision || 0) + 1,
       });
-      items.push(assignmentDto(created));
     }
+    await this.assignments.deleteMany({ profileId });
+    const items: ReturnType<typeof assignmentDto>[] = [];
+    for (const input of prepared)
+      items.push(assignmentDto(await this.assignments.create(input)));
     profile.assignmentSetRevision += 1;
     await profile.save();
     const contextRevision = await this.bumpMembersContext(profileId);
@@ -1760,9 +1864,24 @@ export class MstyleDirectoryService {
     );
   }
 
-  async revealContacts(subject: string) {
+  async revealContacts(subject: string, fieldCodes: string[]) {
     const identity = await this.requireIdentity(subject);
-    const rows = await this.contacts.find({ subject });
+    const bad = fieldCodes.filter(
+      (field) => !['phone', 'email'].includes(field),
+    );
+    if (bad.length)
+      problem(422, 'VALIDATION_FAILED', {
+        errors: bad.map((field) => ({
+          field,
+          code: 'unknown_field',
+          message: 'Unknown fieldCode',
+        })),
+      });
+    const rows = await this.contacts.find({
+      subject,
+      type: { $in: fieldCodes },
+      verifiedAt: { $ne: null },
+    });
     const contacts = rows.map((row) =>
       contactDto(row, decryptJson<string>(this.cfg.piiSecret(), row.valueEnc)),
     );
@@ -1777,142 +1896,39 @@ export class MstyleDirectoryService {
 
   async listConsents(subject: string) {
     await this.requireIdentity(subject);
-    const items = await this.consents
-      .find({ partyType: 'resident', partyId: subject })
-      .lean();
-    const revision = items.reduce((max, i) => Math.max(max, i.revision), 1);
-    return new MstyleResult(
-      schema({
-        subject,
-        consentSetRevision: revision,
-        items: items.map(consentItem),
-      }),
-      200,
-      { ETag: etag('consents', revision), 'Cache-Control': 'no-store' },
-    );
+    return this.consentService.list('resident', subject);
   }
-
   async acceptConsent(
     subject: string,
     documentCode: string,
     dto: ConsentAcceptDto,
+    ifMatch?: string,
   ) {
     await this.requireIdentity(subject);
-    return this.upsertConsent(
+    return this.consentService.change(
       'resident',
       subject,
       documentCode,
-      dto,
       'accepted',
+      dto,
+      ifMatch,
     );
   }
-
-  async withdrawConsent(subject: string, documentCode: string) {
+  async withdrawConsent(
+    subject: string,
+    documentCode: string,
+    ifMatch?: string,
+    reasonCode?: string,
+  ) {
     await this.requireIdentity(subject);
-    return this.upsertConsent(
+    return this.consentService.change(
       'resident',
       subject,
       documentCode,
-      {
-        schemaVersion: '2.0',
-        documentVersion: '',
-        documentDigest: '',
-      },
       'withdrawn',
-    );
-  }
-
-  async upsertConsent(
-    partyType: 'resident' | 'guest',
-    partyId: string,
-    documentCode: string,
-    dto: ConsentAcceptDto,
-    status: 'accepted' | 'withdrawn',
-  ) {
-    let row = await this.consents.findOne({ partyType, partyId, documentCode });
-    const now = nowIso();
-    const auditRef = Ids.event();
-    if (!row) {
-      row = await this.consents.create({
-        partyType,
-        partyId,
-        documentCode,
-        documentVersion: dto.documentVersion || '1',
-        documentDigest: dto.documentDigest || '',
-        documentUrl: dto.documentUrl || '',
-        locale: dto.locale || 'ru-RU',
-        status,
-        revision: 1,
-        acceptedAt: status === 'accepted' ? now : null,
-        withdrawnAt: status === 'withdrawn' ? now : null,
-        auditRef,
-        history: [
-          {
-            status,
-            documentVersion: dto.documentVersion || '1',
-            documentDigest: dto.documentDigest || '',
-            documentUrl: dto.documentUrl || '',
-            locale: dto.locale || 'ru-RU',
-            auditRef,
-            recordedAt: now,
-          },
-        ],
-      });
-    } else {
-      if (dto.documentVersion) row.documentVersion = dto.documentVersion;
-      if (dto.documentDigest) row.documentDigest = dto.documentDigest;
-      if (dto.documentUrl) row.documentUrl = dto.documentUrl;
-      if (dto.locale) row.locale = dto.locale;
-      row.status = status;
-      row.revision += 1;
-      if (status === 'accepted') row.acceptedAt = now;
-      if (status === 'withdrawn') row.withdrawnAt = now;
-      row.auditRef = auditRef;
-      row.history = [
-        ...(row.history || []),
-        {
-          status,
-          documentVersion: row.documentVersion,
-          documentDigest: row.documentDigest,
-          documentUrl: row.documentUrl || '',
-          locale: row.locale || 'ru-RU',
-          auditRef,
-          recordedAt: now,
-        },
-      ];
-      await row.save();
-    }
-    const eventIds = [
-      await this.events.emit({
-        type:
-          partyType === 'resident'
-            ? 'resident_consent.updated'
-            : 'guest_consent.updated',
-        aggregate: {
-          type: partyType === 'resident' ? 'resident_consent' : 'guest_consent',
-          id: `${partyId}:${documentCode}`,
-          revision: row.revision,
-        },
-        subject: partyType === 'resident' ? partyId : undefined,
-        guestPartyId: partyType === 'guest' ? partyId : undefined,
-        payload: { documentCode },
-      }),
-    ];
-    const items = await this.consents.find({ partyType, partyId }).lean();
-    const revision = items.reduce(
-      (max, i) => Math.max(max, i.revision),
-      row.revision,
-    );
-    const bodyKey = partyType === 'resident' ? 'subject' : 'guestPartyId';
-    return new MstyleResult(
-      schema({
-        [bodyKey]: partyId,
-        consentSetRevision: revision,
-        item: consentItem(row),
-        eventIds,
-      }),
-      200,
-      { ETag: etag('consents', revision), 'Cache-Control': 'no-store' },
+      {},
+      ifMatch,
+      reasonCode,
     );
   }
 
@@ -2066,7 +2082,7 @@ export class MstyleDirectoryService {
       profileId,
       status: 'active',
     });
-    if (!membership) problem(404, 'NOT_FOUND');
+    if (!membershipIsEffective(membership)) problem(404, 'NOT_FOUND');
     return membership;
   }
 
@@ -2077,7 +2093,7 @@ export class MstyleDirectoryService {
       role: 'owner',
       status: 'active',
     });
-    if (!membership) problem(404, 'NOT_FOUND');
+    if (!membershipIsEffective(membership)) problem(404, 'NOT_FOUND');
     return membership;
   }
 
@@ -2119,6 +2135,31 @@ export class MstyleDirectoryService {
       type: a.contactType as 'phone' | 'email',
       masked: a.contactMask,
     }));
+  }
+
+  private async bumpMembershipContexts(
+    profileId: string,
+    affectedSubject: string,
+  ) {
+    const members = await this.memberships.find({
+      profileId,
+      status: 'active',
+    });
+    const subjects = new Set([
+      affectedSubject,
+      ...members.map((member) => member.subject),
+    ]);
+    const revisions: { subject: string; contextRevision: number }[] = [];
+    for (const subject of subjects) {
+      const updated = await this.identityModel.findOneAndUpdate(
+        { subject },
+        { $inc: { contextRevision: 1 } },
+        { returnDocument: 'after' },
+      );
+      if (updated)
+        revisions.push({ subject, contextRevision: updated.contextRevision });
+    }
+    return revisions;
   }
 
   private async bumpMembersContext(
@@ -2276,39 +2317,6 @@ function mergeObjects(
     }
   }
   return result;
-}
-
-function privateFieldCodesForInput(
-  data: Record<string, unknown>,
-  profileType: 'individual' | 'company',
-  legalForm?: 'ip' | 'ooo' | null,
-): string[] {
-  return leafFieldCodes(data).map((field) => {
-    if (
-      field.startsWith('company.') ||
-      field.startsWith('entrepreneur.') ||
-      field.startsWith('individual.') ||
-      field.startsWith('representative.') ||
-      field.startsWith('bank.')
-    ) {
-      return field;
-    }
-    if (profileType === 'company') {
-      return `${legalForm === 'ip' ? 'entrepreneur' : 'company'}.${field}`;
-    }
-    const passportAliases: Record<string, string> = {
-      fullName: 'fullName',
-      displayName: 'fullName',
-      gender: 'gender',
-      documentNumber: 'number',
-      documentCode: 'departmentCode',
-      documentIssuedAt: 'issuedDate',
-      documentIssuedBy: 'issuedBy',
-    };
-    return passportAliases[field]
-      ? `individual.passport.${passportAliases[field]}`
-      : `individual.${field}`;
-  });
 }
 
 function privateDataIsComplete(

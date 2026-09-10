@@ -3,6 +3,8 @@ import {
   ArrayMaxSize,
   ArrayMinSize,
   IsArray,
+  IsDefined,
+  IsEmail,
   IsIn,
   IsInt,
   IsISO8601,
@@ -16,6 +18,8 @@ import {
   Min,
   MinLength,
   ValidateNested,
+  ValidateIf,
+  ValidateBy,
 } from 'class-validator';
 import { MSTYLE_SCHEMA_VERSION } from './mstyle-v2.constants';
 
@@ -349,14 +353,31 @@ export class ChangeDecisionDto extends SchemaVersionDto {
   reasonCode: string;
 }
 
-export class CreateMembershipDto extends SchemaVersionDto {
-  @ValidateNested()
-  @Type(() => IdentifierDto)
-  identifier: IdentifierDto;
-
+export class MembershipRevisionsDto {
+  @IsInt() @Min(1) profile: number;
+  @IsInt() @Min(1) membershipSet: number;
+}
+export class MembershipInvitationDto {
+  @IsString() @Matches(/\S/) @MaxLength(200) displayName: string;
+  @IsOptional() @IsEmail() @MaxLength(254) email?: string | null;
+  @IsOptional() @IsString() @Matches(/^\+7[0-9]{10}$/) phone?: string | null;
+}
+export class MembershipIdentityDto {
+  @IsOptional() @IsString() @IsNotEmpty() existingSubject?: string | null;
   @IsOptional()
-  @IsString()
-  displayName?: string;
+  @ValidateNested()
+  @Type(() => MembershipInvitationDto)
+  invitation?: MembershipInvitationDto | null;
+}
+export class CreateMembershipDto extends SchemaVersionDto {
+  @IsDefined()
+  @ValidateNested()
+  @Type(() => MembershipRevisionsDto)
+  expectedRevisions: MembershipRevisionsDto;
+  @IsDefined()
+  @ValidateNested()
+  @Type(() => MembershipIdentityDto)
+  identity: MembershipIdentityDto;
 }
 
 export class PatchMembershipDto extends SchemaVersionDto {
@@ -404,8 +425,24 @@ export class ReasonCodeDto extends SchemaVersionDto {
 }
 
 export class ContactChallengeDto extends SchemaVersionDto {
+  @ValidateIf((o) => o.type !== undefined || o.contactType === undefined)
   @IsIn(['phone', 'email'])
-  type: 'phone' | 'email';
+  type?: 'phone' | 'email';
+
+  @ValidateIf((o) => o.contactType !== undefined || o.type === undefined)
+  @IsIn(['phone', 'email'])
+  @ValidateBy({
+    name: 'consistentContactType',
+    validator: {
+      validate: (value, args) => {
+        const input = args!.object as ContactChallengeDto;
+        return input.type === undefined || input.type === value;
+      },
+      defaultMessage: () =>
+        'contactType and type must match when both are supplied',
+    },
+  })
+  contactType?: 'phone' | 'email';
 
   @IsString()
   @IsNotEmpty()
@@ -416,13 +453,12 @@ export class ContactChallengeDto extends SchemaVersionDto {
 export class ContactVerifyDto extends SchemaVersionDto {
   @IsString()
   @IsNotEmpty()
-  @MaxLength(16)
+  @Matches(/^[0-9]{4}$/)
   code: string;
 }
 
 export class AssignmentItemDto {
-  @IsString()
-  @IsNotEmpty()
+  @IsIn(['primary', 'contract', 'billing'])
   purpose: string;
 
   @IsString()
@@ -439,22 +475,20 @@ export class AssignmentItemDto {
   priority?: number;
 
   @IsOptional()
-  @IsString()
+  @IsIn(['active', 'revoked', 'inactive'])
   status?: string;
 }
 
 export class PatchAssignmentsDto extends SchemaVersionDto {
-  @Type(() => Number)
-  @IsInt()
-  assignmentSetRevision: number;
-
   @IsArray()
+  @ArrayMaxSize(6)
   @ValidateNested({ each: true })
   @Type(() => AssignmentItemDto)
-  items: AssignmentItemDto[];
+  assignments: AssignmentItemDto[];
 }
 
 export class ConsentAcceptDto extends SchemaVersionDto {
+  @IsOptional() @IsString() @MaxLength(128) evidenceCode?: string;
   @IsString()
   @IsNotEmpty()
   documentVersion: string;
@@ -510,14 +544,66 @@ export class SnapshotRevealDto extends RevealDto {
 export class SnapshotContactsRevealDto extends SnapshotRevealDto {}
 
 export class PatchPrivateDataDto extends SchemaVersionDto {
-  @IsObject()
-  values: Record<string, unknown>;
+  @IsOptional() @IsObject() values?: Record<string, unknown>;
+  @IsOptional() @IsString() @MaxLength(256) displayName?: string;
+  @IsOptional()
+  @ValidateNested()
+  @Type(() => PrivateDataInputDto)
+  privateData?: PrivateDataInputDto;
 }
 
+export class ResidentPatchPrivateDataDto extends SchemaVersionDto {
+  @IsDefined()
+  @ValidateNested()
+  @Type(() => PrivateDataInputDto)
+  privateData: PrivateDataInputDto;
+}
+export class ContactSourceRevisionsDto {
+  @ValidateIf((_object, value) => value !== null) @IsInt() @Min(1) phone:
+    number | null;
+  @ValidateIf((_object, value) => value !== null) @IsInt() @Min(1) email:
+    number | null;
+}
+export class ResidentSourceRevisionsDto {
+  @IsInt() @Min(1) profile: number;
+  @IsDefined()
+  @ValidateNested()
+  @Type(() => ContactSourceRevisionsDto)
+  profileContactAssignments: ContactSourceRevisionsDto;
+  @ValidateIf((_object, value) => value !== null)
+  @IsInt()
+  @Min(1)
+  contactIdentity: number | null;
+  @IsDefined()
+  @ValidateNested()
+  @Type(() => ContactSourceRevisionsDto)
+  identityContacts: ContactSourceRevisionsDto;
+  @IsInt() @Min(1) privateData: number;
+}
+export class ResidentCreateSnapshotDto extends SchemaVersionDto {
+  @IsIn(['booking_legal_snapshot']) snapshotKind: string;
+  @IsIn(['primary']) contactPurpose: 'primary';
+  @IsDefined()
+  @ValidateNested()
+  @Type(() => ResidentSourceRevisionsDto)
+  expectedSourceRevisions: ResidentSourceRevisionsDto;
+}
+
+export class GuestSourceRevisionsDto {
+  @IsInt() @Min(1) guestParty: number;
+  @IsDefined()
+  @ValidateNested()
+  @Type(() => ContactSourceRevisionsDto)
+  guestContacts: ContactSourceRevisionsDto;
+  @IsInt() @Min(1) privateData: number;
+}
 export class CreateSnapshotDto extends SchemaVersionDto {
-  @IsOptional()
-  @IsString()
-  purpose?: string;
+  @IsIn(['booking_legal_snapshot']) snapshotKind: string;
+  @IsIn(['primary']) contactPurpose: 'primary';
+  @IsDefined()
+  @ValidateNested()
+  @Type(() => GuestSourceRevisionsDto)
+  expectedSourceRevisions: GuestSourceRevisionsDto;
 }
 
 export class BindSnapshotDto extends SchemaVersionDto {
@@ -527,6 +613,9 @@ export class BindSnapshotDto extends SchemaVersionDto {
 }
 
 export class CreateGuestDto extends SchemaVersionDto {
+  @IsOptional()
+  @IsIn(['mstyle_booking', 'guest_participant_declaration'])
+  partyPurpose?: string;
   @IsOptional()
   @IsString()
   purpose?: string;
@@ -541,6 +630,7 @@ export class CreateGuestDto extends SchemaVersionDto {
 }
 
 export class ConfirmBookingDto extends SchemaVersionDto {
+  @IsOptional() @IsIn(['booker']) participantRole?: 'booker';
   @ValidateNested()
   @Type(() => OperationRefDto)
   operationRef: OperationRefDto;

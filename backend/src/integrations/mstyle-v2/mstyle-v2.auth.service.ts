@@ -80,7 +80,15 @@ export class MstyleAuthService {
       problem(401, 'INVALID_CREDENTIALS');
     }
     const identity = await this.identities.ensureFromUser(user);
-    if (identity.identityStatus !== 'active') {
+    const currentUser = await this.identities.findUserByLogin(dto.login);
+    if (
+      identity.identityStatus !== 'active' ||
+      !currentUser ||
+      String(currentUser._id) !== String(user._id) ||
+      currentUser.password !== user.password ||
+      currentUser.authVersion !== user.authVersion ||
+      !this.identities.usableForAuth(identityStatusFromUser(currentUser))
+    ) {
       problem(401, 'INVALID_CREDENTIALS');
     }
     const body = await this.issueAuthentication(
@@ -96,6 +104,7 @@ export class MstyleAuthService {
     clientId: string,
     ip: string,
   ): Promise<MstyleResult> {
+    this.assertOtpMode();
     if (
       !ALLOWED_AUTH_PAIRS.some(
         ([type, channel]) =>
@@ -136,28 +145,27 @@ export class MstyleAuthService {
       this.rates.identifierKey(`${dto.identifier.type}:${normalized}`),
     );
 
-    const user = await this.identities.findUserByIdentifier(
+    let identity = await this.identities.findIdentityByIdentifier(
       dto.identifier.type,
       normalized,
     );
-    let subject: string | null = null;
-    let isDummy = true;
-    if (user) {
-      const status = identityStatusFromUser(user);
-      if (this.identities.usableForAuth(status)) {
-        const identity = await this.identities.ensureFromUser(user);
-        subject = identity.subject;
-        isDummy = false;
-      }
-    } else {
-      const identity = await this.identities.findIdentityByIdentifier(
+    if (!identity) {
+      const user = await this.identities.findUserByIdentifier(
         dto.identifier.type,
         normalized,
       );
-      if (identity && this.identities.usableForAuth(identity.identityStatus)) {
-        subject = identity.subject;
-        isDummy = false;
-      }
+      if (user && this.identities.usableForAuth(identityStatusFromUser(user)))
+        identity = await this.identities.ensureFromUser(user);
+    }
+    let subject: string | null = null;
+    let isDummy = true;
+    if (
+      identity &&
+      this.identities.usableForAuth(identity.identityStatus) &&
+      identity[dto.identifier.type] === normalized
+    ) {
+      subject = identity.subject;
+      isDummy = false;
     }
 
     dummyHashWork(this.cfg.rateLimitSecret(), normalized);
@@ -188,6 +196,7 @@ export class MstyleAuthService {
         `${dto.identifier.type}:${normalized}`,
       ),
       subject,
+      authVersion: isDummy ? undefined : identity!.authVersion,
       isDummy,
       codeHash: await bcrypt.hash(code, 8),
       codeLength: CODE_LENGTH,
@@ -238,7 +247,10 @@ export class MstyleAuthService {
       const verified = await this.sms.isMobileAuthVerified(
         challenge.mobileIdRequestId,
       );
-      if (verified) await this.consumeChallenge(challenge);
+      if (verified) {
+        await this.consumeChallenge(challenge);
+        challenge.status = 'consumed';
+      }
     }
     await challenge.save();
     return new MstyleResult(this.challengeDto(challenge), 200, {
@@ -255,6 +267,12 @@ export class MstyleAuthService {
     this.expireIfNeeded(challenge);
     if (challenge.status === 'expired') problem(410, 'CHALLENGE_EXPIRED');
     if (challenge.status === 'consumed') problem(409, 'CHALLENGE_CONSUMED');
+    if (!challenge.isDummy) {
+      const identity = challenge.subject
+        ? await this.identities.findIdentityBySubject(challenge.subject)
+        : null;
+      this.assertChallengeIdentity(challenge, identity);
+    }
     if (challenge.resendAfter.getTime() > Date.now()) {
       const retryAfter = Math.ceil(
         (challenge.resendAfter.getTime() - Date.now()) / 1000,
@@ -266,6 +284,7 @@ export class MstyleAuthService {
 
     const now = Date.now();
     const useSmsAero = this.isSmsAeroChallenge(challenge);
+    this.assertOtpMode();
     let code = this.cfg.mockOtp();
     if (useSmsAero) {
       this.requireSmsAero();
@@ -361,8 +380,26 @@ export class MstyleAuthService {
       problem(409, 'CHALLENGE_CONSUMED');
     }
 
-    if (challenge.verifyAttempts >= MAX_VERIFY_ATTEMPTS) {
-      problem(429, 'RATE_LIMITED', { retryable: false, retryAfter: 60 });
+    const reserved = await this.challenges.findOneAndUpdate(
+      {
+        challengeId,
+        clientId,
+        status: 'awaiting_code',
+        codeHash: challenge.codeHash,
+        expiresAt: { $gt: new Date() },
+        verifyAttempts: { $lt: MAX_VERIFY_ATTEMPTS },
+      },
+      { $inc: { verifyAttempts: 1 } },
+      { new: true },
+    );
+    if (!reserved) {
+      const latest = await this.loadChallenge(challengeId, clientId);
+      if (latest.verifyAttempts >= MAX_VERIFY_ATTEMPTS)
+        problem(429, 'RATE_LIMITED', { retryable: false, retryAfter: 60 });
+      if (latest.status === 'consumed') problem(409, 'CHALLENGE_CONSUMED');
+      if (latest.expiresAt.getTime() <= Date.now())
+        problem(410, 'CHALLENGE_EXPIRED');
+      problem(409, 'CONFLICT');
     }
 
     let matches: boolean;
@@ -384,9 +421,7 @@ export class MstyleAuthService {
     } else {
       matches = await bcrypt.compare(dto.code, challenge.codeHash);
     }
-    challenge.verifyAttempts += 1;
     if (!matches || challenge.isDummy || !challenge.subject) {
-      await challenge.save();
       problem(401, 'INVALID_CREDENTIALS');
     }
 
@@ -403,6 +438,18 @@ export class MstyleAuthService {
     ) {
       problem(409, 'CHALLENGE_CONSUMED');
     }
+  }
+
+  async validateAuthenticationReplay(body: any) {
+    const identity = body?.subject
+      ? await this.identities.findIdentityBySubject(body.subject)
+      : null;
+    if (
+      !identity ||
+      identity.identityStatus !== 'active' ||
+      identity.authVersion !== body.authVersion
+    )
+      problem(401, 'INVALID_CREDENTIALS');
   }
 
   private async loadChallenge(challengeId: string, clientId: string) {
@@ -461,31 +508,95 @@ export class MstyleAuthService {
     }
   }
 
-  private async consumeChallenge(challenge: MstyleChallengeDocument) {
-    const identity = challenge.subject
-      ? await this.identities.findIdentityBySubject(challenge.subject)
-      : null;
-    if (!identity || !this.identities.usableForAuth(identity.identityStatus)) {
-      await challenge.save();
-      problem(401, 'INVALID_CREDENTIALS');
-    }
-    // Онбординг создаёт invited; первый успешный код активирует учётку.
-    if (identity.identityStatus === 'invited') {
-      identity.identityStatus = 'active';
-      identity.revision += 1;
-      await identity.save();
-    }
-
-    const body = await this.issueAuthentication(
-      identity.subject,
-      identity.authVersion,
-      challenge.channel || 'sms',
+  private async consumeChallenge(verified: MstyleChallengeDocument) {
+    this.challenges.db.base.set('transactionAsyncLocalStorage', true);
+    return this.challenges.db.transaction(
+      async () => {
+        const current = await this.loadChallenge(
+          verified.challengeId,
+          verified.clientId,
+        );
+        if (current.status === 'consumed') {
+          if (
+            !current.consumedAuthJson ||
+            !current.consumedAt ||
+            Date.now() - current.consumedAt.getTime() > AUTH_SUCCESS_REPLAY_MS
+          )
+            problem(409, 'CHALLENGE_CONSUMED');
+          const stored = JSON.parse(current.consumedAuthJson);
+          const identity = await this.identities.findIdentityBySubject(
+            stored.subject,
+          );
+          if (
+            !identity ||
+            identity.identityStatus !== 'active' ||
+            identity.authVersion !== stored.authVersion
+          )
+            problem(401, 'INVALID_CREDENTIALS');
+          return stored;
+        }
+        if (
+          current.status !== 'awaiting_code' ||
+          current.expiresAt.getTime() <= Date.now() ||
+          current.codeHash !== verified.codeHash ||
+          current.mobileIdRequestId !== verified.mobileIdRequestId
+        )
+          problem(409, 'CONFLICT');
+        // Saving the challenge in the same transaction serializes simultaneous successful verifications.
+        current.status = 'consumed';
+        current.consumedAt = new Date();
+        await current.save();
+        const identity = current.subject
+          ? await this.identities.findIdentityBySubject(current.subject)
+          : null;
+        if (
+          !identity ||
+          !this.identities.usableForAuth(identity.identityStatus)
+        )
+          problem(401, 'INVALID_CREDENTIALS');
+        this.assertChallengeIdentity(current, identity);
+        await this.identities.confirmLogin(
+          identity.subject,
+          current.identifierType!,
+          current.identifierHash!,
+        );
+        const body = await this.issueAuthentication(
+          identity.subject,
+          identity.authVersion,
+          current.channel || 'sms',
+        );
+        current.consumedAuthJson = JSON.stringify(body);
+        await current.save();
+        return body;
+      },
+      { readConcern: { level: 'snapshot' }, writeConcern: { w: 'majority' } },
     );
-    challenge.status = 'consumed';
-    challenge.consumedAt = new Date();
-    challenge.consumedAuthJson = JSON.stringify(body);
-    await challenge.save();
-    return body;
+  }
+
+  private assertChallengeIdentity(
+    challenge: MstyleChallengeDocument,
+    identity: Awaited<
+      ReturnType<MstyleIdentityService['findIdentityBySubject']>
+    >,
+  ) {
+    const type = challenge.identifierType;
+    const value =
+      type === 'email'
+        ? identity?.email
+        : type === 'phone'
+          ? identity?.phone
+          : null;
+    if (
+      !identity ||
+      !this.identities.usableForAuth(identity.identityStatus) ||
+      !value ||
+      hmacHex(this.cfg.rateLimitSecret(), `${type}:${value}`) !==
+        challenge.identifierHash ||
+      (challenge.authVersion != null &&
+        challenge.authVersion !== identity.authVersion) ||
+      (identity.userId && challenge.authVersion == null)
+    )
+      problem(401, 'INVALID_CREDENTIALS');
   }
 
   private async issueAuthentication(
@@ -530,6 +641,11 @@ export class MstyleAuthService {
   }
 
   /** 4-digit OTP for email/telegram; mock OTP when dispatch off / dummy / SMS Aero. */
+  private assertOtpMode() {
+    if (!this.cfg.dispatchEnabled() && this.cfg.environment() !== 'local')
+      problem(503, 'UPSTREAM_UNAVAILABLE');
+  }
+
   private issueChallengeCode(params: {
     isDummy: boolean;
     useSmsAero: boolean;

@@ -1,3 +1,5 @@
+import { MstyleConsentService } from './mstyle-v2.consent.service';
+import { MstyleNativeConsoleProof } from './mstyle-v2.native-console';
 import { Module } from '@nestjs/common';
 import { ConfigService } from '@nestjs/config';
 import { createMstyleSmsService, MSTYLE_SMS_SERVICE } from './mstyle-v2.sms';
@@ -25,6 +27,10 @@ import { MstylePrivateController } from './mstyle-v2.private.controller';
 import { MstylePrivateDataService } from './mstyle-v2.private-data.service';
 import { MstyleRateLimitService } from './mstyle-v2.rate-limit';
 import { MSTYLE_MODELS } from './mstyle-v2.schemas';
+import { MstylePublicResponseService } from './mstyle-v2.public-response';
+import { MstyleContactSelectionService } from './mstyle-v2.contact-selection';
+import { MstyleReadinessService } from './mstyle-v2.readiness';
+import { MstyleContactProofService } from './mstyle-v2.contact-proof';
 
 @Module({
   imports: [
@@ -35,12 +41,18 @@ import { MSTYLE_MODELS } from './mstyle-v2.schemas';
   exports: [MstyleIdentityService, MstyleOauthService, MstyleV2Config],
   controllers: [MstyleOauthController, MstylePrivateController],
   providers: [
+    MstyleConsentService,
+    MstyleNativeConsoleProof,
     {
       provide: MSTYLE_SMS_SERVICE,
       inject: [ConfigService],
       useFactory: createMstyleSmsService,
     },
     MstyleV2Config,
+    MstylePublicResponseService,
+    MstyleContactSelectionService,
+    MstyleReadinessService,
+    MstyleContactProofService,
     MstyleOauthService,
     MstyleAuthService,
     MstyleIdentityService,

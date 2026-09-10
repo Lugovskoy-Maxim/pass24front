@@ -1,4 +1,7 @@
-import { mapChangeEventType, presentChangeEvent } from './mstyle-v2.change-events';
+import {
+  mapChangeEventType,
+  presentChangeEvent,
+} from './mstyle-v2.change-events';
 
 describe('R-03 change event presentation', () => {
   it('maps legacy types and fills aggregate.revision', () => {

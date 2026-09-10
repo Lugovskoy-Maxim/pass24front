@@ -106,7 +106,8 @@ export function presentChangeEvent(
         row.guestPartyId ||
         row.subject ||
         '',
-      revision: Number.isInteger(revision) && (revision as number) >= 1 ? revision : 1,
+      revision:
+        Number.isInteger(revision) && (revision as number) >= 1 ? revision : 1,
     },
     subject: row.subject,
     profileId: row.profileId,

@@ -22,7 +22,7 @@ export const MOCK_EMPLOYEE_SUBJECT = 'usr_01J5Q8K2M7N4P6R9T1V3X5Z7AB';
 export const MOCK_PROFILE_ID = 'prf_01J5Q8K2M7N4P6R9T1V3X5Z7BB';
 export const MOCK_OWNER_MEMBERSHIP_ID = 'mem_01J5Q8K2M7N4P6R9T1V3X5Z7CC';
 export const MOCK_EMPLOYEE_MEMBERSHIP_ID = 'mem_01J5Q8K2M7N4P6R9T1V3X5Z7CD';
-export const MOCK_CONTACT_ID = 'cnt_01J5Q8K2M7N4P6R9T1V3X5Z7CE';
+export const MOCK_CONTACT_ID = 'ict_01J5Q8K2M7N4P6R9T1V3X5Z7CE';
 export const MOCK_CONTACT_CHALLENGE_ID = 'cch_01J5Q8K2M7N4P6R9T1V3X5Z7CF';
 export const MOCK_AUTH_CHALLENGE_ID = 'ach_01J5Q8K2M7N4P6R9T1V3X5Z7A2';
 export const MOCK_SNAPSHOT_ID = 'snp_01J5Q8K2M7N4P6R9T1V3X5Z7DD';
@@ -185,6 +185,8 @@ const SAFE_PROFILE = {
   privateDataRevision: 1,
   privateDataComplete: true,
   memberPolicy: { employeeLimit: 10 },
+  membershipSetRevision: 2,
+  contactAssignmentSetRevision: 1,
   sourceLinks: [
     {
       sourceSystem: 'mstyle-wordpress',
@@ -552,6 +554,8 @@ export function createMstyleMockResponse(
               privateDataComplete: true,
               display: { label: SAFE_PROFILE.label },
               memberPolicy: { employeeLimit: 10 },
+              membershipSetRevision: 2,
+              contactAssignmentSetRevision: 1,
               snapshotSources: { primary: RESIDENT_SOURCE_REVISIONS },
             },
           ],
@@ -621,6 +625,8 @@ export function createMstyleMockResponse(
               privateDataRevision: 1,
               privateDataComplete: true,
               memberPolicy: { employeeLimit: 10 },
+              membershipSetRevision: 2,
+              contactAssignmentSetRevision: 1,
               updatedAt: UPDATED_AT,
               display: {
                 label: SAFE_PROFILE.label,
@@ -809,7 +815,7 @@ export function createMstyleMockResponse(
             displayName: 'Сидоров Сидор',
             contactMasks: [{ type: 'email', masked: 's***@example.test' }],
           },
-          invitationStatus: 'invited',
+          invitationStatus: 'pending',
           membershipSetRevision: 3,
           contextRevisions: [
             { subject, contextRevision: 6 },
@@ -917,7 +923,14 @@ export function createMstyleMockResponse(
     case 'C-05':
       return {
         status: 200,
-        body: schema({ subject, contacts: [CONTACT] }),
+        body: schema({
+          subject,
+          contacts:
+            !Array.isArray(input.body?.fieldCodes) ||
+            input.body.fieldCodes.includes(CONTACT.type)
+              ? [CONTACT]
+              : [],
+        }),
         headers: { 'Cache-Control': 'no-store, private' },
       };
     case 'S-01':

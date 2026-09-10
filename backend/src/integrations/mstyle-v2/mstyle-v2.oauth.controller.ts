@@ -8,7 +8,12 @@ import {
 } from '@nestjs/common';
 import { ApiExcludeController } from '@nestjs/swagger';
 import type { Request } from 'express';
-import { MstyleEnabledGuard, MstyleProblemFilter } from './mstyle-v2.http';
+import {
+  MstyleEnabledGuard,
+  MstyleProblemFilter,
+  validateHeaderEnvelope,
+  MstyleRequest,
+} from './mstyle-v2.http';
 import { MstyleOauthService } from './mstyle-v2.oauth.service';
 
 @ApiExcludeController()
@@ -21,6 +26,7 @@ export class MstyleOauthController {
   @Post('token')
   @HttpCode(200)
   issue(@Req() req: Request) {
+    validateHeaderEnvelope(req as MstyleRequest);
     return this.oauth.issueToken((req.body || {}) as Record<string, string>);
   }
 }

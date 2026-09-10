@@ -53,7 +53,7 @@ function problem(
     label: `${status} ${code}`,
     contentType: 'application/problem+json',
     body: {
-      type: `https://pass.example/problems/${code.toLowerCase().replace(/_/g, '-')}`,
+      type: `https://pass.mstyle.ru/problems/${code.toLowerCase().replace(/_/g, '-')}`,
       title,
       status,
       code,
@@ -1293,6 +1293,93 @@ type M1M2CatalogOverride = {
 
 /** Final M1/M2 contract overlays the older 58-route draft catalog. */
 const M1_M2_CATALOG_OVERRIDES: Record<string, M1M2CatalogOverride> = {
+  'R-04': { headers: RESIDENT },
+  'M-01': { headers: RESIDENT },
+  'M-02': {
+    headers: {
+      ...RESIDENT,
+      'X-Purpose-Code': 'membership_invitation',
+      'If-Match': '"memberships-2"',
+      'Idempotency-Key': 'idem_01TESTKEY',
+    },
+    request: {
+      schemaVersion: SCHEMA,
+      expectedRevisions: { profile: 2, membershipSet: 2 },
+      identity: {
+        existingSubject: null,
+        invitation: {
+          displayName: 'Сотрудник',
+          email: 'employee@example.test',
+          phone: null,
+        },
+      },
+    },
+  },
+  'C-03': { headers: RESIDENT },
+  'C-04': {
+    headers: {
+      ...RESIDENT,
+      'X-Purpose-Code': 'account_profile_edit',
+      'If-Match': '"assignments-1"',
+      'Idempotency-Key': 'idem_01TESTKEY',
+    },
+    request: {
+      schemaVersion: SCHEMA,
+      assignments: [
+        {
+          purpose: 'primary',
+          subject: IDENTITY.subject,
+          contactId: 'ict_01J5Q8K2M7N4P6R9T1V3X5Z7CE',
+          priority: 1,
+          status: 'active',
+        },
+      ],
+    },
+  },
+  'C-05': {
+    headers: { ...RESIDENT, 'X-Purpose-Code': 'account_contact_view' },
+    request: { schemaVersion: SCHEMA, fieldCodes: ['email', 'phone'] },
+  },
+  'P-03': {
+    headers: {
+      ...RESIDENT,
+      'X-Purpose-Code': 'account_profile_edit',
+      'If-Match': '"private-0"',
+      'Idempotency-Key': 'idem_01TESTKEY',
+    },
+    request: {
+      schemaVersion: SCHEMA,
+      privateData: {
+        profileType: 'company',
+        legalForm: 'ooo',
+        data: {
+          fullName: 'ООО Пример',
+          inn: '0000000000',
+          ogrn: '0000000000000',
+        },
+      },
+    },
+  },
+  'P-04': {
+    headers: {
+      ...RESIDENT,
+      'X-Purpose-Code': 'booking_snapshot_create',
+      'Idempotency-Key': 'idem_01TESTKEY',
+    },
+    request: {
+      schemaVersion: SCHEMA,
+      snapshotKind: 'booking_legal_snapshot',
+      contactPurpose: 'primary',
+      expectedSourceRevisions: {
+        profile: 2,
+        profileContactAssignments: { phone: 1, email: null },
+        contactIdentity: 4,
+        identityContacts: { phone: 1, email: null },
+        privateData: 1,
+      },
+    },
+  },
+
   'A-02': {
     path: `${PRIVATE}/auth/residents/password:verify`,
     headers: IDEM,

@@ -1,5 +1,6 @@
 import type { ExecutionContext } from '@nestjs/common';
-import { createAdminAssertion } from './mstyle-v2.assertions';
+import { generateKeyPairSync, randomBytes, sign } from 'crypto';
+import { ADMIN_ASSERTION_TYPE } from './mstyle-v2.assertions';
 import {
   MstyleRouteContextGuard,
   MstyleServiceTokenGuard,
@@ -7,7 +8,20 @@ import {
 } from './mstyle-v2.http';
 import { ProblemException } from './mstyle-v2.problem';
 
-const ADMIN_SECRET = 'test-admin-assertion';
+const keys = generateKeyPairSync('rsa', { modulusLength: 2048 });
+const base = 'https://pass.mstyle.ru/api/internal/integrations/mstyle/v2';
+const client = {
+  clientId: 'mstyle-backend-prod',
+  adminAllowed: true,
+  algorithm: 'RS256',
+  scopes: [
+    'mstyle.integration.admin.profile.read',
+    'mstyle.integration.admin.identity.read',
+  ],
+  publicKeysByKid: {
+    test: keys.publicKey.export({ type: 'spki', format: 'pem' }),
+  },
+};
 
 describe('MstyleServiceTokenGuard scopes', () => {
   const tokenRow = {
@@ -40,10 +54,11 @@ describe('MstyleServiceTokenGuard scopes', () => {
 
 describe('MstyleRouteContextGuard M1/M2 context', () => {
   const authentications = {
-    findOne: jest.fn(async (query: { authenticationId: string; subject: string }) =>
-      query.authenticationId === 'aut_1' && query.subject === 'usr_1'
-        ? { expiresAt: new Date(Date.now() + 60_000) }
-        : null,
+    findOne: jest.fn(
+      async (query: { authenticationId: string; subject: string }) =>
+        query.authenticationId === 'aut_1' && query.subject === 'usr_1'
+          ? { expiresAt: new Date(Date.now() + 60_000), authVersion: 1 }
+          : null,
     ),
   };
   const adminAssertions = {
@@ -52,11 +67,19 @@ describe('MstyleRouteContextGuard M1/M2 context', () => {
   const guard = new MstyleRouteContextGuard(
     {
       reconcileClientId: () => 'mstyle-reconcile-prod',
-      adminAssertionSecret: () => ADMIN_SECRET,
-      jwtSecret: () => 'unused-jwt',
+      privateApiBase: () => base,
+      oauthClient: () => client,
     } as any,
     authentications as any,
     adminAssertions as any,
+    { create: async () => undefined } as any,
+    {
+      findIdentityBySubject: async () => ({
+        identityStatus: 'active',
+        authVersion: 1,
+      }),
+    } as any,
+    { findOne: async () => ({ role: 'owner' }) } as any,
   );
 
   beforeEach(() => {
@@ -167,7 +190,7 @@ describe('MstyleRouteContextGuard M1/M2 context', () => {
           purposeCode: 'admin_support_review',
         }),
       ),
-    ).rejects.toMatchObject({ problemCode: 'INVALID_ADMIN_ASSERTION' });
+    ).rejects.toMatchObject({ problemCode: 'ADMIN_ASSERTION_INVALID' });
   });
 
   it('accepts R-14 without a purpose header', async () => {
@@ -188,7 +211,33 @@ describe('MstyleRouteContextGuard M1/M2 context', () => {
 });
 
 function signedAdmin(actor: string, purpose?: string): string {
-  return createAdminAssertion(ADMIN_SECRET, { actor, purpose, jti: `jti_${Math.random()}` });
+  const now = Math.floor(Date.now() / 1000);
+  const data = [
+    { alg: 'RS256', typ: ADMIN_ASSERTION_TYPE, kid: 'test' },
+    {
+      iss: client.clientId,
+      sub: actor,
+      aud: base,
+      iat: now,
+      exp: now + 55,
+      jti: randomBytes(24).toString('base64url'),
+      auth_context: 'wp_session',
+      scope: purpose ? client.scopes[0] : client.scopes[1],
+      purpose: purpose || '',
+      method: purpose ? 'POST' : 'GET',
+      target:
+        '/api/internal/integrations/mstyle/v2/' +
+        (purpose ? 'resident-profiles/search' : 'identities/usr_1'),
+      requestId: 'req_test',
+    },
+  ]
+    .map((value) => Buffer.from(JSON.stringify(value)).toString('base64url'))
+    .join('.');
+  return (
+    data +
+    '.' +
+    sign('sha256', Buffer.from(data), keys.privateKey).toString('base64url')
+  );
 }
 
 function contextFor(
@@ -215,6 +264,14 @@ function contextFor(
       'x-purpose-code': options.purposeCode,
     },
     mstyleClientId: options.clientId,
+    mstyleRequestId: 'req_test',
+    mstyleTokenScopes: [
+      originalUrl.includes('/identities/')
+        ? client.scopes[1]
+        : client.scopes[0],
+    ],
+    mstyleAcceptedScopes: client.scopes,
+    params: {},
   } as MstyleRequest;
   return {
     switchToHttp: () => ({ getRequest: () => request }),

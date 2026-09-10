@@ -1,11 +1,22 @@
+import { MstyleConsentService } from './mstyle-v2.consent.service';
+import { guestWriteAllowed } from './mstyle-v2.guest-access';
+import { membershipIsEffective } from './mstyle-v2.membership-policy';
+import { MstyleContactSelectionService } from './mstyle-v2.contact-selection';
+import {
+  hasValue,
+  pick,
+  getPath,
+  mergeObjects,
+  requiredResidentFields,
+  canonicalPrivateValues,
+  normalizeResidentInput,
+  validateResidentValues,
+} from './mstyle-v2.private-values';
 import { Injectable } from '@nestjs/common';
 import { InjectModel } from '@nestjs/mongoose';
 import { Model } from 'mongoose';
 import {
   GUEST_PRIVATE_FIELDS,
-  REQUIRED_COMPANY_FIELDS,
-  REQUIRED_GUEST_FIELDS,
-  REQUIRED_INDIVIDUAL_FIELDS,
   RESIDENT_PRIVATE_FIELDS,
 } from './mstyle-v2.constants';
 import { MstyleV2Config } from './mstyle-v2.config';
@@ -17,14 +28,17 @@ import {
 } from './mstyle-v2.crypto';
 import type {
   BindSnapshotDto,
+  CreateSnapshotDto,
   PatchPrivateDataDto,
+  ResidentPatchPrivateDataDto,
+  ResidentCreateSnapshotDto,
   ProfileContactsRevealDto,
   RevealDto,
   SnapshotContactsRevealDto,
   SnapshotRevealDto,
 } from './mstyle-v2.dto';
 import { MstyleEventsService } from './mstyle-v2.events';
-import { Ids } from './mstyle-v2.ids';
+import { Ids, publicSnapshotId, snapshotQuery } from './mstyle-v2.ids';
 import {
   nowIso,
   privateStatusDto,
@@ -81,6 +95,8 @@ export class MstylePrivateDataService {
     private readonly guests: Model<MstyleGuestPartyDocument>,
     @InjectModel(MstyleGuestContact.name)
     private readonly guestContacts: Model<MstyleGuestContactDocument>,
+    private readonly contactSelection: MstyleContactSelectionService,
+    private readonly consentService: MstyleConsentService,
   ) {}
 
   async residentStatus(profileId: string) {
@@ -121,7 +137,18 @@ export class MstylePrivateDataService {
     );
   }
 
-  async revealResident(profileId: string, dto: RevealDto) {
+  async revealResident(
+    profileId: string,
+    dto: RevealDto,
+    residentSubject: string,
+  ) {
+    if (!residentSubject) problem(404, 'NOT_FOUND');
+    const owner = await this.memberships.findOne({
+      profileId,
+      subject: residentSubject,
+      role: 'owner',
+    });
+    if (!membershipIsEffective(owner)) problem(404, 'NOT_FOUND');
     const profile = await this.requireProfile(profileId);
     this.assertFields(dto.fieldCodes, RESIDENT_PRIVATE_FIELDS);
     const doc = await this.privateData.findOne({
@@ -145,7 +172,10 @@ export class MstylePrivateDataService {
         profileType: profile.type,
         legalForm: profile.legalForm,
         revision: doc?.revision ?? 0,
-        sourceRevisions: await this.residentSourceRevisions(profile),
+        sourceRevisions: {
+          profile: profile.revision,
+          privateData: doc?.revision ?? 0,
+        },
         values,
       }),
       200,
@@ -155,23 +185,53 @@ export class MstylePrivateDataService {
 
   async patchResident(
     profileId: string,
-    dto: PatchPrivateDataDto,
+    dto: ResidentPatchPrivateDataDto,
     ifMatch?: string,
   ) {
     const profile = await this.requireProfile(profileId);
-    this.assertFields(leafFieldCodes(dto.values), RESIDENT_PRIVATE_FIELDS);
+    if (
+      dto.privateData.profileType !== profile.type ||
+      (dto.privateData.legalForm ?? null) !== profile.legalForm
+    ) {
+      problem(422, 'VALIDATION_FAILED', {
+        errors: [
+          {
+            field: 'privateData',
+            code: 'profile_type_mismatch',
+            message: 'privateData must match the current profile',
+          },
+        ],
+      });
+    }
+    const patch = normalizeResidentInput(
+      dto.privateData.data,
+      profile.type,
+      profile.legalForm,
+    );
     let doc = await this.privateData.findOne({
       partyType: 'resident_profile',
       partyId: profileId,
     });
+    if (!ifMatch) problem(412, 'PRECONDITION_FAILED');
     this.assertMatch(ifMatch, 'private', doc?.revision ?? 0);
+    if (doc && !['initial', 'self_service'].includes(doc.editPolicy))
+      problem(409, 'CONFLICT', {
+        title: 'Private data requires a change request',
+      });
     const current = doc
       ? decryptJson<Record<string, unknown>>(
           this.cfg.piiSecret(),
           doc.valuesEnc,
         )
       : {};
-    const merged = mergeObjects(current, dto.values);
+    const merged = validateResidentValues(
+      mergeObjects(
+        normalizeResidentInput(current, profile.type, profile.legalForm),
+        patch,
+      ),
+      profile.type,
+      profile.legalForm,
+    );
     if (!doc) {
       doc = await this.privateData.create({
         partyType: 'resident_profile',
@@ -200,6 +260,7 @@ export class MstylePrivateDataService {
     profile.privateDataRevision = doc.revision;
     profile.privateDataComplete = missing.length === 0;
     await profile.save();
+    const contextRevision = await this.bumpMemberContexts(profileId);
     const eventIds = [
       await this.events.emit({
         type: 'resident_private_data.updated',
@@ -221,7 +282,7 @@ export class MstylePrivateDataService {
           doc,
           missing,
         ),
-        contextRevision: profile.revision,
+        contextRevision,
         eventIds,
       }),
       200,
@@ -229,7 +290,7 @@ export class MstylePrivateDataService {
     );
   }
 
-  async snapshotResident(profileId: string) {
+  async snapshotResident(profileId: string, dto: ResidentCreateSnapshotDto) {
     const profile = await this.requireProfile(profileId);
     const doc = await this.privateData.findOne({
       partyType: 'resident_profile',
@@ -241,8 +302,37 @@ export class MstylePrivateDataService {
           doc.valuesEnc,
         )
       : {};
-    const contacts = await this.revealProfileContactsValues(profileId);
-    const sourceRevisions = await this.residentSourceRevisions(profile);
+    const canonical = canonicalPrivateValues(
+      values,
+      profile.type,
+      profile.legalForm,
+    );
+    if (
+      !doc ||
+      !profile.privateDataComplete ||
+      requiredResidentFields(profile.type, profile.legalForm).some(
+        (field) => !hasValue(getPath(canonical, field)),
+      )
+    ) {
+      problem(409, 'CONFLICT', { title: 'Private data is incomplete' });
+    }
+    const contacts = await this.revealProfileContactsValues(
+      profileId,
+      dto.contactPurpose,
+    );
+    if (!contacts.phone && !contacts.email)
+      problem(409, 'CONFLICT', {
+        title: 'Verified primary contact is required',
+      });
+    const sourceRevisions = await this.residentSourceRevisions(
+      profile,
+      dto.contactPurpose,
+    );
+    if (
+      canonicalJson(sourceRevisions) !==
+      canonicalJson(dto.expectedSourceRevisions)
+    )
+      problem(412, 'PRECONDITION_FAILED');
     const payload = {
       values: canonicalPrivateValues(values, profile.type, profile.legalForm),
       contacts,
@@ -292,7 +382,7 @@ export class MstylePrivateDataService {
         role: 'owner',
         status: 'active',
       });
-      if (!owner) problem(404, 'NOT_FOUND');
+      if (!membershipIsEffective(owner)) problem(404, 'NOT_FOUND');
     }
     this.assertFields(dto.fieldCodes, ['displayName', 'phone', 'email']);
     const values = pick(
@@ -326,7 +416,7 @@ export class MstylePrivateDataService {
   ) {
     const snapshot = await this.requireSnapshot(snapshotId);
     this.assertSnapshotScope(snapshot, scopes, 'private');
-    await this.assertSnapshotOperation(snapshotId, dto.operationRef);
+    await this.assertSnapshotOperation(snapshot.snapshotId, dto.operationRef);
     const payload = decryptJson<{ values: Record<string, unknown> }>(
       this.cfg.piiSecret(),
       snapshot.payloadEnc,
@@ -338,7 +428,7 @@ export class MstylePrivateDataService {
     this.assertFields(dto.fieldCodes, allowed);
     return new MstyleResult(
       schema({
-        snapshotId,
+        snapshotId: publicSnapshotId(snapshot.snapshotId, snapshot.partyType),
         partyType: snapshot.partyType,
         partyId: snapshot.partyId,
         snapshotRevision: snapshot.snapshotRevision,
@@ -357,14 +447,14 @@ export class MstylePrivateDataService {
   ) {
     const snapshot = await this.requireSnapshot(snapshotId);
     this.assertSnapshotScope(snapshot, scopes, 'contact');
-    await this.assertSnapshotOperation(snapshotId, dto.operationRef);
+    await this.assertSnapshotOperation(snapshot.snapshotId, dto.operationRef);
     this.assertFields(dto.fieldCodes, ['displayName', 'phone', 'email']);
     const payload = decryptJson<{
       contacts?: { displayName?: string; phone?: string; email?: string };
     }>(this.cfg.piiSecret(), snapshot.payloadEnc);
     return new MstyleResult(
       schema({
-        snapshotId,
+        snapshotId: publicSnapshotId(snapshot.snapshotId, snapshot.partyType),
         partyType: snapshot.partyType,
         partyId: snapshot.partyId,
         snapshotRevision: snapshot.snapshotRevision,
@@ -378,6 +468,7 @@ export class MstylePrivateDataService {
 
   async bindSnapshot(snapshotId: string, dto: BindSnapshotDto) {
     const snapshot = await this.requireSnapshot(snapshotId);
+    snapshotId = snapshot.snapshotId;
     const existingRows = await this.bindings.find({ snapshotId });
     const requestedRef = canonicalJson(dto.operationRef);
     const existing = existingRows.find(
@@ -401,6 +492,14 @@ export class MstylePrivateDataService {
         title: 'Snapshot is already bound to another operation',
       });
     }
+    const operationBinding = await this.bindings.findOne({
+      'operationRef.sourceSystem': dto.operationRef.sourceSystem,
+      'operationRef.environment': dto.operationRef.environment,
+      'operationRef.operationType': dto.operationRef.operationType,
+      'operationRef.operationId': dto.operationRef.operationId,
+    });
+    if (operationBinding)
+      problem(409, 'CONFLICT', { title: 'Operation already has a snapshot' });
     const eventIds = [
       await this.events.emit({
         type: 'snapshot.operation_bound',
@@ -451,16 +550,21 @@ export class MstylePrivateDataService {
           doc.valuesEnc,
         )
       : {};
-    const canonicalValues = canonicalPrivateValues(values, 'individual', null);
-    const missing = REQUIRED_GUEST_FIELDS.filter(
-      (field) => !hasValue(getPath(canonicalValues, field)),
+    const canonicalValues = canonicalPrivateValues(
+      values,
+      doc?.profileType || 'individual',
+      doc?.legalForm,
     );
+    const missing = requiredResidentFields(
+      doc?.profileType || 'individual',
+      doc?.legalForm,
+    ).filter((field) => !hasValue(getPath(canonicalValues, field)));
     return new MstyleResult(
       privateStatusDto(
         'guest_party',
         guestPartyId,
-        'individual',
-        null,
+        (doc?.profileType || 'individual') as 'individual' | 'company',
+        doc?.legalForm,
         doc,
         missing,
       ),
@@ -474,7 +578,7 @@ export class MstylePrivateDataService {
 
   async revealGuest(guestPartyId: string, dto: RevealDto) {
     const guest = await this.requireGuest(guestPartyId);
-    this.assertFields(dto.fieldCodes, GUEST_PRIVATE_FIELDS);
+    this.assertFields(dto.fieldCodes, RESIDENT_PRIVATE_FIELDS);
     const doc = await this.privateData.findOne({
       partyType: 'guest_party',
       partyId: guestPartyId,
@@ -495,7 +599,11 @@ export class MstylePrivateDataService {
           privateData: doc?.revision ?? null,
         },
         values: pick(
-          canonicalPrivateValues(stored, 'individual', null),
+          canonicalPrivateValues(
+            stored,
+            doc?.profileType || 'individual',
+            doc?.legalForm,
+          ),
           dto.fieldCodes,
         ),
       }),
@@ -510,25 +618,53 @@ export class MstylePrivateDataService {
     ifMatch?: string,
   ) {
     const guest = await this.requireGuest(guestPartyId);
-    this.assertFields(leafFieldCodes(dto.values), GUEST_PRIVATE_FIELDS);
+    if (!guestWriteAllowed(guest.status) || guest.status === 'draft')
+      problem(409, 'CONFLICT');
+    if ((!dto.privateData && !dto.values) || (dto.privateData && dto.values))
+      problem(422, 'VALIDATION_FAILED');
     let doc = await this.privateData.findOne({
       partyType: 'guest_party',
       partyId: guestPartyId,
     });
+    if (!ifMatch) problem(412, 'PRECONDITION_FAILED');
     this.assertMatch(ifMatch, 'private', doc?.revision ?? 0);
+    const profileType =
+      dto.privateData?.profileType || doc?.profileType || 'individual';
+    const legalForm = dto.privateData?.legalForm ?? doc?.legalForm ?? null;
+    if (
+      (profileType === 'company' && !['ip', 'ooo'].includes(legalForm || '')) ||
+      (profileType === 'individual' && legalForm !== null)
+    )
+      problem(422, 'VALIDATION_FAILED');
+    if (
+      doc &&
+      (doc.profileType !== profileType || (doc.legalForm ?? null) !== legalForm)
+    )
+      problem(409, 'CONFLICT');
     const current = doc
       ? decryptJson<Record<string, unknown>>(
           this.cfg.piiSecret(),
           doc.valuesEnc,
         )
       : {};
-    const merged = mergeObjects(current, dto.values);
+    const merged = validateResidentValues(
+      mergeObjects(
+        normalizeResidentInput(current, profileType, legalForm),
+        normalizeResidentInput(
+          dto.privateData?.data || dto.values!,
+          profileType,
+          legalForm,
+        ),
+      ),
+      profileType,
+      legalForm,
+    );
     if (!doc) {
       doc = await this.privateData.create({
         partyType: 'guest_party',
         partyId: guestPartyId,
-        profileType: 'individual',
-        legalForm: null,
+        profileType,
+        legalForm,
         revision: 1,
         editPolicy: 'self_service',
         valuesEnc: encryptJson(this.cfg.piiSecret(), merged),
@@ -538,10 +674,17 @@ export class MstylePrivateDataService {
       doc.revision += 1;
       await doc.save();
     }
-    const canonicalMerged = canonicalPrivateValues(merged, 'individual', null);
-    const missing = REQUIRED_GUEST_FIELDS.filter(
-      (field) => !hasValue(getPath(canonicalMerged, field)),
+    const canonicalMerged = canonicalPrivateValues(
+      merged,
+      profileType,
+      legalForm,
     );
+    const missing = requiredResidentFields(
+      doc?.profileType || 'individual',
+      doc?.legalForm,
+    ).filter((field) => !hasValue(getPath(canonicalMerged, field)));
+    if (dto.displayName !== undefined)
+      guest.displayName = dto.displayName.trim();
     guest.privateDataRevision = doc.revision;
     guest.revision += 1;
     await guest.save();
@@ -561,8 +704,8 @@ export class MstylePrivateDataService {
         status: privateStatusDto(
           'guest_party',
           guestPartyId,
-          'individual',
-          null,
+          profileType as 'individual' | 'company',
+          legalForm,
           doc,
           missing,
         ),
@@ -570,12 +713,15 @@ export class MstylePrivateDataService {
         eventIds,
       }),
       200,
-      { ETag: etag('guest', guest.revision), 'Cache-Control': 'no-store' },
+      { ETag: etag('private', doc.revision), 'Cache-Control': 'no-store' },
     );
   }
 
-  async snapshotGuest(guestPartyId: string) {
-    await this.requireGuest(guestPartyId);
+  async snapshotGuest(guestPartyId: string, dto: CreateSnapshotDto) {
+    await this.consentService.assertAccepted('guest', guestPartyId);
+    const guest = await this.requireGuest(guestPartyId);
+    if (!guestWriteAllowed(guest.status) || !guest.primaryContact?.verifiedAt)
+      problem(409, 'CONFLICT');
     const doc = await this.privateData.findOne({
       partyType: 'guest_party',
       partyId: guestPartyId,
@@ -588,8 +734,29 @@ export class MstylePrivateDataService {
       : {};
     const contacts = await this.guestContactValues(guestPartyId);
     const sourceRevisions = await this.guestSourceRevisions(guestPartyId);
+    if (
+      canonicalJson(dto.expectedSourceRevisions) !==
+      canonicalJson(sourceRevisions)
+    )
+      problem(412, 'PRECONDITION_FAILED');
+    const canonicalValues = canonicalPrivateValues(
+      values,
+      doc?.profileType || 'individual',
+      doc?.legalForm,
+    );
+    if (
+      !doc ||
+      requiredResidentFields(doc.profileType, doc.legalForm).some(
+        (field) => !hasValue(getPath(canonicalValues, field)),
+      )
+    )
+      problem(409, 'CONFLICT');
     const payload = {
-      values: canonicalPrivateValues(values, 'individual', null),
+      values: canonicalPrivateValues(
+        values,
+        doc?.profileType || 'individual',
+        doc?.legalForm,
+      ),
       contacts,
       sourceRevisions,
     };
@@ -644,74 +811,34 @@ export class MstylePrivateDataService {
 
   private async residentSourceRevisions(
     profile: MstyleProfileDocument,
-    purpose?: string,
+    purpose = 'primary',
   ) {
-    const assigns = await this.assignments
-      .find({
-        profileId: profile.profileId,
-        status: 'active',
-        ...(purpose ? { purpose } : {}),
-      })
-      .sort({ priority: 1, updatedAt: -1 });
-    const phone = assigns.find((a) => a.contactType === 'phone');
-    const email = assigns.find((a) => a.contactType === 'email');
-    const ownerAssign = assigns[0];
-    const identity = ownerAssign
-      ? await this.identities.findOne({ subject: ownerAssign.subject })
-      : null;
-    const identityPhone = phone
-      ? await this.contacts.findOne({ contactId: phone.contactId })
-      : null;
-    const identityEmail = email
-      ? await this.contacts.findOne({ contactId: email.contactId })
-      : null;
+    const selected = await this.contactSelection.select(
+      profile.profileId,
+      purpose,
+    );
     return {
       profile: profile.revision,
-      profileContactAssignments: {
-        phone: phone?.revision ?? null,
-        email: email?.revision ?? null,
-      },
-      contactIdentity: identity?.revision ?? null,
-      identityContacts: {
-        phone: identityPhone?.revision ?? null,
-        email: identityEmail?.revision ?? null,
-      },
+      ...selected.sourceRevisions,
       privateData: profile.privateDataRevision ?? null,
     };
   }
 
   private async revealProfileContactsValues(
     profileId: string,
-    purpose?: string,
+    purpose = 'primary',
   ) {
-    const assigns = await this.assignments
-      .find({
-        profileId,
-        status: 'active',
-        ...(purpose ? { purpose } : {}),
-      })
-      .sort({ priority: 1, updatedAt: -1 });
+    const selected = await this.contactSelection.select(profileId, purpose);
     const values: { displayName?: string; phone?: string; email?: string } = {};
-    for (const assign of assigns) {
-      if (assign.contactType === 'phone' && values.phone !== undefined) {
-        continue;
-      }
-      if (assign.contactType === 'email' && values.email !== undefined) {
-        continue;
-      }
-      const contact = await this.contacts.findOne({
-        contactId: assign.contactId,
-      });
-      if (!contact) continue;
-      const raw = decryptJson<string>(this.cfg.piiSecret(), contact.valueEnc);
-      if (contact.type === 'phone') values.phone = raw;
-      if (contact.type === 'email') values.email = raw;
-      const identity = await this.identities.findOne({
-        subject: assign.subject,
-      });
-      if (identity?.displayName && values.displayName === undefined) {
-        values.displayName = identity.displayName;
-      }
+    for (const type of ['phone', 'email'] as const) {
+      const item = selected[type];
+      if (!item) continue;
+      values[type] = decryptJson<string>(
+        this.cfg.piiSecret(),
+        item.contact.valueEnc,
+      );
+      if (item.identity.displayName && values.displayName === undefined)
+        values.displayName = item.identity.displayName;
     }
     return values;
   }
@@ -730,12 +857,14 @@ export class MstylePrivateDataService {
       .findOne({
         guestPartyId,
         type: 'phone',
+        verifiedAt: { $ne: null },
       })
       .sort({ updatedAt: -1, revision: -1 });
     const email = await this.guestContacts
       .findOne({
         guestPartyId,
         type: 'email',
+        verifiedAt: { $ne: null },
       })
       .sort({ updatedAt: -1, revision: -1 });
     return {
@@ -746,7 +875,7 @@ export class MstylePrivateDataService {
 
   private async guestContactValues(guestPartyId: string) {
     const rows = await this.guestContacts
-      .find({ guestPartyId })
+      .find({ guestPartyId, verifiedAt: { $ne: null } })
       .sort({ updatedAt: -1, revision: -1 });
     const values: { phone?: string; email?: string } = {};
     for (const row of rows) {
@@ -761,6 +890,24 @@ export class MstylePrivateDataService {
     return values;
   }
 
+  private async bumpMemberContexts(profileId: string): Promise<number> {
+    const members = await this.memberships.find({
+      profileId,
+      status: 'active',
+    });
+    let ownerRevision = 0;
+    for (const member of members) {
+      const identity = await this.identities.findOneAndUpdate(
+        { subject: member.subject },
+        { $inc: { contextRevision: 1 } },
+        { returnDocument: 'after' },
+      );
+      if (member.role === 'owner')
+        ownerRevision = identity?.contextRevision || 0;
+    }
+    return ownerRevision;
+  }
+
   private async requireProfile(profileId: string) {
     const profile = await this.profiles.findOne({ profileId });
     if (!profile) problem(404, 'NOT_FOUND');
@@ -773,8 +920,8 @@ export class MstylePrivateDataService {
     return guest;
   }
 
-  private async requireSnapshot(snapshotId: string) {
-    const snapshot = await this.snapshots.findOne({ snapshotId });
+  async requireSnapshot(snapshotId: string) {
+    const snapshot = await this.snapshots.findOne(snapshotQuery(snapshotId));
     if (!snapshot) problem(404, 'NOT_FOUND');
     return snapshot;
   }
@@ -829,158 +976,6 @@ export class MstylePrivateDataService {
       parsedRevision !== revision
     ) {
       problem(412, 'PRECONDITION_FAILED');
-    }
-  }
-}
-
-function hasValue(value: unknown): boolean {
-  return value !== undefined && value !== null && String(value).trim() !== '';
-}
-
-function pick(source: Record<string, unknown>, keys: string[]) {
-  const out: Record<string, unknown> = {};
-  for (const key of keys) {
-    const value = getPath(source, key);
-    if (value !== undefined) setPath(out, key, value);
-  }
-  return out;
-}
-
-function getPath(source: Record<string, unknown>, path: string): unknown {
-  let value: unknown = source;
-  for (const part of path.split('.')) {
-    if (!value || typeof value !== 'object' || Array.isArray(value)) {
-      return undefined;
-    }
-    value = (value as Record<string, unknown>)[part];
-  }
-  return value;
-}
-
-function setPath(
-  target: Record<string, unknown>,
-  path: string,
-  value: unknown,
-) {
-  const parts = path.split('.');
-  let cursor = target;
-  for (const part of parts.slice(0, -1)) {
-    const child = cursor[part];
-    if (!child || typeof child !== 'object' || Array.isArray(child)) {
-      cursor[part] = {};
-    }
-    cursor = cursor[part] as Record<string, unknown>;
-  }
-  cursor[parts[parts.length - 1]] = value;
-}
-
-function leafFieldCodes(
-  source: Record<string, unknown>,
-  prefix = '',
-): string[] {
-  const out: string[] = [];
-  for (const [key, value] of Object.entries(source)) {
-    const path = prefix ? `${prefix}.${key}` : key;
-    if (value && typeof value === 'object' && !Array.isArray(value)) {
-      out.push(...leafFieldCodes(value as Record<string, unknown>, path));
-    } else {
-      out.push(path);
-    }
-  }
-  return out;
-}
-
-function mergeObjects(
-  base: Record<string, unknown>,
-  patch: Record<string, unknown>,
-): Record<string, unknown> {
-  const merged: Record<string, unknown> = { ...base };
-  for (const [key, value] of Object.entries(patch)) {
-    const current = merged[key];
-    merged[key] =
-      value &&
-      typeof value === 'object' &&
-      !Array.isArray(value) &&
-      current &&
-      typeof current === 'object' &&
-      !Array.isArray(current)
-        ? mergeObjects(
-            current as Record<string, unknown>,
-            value as Record<string, unknown>,
-          )
-        : value;
-  }
-  return merged;
-}
-
-function requiredResidentFields(
-  profileType: string,
-  legalForm?: string | null,
-): readonly string[] {
-  if (profileType !== 'company') return REQUIRED_INDIVIDUAL_FIELDS;
-  return legalForm === 'ip'
-    ? ['entrepreneur.inn', 'entrepreneur.ogrnip']
-    : REQUIRED_COMPANY_FIELDS;
-}
-
-/**
- * M0 stored flat field names. M1/M2 expose structured field codes, so reads
- * project legacy rows into the canonical shape without rewriting history.
- */
-function canonicalPrivateValues(
-  source: Record<string, unknown>,
-  profileType: string,
-  legalForm?: string | null,
-): Record<string, unknown> {
-  const result = mergeObjects({}, source);
-  if (profileType === 'company' && legalForm === 'ip') {
-    copyAliases(result, source, 'entrepreneur', {
-      inn: ['inn'],
-      ogrnip: ['ogrnip', 'ogrn'],
-      registrationAddress: ['registrationAddress', 'legalAddress'],
-    });
-  } else if (profileType === 'company') {
-    copyAliases(result, source, 'company', {
-      fullName: ['fullName', 'companyFullName'],
-      inn: ['inn'],
-      kpp: ['kpp'],
-      ogrn: ['ogrn'],
-      legalAddress: ['legalAddress'],
-      actualAddress: ['actualAddress'],
-      generalDirector: ['generalDirector', 'ceoName'],
-    });
-  } else {
-    copyAliases(result, source, 'individual', {
-      birthDate: ['birthDate'],
-      inn: ['inn'],
-      registrationAddress: ['registrationAddress'],
-    });
-    copyAliases(result, source, 'individual.passport', {
-      fullName: ['fullName', 'displayName'],
-      gender: ['gender'],
-      birthDate: ['birthDate'],
-      number: ['documentNumber'],
-      departmentCode: ['documentCode'],
-      issuedDate: ['documentIssuedAt'],
-      issuedBy: ['documentIssuedBy'],
-    });
-  }
-  return result;
-}
-
-function copyAliases(
-  target: Record<string, unknown>,
-  source: Record<string, unknown>,
-  targetPrefix: string,
-  aliases: Record<string, readonly string[]>,
-) {
-  for (const [name, candidates] of Object.entries(aliases)) {
-    if (getPath(target, `${targetPrefix}.${name}`) !== undefined) continue;
-    const candidate = candidates
-      .map((path) => getPath(source, path))
-      .find((value) => value !== undefined);
-    if (candidate !== undefined) {
-      setPath(target, `${targetPrefix}.${name}`, candidate);
     }
   }
 }

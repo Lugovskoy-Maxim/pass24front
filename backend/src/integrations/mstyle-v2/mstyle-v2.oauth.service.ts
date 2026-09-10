@@ -1,6 +1,6 @@
-import { Injectable, OnModuleInit } from '@nestjs/common';
+import { Injectable } from '@nestjs/common';
 import { InjectModel } from '@nestjs/mongoose';
-import { createPublicKey, createVerify } from 'crypto';
+import { jwtReplayKey, verifyRegisteredJwt } from './mstyle-v2.jwt';
 import { Model } from 'mongoose';
 import { MstyleV2Config, type MstyleOauthClient } from './mstyle-v2.config';
 import { sha256Hex } from './mstyle-v2.crypto';
@@ -28,7 +28,7 @@ type TokenForm = {
 };
 
 @Injectable()
-export class MstyleOauthService implements OnModuleInit {
+export class MstyleOauthService {
   constructor(
     private readonly cfg: MstyleV2Config,
     @InjectModel(MstyleServiceToken.name)
@@ -37,10 +37,6 @@ export class MstyleOauthService implements OnModuleInit {
     private readonly jtis: Model<MstyleOauthJtiDocument>,
     private readonly siteSettings: SiteSettingsService,
   ) {}
-
-  onModuleInit() {
-    this.cfg.assertReady();
-  }
 
   async issueToken(form: TokenForm) {
     const mockMode = await this.siteSettings.getMstyleMockResponsesEnabled(
@@ -147,124 +143,80 @@ export class MstyleOauthService implements OnModuleInit {
         401,
       );
     }
-    const header = parseClientJwtHeader(assertion);
-    const publicKey = publicKeyForKid(client, header.kid);
-    const claims = verifyClientJwt(assertion, publicKey);
-    if (claims.iss !== client.clientId || claims.sub !== client.clientId) {
-      throw new OAuthException('invalid_client', 'iss/sub mismatch', 401);
-    }
-    const aud = Array.isArray(claims.aud) ? claims.aud : [claims.aud];
-    const allowedAud = this.cfg.tokenEndpointAudiences();
-    if (!aud.some((value) => allowedAud.includes(String(value)))) {
-      throw new OAuthException('invalid_client', 'aud mismatch', 401);
-    }
-    const exp = Number(claims.exp);
-    const iat = Number(claims.iat);
-    const now = Math.floor(Date.now() / 1000);
-    if (!Number.isFinite(exp) || exp <= now) {
-      throw new OAuthException('invalid_client', 'assertion expired', 401);
-    }
-    if (Number.isFinite(iat) && exp - iat > 60) {
-      throw new OAuthException(
-        'invalid_client',
-        'assertion lifetime must be <= 60 seconds',
-        401,
-      );
-    }
-    const jti = String(claims.jti || '');
-    if (!jti) {
-      throw new OAuthException('invalid_client', 'jti required', 401);
-    }
+    let claims: Record<string, unknown>;
     try {
-      await this.jtis.create({
-        jti,
-        clientId: client.clientId,
-        expiresAt: new Date(exp * 1000),
-      });
+      claims = verifyRegisteredJwt(assertion, client, 'JWT', [
+        'iss',
+        'sub',
+        'aud',
+        'iat',
+        'exp',
+        'jti',
+      ]);
+      if (
+        claims.iss !== client.clientId ||
+        claims.sub !== client.clientId ||
+        typeof claims.aud !== 'string' ||
+        !this.cfg.tokenEndpointAudiences().includes(claims.aud) ||
+        !Number.isSafeInteger(claims.iat) ||
+        !Number.isSafeInteger(claims.exp) ||
+        typeof claims.jti !== 'string' ||
+        !claims.jti ||
+        claims.jti.length > 128
+      )
+        throw new Error('claims');
+      const now = Math.floor(Date.now() / 1000);
+      const iat = claims.iat as number,
+        exp = claims.exp as number;
+      if (exp - iat <= 0 || exp - iat > 60 || iat > now + 5 || now >= exp + 5)
+        throw new Error('time');
     } catch {
-      throw new OAuthException('invalid_client', 'jti already used', 401);
-    }
-  }
-}
-
-function parseClientJwtHeader(token: string): { alg?: string; kid?: string } {
-  const parts = token.split('.');
-  if (parts.length !== 3) {
-    throw new OAuthException('invalid_client', 'Malformed assertion', 401);
-  }
-  try {
-    return JSON.parse(base64urlJson(parts[0]));
-  } catch {
-    throw new OAuthException('invalid_client', 'Malformed assertion', 401);
-  }
-}
-
-function publicKeyForKid(client: MstyleOauthClient, kid?: string): string {
-  const keys = client.publicKeysByKid || {};
-  if (!Object.keys(keys).length) return client.publicKey;
-  if (!kid) {
-    throw new OAuthException('invalid_client', 'assertion kid required', 401);
-  }
-  const publicKey = keys[kid];
-  if (!publicKey) {
-    throw new OAuthException('invalid_client', 'Unknown assertion kid', 401);
-  }
-  return publicKey;
-}
-
-function verifyClientJwt(token: string, pem: string): Record<string, unknown> {
-  const parts = token.split('.');
-  if (parts.length !== 3) {
-    throw new OAuthException('invalid_client', 'Malformed assertion', 401);
-  }
-  let header: { alg?: string };
-  let payload: Record<string, unknown>;
-  try {
-    header = JSON.parse(base64urlJson(parts[0]));
-    payload = JSON.parse(base64urlJson(parts[1]));
-  } catch {
-    throw new OAuthException('invalid_client', 'Malformed assertion', 401);
-  }
-  const alg = header.alg || '';
-  if (!['RS256', 'ES256'].includes(alg)) {
-    throw new OAuthException(
-      'invalid_client',
-      'Unsupported assertion alg',
-      401,
-    );
-  }
-  if (!pem) {
-    throw new OAuthException(
-      'invalid_client',
-      'Client key is not configured',
-      401,
-    );
-  }
-  try {
-    const key = createPublicKey(pem);
-    const verifier = createVerify('SHA256');
-    verifier.update(`${parts[0]}.${parts[1]}`);
-    verifier.end();
-    const signature = Buffer.from(parts[2], 'base64url');
-    const ok = verifier.verify({ key, dsaEncoding: 'ieee-p1363' }, signature);
-    if (!ok) {
       throw new OAuthException(
         'invalid_client',
-        'Invalid assertion signature',
+        'Invalid client assertion',
         401,
       );
     }
-  } catch (err) {
-    if (err instanceof OAuthException) throw err;
-    throw new OAuthException(
-      'invalid_client',
-      'Invalid assertion signature',
-      401,
-    );
+    const key = jwtReplayKey(client.clientId, 'JWT', claims.jti as string);
+    try {
+      if (
+        await this.jtis.findOne({
+          jti: claims.jti,
+          clientId: client.clientId,
+          expiresAt: { $gt: new Date() },
+        })
+      ) {
+        throw new OAuthException(
+          'invalid_client',
+          'Assertion already used',
+          401,
+        );
+      }
+      await this.jtis.create(
+        [
+          {
+            jti: key,
+            clientId: client.clientId,
+            nonce: claims.jti,
+            tokenType: 'JWT',
+            expiresAt: new Date(((claims.exp as number) + 5) * 1000),
+          },
+        ],
+        { w: 'majority' },
+      );
+    } catch (error) {
+      if (error instanceof OAuthException) throw error;
+      if ((error as { code?: number }).code === 11000)
+        throw new OAuthException(
+          'invalid_client',
+          'Assertion already used',
+          401,
+        );
+      throw new OAuthException(
+        'temporarily_unavailable',
+        'Assertion replay store unavailable',
+        503,
+      );
+    }
   }
-  return payload;
-}
-
-function base64urlJson(part: string): string {
-  return Buffer.from(part, 'base64url').toString('utf8');
 }

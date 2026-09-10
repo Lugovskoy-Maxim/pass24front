@@ -46,6 +46,8 @@ describe('MstyleV2Config OAuth clients', () => {
     });
 
     expect(config.oauthClient('mstyle-backend-prod')).toEqual({
+      algorithm: 'RS256',
+      adminAllowed: true,
       clientId: 'mstyle-backend-prod',
       auth: 'private_key_jwt',
       publicKey:
@@ -61,6 +63,8 @@ describe('MstyleV2Config OAuth clients', () => {
       ],
     });
     expect(config.oauthClient('mstyle-reconcile-prod')).toEqual({
+      algorithm: 'RS256',
+      adminAllowed: false,
       clientId: 'mstyle-reconcile-prod',
       auth: 'private_key_jwt',
       publicKey:
