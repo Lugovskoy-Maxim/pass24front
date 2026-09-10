@@ -899,7 +899,7 @@ export class MstyleDeletionRequest {
   @Prop({ required: true, unique: true })
   deletionRequestId: string;
 
-  @Prop({ required: true, index: true })
+  @Prop({ required: true })
   profileId: string;
 
   @Prop({ required: true, enum: ['anonymize', 'delete'] })
@@ -931,10 +931,11 @@ export const MstyleDeletionRequestSchema = SchemaFactory.createForClass(
   MstyleDeletionRequest,
 );
 MstyleDeletionRequestSchema.index(
-  { profileId: 1, status: 1 },
+  { profileId: 1 },
   {
     unique: true,
-    partialFilterExpression: { status: { $in: ['pending', 'blocked'] } },
+    name: 'one_open_deletion_request_per_profile',
+    partialFilterExpression: { completedAt: { $exists: false } },
   },
 );
 

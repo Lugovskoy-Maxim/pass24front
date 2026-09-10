@@ -1,4 +1,5 @@
 import {
+  MstyleDeletionRequestSchema,
   MstyleIdentitySchema,
   MstyleMembershipSchema,
   MstyleSnapshotBindingSchema,
@@ -24,6 +25,7 @@ describe('Mongoose schema indexes', () => {
     ['MstyleIdentity', MstyleIdentitySchema],
     ['MstyleMembership', MstyleMembershipSchema],
     ['MstyleSnapshotBinding', MstyleSnapshotBindingSchema],
+    ['MstyleDeletionRequest', MstyleDeletionRequestSchema],
   ])('%s does not declare an index twice', (_name, schema) => {
     expect(duplicateIndexNames(schema)).toEqual([]);
   });
@@ -39,5 +41,20 @@ describe('Mongoose schema indexes', () => {
         'operationRef.operationId': { $type: 'string' },
       },
     });
+  });
+
+  it('uses a MongoDB 4.4-compatible uniqueness rule for open deletion requests', () => {
+    const index = MstyleDeletionRequestSchema.indexes().find(
+      ([, options]) =>
+        options.name === 'one_open_deletion_request_per_profile',
+    );
+
+    expect(index).toEqual([
+      { profileId: 1 },
+      expect.objectContaining({
+        unique: true,
+        partialFilterExpression: { completedAt: { $exists: false } },
+      }),
+    ]);
   });
 });
