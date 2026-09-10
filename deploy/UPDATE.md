@@ -106,6 +106,20 @@ git pull origin main
 docker compose -f docker-compose.yml -f docker-compose.prod.yml --env-file .env up -d --build --wait
 ```
 
+Production MongoDB запускается как single-node replica set `rs0`, потому что
+Mstyle V2 использует транзакции. При первом запуске после обновления сервис
+`mongo-rs-init` инициализирует существующий volume без удаления данных, а backend
+запускается только после выбора PRIMARY. Перед обновлением обязательно выполните
+`sudo ./scripts/mongo-backup.sh` и убедитесь, что локальная и FTP-копии созданы.
+
+Проверка после запуска:
+
+```bash
+docker exec pass24-mongo mongo --quiet --eval \
+  'JSON.stringify(db.adminCommand({isMaster:1}))'
+docker compose -f docker-compose.yml -f docker-compose.prod.yml --env-file .env logs --tail=100 mongo-rs-init backend
+```
+
 ---
 
 ## Первый запуск / супер-администратор

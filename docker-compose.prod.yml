@@ -7,12 +7,31 @@ services:
     # В образе 4.4 шелл — `mongo`, не `mongosh`. Не поднимайте 7-ку на этот volume:
     # данные 4.4 нельзя открыть семёркой напрямую.
     image: mongo:4.4
+    command:
+      - mongod
+      - --replSet
+      - ${MONGO_REPLICA_SET:-rs0}
+      - --bind_ip_all
     healthcheck:
-      test: echo 'db.runCommand("ping").ok' | mongo localhost:27017/test --quiet
+      test: echo 'db.adminCommand({isMaster:1}).ismaster' | mongo localhost:27017/test --quiet | grep -qx true
       interval: 10s
       timeout: 5s
-      retries: 8
-      start_period: 60s
+      retries: 12
+      start_period: 90s
+
+  mongo-rs-init:
+    image: mongo:4.4
+    container_name: pass24-mongo-rs-init
+    restart: "no"
+    depends_on:
+      mongo:
+        condition: service_started
+    environment:
+      - MONGO_REPLICA_SET=${MONGO_REPLICA_SET:-rs0}
+      - MONGO_REPLICA_HOST=${MONGO_REPLICA_HOST:-mongo:27017}
+    volumes:
+      - ./scripts/init-mongo-replica-set.sh:/usr/local/bin/init-mongo-replica-set.sh:ro
+    entrypoint: ["/bin/bash", "/usr/local/bin/init-mongo-replica-set.sh"]
 
   mailpit:
     ports:
@@ -23,6 +42,8 @@ services:
     ports:
       - "127.0.0.1:4000:4000"
     environment:
+      - MONGODB_URI=mongodb://mongo:27017/pass24?replicaSet=${MONGO_REPLICA_SET:-rs0}
+      - MONGODB_AUTH_URI=mongodb://mongo:27017/pass24_auth?replicaSet=${MONGO_REPLICA_SET:-rs0}
       - PUBLIC_APP_URL=${PUBLIC_APP_URL}
       - JWT_SECRET=${JWT_SECRET}
       - JWT_EXPIRES_IN=${JWT_EXPIRES_IN:-7d}
@@ -82,6 +103,13 @@ services:
       - TELEGRAM_GATEWAY_URL=${TELEGRAM_GATEWAY_URL:-}
       - TELEGRAM_GATEWAY_TOKEN=${TELEGRAM_GATEWAY_TOKEN:-}
       - MSTYLE_TELEGRAM_BOT=${MSTYLE_TELEGRAM_BOT:-m_style_office_bot}
+    depends_on:
+      mongo:
+        condition: service_healthy
+      mongo-rs-init:
+        condition: service_completed_successfully
+      mailpit:
+        condition: service_started
 
   frontend:
     build:
