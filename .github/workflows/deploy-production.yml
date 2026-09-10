@@ -1,0 +1,43 @@
+name: Deploy production
+
+on:
+  push:
+    branches: [main]
+  workflow_dispatch:
+    inputs:
+      no_cache:
+        description: Rebuild Docker images without cache
+        type: boolean
+        default: false
+
+concurrency:
+  group: deploy-production
+  cancel-in-progress: false
+
+permissions:
+  contents: read
+
+jobs:
+  deploy:
+    name: SSH and update.sh
+    runs-on: ubuntu-latest
+    environment: production
+    timeout-minutes: 45
+    steps:
+      - name: Deploy /opt/pass24front
+        uses: appleboy/ssh-action@v1.2.2
+        with:
+          host: ${{ secrets.PROD_SSH_HOST || '188.64.164.202' }}
+          username: ${{ secrets.PROD_SSH_USER }}
+          key: ${{ secrets.PROD_SSH_KEY }}
+          port: ${{ secrets.PROD_SSH_PORT || 22 }}
+          command_timeout: 40m
+          script_stop: true
+          script: |
+            set -euo pipefail
+            cd /opt/pass24front
+            if [ "${{ github.event.inputs.no_cache }}" = "true" ]; then
+              NO_CACHE=1 ./scripts/update.sh
+            else
+              ./scripts/update.sh
+            fi

@@ -6,6 +6,37 @@
 
 ---
 
+## Автодеплой с GitHub (push в `main`)
+
+После каждого пуша в `main` workflow `.github/workflows/deploy-production.yml`
+подключается по SSH и запускает `./scripts/update.sh` в `/opt/pass24front`.
+Вручную тот же job: Actions → **Deploy production** → Run workflow.
+
+В репозитории GitHub → Settings → Secrets and variables → Actions задайте:
+
+| Secret | Пример |
+| --- | --- |
+| `PROD_SSH_HOST` | необязательно: в workflow уже `188.64.164.202` |
+| `PROD_SSH_USER` | `user` |
+| `PROD_SSH_KEY` | приватный ключ целиком, включая `-----BEGIN … KEY-----` |
+| `PROD_SSH_PORT` | необязательно, по умолчанию `22` |
+
+Ключ на сервере:
+
+```bash
+# на машине, где создаёте ключ
+ssh-keygen -t ed25519 -f pass24-deploy -N "" -C "github-actions-pass24"
+```
+
+Публичный `pass24-deploy.pub` добавьте в `~/.ssh/authorized_keys` пользователя
+`PROD_SSH_USER`. Приватный ключ — только в секрет `PROD_SSH_KEY`.
+
+GitHub Environment назовите **production** (как в workflow). Внешний SSH-хост
+прода — `188.64.164.202` (`pass.mstyle.ru`). Внутренний адрес `192.168.200.9`
+для GitHub Actions не используйте.
+
+---
+
 ## Быстрое обновление (1 команда)
 
 Подключитесь по SSH и выполните:
