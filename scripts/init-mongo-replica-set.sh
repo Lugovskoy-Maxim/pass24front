@@ -29,25 +29,26 @@ if [[ "$mongo_ready" != "true" ]]; then
   exit 1
 fi
 
-set +e
-mongo --host "$MONGO_REPLICA_HOST" --quiet --eval '
-  try {
-    var status = rs.status();
-    quit(status.ok === 1 ? 0 : 1);
-  } catch (error) {
-    if (error.code === 94 || error.codeName === "NotYetInitialized") quit(2);
-    print(error);
-    quit(1);
+replica_state="$(mongo --host "$MONGO_REPLICA_HOST" --quiet --eval '
+  var hello = db.adminCommand({isMaster:1});
+  if (hello.setName) {
+    print("configured|" + hello.setName);
+  } else if (hello.isreplicaset === true) {
+    print("uninitialized");
+  } else {
+    print("standalone");
   }
-' >/dev/null
-status_code=$?
-set -e
+')"
 
-case "$status_code" in
-  0)
+case "$replica_state" in
+  "configured|${MONGO_REPLICA_SET}")
     echo "Replica set is already initialized"
     ;;
-  2)
+  configured\|*)
+    echo "MongoDB uses a different replica set: ${replica_state#configured|}" >&2
+    exit 1
+    ;;
+  uninitialized)
     echo "Initializing replica set ${MONGO_REPLICA_SET}"
     mongo --host "$MONGO_REPLICA_HOST" --quiet --eval "
       var result = rs.initiate({
@@ -60,9 +61,13 @@ case "$status_code" in
       }
     "
     ;;
+  standalone)
+    echo "MongoDB was not started with --replSet" >&2
+    exit 1
+    ;;
   *)
-    echo "Cannot read replica-set status" >&2
-    exit "$status_code"
+    echo "Unexpected MongoDB replica-set state: ${replica_state}" >&2
+    exit 1
     ;;
 esac
 
