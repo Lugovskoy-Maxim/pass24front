@@ -245,6 +245,49 @@ describe('integration readiness isolation', () => {
     await expect(service.assertReady()).resolves.toBeUndefined();
     expect(model.syncIndexes).toHaveBeenCalled();
   });
+  it('keeps one index synchronization running after a request timeout', async () => {
+    jest.useFakeTimers();
+    let releaseSync!: () => void;
+    const slowSync = new Promise<string[]>((resolve) => {
+      releaseSync = () => resolve([]);
+    });
+    const model = {
+      createCollection: jest.fn(async () => {}),
+      syncIndexes: jest
+        .fn()
+        .mockImplementationOnce(() => slowSync)
+        .mockResolvedValue([]),
+    };
+    const connection = {
+      db: { admin: () => ({ command: async () => ({ setName: 'rs0' }) }) },
+      model: () => model,
+    };
+    const service = new MstyleReadinessService(
+      connection as any,
+      { assertReady: () => {} } as any,
+    );
+
+    try {
+      service.onModuleInit();
+      await Promise.resolve();
+      await Promise.resolve();
+      const background = (service as any).pending as Promise<void>;
+      const request = service.assertReady();
+      const timedOutRequest = expect(request).rejects.toMatchObject({
+        problemCode: 'UPSTREAM_UNAVAILABLE',
+      });
+
+      await jest.advanceTimersByTimeAsync(10000);
+      await timedOutRequest;
+      expect(model.syncIndexes).toHaveBeenCalledTimes(1);
+
+      releaseSync();
+      await background;
+      await expect(service.assertReady()).resolves.toBeUndefined();
+    } finally {
+      jest.useRealTimers();
+    }
+  });
 });
 
 describe('native admin console compatibility', () => {

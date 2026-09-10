@@ -23,9 +23,23 @@ export class MstyleReadinessService implements OnModuleInit {
   }
 
   async assertReady() {
-    if (!this.ready) await this.refresh();
+    if (!this.ready) await this.waitForRefresh();
     if (!this.ready)
       problem(503, 'UPSTREAM_UNAVAILABLE', { retryable: true, retryAfter: 30 });
+  }
+
+  private async waitForRefresh() {
+    let timeout: ReturnType<typeof setTimeout> | undefined;
+    try {
+      await Promise.race([
+        this.refresh(),
+        new Promise<void>((resolve) => {
+          timeout = setTimeout(resolve, 10000);
+        }),
+      ]);
+    } finally {
+      if (timeout) clearTimeout(timeout);
+    }
   }
 
   private refresh(): Promise<void> {
@@ -38,35 +52,24 @@ export class MstyleReadinessService implements OnModuleInit {
   }
 
   private async initialize() {
-    let timeout: ReturnType<typeof setTimeout> | undefined;
     try {
       this.cfg.assertReady();
-      await Promise.race([
-        (async () => {
-          const hello = await this.connection.db!.admin().command({ hello: 1 });
-          if (!hello.setName && hello.msg !== 'isdbgrid')
-            throw new Error('Transactions require a replica set or mongos');
-          for (const definition of MSTYLE_MODELS) {
-            const model = this.connection.model(definition.name);
-            // These collections belong exclusively to Mstyle V2. syncIndexes
-            // upgrades legacy index options (for example non-unique identity
-            // indexes) and removes obsolete M1 indexes before creating M2 ones.
-            await model.createCollection();
-            const removed = await model.syncIndexes();
-            if (removed.length > 0) {
-              this.logger.warn(
-                `Synchronized ${definition.name} indexes; removed=${removed.join(',')}`,
-              );
-            }
-          }
-        })(),
-        new Promise<never>((_, reject) => {
-          timeout = setTimeout(
-            () => reject(new Error('Integration initialization timeout')),
-            10000,
+      const hello = await this.connection.db!.admin().command({ hello: 1 });
+      if (!hello.setName && hello.msg !== 'isdbgrid')
+        throw new Error('Transactions require a replica set or mongos');
+      for (const definition of MSTYLE_MODELS) {
+        const model = this.connection.model(definition.name);
+        // These collections belong exclusively to Mstyle V2. syncIndexes
+        // upgrades legacy index options (for example non-unique identity
+        // indexes) and removes obsolete M1 indexes before creating M2 ones.
+        await model.createCollection();
+        const removed = await model.syncIndexes();
+        if (removed.length > 0) {
+          this.logger.warn(
+            `Synchronized ${definition.name} indexes; removed=${removed.join(',')}`,
           );
-        }),
-      ]);
+        }
+      }
       this.ready = true;
       this.logger.log('Mstyle integration ready');
     } catch (error) {
@@ -76,8 +79,6 @@ export class MstyleReadinessService implements OnModuleInit {
       this.logger.error(
         `Mstyle integration unavailable; error=${(error as Error).name || 'Error'}; code=${(error as { code?: number }).code || 'initialization'}`,
       );
-    } finally {
-      if (timeout) clearTimeout(timeout);
     }
   }
 }
