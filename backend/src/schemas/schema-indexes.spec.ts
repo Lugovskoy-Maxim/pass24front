@@ -1,5 +1,6 @@
 import {
   MstyleIdentitySchema,
+  MstyleMembershipSchema,
   MstyleSnapshotBindingSchema,
 } from '../integrations/mstyle-v2/mstyle-v2.schemas';
 import { UserSchema } from './user.schema';
@@ -21,6 +22,8 @@ describe('Mongoose schema indexes', () => {
   it.each([
     ['User', UserSchema],
     ['MstyleIdentity', MstyleIdentitySchema],
+    ['MstyleMembership', MstyleMembershipSchema],
+    ['MstyleSnapshotBinding', MstyleSnapshotBindingSchema],
   ])('%s does not declare an index twice', (_name, schema) => {
     expect(duplicateIndexNames(schema)).toEqual([]);
   });

@@ -281,7 +281,7 @@ export const MstyleMembershipSchema =
   SchemaFactory.createForClass(MstyleMembership);
 MstyleMembershipSchema.index({ profileId: 1, subject: 1 }, { unique: true });
 MstyleMembershipSchema.index(
-  { profileId: 1 },
+  { profileId: 1, role: 1, status: 1 },
   {
     unique: true,
     name: 'one_active_owner_per_profile',
@@ -289,7 +289,7 @@ MstyleMembershipSchema.index(
   },
 );
 MstyleMembershipSchema.index(
-  { subject: 1 },
+  { subject: 1, role: 1, status: 1 },
   {
     unique: true,
     name: 'one_active_employee_profile',
@@ -700,7 +700,7 @@ export class MstyleSnapshotBinding {
   @Prop({ required: true, unique: true })
   bindingId: string;
 
-  @Prop({ required: true, index: true })
+  @Prop({ required: true })
   snapshotId: string;
 
   @Prop({ type: Object, required: true })
