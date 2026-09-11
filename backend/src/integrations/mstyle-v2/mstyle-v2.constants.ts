@@ -494,6 +494,7 @@ export const ROUTE_SCOPES: Array<{
     method: 'POST',
     match: /\/guest-parties\/[^/]+\/snapshots$/,
     scope: 'mstyle.guest.snapshot.create',
+    alternatives: ['mstyle.guest.create'],
   },
   {
     method: 'POST',

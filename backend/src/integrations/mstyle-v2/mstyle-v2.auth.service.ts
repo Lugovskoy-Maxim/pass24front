@@ -1,5 +1,9 @@
 import { Inject, Injectable, Logger } from '@nestjs/common';
-import { MSTYLE_SMS_SERVICE } from './mstyle-v2.sms';
+import {
+  MSTYLE_SMS_SERVICE,
+  MSTYLE_SMS_CHALLENGE_TTL_MS,
+  MstyleSmsSessionExpiredError,
+} from './mstyle-v2.sms';
 import { InjectModel } from '@nestjs/mongoose';
 import * as bcrypt from 'bcryptjs';
 import { Model } from 'mongoose';
@@ -204,7 +208,9 @@ export class MstyleAuthService {
       mobileIdRequestId: mobileId?.requestId,
       mobileIdAuthType: mobileId?.authType,
       verifyAttempts: 0,
-      expiresAt: new Date(now + CHALLENGE_TTL_MS),
+      expiresAt: new Date(
+        now + (useSmsAero ? MSTYLE_SMS_CHALLENGE_TTL_MS : CHALLENGE_TTL_MS),
+      ),
       resendAfter: new Date(now + RESEND_MIN_MS),
       telegramAction,
     });
@@ -244,9 +250,19 @@ export class MstyleAuthService {
       challenge.mobileIdRequestId
     ) {
       this.requireSmsAero();
-      const verified = await this.sms.isMobileAuthVerified(
-        challenge.mobileIdRequestId,
-      );
+      let verified: boolean;
+      try {
+        verified = await this.sms.isMobileAuthVerified(
+          challenge.mobileIdRequestId,
+        );
+      } catch (error) {
+        if (!(error instanceof MstyleSmsSessionExpiredError))
+          problem(503, 'UPSTREAM_UNAVAILABLE', { retryable: true });
+        await this.expireProviderChallenge(challenge);
+        return new MstyleResult(this.challengeDto(challenge), 200, {
+          'Cache-Control': 'no-store',
+        });
+      }
       if (verified) {
         await this.consumeChallenge(challenge);
         challenge.status = 'consumed';
@@ -309,7 +325,9 @@ export class MstyleAuthService {
     challenge.codeLength = CODE_LENGTH;
     challenge.status = 'dispatch_pending';
     challenge.verifyAttempts = 0;
-    challenge.expiresAt = new Date(now + CHALLENGE_TTL_MS);
+    challenge.expiresAt = new Date(
+      now + (useSmsAero ? MSTYLE_SMS_CHALLENGE_TTL_MS : CHALLENGE_TTL_MS),
+    );
     challenge.resendAfter = new Date(now + RESEND_MIN_MS);
     if (challenge.channel === 'telegram') {
       challenge.telegramAction = this.telegramAction(challenge.challengeId);
@@ -414,7 +432,11 @@ export class MstyleAuthService {
             challenge.mobileIdRequestId,
             dto.code,
           );
-        } catch {
+        } catch (error) {
+          if (error instanceof MstyleSmsSessionExpiredError) {
+            await this.expireProviderChallenge(challenge);
+            problem(410, 'CHALLENGE_EXPIRED');
+          }
           problem(503, 'UPSTREAM_UNAVAILABLE', { retryable: true });
         }
       }
@@ -458,6 +480,19 @@ export class MstyleAuthService {
       problem(404, 'NOT_FOUND');
     }
     return challenge;
+  }
+
+  private async expireProviderChallenge(challenge: MstyleChallengeDocument) {
+    await this.challenges.updateOne(
+      {
+        challengeId: challenge.challengeId,
+        clientId: challenge.clientId,
+        mobileIdRequestId: challenge.mobileIdRequestId,
+        status: 'awaiting_code',
+      },
+      { $set: { status: 'expired' } },
+    );
+    challenge.status = 'expired';
   }
 
   private expireIfNeeded(challenge: MstyleChallengeDocument) {

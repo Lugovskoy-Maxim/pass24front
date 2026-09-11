@@ -6,7 +6,9 @@ import {
 } from '../integrations/mstyle-v2/mstyle-v2.schemas';
 import { UserSchema } from './user.schema';
 
-function duplicateIndexNames(schema: { indexes: () => Array<[Record<string, unknown>]> }) {
+function duplicateIndexNames(schema: {
+  indexes: () => Array<[Record<string, unknown>]>;
+}) {
   const seen = new Set<string>();
   const duplicates = new Set<string>();
 
@@ -43,18 +45,23 @@ describe('Mongoose schema indexes', () => {
     });
   });
 
-  it('uses a MongoDB 4.4-compatible uniqueness rule for open deletion requests', () => {
-    const index = MstyleDeletionRequestSchema.indexes().find(
-      ([, options]) =>
-        options.name === 'one_open_deletion_request_per_profile',
-    );
+  it.each(['pending', 'blocked'])(
+    'uses a MongoDB 4.4-compatible uniqueness rule for %s deletion requests',
+    (status) => {
+      const index = MstyleDeletionRequestSchema.indexes().find(
+        ([, options]) =>
+          options.name === `one_${status}_deletion_request_per_profile`,
+      );
 
-    expect(index).toEqual([
-      { profileId: 1 },
-      expect.objectContaining({
-        unique: true,
-        partialFilterExpression: { completedAt: { $exists: false } },
-      }),
-    ]);
-  });
+      expect(index).toEqual([
+        status === 'pending'
+          ? { profileId: 1, status: 1 }
+          : { status: 1, profileId: 1 },
+        expect.objectContaining({
+          unique: true,
+          partialFilterExpression: { status },
+        }),
+      ]);
+    },
+  );
 });

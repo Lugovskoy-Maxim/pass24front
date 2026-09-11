@@ -1,6 +1,9 @@
 import { ConfigService } from '@nestjs/config';
 import { SmsService } from '../../sms/sms.service';
-import { createMstyleSmsService } from './mstyle-v2.sms';
+import {
+  createMstyleSmsService,
+  MstyleSmsSessionExpiredError,
+} from './mstyle-v2.sms';
 
 describe('V2 SMS Aero account isolation', () => {
   const pass = {
@@ -17,6 +20,64 @@ describe('V2 SMS Aero account isolation', () => {
     MSTYLE_SMSAERO_SIGN: 'v2-sign',
   };
   afterEach(() => jest.restoreAllMocks());
+
+  it('stops V2 verification when the provider already reports a closed session', async () => {
+    const mock = jest.spyOn(globalThis, 'fetch').mockResolvedValue({
+      ok: true,
+      json: async () => ({ success: true, data: { id: 701, status: 2 } }),
+    } as Response);
+    await expect(
+      createMstyleSmsService(new ConfigService(v2)).verifyMobileAuth(
+        701,
+        '1234',
+      ),
+    ).rejects.toBeInstanceOf(MstyleSmsSessionExpiredError);
+    expect(mock).toHaveBeenCalledTimes(1);
+    expect(mock.mock.calls[0][0]).toContain('mobile-id/status');
+    expect(
+      await new SmsService(new ConfigService(pass)).isMobileAuthVerified(701),
+    ).toBe(false);
+  });
+
+  it('recognizes a session that expires between status and verify', async () => {
+    jest
+      .spyOn(globalThis, 'fetch')
+      .mockResolvedValueOnce({
+        ok: true,
+        json: async () => ({ success: true, data: { id: 701, status: 3 } }),
+      } as Response)
+      .mockResolvedValueOnce({
+        ok: false,
+        status: 404,
+        json: async () => ({ success: false, message: 'session not found' }),
+      } as Response);
+    await expect(
+      createMstyleSmsService(new ConfigService(v2)).verifyMobileAuth(
+        701,
+        '1234',
+      ),
+    ).rejects.toBeInstanceOf(MstyleSmsSessionExpiredError);
+  });
+
+  it('keeps an incorrect OTP distinct from session expiry', async () => {
+    jest
+      .spyOn(globalThis, 'fetch')
+      .mockResolvedValueOnce({
+        ok: true,
+        json: async () => ({ success: true, data: { id: 701, status: 3 } }),
+      } as Response)
+      .mockResolvedValueOnce({
+        ok: false,
+        status: 400,
+        json: async () => ({ success: false, message: 'invalid otp code' }),
+      } as Response);
+    expect(
+      await createMstyleSmsService(new ConfigService(v2)).verifyMobileAuth(
+        701,
+        '0000',
+      ),
+    ).toBe(false);
+  });
 
   it('never falls back to PASS credentials when V2 is unconfigured', async () => {
     const cfg = new ConfigService(pass);

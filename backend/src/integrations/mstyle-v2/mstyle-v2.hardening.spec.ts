@@ -1,13 +1,43 @@
 import { membershipIsEffective } from './mstyle-v2.membership-policy';
+import { MstyleSmsSessionExpiredError } from './mstyle-v2.sms';
 import { guestFlowRoute } from './mstyle-v2.guest-access';
 import { MstyleContactSelectionService } from './mstyle-v2.contact-selection';
 import { MstyleContactProofService } from './mstyle-v2.contact-proof';
 import { MstyleReadinessService } from './mstyle-v2.readiness';
 import { MstyleNativeConsoleProof } from './mstyle-v2.native-console';
 import { MstyleConsentService } from './mstyle-v2.consent.service';
+import { MstyleDirectoryService } from './mstyle-v2.directory.service';
+import { consentItem } from './mstyle-v2.present';
+import type { MstyleConsent } from './mstyle-v2.schemas';
 import { ConfigService } from '@nestjs/config';
 import { sign } from 'jsonwebtoken';
 import * as bcrypt from 'bcryptjs';
+
+describe('resident consent response contract', () => {
+  it.each(['required', 'accepted', 'withdrawn'])(
+    'keeps stored history out of the public %s item',
+    (status) => {
+      const doc = {
+        documentCode: 'personal_data_processing',
+        documentVersion: '2026-07-16',
+        documentDigest: 'sha256:' + 'a'.repeat(64),
+        documentUrl: 'https://mstyle.ru/user-agreement/',
+        locale: 'ru-RU',
+        status,
+        revision: 1,
+        history: [{ status: 'accepted', recordedAt: '2026-09-10T10:00:00Z' }],
+      } as MstyleConsent;
+      const savedHistory = JSON.stringify(doc.history);
+      expect(Object.keys(consentItem(doc)).sort()).toEqual(
+        [
+          'documentCode', 'documentVersion', 'documentDigest', 'documentUrl',
+          'locale', 'status', 'revision', 'acceptedAt', 'withdrawnAt', 'auditRef',
+        ].sort(),
+      );
+      expect(JSON.stringify(doc.history)).toBe(savedHistory);
+    },
+  );
+});
 
 describe('effective memberships and contract contact selection', () => {
   const now = Date.parse('2026-09-10T10:00:00Z');
@@ -129,6 +159,44 @@ describe('contact proof delivery and attempt accounting', () => {
     };
   }
   const binding = { kind: 'contact' as const, subject: 'usr_test' };
+  it('limits SMS contact proof to the provider window and keeps email at five minutes', async () => {
+    const f = fixture();
+    const before = Date.now();
+    const sms = await f.service.start(binding, 'phone', '+79990001234', 2);
+    expect(sms.expiresAt.getTime() - before).toBeGreaterThanOrEqual(120_000);
+    expect(sms.expiresAt.getTime() - Date.now()).toBeLessThanOrEqual(120_000);
+    const email = await f.service.start(
+      binding,
+      'email',
+      'fixture@example.invalid',
+      2,
+    );
+    expect(email.expiresAt.getTime() - Date.now()).toBeGreaterThan(290_000);
+  });
+
+  it('reports expired contact proof instead of a provider outage', async () => {
+    const f = fixture();
+    const challenge = await f.service.start(
+      binding,
+      'phone',
+      '+79990001234',
+      2,
+    );
+    f.rows.findOneAndUpdate.mockResolvedValue(challenge);
+    f.sms.verifyMobileAuth.mockRejectedValueOnce(
+      new MstyleSmsSessionExpiredError(),
+    );
+    await expect(
+      f.service.verify(binding, challenge.challengeId, '5829'),
+    ).rejects.toMatchObject({ problemCode: 'CHALLENGE_EXPIRED' });
+    expect(f.rows.updateOne).toHaveBeenCalledWith(
+      expect.objectContaining({
+        mobileIdRequestId: 42,
+        status: 'awaiting_code',
+      }),
+      { $set: { status: 'expired' } },
+    );
+  });
   it('uses the provider session when issuing and verifying SMS', async () => {
     const f = fixture();
     const challenge = await f.service.start(
@@ -227,6 +295,7 @@ describe('integration readiness isolation', () => {
   it('requires transactions and retries after a repaired deployment', async () => {
     let replica = false;
     const model = {
+      collection: { collectionName: 'mstyle_v2_test' },
       createCollection: jest.fn(async () => {}),
       syncIndexes: jest.fn(async () => []),
     };
@@ -252,6 +321,7 @@ describe('integration readiness isolation', () => {
       releaseSync = () => resolve([]);
     });
     const model = {
+      collection: { collectionName: 'mstyle_v2_test' },
       createCollection: jest.fn(async () => {}),
       syncIndexes: jest
         .fn()
@@ -340,3 +410,67 @@ describe('consent definition validation', () => {
     expect(() => service.definitions()).toThrow();
   });
 });
+describe('deletion request concurrency', () => {
+  it('maps the open-request unique-index race to a conflict', async () => {
+    const deletions = {
+      findOne: jest
+        .fn()
+        .mockResolvedValueOnce(null)
+        .mockResolvedValueOnce({ deletionRequestId: 'del_existing' }),
+      create: jest.fn(async () => {
+        throw Object.assign(
+          new Error(
+            'E11000 duplicate key error index: one_pending_deletion_request_per_profile',
+          ),
+          {
+            code: 11000,
+            keyPattern: { profileId: 1, status: 1 },
+          },
+        );
+      }),
+    };
+    const service = new MstyleDirectoryService(
+      {} as any,
+      {} as any,
+      { emit: jest.fn() } as any,
+      {} as any,
+      {
+        findOne: jest.fn(async () => ({
+          profileId: 'prf_test',
+          revision: 1,
+        })),
+      } as any,
+      {} as any,
+      {} as any,
+      {} as any,
+      {} as any,
+      {} as any,
+      {} as any,
+      {} as any,
+      {} as any,
+      deletions as any,
+      {} as any,
+      {} as any,
+      {} as any,
+    );
+
+    await expect(
+      service.requestDeletion(
+        'prf_test',
+        { mode: 'anonymize', reasonCode: 'client_request' } as any,
+        '"profile-1"',
+      ),
+    ).rejects.toMatchObject({
+      problemCode: 'CONFLICT',
+      errors: [
+        {
+          field: 'profileId',
+          code: 'deletion_request_exists',
+          message: 'del_existing',
+        },
+      ],
+    });
+    expect(deletions.findOne).toHaveBeenCalledTimes(2);
+  });
+});
+

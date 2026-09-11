@@ -52,11 +52,14 @@ export async function publicResponse(
     ) {
       result[key] = item;
     } else if (
-      key === 'snapshotId' &&
+      (key === 'snapshotId' || key === 'parentSnapshotId') &&
       typeof item === 'string' &&
       item.startsWith('snp_')
     ) {
-      const resolvedParty = party || (await resolveSnapshot(item));
+      const resolvedParty =
+        key === 'parentSnapshotId'
+          ? await resolveSnapshot(item)
+          : party || (await resolveSnapshot(item));
       if (!resolvedParty)
         problem(503, 'UPSTREAM_UNAVAILABLE', {
           title: 'Snapshot reference cannot be resolved',

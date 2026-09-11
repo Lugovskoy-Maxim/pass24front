@@ -766,16 +766,37 @@ export class MstyleDirectoryService {
       });
     }
     const createdAt = nowIso();
-    const row = await this.deletions.create({
-      deletionRequestId: Ids.deletion(),
-      profileId,
-      mode: dto.mode,
-      reasonCode: dto.reasonCode,
-      status: 'pending',
-      reasonCodes: [],
-      deletionRequestRevision: 1,
-      createdAtIso: createdAt,
-    });
+    let row: MstyleDeletionRequestDocument;
+    try {
+      row = await this.deletions.create({
+        deletionRequestId: Ids.deletion(),
+        profileId,
+        mode: dto.mode,
+        reasonCode: dto.reasonCode,
+        status: 'pending',
+        reasonCodes: [],
+        deletionRequestRevision: 1,
+        createdAtIso: createdAt,
+      });
+    } catch (error) {
+      if (!isOpenDeletionRequestDuplicate(error)) throw error;
+      const existing = await this.deletions.findOne({
+        profileId,
+        status: { $in: ['pending', 'blocked'] },
+      });
+      problem(409, 'CONFLICT', {
+        title: 'Deletion request is already being processed',
+        errors: [
+          {
+            field: 'profileId',
+            code: 'deletion_request_exists',
+            ...(existing?.deletionRequestId
+              ? { message: existing.deletionRequestId }
+              : {}),
+          },
+        ],
+      });
+    }
     const eventIds = [
       await this.events.emit({
         type: 'resident_deletion_request.updated',
@@ -1390,6 +1411,11 @@ export class MstyleDirectoryService {
       profile.membershipSetRevision,
     );
     await this.assertActiveOwner(residentSubject!, membership.profileId);
+    if (membership.status === 'revoked') {
+      problem(409, 'CONFLICT', {
+        title: 'Revoked membership must be invited again',
+      });
+    }
     const validFrom =
       dto.validFrom !== undefined ? dto.validFrom : membership.validFrom;
     const validUntil =
@@ -2370,3 +2396,28 @@ function hasPrivateInputValue(
   }
   return false;
 }
+
+function isOpenDeletionRequestDuplicate(error: unknown): boolean {
+  if (!error || typeof error !== 'object') return false;
+  const duplicate = error as {
+    code?: unknown;
+    keyPattern?: Record<string, unknown>;
+    message?: unknown;
+  };
+  if (duplicate.code !== 11000) return false;
+  const keys = Object.keys(duplicate.keyPattern || {}).sort();
+  if (
+    keys.length === 2 &&
+    keys[0] === 'profileId' &&
+    keys[1] === 'status'
+  ) {
+    return true;
+  }
+  return (
+    typeof duplicate.message === 'string' &&
+    /one_(?:pending|blocked)_deletion_request_per_profile/.test(
+      duplicate.message,
+    )
+  );
+}
+

@@ -87,6 +87,45 @@ export function presentChangeEvent(
   const revision = row.aggregate?.revision;
   const payload =
     row.payload && typeof row.payload === 'object' ? { ...row.payload } : {};
+  // The old snapshot.bound event used the snapshot ID as its aggregate ID.
+  // Its free-form operation string predates the structured operation contract.
+  // Present the persisted snapshot reference so consumers can reconcile these
+  // events without manufacturing operation IDs or rewriting the event log.
+  if (
+    row.type === 'snapshot.bound' &&
+    /^(rps|gps|snp)_[A-Za-z0-9_-]{16,}$/.test(row.aggregate?.id || '')
+  ) {
+    if (payload.snapshotId == null) payload.snapshotId = row.aggregate!.id;
+    if (
+      typeof payload.operationRef === 'string' &&
+      !/^op_[A-Za-z0-9_-]{16,}$/.test(payload.operationRef)
+    ) {
+      delete payload.operationRef;
+    }
+  }
+  // Early structured bindings also allowed operation IDs outside the Mstyle
+  // op_ namespace. Their explicit snapshot is sufficient for historical
+  // reconciliation. Keep malformed/current op_ references visible as errors.
+  const operation = payload.operationRef as Record<string, unknown> | undefined;
+  if (
+    type === 'snapshot.operation_bound' &&
+    typeof payload.snapshotId === 'string' &&
+    /^(rps|gps|snp)_[A-Za-z0-9_-]{16,}$/.test(payload.snapshotId) &&
+    payload.snapshotId === row.aggregate?.id &&
+    operation &&
+    typeof operation === 'object' &&
+    !Array.isArray(operation) &&
+    Object.keys(operation).sort().join(',') ===
+      'environment,operationId,operationType,sourceSystem' &&
+    operation.sourceSystem === 'mstyle' &&
+    operation.environment === ctx.environment &&
+    operation.operationType === 'booking' &&
+    typeof operation.operationId === 'string' &&
+    !operation.operationId.startsWith('op_') &&
+    /^[A-Za-z0-9_-]{1,191}$/.test(operation.operationId)
+  ) {
+    delete payload.operationRef;
+  }
   if (type === 'guest_party.updated' && payload.status == null) {
     const status = LEGACY_GUEST_STATUS[row.type];
     if (status) payload.status = status;

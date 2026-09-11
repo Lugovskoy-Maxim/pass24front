@@ -149,7 +149,21 @@ export class MstyleServiceTokenGuard implements CanActivate {
     req.mstyleClientId = row.clientId;
     req.mstyleTokenScopes = [...(row.scopes || [])];
     req.mstyleScopes = expandMstyleScopes(row.scopes || []);
-    if (guestId) problem(403, 'INSUFFICIENT_SCOPE');
+    if (guestId) {
+      // A service client can freeze only declarations it created. Primary guest
+      // routes still require their own bearer token, including contact and PII writes.
+      const declaration =
+        method === 'POST' && /\/snapshots$/.test(path) && this.guests
+          ? await this.guests.findOne({ guestPartyId: guestId })
+          : null;
+      if (
+        !declaration ||
+        declaration.purpose !== 'guest_participant_declaration' ||
+        declaration.role !== 'participant' ||
+        declaration.declaration?.clientId !== row.clientId
+      )
+        problem(403, 'INSUFFICIENT_SCOPE');
+    }
     const needed = ROUTE_SCOPES.find(
       (rule) => rule.method === method && rule.match.test(path),
     );
@@ -272,7 +286,12 @@ export class MstyleRouteContextGuard implements CanActivate {
     }
     if (method === 'POST' && /\/guest-parties$/.test(path)) {
       requireHeaderValue('X-Actor-Ref', actor, 'guest:booking');
-      requirePurpose(purpose, ['guest_booking_registration']);
+      requirePurpose(purpose, [
+        req.body?.partyPurpose === 'guest_participant_declaration' ||
+        req.body?.purpose === 'guest_participant_declaration'
+          ? 'guest_participant_declaration'
+          : 'guest_booking_registration',
+      ]);
       return true;
     }
     if (isChanges) {

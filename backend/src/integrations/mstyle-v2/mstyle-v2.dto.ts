@@ -560,9 +560,11 @@ export class ResidentPatchPrivateDataDto extends SchemaVersionDto {
 }
 export class ContactSourceRevisionsDto {
   @ValidateIf((_object, value) => value !== null) @IsInt() @Min(1) phone:
-    number | null;
+    | number
+    | null;
   @ValidateIf((_object, value) => value !== null) @IsInt() @Min(1) email:
-    number | null;
+    | number
+    | null;
 }
 export class ResidentSourceRevisionsDto {
   @IsInt() @Min(1) profile: number;
@@ -612,6 +614,22 @@ export class BindSnapshotDto extends SchemaVersionDto {
   operationRef: OperationRefDto;
 }
 
+export class ParticipantDeclarationDto {
+  @IsString()
+  @Matches(/^(rps|gps)_[A-Za-z0-9_-]{16,}$/)
+  parentSnapshotId: string;
+  @IsDefined()
+  @ValidateNested()
+  @Type(() => OperationRefDto)
+  operationRef: OperationRefDto;
+  @IsString() @MinLength(1) @MaxLength(200) name: string;
+  @IsOptional() @IsString() @MaxLength(32) phone?: string | null;
+  @IsOptional() @IsEmail() @MaxLength(254) email?: string | null;
+  // An acknowledgement by the organizer, never a personal consent by the attendee.
+  @IsIn([true]) organizerAcknowledged: true;
+  @IsIn(['mstyle_participant_notice_v1']) noticeVersion: string;
+}
+
 export class CreateGuestDto extends SchemaVersionDto {
   @IsOptional()
   @IsIn(['mstyle_booking', 'guest_participant_declaration'])
@@ -627,10 +645,17 @@ export class CreateGuestDto extends SchemaVersionDto {
   @IsOptional()
   @IsISO8601({ strict: true })
   expiresAt?: string;
+
+  @IsOptional()
+  @ValidateNested()
+  @Type(() => ParticipantDeclarationDto)
+  declaration?: ParticipantDeclarationDto;
 }
 
 export class ConfirmBookingDto extends SchemaVersionDto {
-  @IsOptional() @IsIn(['booker']) participantRole?: 'booker';
+  @IsOptional() @IsIn(['booker', 'participant']) participantRole?:
+    | 'booker'
+    | 'participant';
   @ValidateNested()
   @Type(() => OperationRefDto)
   operationRef: OperationRefDto;

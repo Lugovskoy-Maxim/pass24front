@@ -18,7 +18,7 @@ import {
 import { ConfigService } from '@nestjs/config';
 import { ruPhoneToSmsNumber } from '../common/phone';
 
-interface SmsAeroResponse {
+export interface SmsAeroResponse {
   success?: boolean;
   message?: string | Record<string, unknown>;
   data?: unknown;
@@ -115,7 +115,7 @@ export class SmsService {
 
     // SIM-PUSH: пользователь подтвердил на телефоне — код не нужен
     const already = await this.isMobileAuthVerified(requestId).catch(
-      () => false,
+      (error: unknown) => this.handleMobileAuthStatusError(error),
     );
     if (already) {
       this.logger.log(`Mobile ID already verified (SIM-PUSH): id=${requestId}`);
@@ -164,6 +164,10 @@ export class SmsService {
       );
     }
     this.logger.warn(`Mobile ID verify failed id=${requestId}: ${payload}`);
+    return false;
+  }
+
+  protected handleMobileAuthStatusError(_error: unknown): boolean {
     return false;
   }
 
@@ -278,7 +282,7 @@ export class SmsService {
   }
 
   /** POST в формате формы — так параметры Mobile ID передают официальные SDK SMS Aero. */
-  private async requestForm(
+  protected async requestForm(
     path: string,
     body: Record<string, string | number>,
   ): Promise<SmsAeroResponse> {

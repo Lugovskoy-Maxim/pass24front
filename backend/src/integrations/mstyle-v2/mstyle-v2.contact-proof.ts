@@ -5,7 +5,11 @@ import * as bcrypt from 'bcryptjs';
 import { MailService } from '../../mail/mail.service';
 import { SmsService } from '../../sms/sms.service';
 import { generateOtpCode } from '../../common/otp-code';
-import { MSTYLE_SMS_SERVICE } from './mstyle-v2.sms';
+import {
+  MSTYLE_SMS_SERVICE,
+  MSTYLE_SMS_CHALLENGE_TTL_MS,
+  MstyleSmsSessionExpiredError,
+} from './mstyle-v2.sms';
 import { MstyleV2Config } from './mstyle-v2.config';
 import { MstyleChallenge, MstyleChallengeDocument } from './mstyle-v2.schemas';
 import {
@@ -73,7 +77,9 @@ export class MstyleContactProofService {
       expectedContactValueRevision: Math.max(1, baseRevision),
       pendingValueEnc: encryptJson(this.cfg.piiSecret(), value),
       verifyAttempts: 0,
-      expiresAt: new Date(now + CHALLENGE_TTL_MS),
+      expiresAt: new Date(
+        now + (useSms ? MSTYLE_SMS_CHALLENGE_TTL_MS : CHALLENGE_TTL_MS),
+      ),
       resendAfter: new Date(now + RESEND_MIN_MS),
     });
     try {
@@ -119,7 +125,19 @@ export class MstyleContactProofService {
           challenge.mobileIdRequestId,
           code,
         );
-      } catch {
+      } catch (error) {
+        if (error instanceof MstyleSmsSessionExpiredError) {
+          await this.challenges.updateOne(
+            {
+              ...binding,
+              challengeId,
+              mobileIdRequestId: challenge.mobileIdRequestId,
+              status: 'awaiting_code',
+            },
+            { $set: { status: 'expired' } },
+          );
+          problem(410, 'CHALLENGE_EXPIRED');
+        }
         problem(503, 'UPSTREAM_UNAVAILABLE', { retryable: true });
       }
     } else matches = await bcrypt.compare(code, challenge.codeHash);
