@@ -1,4 +1,4 @@
-import { Inject, Injectable, Logger } from '@nestjs/common';
+import { Inject, Injectable, Logger, Optional } from '@nestjs/common';
 import {
   MSTYLE_SMS_SERVICE,
   MSTYLE_SMS_CHALLENGE_TTL_MS,
@@ -43,6 +43,7 @@ import type {
   PasswordVerifyDto,
   VerifyCodeDto,
 } from './mstyle-v2.dto';
+import { SiteSettingsService } from '../../site-settings/site-settings.service';
 
 @Injectable()
 export class MstyleAuthService {
@@ -59,6 +60,7 @@ export class MstyleAuthService {
     @Inject(MSTYLE_SMS_SERVICE) private readonly sms: SmsService,
     private readonly mail: MailService,
     private readonly telegramGateway: TelegramGatewayService,
+    @Optional() private readonly siteSettings?: SiteSettingsService,
   ) {}
 
   async verifyPassword(
@@ -176,7 +178,16 @@ export class MstyleAuthService {
 
     const challengeId = Ids.challenge();
     const now = Date.now();
-    const useSmsAero = this.useSmsAero(dto.identifier.type, dto.channel);
+    const manualTesting = await this.siteSettings?.resolveManualTestContact(
+      dto.identifier.type,
+      normalized,
+    );
+    if (manualTesting && !manualTesting.enabled) {
+      problem(503, 'UPSTREAM_UNAVAILABLE', { retryable: false });
+    }
+    const useManualDelivery = !!manualTesting?.enabled;
+    const useSmsAero =
+      !useManualDelivery && this.useSmsAero(dto.identifier.type, dto.channel);
     if (useSmsAero) this.requireSmsAero();
     const code = this.issueChallengeCode({
       isDummy,
@@ -204,7 +215,11 @@ export class MstyleAuthService {
       isDummy,
       codeHash: await bcrypt.hash(code, 8),
       codeLength: CODE_LENGTH,
-      verificationProvider: useSmsAero ? 'smsaero_mobile_id' : 'local',
+      verificationProvider: useManualDelivery
+        ? 'manual_test_email'
+        : useSmsAero
+          ? 'smsaero_mobile_id'
+          : 'local',
       mobileIdRequestId: mobileId?.requestId,
       mobileIdAuthType: mobileId?.authType,
       verifyAttempts: 0,
@@ -224,6 +239,9 @@ export class MstyleAuthService {
       phone: dto.identifier.type === 'phone' ? normalized : undefined,
       expiresAt: challenge.expiresAt.toISOString(),
       challengeId,
+      manualDeliveryEmail: manualTesting?.deliveryEmail,
+      target: normalized,
+      scenario: 'Вход в Mstyle',
     });
 
     await this.challenges.updateOne(
@@ -300,6 +318,8 @@ export class MstyleAuthService {
 
     const now = Date.now();
     const useSmsAero = this.isSmsAeroChallenge(challenge);
+    const useManualDelivery =
+      challenge.verificationProvider === 'manual_test_email';
     this.assertOtpMode();
     let code = this.cfg.mockOtp();
     if (useSmsAero) {
@@ -336,15 +356,23 @@ export class MstyleAuthService {
 
     let email: string | undefined;
     let phone: string | undefined;
-    if (
-      challenge.subject &&
-      ['email', 'telegram'].includes(challenge.channel || '')
-    ) {
+    if (challenge.subject) {
       const identity = await this.identities.findIdentityBySubject(
         challenge.subject,
       );
       email = identity?.email || undefined;
       phone = identity?.phone || undefined;
+    }
+    const target = challenge.identifierType === 'phone' ? phone : email;
+    const manualTesting =
+      useManualDelivery && target
+        ? await this.siteSettings?.resolveManualTestContact(
+            challenge.identifierType as 'email' | 'phone',
+            target,
+          )
+        : null;
+    if (useManualDelivery && !manualTesting?.enabled) {
+      problem(503, 'UPSTREAM_UNAVAILABLE', { retryable: false });
     }
     await this.dispatchChallengeCode({
       channel: challenge.channel || 'email',
@@ -355,6 +383,9 @@ export class MstyleAuthService {
       phone,
       expiresAt: challenge.expiresAt.toISOString(),
       challengeId: challenge.challengeId,
+      manualDeliveryEmail: manualTesting?.deliveryEmail,
+      target,
+      scenario: 'Повторный код для входа в Mstyle',
     });
 
     await this.challenges.updateOne(
@@ -700,6 +731,9 @@ export class MstyleAuthService {
     phone?: string | null;
     expiresAt: string;
     challengeId: string;
+    manualDeliveryEmail?: string | null;
+    target?: string | null;
+    scenario?: string;
   }) {
     if (!this.cfg.dispatchEnabled()) {
       this.logger.warn(
@@ -711,6 +745,16 @@ export class MstyleAuthService {
       this.logger.log(
         `OTP dispatch skipped: no eligible identity; challenge=${params.challengeId}; channel=${params.channel}`,
       );
+      return;
+    }
+    if (params.manualDeliveryEmail && params.target) {
+      await this.mail.sendManualTestCode({
+        to: params.manualDeliveryEmail,
+        code: params.code,
+        channel: params.channel,
+        target: params.target,
+        scenario: params.scenario || 'Ручное тестирование',
+      });
       return;
     }
     if (params.useSmsAero) return;

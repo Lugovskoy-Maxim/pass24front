@@ -5,7 +5,12 @@ import { AdminLayout } from '@/components/AdminLayout';
 import { SettingsNav } from '@/components/SettingsNav';
 import { PageError } from '@/components/PageError';
 import { useToast } from '@/components/Toast';
-import { api, getErrorMessage, IntegrationEndpoint } from '@/lib/api';
+import {
+  api,
+  getErrorMessage,
+  IntegrationEndpoint,
+  ManualTestProfile,
+} from '@/lib/api';
 
 export default function IntegrationCatalogPage() {
   const { toast } = useToast();
@@ -21,6 +26,16 @@ export default function IntegrationCatalogPage() {
   const [mockResponsesEnabled, setMockResponsesEnabled] = useState(false);
   const [mockResponsesOverridden, setMockResponsesOverridden] = useState(false);
   const [mockModeBusy, setMockModeBusy] = useState(false);
+  const [manualTestingEnabled, setManualTestingEnabled] = useState(false);
+  const [manualTestingEmail, setManualTestingEmail] = useState('ninzak@ya.ru');
+  const [manualTestingExpiresAt, setManualTestingExpiresAt] = useState<
+    string | null
+  >(null);
+  const [manualTestingBusy, setManualTestingBusy] = useState(false);
+  const [manualProfilesBusy, setManualProfilesBusy] = useState(false);
+  const [manualTestProfiles, setManualTestProfiles] = useState<
+    ManualTestProfile[]
+  >([]);
 
   const load = () => {
     setError('');
@@ -34,6 +49,10 @@ export default function IntegrationCatalogPage() {
         );
         setMockResponsesEnabled(data.meta.mockResponsesEnabled);
         setMockResponsesOverridden(data.meta.mockResponsesOverridden);
+        setManualTestingEnabled(data.meta.manualTesting.enabled);
+        setManualTestingEmail(data.meta.manualTesting.deliveryEmail);
+        setManualTestingExpiresAt(data.meta.manualTesting.expiresAt);
+        setManualTestProfiles(data.manualTestProfiles);
         setActiveId((current) => current || data.endpoints[0]?.id || '');
       })
       .catch((err) => setError(getErrorMessage(err, 'Каталог не загрузился')))
@@ -83,6 +102,42 @@ export default function IntegrationCatalogPage() {
       toast(getErrorMessage(err, 'Не удалось изменить mock-режим'), 'error');
     } finally {
       setMockModeBusy(false);
+    }
+  };
+
+  const toggleManualTesting = async () => {
+    setManualTestingBusy(true);
+    try {
+      const result = await api.admin.updateIntegrationManualTesting({
+        enabled: !manualTestingEnabled,
+        deliveryEmail: manualTestingEmail,
+        expiresInHours: 24,
+      });
+      setManualTestingEnabled(result.settings.enabled);
+      setManualTestingEmail(result.settings.deliveryEmail);
+      setManualTestingExpiresAt(result.settings.expiresAt);
+      toast(
+        result.settings.enabled
+          ? 'Тестовый режим включён'
+          : 'Тестовый режим выключен',
+        'success',
+      );
+    } catch (err) {
+      toast(getErrorMessage(err, 'Не удалось сохранить'), 'error');
+    } finally {
+      setManualTestingBusy(false);
+    }
+  };
+
+  const prepareManualProfiles = async () => {
+    setManualProfilesBusy(true);
+    try {
+      const result = await api.admin.prepareIntegrationManualTesting();
+      toast(`Профили готовы: ${result.prepared.length}`, 'success');
+    } catch (err) {
+      toast(getErrorMessage(err, 'Не удалось подготовить профили'), 'error');
+    } finally {
+      setManualProfilesBusy(false);
     }
   };
 
@@ -136,6 +191,89 @@ export default function IntegrationCatalogPage() {
               : 'Включить mock'}
         </button>
       </div>
+      <section className="card p-4 mb-4">
+        <div className="flex flex-col sm:flex-row sm:items-end gap-3">
+          <div className="min-w-0 flex-1">
+            <h2 className="font-semibold">Для ручного тестирования</h2>
+            <p className="text-sm text-[var(--muted)] mt-1">
+              Коды тестовых аккаунтов придут на указанную почту. Режим
+              выключится через 24 часа.
+            </p>
+            <label className="block text-sm mt-3">
+              Почта для кодов
+              <input
+                className="input mt-1"
+                type="email"
+                value={manualTestingEmail}
+                disabled={manualTestingBusy}
+                onChange={(event) => setManualTestingEmail(event.target.value)}
+              />
+            </label>
+            {manualTestingEnabled && manualTestingExpiresAt ? (
+              <p className="text-xs text-[var(--muted)] mt-2">
+                Включено до{' '}
+                {new Date(manualTestingExpiresAt).toLocaleString('ru-RU')}
+              </p>
+            ) : null}
+          </div>
+          <div className="flex flex-wrap gap-2">
+            <button
+              type="button"
+              className="btn btn-secondary"
+              disabled={manualProfilesBusy || !manualTestingEnabled}
+              onClick={() => void prepareManualProfiles()}
+            >
+              {manualProfilesBusy ? 'Подготовка…' : 'Подготовить профили'}
+            </button>
+            <button
+              type="button"
+              className={`btn ${manualTestingEnabled ? 'btn-secondary' : 'btn-primary'}`}
+              disabled={manualTestingBusy || !manualTestingEmail.trim()}
+              onClick={() => void toggleManualTesting()}
+            >
+              {manualTestingBusy
+                ? 'Сохранение…'
+                : manualTestingEnabled
+                  ? 'Выключить тестовый режим'
+                  : 'Включить тестовый режим'}
+            </button>
+          </div>
+        </div>
+
+        <div className="grid md:grid-cols-2 gap-3 mt-4">
+          {manualTestProfiles.map((profile) => (
+            <article key={profile.key} className="border rounded-lg p-3">
+              <div className="font-medium">{profile.title}</div>
+              <div className="text-sm text-[var(--muted)] mt-1">
+                {profile.type === 'individual'
+                  ? 'Физическое лицо'
+                  : profile.legalForm === 'ip'
+                    ? 'ИП'
+                    : 'ООО'}
+              </div>
+              <div className="text-sm mt-2">
+                <div>{profile.owner.fullName}</div>
+                <div className="text-[var(--muted)]">{profile.owner.email}</div>
+                <div className="text-[var(--muted)]">{profile.owner.phone}</div>
+              </div>
+              {profile.employees.map((employee) => (
+                <div key={employee.key} className="text-sm mt-2 border-t pt-2">
+                  <div>{employee.title}</div>
+                  <div className="text-[var(--muted)]">{employee.fullName}</div>
+                  <div className="text-[var(--muted)]">{employee.email}</div>
+                  <div className="text-[var(--muted)]">{employee.phone}</div>
+                </div>
+              ))}
+              <details className="text-sm mt-3">
+                <summary className="cursor-pointer">Поля профиля</summary>
+                <pre className="text-xs overflow-auto mt-2 bg-[var(--surface-muted)] p-3 rounded whitespace-pre-wrap">
+                  {JSON.stringify(profile.privateData, null, 2)}
+                </pre>
+              </details>
+            </article>
+          ))}
+        </div>
+      </section>
       {loading ? (
         <div className="text-[var(--muted)]">Загрузка…</div>
       ) : (

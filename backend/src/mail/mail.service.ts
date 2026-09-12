@@ -7,6 +7,7 @@ import {
 import { ConfigService } from '@nestjs/config';
 import * as nodemailer from 'nodemailer';
 import { Transporter } from 'nodemailer';
+import { SiteSettingsService } from '../site-settings/site-settings.service';
 
 export interface PassTicketEmailData {
   to: string;
@@ -35,7 +36,10 @@ export class MailService {
   private readonly logger = new Logger(MailService.name);
   private transporter: Transporter | null = null;
 
-  constructor(private readonly configService: ConfigService) {
+  constructor(
+    private readonly configService: ConfigService,
+    private readonly siteSettingsService: SiteSettingsService,
+  ) {
     this.initTransporter();
   }
 
@@ -106,7 +110,7 @@ export class MailService {
     ].join('\n');
 
     try {
-      const info = await this.transporter.sendMail({
+      const info = await this.sendMail({
         from,
         to: data.to,
         subject: `Пропуск ${data.passNumber} — ${data.visitorName}`,
@@ -151,7 +155,7 @@ export class MailService {
     });
 
     try {
-      await this.transporter.sendMail({
+      await this.sendMail({
         from,
         to,
         subject: `Код подтверждения: ${code}`,
@@ -188,7 +192,7 @@ export class MailService {
     });
 
     try {
-      await this.transporter.sendMail({
+      await this.sendMail({
         from,
         to,
         subject: `Восстановление пароля: ${code}`,
@@ -225,7 +229,7 @@ export class MailService {
     });
 
     try {
-      await this.transporter.sendMail({
+      await this.sendMail({
         from,
         to,
         subject: `Подтверждение email: ${code}`,
@@ -242,6 +246,37 @@ export class MailService {
         'Не удалось отправить код подтверждения на почту',
       );
     }
+  }
+
+  async sendManualTestCode(data: {
+    to: string;
+    code: string;
+    channel: string;
+    target: string;
+    scenario: string;
+  }) {
+    if (!this.transporter) {
+      throw new BadRequestException('Почтовый сервер не настроен');
+    }
+    const from = this.getPassFromAddress();
+    const appHost = this.getAppHost();
+    const html = this.buildCodeEmailHtml({
+      title: 'Код для ручного тестирования',
+      intro: `${data.scenario}. Канал: ${data.channel}. Получатель: ${data.target}.`,
+      code: data.code,
+      footer: `Код действует по обычным правилам ${appHost}.`,
+    });
+    await this.sendMail({
+      from,
+      to: data.to,
+      subject: `Тестовый код: ${data.code}`,
+      text: `${data.scenario}\nКанал: ${data.channel}\nПолучатель: ${data.target}\nКод: ${data.code}`,
+      html,
+    });
+    this.logger.log(
+      `Manual test code emailed; channel=${data.channel}; target=${data.target}`,
+    );
+    return { sent: true };
   }
 
   /**
@@ -292,7 +327,7 @@ export class MailService {
     `;
 
     try {
-      await this.transporter.sendMail({
+      await this.sendMail({
         from,
         to: params.to,
         subject: `Приглашение: доступ к пропускам${params.companyName ? ` — ${params.companyName}` : ''}`,
@@ -384,7 +419,7 @@ export class MailService {
     ].join('\n');
 
     try {
-      await this.transporter.sendMail({
+      await this.sendMail({
         from,
         to: recipients.join(', '),
         subject: `⚠ Заявка на регистрацию: ${company}`,
@@ -412,6 +447,40 @@ export class MailService {
       this.configService.get<string>('PUBLIC_APP_URL') ||
       'https://pass.mstyle.ru'
     ).replace(/\/$/, '');
+  }
+
+  private async sendMail(options: Record<string, any>) {
+    if (!this.transporter) {
+      throw new BadRequestException('Почтовый сервер не настроен');
+    }
+    const original = Array.isArray(options.to)
+      ? options.to.map(String)
+      : String(options.to || '').split(',');
+    const recipients: string[] = [];
+    const redirected: string[] = [];
+    for (const item of original.map((value) => value.trim()).filter(Boolean)) {
+      const test = await this.siteSettingsService.resolveManualTestContact(
+        'email',
+        item,
+      );
+      if (!test) {
+        recipients.push(item);
+        continue;
+      }
+      if (!test.enabled) {
+        throw new BadRequestException('Ручное тестирование выключено');
+      }
+      recipients.push(test.deliveryEmail);
+      redirected.push(item);
+    }
+    const uniqueRecipients = [...new Set(recipients)];
+    return this.transporter.sendMail({
+      ...options,
+      to: uniqueRecipients.join(', '),
+      subject: redirected.length
+        ? `[Тест: ${redirected.join(', ')}] ${options.subject || ''}`
+        : options.subject,
+    });
   }
 
   private getAppHost(): string {

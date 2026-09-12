@@ -68,6 +68,15 @@ export class AppSettings {
   @Prop({ type: Boolean, default: undefined })
   mstyleMockResponsesEnabled?: boolean;
 
+  @Prop({ type: Boolean, default: false })
+  mstyleManualTestingEnabled?: boolean;
+
+  @Prop({ lowercase: true, trim: true, default: 'ninzak@ya.ru' })
+  mstyleManualTestingDeliveryEmail?: string;
+
+  @Prop({ type: Date, default: null })
+  mstyleManualTestingExpiresAt?: Date | null;
+
   /** Регистрация арендаторов по SMS (код на телефон) */
   @Prop({ default: true })
   smsRegistrationEnabled: boolean;

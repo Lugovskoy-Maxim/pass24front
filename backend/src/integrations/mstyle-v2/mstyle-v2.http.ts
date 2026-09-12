@@ -1,4 +1,6 @@
 import { MstyleNativeConsoleProof } from './mstyle-v2.native-console';
+import { findManualTestIdentity } from './mstyle-v2.manual-test-profiles';
+import { SiteSettingsService } from '../../site-settings/site-settings.service';
 import { MstyleIdentityService } from './mstyle-v2.identities';
 import { MSTYLE_ADMIN_PROBE_CLIENT_ID } from './mstyle-v2.constants';
 import { guestFlowRoute, guestWriteAllowed } from './mstyle-v2.guest-access';
@@ -49,7 +51,6 @@ import {
   MstyleServiceToken,
   MstyleServiceTokenDocument,
 } from './mstyle-v2.schemas';
-import { SiteSettingsService } from '../../site-settings/site-settings.service';
 
 export type MstyleRequest = Request & {
   mstyleRequestId: string;
@@ -240,6 +241,7 @@ export class MstyleRouteContextGuard implements CanActivate {
     @InjectModel(MstyleMembership.name)
     private readonly memberships: Model<MstyleMembership>,
     private readonly nativeConsole?: MstyleNativeConsoleProof,
+    private readonly siteSettings?: SiteSettingsService,
   ) {}
 
   async canActivate(ctx: ExecutionContext): Promise<boolean> {
@@ -334,6 +336,16 @@ export class MstyleRouteContextGuard implements CanActivate {
         identity.authVersion !== session.authVersion
       )
         problem(401, 'STEP_UP_REQUIRED');
+      const manualIdentity = identity.email
+        ? findManualTestIdentity('email', identity.email)
+        : identity.phone
+          ? findManualTestIdentity('phone', identity.phone)
+          : null;
+      if (manualIdentity && this.siteSettings) {
+        const manualTesting =
+          await this.siteSettings.getMstyleManualTestingSettings();
+        if (!manualTesting.enabled) problem(401, 'STEP_UP_REQUIRED');
+      }
       if (req.params.subject && req.params.subject !== subject)
         problem(404, 'NOT_FOUND');
       if (req.params.profileId) {

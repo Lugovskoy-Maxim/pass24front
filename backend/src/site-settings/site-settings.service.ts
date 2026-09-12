@@ -24,6 +24,10 @@ import {
   normalizeGuideSections,
 } from './guide-defaults';
 import { deepMergeUiLabels, UiLabels } from './ui-labels.defaults';
+import {
+  findManualTestIdentity,
+  MANUAL_TEST_DEFAULT_DELIVERY_EMAIL,
+} from '../integrations/mstyle-v2/mstyle-v2.manual-test-profiles';
 
 /** Единственный документ настроек сайта в app_settings. */
 const SETTINGS_KEY = 'global';
@@ -132,6 +136,71 @@ export class SiteSettingsService implements OnModuleInit {
       { upsert: true },
     );
     return !!enabled;
+  }
+
+  async getMstyleManualTestingSettings() {
+    const doc = await this.appSettingsModel
+      .findOne({ key: SETTINGS_KEY })
+      .select({
+        mstyleManualTestingEnabled: 1,
+        mstyleManualTestingDeliveryEmail: 1,
+        mstyleManualTestingExpiresAt: 1,
+      })
+      .lean();
+    const expiresAt = doc?.mstyleManualTestingExpiresAt
+      ? new Date(doc.mstyleManualTestingExpiresAt)
+      : null;
+    const enabled =
+      doc?.mstyleManualTestingEnabled === true &&
+      !!expiresAt &&
+      expiresAt.getTime() > Date.now();
+    return {
+      enabled,
+      deliveryEmail:
+        doc?.mstyleManualTestingDeliveryEmail?.trim().toLowerCase() ||
+        MANUAL_TEST_DEFAULT_DELIVERY_EMAIL,
+      expiresAt: expiresAt?.toISOString() || null,
+    };
+  }
+
+  async setMstyleManualTestingSettings(input: {
+    enabled: boolean;
+    deliveryEmail: string;
+    expiresInHours?: number;
+  }) {
+    const deliveryEmail = input.deliveryEmail.trim().toLowerCase();
+    if (!/^[^\s@]+@[^\s@]+\.[^\s@]+$/.test(deliveryEmail)) {
+      throw new BadRequestException('Укажите корректную почту');
+    }
+    const expiresAt = input.enabled
+      ? new Date(
+          Date.now() +
+            Math.min(168, Math.max(1, input.expiresInHours || 24)) * 3_600_000,
+        )
+      : null;
+    await this.appSettingsModel.updateOne(
+      { key: SETTINGS_KEY },
+      {
+        $set: {
+          mstyleManualTestingEnabled: !!input.enabled,
+          mstyleManualTestingDeliveryEmail: deliveryEmail,
+          mstyleManualTestingExpiresAt: expiresAt,
+        },
+      },
+      { upsert: true },
+    );
+    return {
+      enabled: !!input.enabled,
+      deliveryEmail,
+      expiresAt: expiresAt?.toISOString() || null,
+    };
+  }
+
+  async resolveManualTestContact(type: 'email' | 'phone', value: string) {
+    const identity = findManualTestIdentity(type, value);
+    if (!identity) return null;
+    const settings = await this.getMstyleManualTestingSettings();
+    return { ...settings, identity };
   }
 
   async update(data: {

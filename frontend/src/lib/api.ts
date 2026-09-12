@@ -1207,8 +1207,14 @@ export const api = {
           mockResponsesEnabled: boolean;
           mockResponsesOverridden: boolean;
           mockResponsesEnvironmentDefault: boolean;
+          manualTesting: {
+            enabled: boolean;
+            deliveryEmail: string;
+            expiresAt: string | null;
+          };
         };
         endpoints: IntegrationEndpoint[];
+        manualTestProfiles: ManualTestProfile[];
       }>('/admin/integration/catalog'),
 
     updateIntegrationMockMode: (mockResponsesEnabled: boolean) =>
@@ -1219,6 +1225,33 @@ export const api = {
           body: JSON.stringify({ mockResponsesEnabled }),
         },
       ),
+
+    updateIntegrationManualTesting: (data: {
+      enabled: boolean;
+      deliveryEmail: string;
+      expiresInHours?: number;
+    }) =>
+      request<{
+        settings: {
+          enabled: boolean;
+          deliveryEmail: string;
+          expiresAt: string | null;
+        };
+      }>('/admin/integration/manual-testing', {
+        method: 'PATCH',
+        body: JSON.stringify(data),
+      }),
+
+    prepareIntegrationManualTesting: () =>
+      request<{
+        prepared: Array<{
+          key: string;
+          title: string;
+          profileId: string;
+          subject: string;
+          employees: number;
+        }>;
+      }>('/admin/integration/manual-testing/prepare', { method: 'POST' }),
 
     getSiteSettings: () =>
       request<{ settings: SiteSettings }>('/admin/site-settings'),
@@ -1352,6 +1385,27 @@ export interface IntegrationEndpoint {
     body: unknown;
     contentType?: string;
   }>;
+}
+
+export interface ManualTestIdentity {
+  key: string;
+  title: string;
+  fullName: string;
+  email: string;
+  phone: string;
+  role: 'owner' | 'employee';
+}
+
+export interface ManualTestProfile {
+  key: string;
+  title: string;
+  type: 'company' | 'individual';
+  legalForm: 'ooo' | 'ip' | null;
+  companyShortName: string | null;
+  employeeLimit: number | null;
+  owner: ManualTestIdentity;
+  employees: ManualTestIdentity[];
+  privateData: Record<string, unknown>;
 }
 
 export interface SiteMysqlSettings {

@@ -17,6 +17,7 @@ import {
 } from '@nestjs/common';
 import { ConfigService } from '@nestjs/config';
 import { ruPhoneToSmsNumber } from '../common/phone';
+import { findManualTestIdentity } from '../integrations/mstyle-v2/mstyle-v2.manual-test-profiles';
 
 export interface SmsAeroResponse {
   success?: boolean;
@@ -51,6 +52,11 @@ export class SmsService {
    * Код генерирует SMS Aero — локально его не храним.
    */
   async startMobileAuth(phone: string): Promise<MobileIdSendResult> {
+    if (findManualTestIdentity('phone', phone)) {
+      throw new BadRequestException(
+        'Тестовый номер нельзя отправлять в SMS Aero',
+      );
+    }
     if (!this.isConfigured()) {
       throw new BadRequestException(
         'SMS-сервис не настроен. Укажите SMSAERO_EMAIL, SMSAERO_API_KEY и SMS_ENABLED=true.',
@@ -167,7 +173,8 @@ export class SmsService {
     return false;
   }
 
-  protected handleMobileAuthStatusError(_error: unknown): boolean {
+  protected handleMobileAuthStatusError(error: unknown): boolean {
+    void error;
     return false;
   }
 

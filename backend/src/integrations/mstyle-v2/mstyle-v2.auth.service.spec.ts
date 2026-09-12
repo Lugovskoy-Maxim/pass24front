@@ -47,6 +47,29 @@ describe('MstyleAuthService SMS Aero Mobile ID', () => {
     expect(Date.parse(result.body.expiresAt) - Date.now()).toBe(300_000);
   });
 
+  it('sends a test phone code to email without calling SMS Aero', async () => {
+    const phone = '+79990001001';
+    const f = createFixture({ phone, manualTesting: true });
+    await f.service.startCodeChallenge(
+      {
+        ...challengeDto(),
+        identifier: { type: 'phone', value: phone },
+      },
+      'mstyle-backend-prod',
+      '192.0.2.10',
+    );
+    expect(f.sms.startMobileAuth).not.toHaveBeenCalled();
+    expect(f.challenge().verificationProvider).toBe('manual_test_email');
+    expect(f.mail.sendManualTestCode).toHaveBeenCalledWith(
+      expect.objectContaining({
+        to: 'ninzak@ya.ru',
+        channel: 'sms',
+        target: phone,
+        code: expect.stringMatching(/^\d{4}$/),
+      }),
+    );
+  });
+
   it('rejects an SMS at its exact expiry without calling the provider', async () => {
     const f = createFixture();
     await f.service.startCodeChallenge(
@@ -448,14 +471,15 @@ function challengeDto() {
   };
 }
 
-function createFixture() {
+function createFixture(options?: { phone?: string; manualTesting?: boolean }) {
   let stored: any;
+  const phone = options?.phone || '+79990001234';
   const identity = {
     subject: 'usr_sms_aero',
     identityStatus: 'active',
     authVersion: 3,
     revision: 1,
-    phone: '+79990001234',
+    phone,
     email: 'test@example.com',
     save: jest.fn(async () => undefined),
   };
@@ -522,6 +546,7 @@ function createFixture() {
   };
   const mail = {
     sendEmailVerificationCode: jest.fn(async () => ({ sent: true })),
+    sendManualTestCode: jest.fn(async () => ({ sent: true })),
   };
   const telegramGateway = {
     isConfigured: jest.fn(() => false),
@@ -530,6 +555,18 @@ function createFixture() {
   };
   const authentications = {
     create: jest.fn(async (value: unknown) => value),
+  };
+  const siteSettings = {
+    resolveManualTestContact: jest.fn(async () =>
+      options?.manualTesting
+        ? {
+            enabled: true,
+            deliveryEmail: 'ninzak@ya.ru',
+            expiresAt: new Date(Date.now() + 86_400_000).toISOString(),
+            identity: { key: 'manual' },
+          }
+        : null,
+    ),
   };
   const service = new MstyleAuthService(
     config as any,
@@ -540,6 +577,7 @@ function createFixture() {
     sms as any,
     mail as any,
     telegramGateway as any,
+    siteSettings as any,
   );
 
   return {

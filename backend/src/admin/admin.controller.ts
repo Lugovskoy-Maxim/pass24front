@@ -6,6 +6,7 @@
  * site-settings: SMS-поля может менять только role===admin (см. updateSiteSettings).
  */
 import {
+  BadRequestException,
   Body,
   Controller,
   Delete,
@@ -55,6 +56,9 @@ import { MstyleV2Config } from '../integrations/mstyle-v2/mstyle-v2.config';
 import { MstyleOauthService } from '../integrations/mstyle-v2/mstyle-v2.oauth.service';
 import { MSTYLE_ADMIN_PROBE_CLIENT_ID } from '../integrations/mstyle-v2/mstyle-v2.constants';
 import { UpdateMstyleIntegrationSettingsDto } from './dto/update-mstyle-integration-settings.dto';
+import { UpdateMstyleManualTestingDto } from './dto/update-mstyle-manual-testing.dto';
+import { MANUAL_TEST_PROFILES } from '../integrations/mstyle-v2/mstyle-v2.manual-test-profiles';
+import { MstyleManualTestingService } from '../integrations/mstyle-v2/mstyle-v2.manual-testing.service';
 
 @Controller('admin')
 @UseGuards(AuthGuard('jwt'), PermissionsGuard)
@@ -68,6 +72,7 @@ export class AdminController {
     private readonly siteSourceService: SiteSourceService,
     private readonly mstyleV2Config: MstyleV2Config,
     private readonly mstyleOauthService: MstyleOauthService,
+    private readonly mstyleManualTestingService: MstyleManualTestingService,
   ) {}
 
   @Get('dashboard')
@@ -433,14 +438,18 @@ export class AdminController {
       await this.siteSettingsService.getMstyleMockResponsesEnabled(
         environmentDefault,
       );
+    const manualTesting =
+      await this.siteSettingsService.getMstyleManualTestingSettings();
     return {
       meta: {
         ...mstyleCatalogMeta(),
         mockResponsesEnabled: mockMode.enabled,
         mockResponsesOverridden: mockMode.overridden,
         mockResponsesEnvironmentDefault: environmentDefault,
+        manualTesting,
       },
       endpoints: MSTYLE_V2_CATALOG,
+      manualTestProfiles: MANUAL_TEST_PROFILES,
     };
   }
 
@@ -461,6 +470,47 @@ export class AdminController {
       details: { mockResponsesEnabled },
     });
     return { mockResponsesEnabled };
+  }
+
+  @Patch('integration/manual-testing')
+  @RequireAllPermissions('admin.settings')
+  async updateIntegrationManualTesting(
+    @Body() dto: UpdateMstyleManualTestingDto,
+    @Req() req: any,
+  ) {
+    if (req.user?.role !== 'admin') {
+      throw new ForbiddenException('Доступно только администратору');
+    }
+    const settings =
+      await this.siteSettingsService.setMstyleManualTestingSettings(dto);
+    await this.auditService.log({
+      action: 'integration.manual_testing.update',
+      entityType: 'app_settings',
+      actor: req.user,
+      details: settings,
+    });
+    return { settings };
+  }
+
+  @Post('integration/manual-testing/prepare')
+  @RequireAllPermissions('admin.settings')
+  async prepareIntegrationManualTesting(@Req() req: any) {
+    if (req.user?.role !== 'admin') {
+      throw new ForbiddenException('Доступно только администратору');
+    }
+    const settings =
+      await this.siteSettingsService.getMstyleManualTestingSettings();
+    if (!settings.enabled) {
+      throw new BadRequestException('Сначала включите тестовый режим');
+    }
+    const result = await this.mstyleManualTestingService.prepare();
+    await this.auditService.log({
+      action: 'integration.manual_testing.prepare',
+      entityType: 'mstyle_test_profiles',
+      actor: req.user,
+      details: { profiles: result.prepared.length },
+    });
+    return result;
   }
 
   @Post('integration/probe-token')
