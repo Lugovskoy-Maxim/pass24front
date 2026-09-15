@@ -106,6 +106,7 @@ const PROFILE = {
   privateDataRevision: 1,
   privateDataComplete: true,
   memberPolicy: { employeeLimit: 3 },
+  officeIds: ['tf-room:107'],
   sourceLinks: [],
   createdAt: '2026-08-01T10:00:00Z',
   updatedAt: '2026-08-14T10:00:00Z',
@@ -339,6 +340,7 @@ const MSTYLE_V2_CATALOG_BASE: CatalogEndpoint[] = [
             privateDataComplete: true,
             display: { label: 'ООО Пример' },
             memberPolicy: { employeeLimit: 3 },
+            officeIds: ['tf-room:107'],
             snapshotSources: {
               primary: {
                 profile: 2,

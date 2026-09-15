@@ -212,6 +212,10 @@ export class MstyleProfile {
   @Prop({ type: Object, default: { employeeLimit: null } })
   memberPolicy: { employeeLimit: number | null };
 
+  /** Mstyle office identifiers taken from assigned Office.externalId values. */
+  @Prop({ type: [String], default: [] })
+  officeIds: string[];
+
   @Prop({ type: [Object], default: [] })
   sourceLinks: Array<{
     sourceSystem: string;

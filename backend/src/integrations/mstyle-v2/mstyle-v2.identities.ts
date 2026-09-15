@@ -5,8 +5,9 @@ import { InjectModel } from '@nestjs/mongoose';
 import { Model } from 'mongoose';
 import * as bcrypt from 'bcryptjs';
 import { AUTH_CONNECTION } from '../../database/auth-database.constants';
-import { User, UserDocument } from '../../schemas';
+import { Office, OfficeDocument, User, UserDocument } from '../../schemas';
 import { normalizeRuMobilePhone } from '../../common/phone';
+import { officeAssignedToQuery } from '../../common/office-tenants';
 import { Ids } from './mstyle-v2.ids';
 import {
   encryptJson,
@@ -38,6 +39,18 @@ export function identityStatusFromUser(
   return deriveIdentityStatus(user);
 }
 
+export function normalizeOfficeExternalIds(
+  offices: Array<{ externalId?: string | null }>,
+): string[] {
+  return [
+    ...new Set(
+      offices
+        .map((office) => office.externalId?.trim())
+        .filter((id): id is string => !!id),
+    ),
+  ].sort();
+}
+
 @Injectable()
 export class MstyleIdentityService {
   constructor(
@@ -53,6 +66,8 @@ export class MstyleIdentityService {
     private readonly memberships: Model<MstyleMembershipDocument>,
     @InjectModel(MstyleContact.name)
     private readonly contacts: Model<MstyleContactDocument>,
+    @InjectModel(Office.name)
+    private readonly offices: Model<OfficeDocument>,
   ) {}
 
   async findUserByLogin(loginRaw: string) {
@@ -275,7 +290,9 @@ export class MstyleIdentityService {
         existing.userId = userId;
         await existing.save();
       }
-      return (await this.refreshUserSecurity(existing))!;
+      const refreshed = (await this.refreshUserSecurity(existing))!;
+      await this.syncProfileOfficeIds(user, refreshed);
+      return refreshed;
     }
 
     const phone = normalizeRuMobilePhone(user.phone || '') || undefined;
@@ -368,6 +385,7 @@ export class MstyleIdentityService {
         privateDataRevision: null,
         privateDataComplete: false,
         memberPolicy: { employeeLimit: user.employeeLimit ?? null },
+        officeIds: await this.officeExternalIds(ownerUserId),
         sourceLinks: [],
       });
       await this.memberships.create({
@@ -410,6 +428,64 @@ export class MstyleIdentityService {
       !!user.emailVerified,
     );
     return identity;
+  }
+
+  private async officeExternalIds(ownerUserId: string): Promise<string[]> {
+    const offices = await this.offices
+      .find({
+        ...officeAssignedToQuery(ownerUserId),
+        isActive: true,
+        externalId: { $type: 'string', $ne: '' },
+      })
+      .select('externalId')
+      .lean();
+    return normalizeOfficeExternalIds(offices);
+  }
+
+  private async syncProfileOfficeIds(
+    user: UserDocument,
+    identity: MstyleIdentityDocument,
+  ): Promise<void> {
+    const membership = await this.memberships.findOne({
+      subject: identity.subject,
+      status: 'active',
+    });
+    if (!membership) return;
+    const profile = await this.profiles.findOne({
+      profileId: membership.profileId,
+    });
+    if (!profile) return;
+
+    const ownerUserId = user.parentTenantId
+      ? String(user.parentTenantId)
+      : String(user._id);
+    const officeIds = await this.officeExternalIds(ownerUserId);
+    const current = profile.officeIds || [];
+    if (
+      current.length === officeIds.length &&
+      current.every((id, index) => id === officeIds[index])
+    ) {
+      return;
+    }
+
+    profile.officeIds = officeIds;
+    profile.revision += 1;
+    await profile.save();
+    const members = await this.memberships
+      .find({ profileId: profile.profileId, status: 'active' })
+      .select('subject')
+      .lean();
+    for (const member of members) await this.bumpContext(member.subject);
+    await this.events.emit({
+      type: 'profile.updated',
+      aggregate: {
+        type: 'resident_profile',
+        id: profile.profileId,
+        revision: profile.revision,
+      },
+      profileId: profile.profileId,
+      payload: { changedFieldCodes: ['officeIds'] },
+    });
   }
 
   async ensureStandalone(input: {

@@ -15,8 +15,9 @@ import {
   safeEqualHex,
 } from './mstyle-v2.crypto';
 import { Ids, ulid } from './mstyle-v2.ids';
-import { consentItem } from './mstyle-v2.present';
+import { consentItem, safeProfile } from './mstyle-v2.present';
 import { ProblemException } from './mstyle-v2.problem';
+import { normalizeOfficeExternalIds } from './mstyle-v2.identities';
 
 describe('mstyle-v2 helpers', () => {
   it('builds crockford-like ids', () => {
@@ -165,5 +166,38 @@ describe('mstyle-v2 helpers', () => {
 
     expect(item.history).toHaveLength(1);
     expect(item.history[0].auditRef).toBe('evt_current');
+  });
+
+  it('uses exact Office.externalId values for resident officeIds', () => {
+    expect(
+      normalizeOfficeExternalIds([
+        { externalId: ' tf_room:703 ' },
+        { externalId: 'tf-room:107' },
+        { externalId: 'tf_room:703' },
+        { externalId: '' },
+        {},
+      ]),
+    ).toEqual(['tf-room:107', 'tf_room:703']);
+  });
+
+  it('includes external office ids in the safe V2 profile', () => {
+    expect(
+      safeProfile({
+        profileId: 'prf_test',
+        type: 'company',
+        legalForm: 'ooo',
+        status: 'active',
+        label: 'Test',
+        companyShortName: 'Test',
+        revision: 2,
+        privateDataRevision: null,
+        privateDataComplete: false,
+        memberPolicy: { employeeLimit: null },
+        officeIds: ['tf_room:703'],
+        membershipSetRevision: 1,
+        assignmentSetRevision: 1,
+        sourceLinks: [],
+      } as any).officeIds,
+    ).toEqual(['tf_room:703']);
   });
 });

@@ -136,6 +136,7 @@ export class MstyleDirectoryService {
         privateDataComplete: profile.privateDataComplete,
         display: { label: profile.label },
         memberPolicy: profile.memberPolicy || { employeeLimit: null },
+        officeIds: profile.officeIds || [],
         snapshotSources: {
           primary: {
             profile: profile.revision,
@@ -380,6 +381,7 @@ export class MstyleDirectoryService {
         privateDataRevision: row.privateDataRevision,
         privateDataComplete: row.privateDataComplete,
         memberPolicy: row.memberPolicy,
+        officeIds: row.officeIds || [],
         updatedAt: (row as any).updatedAt?.toISOString?.() || nowIso(),
         display: { label: row.label, contactMasks: masks },
       });

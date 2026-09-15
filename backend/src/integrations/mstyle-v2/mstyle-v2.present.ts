@@ -68,6 +68,7 @@ export function safeProfile(doc: MstyleProfile) {
     memberPolicy: {
       employeeLimit: doc.memberPolicy?.employeeLimit ?? null,
     },
+    officeIds: doc.officeIds || [],
     membershipSetRevision: doc.membershipSetRevision,
     contactAssignmentSetRevision: doc.assignmentSetRevision,
     sourceLinks: doc.sourceLinks || [],

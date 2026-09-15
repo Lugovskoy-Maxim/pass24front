@@ -1531,7 +1531,9 @@ export class AdminService {
 
     const toRemove = current.filter((o) => !targetIdSet.has(o._id.toString()));
     for (const office of toRemove) {
-      const next = collectOfficeTenantIds(office).filter((id) => id !== tenantId);
+      const next = collectOfficeTenantIds(office).filter(
+        (id) => id !== tenantId,
+      );
       const write = officeTenantWrite(normalizeOfficeTenantIds(next));
       await this.officeModel.updateOne({ _id: office._id }, write);
     }
@@ -1573,16 +1575,21 @@ export class AdminService {
     const propertyIds = [...new Set(offices.map((o) => o.property.toString()))];
     const primary = offices[0];
 
-    await this.userModel.findByIdAndUpdate(tenantId, {
-      properties: propertyIds.map((id) => new Types.ObjectId(id)),
-      ...(primary
-        ? {
-            office: primary.number,
-            floor: primary.floor,
-            // company офиса не затираем company пользователя, если у user уже есть
-          }
-        : { office: '', floor: '' }),
-    });
+    const user = await this.userModel.findByIdAndUpdate(
+      tenantId,
+      {
+        properties: propertyIds.map((id) => new Types.ObjectId(id)),
+        ...(primary
+          ? {
+              office: primary.number,
+              floor: primary.floor,
+              // company офиса не затираем company пользователя, если у user уже есть
+            }
+          : { office: '', floor: '' }),
+      },
+      { new: true },
+    );
+    if (user) await this.syncResidentRecord(user);
   }
 
   /**

@@ -5,7 +5,7 @@ import { ConfigService } from '@nestjs/config';
 import { createMstyleSmsService, MSTYLE_SMS_SERVICE } from './mstyle-v2.sms';
 import { MongooseModule } from '@nestjs/mongoose';
 import { AuthDatabaseModule } from '../../database/auth-database.module';
-import { User, UserSchema } from '../../schemas';
+import { Office, OfficeSchema, User, UserSchema } from '../../schemas';
 import { SmsModule } from '../../sms/sms.module';
 import { MstyleAuthService } from './mstyle-v2.auth.service';
 import { MstyleV2Config } from './mstyle-v2.config';
@@ -35,7 +35,10 @@ import { MstyleContactProofService } from './mstyle-v2.contact-proof';
 @Module({
   imports: [
     AuthDatabaseModule.forFeature([{ name: User.name, schema: UserSchema }]),
-    MongooseModule.forFeature(MSTYLE_MODELS),
+    MongooseModule.forFeature([
+      ...MSTYLE_MODELS,
+      { name: Office.name, schema: OfficeSchema },
+    ]),
     SmsModule,
   ],
   exports: [MstyleIdentityService, MstyleOauthService, MstyleV2Config],
