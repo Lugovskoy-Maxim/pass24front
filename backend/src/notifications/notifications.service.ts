@@ -332,7 +332,7 @@ export class NotificationsService implements OnModuleInit {
       ?.trim();
     if (!projectId || !serviceToken) return;
     const response = await fetch(
-      `https://vkpns.rustore.ru/v1/projects/${encodeURIComponent(projectId)}/messages`,
+      `https://vkpns.rustore.ru/v1/projects/${encodeURIComponent(projectId)}/messages:send`,
       {
         method: 'POST',
         headers: {
@@ -340,8 +340,8 @@ export class NotificationsService implements OnModuleInit {
           'Content-Type': 'application/json',
         },
         body: JSON.stringify({
-          tokens: [token],
           message: {
+            token,
             notification: { title: message.title, body: message.body },
             data: {
               title: message.title,
