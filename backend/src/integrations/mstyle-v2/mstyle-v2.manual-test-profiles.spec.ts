@@ -1,10 +1,15 @@
-import { MANUAL_TEST_PROFILES } from './mstyle-v2.manual-test-profiles';
+import {
+  findManualTestIdentity,
+  MANUAL_TEST_GUEST_CONTACTS,
+  MANUAL_TEST_PROFILES,
+} from './mstyle-v2.manual-test-profiles';
 
 describe('manual test profiles', () => {
   it('uses unique contacts reserved for manual testing', () => {
     const identities = MANUAL_TEST_PROFILES.flatMap((profile) => [
       profile.owner,
       ...profile.employees,
+      ...profile.employeeCandidates,
     ]);
     expect(new Set(identities.map((item) => item.email)).size).toBe(
       identities.length,
@@ -31,6 +36,67 @@ describe('manual test profiles', () => {
         expect(validInn12(data.individual.inn)).toBe(true);
       }
     }
+  });
+
+  it('provides valid birth dates for every manual employee identity', () => {
+    const employees = MANUAL_TEST_PROFILES.flatMap((profile) => [
+      ...profile.employees,
+      ...profile.employeeCandidates,
+    ]);
+    expect(employees.length).toBeGreaterThan(0);
+    for (const employee of employees) {
+      expect(employee.birthDate).toMatch(/^\d{4}-\d{2}-\d{2}$/);
+      expect(Number.isNaN(Date.parse(`${employee.birthDate}T00:00:00Z`))).toBe(
+        false,
+      );
+    }
+  });
+
+  it('keeps guest delivery contacts separate from resident fixtures', () => {
+    const residentPhones = new Set(
+      MANUAL_TEST_PROFILES.flatMap((profile) => [
+        profile.owner,
+        ...profile.employees,
+        ...profile.employeeCandidates,
+      ]).map((identity) => identity.phone),
+    );
+    expect(MANUAL_TEST_GUEST_CONTACTS).toHaveLength(3);
+    for (const guest of MANUAL_TEST_GUEST_CONTACTS) {
+      expect(guest.phone).toMatch(/^\+79990005\d{3}$/);
+      expect(residentPhones.has(guest.phone)).toBe(false);
+      expect(findManualTestIdentity('phone', guest.phone)?.key).toBe(guest.key);
+    }
+    expect(findManualTestIdentity('email', 'ninzak@ya.ru')).toBeUndefined();
+  });
+
+  it('keeps a dedicated editable company fixture', () => {
+    const editable = MANUAL_TEST_PROFILES.filter(
+      (profile) => profile.editPolicy === 'self_service',
+    );
+    expect(editable.map((profile) => profile.key)).toEqual(['romashka']);
+    expect(editable[0].type).toBe('company');
+  });
+
+  it('covers active, expired and employee-limit scenarios', () => {
+    const roga = MANUAL_TEST_PROFILES.find(
+      (profile) => profile.key === 'roga-i-kopyta',
+    );
+    const romashka = MANUAL_TEST_PROFILES.find(
+      (profile) => profile.key === 'romashka',
+    );
+    const ip = MANUAL_TEST_PROFILES.find(
+      (profile) => profile.key === 'ip-testov',
+    );
+
+    expect(roga?.scenario.office?.externalId).toMatch(/^tf-room:\d+$/);
+    expect(roga?.scenario.office?.resourceId).toMatch(
+      /^[a-z][a-z0-9]{1,7}_[A-Za-z0-9_-]{16,}$/,
+    );
+    expect(roga?.scenario.balanceMinutes).toBeGreaterThan(0);
+    expect(roga?.scenario.employeeBalanceMinutes).toBe(0);
+    expect(romashka?.employeeCandidates).toHaveLength(3);
+    expect(romashka?.employeeLimit).toBe(2);
+    expect(ip?.scenario.expiresOffsetDays).toBeLessThan(0);
   });
 });
 

@@ -1251,7 +1251,30 @@ export const api = {
           subject: string;
           employees: number;
         }>;
+        mstyle: {
+          principals: number;
+          resetActivity: boolean;
+          removedBookings: number;
+          removedRequests: number;
+        };
       }>('/admin/integration/manual-testing/prepare', { method: 'POST' }),
+
+    resetIntegrationManualTesting: () =>
+      request<{
+        prepared: Array<{
+          key: string;
+          title: string;
+          profileId: string;
+          subject: string;
+          employees: number;
+        }>;
+        mstyle: {
+          principals: number;
+          resetActivity: boolean;
+          removedBookings: number;
+          removedRequests: number;
+        };
+      }>('/admin/integration/manual-testing/reset', { method: 'POST' }),
 
     getSiteSettings: () =>
       request<{ settings: SiteSettings }>('/admin/site-settings'),
@@ -1405,6 +1428,22 @@ export interface ManualTestProfile {
   employeeLimit: number | null;
   owner: ManualTestIdentity;
   employees: ManualTestIdentity[];
+  employeeCandidates: ManualTestIdentity[];
+  scenario: {
+    description: string;
+    balanceMinutes: number;
+    employeeBalanceMinutes: number;
+    accrualOffsetDays: number | null;
+    expiresOffsetDays: number | null;
+    office: {
+      externalId: string;
+      resourceId: string;
+      label: string;
+      validFromOffsetDays: number;
+      validUntilOffsetDays: number;
+    } | null;
+    expected: string[];
+  };
   privateData: Record<string, unknown>;
 }
 

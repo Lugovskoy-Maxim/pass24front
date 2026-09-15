@@ -210,8 +210,14 @@ export class MstyleProfile {
   @Prop({ default: false })
   privateDataComplete: boolean;
 
-  @Prop({ type: Object, default: { employeeLimit: null } })
-  memberPolicy: { employeeLimit: number | null };
+  @Prop({
+    type: Object,
+    default: { employeeLimit: null, residentHoursMonthlyQuotaMin: 0 },
+  })
+  memberPolicy: {
+    employeeLimit: number | null;
+    residentHoursMonthlyQuotaMin?: number;
+  };
 
   @Prop({ type: [Object], default: [] })
   sourceLinks: Array<{
@@ -510,7 +516,10 @@ export class MstyleChallenge {
   @Prop({ default: 4 })
   codeLength: number;
 
-  @Prop({ enum: ['local', 'smsaero_mobile_id'], default: 'local' })
+  @Prop({
+    enum: ['local', 'smsaero_mobile_id', 'manual_test_email'],
+    default: 'local',
+  })
   verificationProvider?: string;
 
   @Prop({ type: Number })

@@ -1,6 +1,10 @@
 import { MstyleConsentService } from './mstyle-v2.consent.service';
 import { MstyleContactProofService } from './mstyle-v2.contact-proof';
-import { membershipIsEffective } from './mstyle-v2.membership-policy';
+import {
+  EMPLOYEE_SLOT_STATUSES,
+  membershipIsEffective,
+  membershipOccupiesEmployeeSlot,
+} from './mstyle-v2.membership-policy';
 import { MstyleContactSelectionService } from './mstyle-v2.contact-selection';
 import {
   normalizeResidentInput,
@@ -39,6 +43,7 @@ import type {
 import { MstyleEventsService } from './mstyle-v2.events';
 import { Ids, contactIdQuery } from './mstyle-v2.ids';
 import { MstyleIdentityService } from './mstyle-v2.identities';
+import { findManualTestIdentity } from './mstyle-v2.manual-test-profiles';
 import {
   assignmentDto,
   contactDto,
@@ -112,6 +117,11 @@ export class MstyleDirectoryService {
 
   async getContext(subject: string): Promise<MstyleResult> {
     const identity = await this.requireIdentity(subject);
+    const manualTestIdentity = identity.email
+      ? findManualTestIdentity('email', identity.email)
+      : identity.phone
+        ? findManualTestIdentity('phone', identity.phone)
+        : undefined;
     const identityContactMasks = await this.contactMasks(subject);
     const memberships = await this.memberships.find({ subject }).lean();
     const profiles: Record<string, unknown>[] = [];
@@ -135,7 +145,13 @@ export class MstyleDirectoryService {
         privateDataRevision: profile.privateDataRevision,
         privateDataComplete: profile.privateDataComplete,
         display: { label: profile.label },
-        memberPolicy: profile.memberPolicy || { employeeLimit: null },
+        memberPolicy: {
+          employeeLimit: profile.memberPolicy?.employeeLimit ?? null,
+          residentHoursMonthlyQuotaMin: Math.max(
+            0,
+            profile.memberPolicy?.residentHoursMonthlyQuotaMin ?? 0,
+          ),
+        },
         snapshotSources: {
           primary: {
             profile: profile.revision,
@@ -163,6 +179,10 @@ export class MstyleDirectoryService {
         identityDisplay: {
           displayName: identity.displayName || '',
           contactMasks: identityContactMasks,
+          ...(manualTestIdentity?.role === 'employee' &&
+          manualTestIdentity.birthDate
+            ? { birthDate: manualTestIdentity.birthDate }
+            : {}),
         },
         profiles,
         physicalAccessFacts: {
@@ -248,6 +268,13 @@ export class MstyleDirectoryService {
           dto.memberPolicy.employeeLimit === undefined
             ? (profile.memberPolicy?.employeeLimit ?? null)
             : dto.memberPolicy.employeeLimit,
+        residentHoursMonthlyQuotaMin:
+          dto.memberPolicy.residentHoursMonthlyQuotaMin === undefined
+            ? Math.max(
+                0,
+                profile.memberPolicy?.residentHoursMonthlyQuotaMin ?? 0,
+              )
+            : dto.memberPolicy.residentHoursMonthlyQuotaMin,
       };
     }
     profile.revision += 1;
@@ -379,7 +406,13 @@ export class MstyleDirectoryService {
         profileRevision: row.revision,
         privateDataRevision: row.privateDataRevision,
         privateDataComplete: row.privateDataComplete,
-        memberPolicy: row.memberPolicy,
+        memberPolicy: {
+          employeeLimit: row.memberPolicy?.employeeLimit ?? null,
+          residentHoursMonthlyQuotaMin: Math.max(
+            0,
+            row.memberPolicy?.residentHoursMonthlyQuotaMin ?? 0,
+          ),
+        },
         updatedAt: (row as any).updatedAt?.toISOString?.() || nowIso(),
         display: { label: row.label, contactMasks: masks },
       });
@@ -558,6 +591,8 @@ export class MstyleDirectoryService {
       ),
       memberPolicy: {
         employeeLimit: dto.profile.memberPolicy?.employeeLimit ?? null,
+        residentHoursMonthlyQuotaMin:
+          dto.profile.memberPolicy?.residentHoursMonthlyQuotaMin ?? 0,
       },
       sourceLinks: [{ ...dto.sourceLink, linkedAt: nowIso() }],
       assignmentSetRevision: 1,
@@ -1200,6 +1235,9 @@ export class MstyleDirectoryService {
     const activeEmployeeCount = rows.filter(
       (m) => m.role === 'employee' && m.status === 'active',
     ).length;
+    const occupiedEmployeeCount = rows.filter(
+      membershipOccupiesEmployeeSlot,
+    ).length;
     const items: Record<string, unknown>[] = [];
     for (const row of rows) {
       const identity = await this.identityModel.findOne({
@@ -1225,7 +1263,7 @@ export class MstyleDirectoryService {
           activeEmployeeCount,
           canAdd:
             profile.memberPolicy?.employeeLimit == null ||
-            activeEmployeeCount < profile.memberPolicy.employeeLimit,
+            occupiedEmployeeCount < profile.memberPolicy.employeeLimit,
         },
         items,
         nextCursor: null,
@@ -1456,7 +1494,7 @@ export class MstyleDirectoryService {
         membership.membershipId,
       );
       if (membership.status !== 'active')
-        await this.assertEmployeeLimit(profile);
+        await this.assertEmployeeLimit(profile, membership.membershipId);
     }
     if (dto.status) membership.status = dto.status;
     if (dto.validFrom !== undefined) membership.validFrom = dto.validFrom;
@@ -1958,16 +1996,24 @@ export class MstyleDirectoryService {
     );
   }
 
-  private async assertEmployeeLimit(profile: MstyleProfileDocument) {
+  private async assertEmployeeLimit(
+    profile: MstyleProfileDocument,
+    excludeMembershipId?: string,
+  ) {
     const limit = profile.memberPolicy?.employeeLimit;
     if (limit == null) return;
     const used = await this.memberships.countDocuments({
       profileId: profile.profileId,
       role: 'employee',
-      status: 'active',
+      status: { $in: [...EMPLOYEE_SLOT_STATUSES] },
+      ...(excludeMembershipId
+        ? { membershipId: { $ne: excludeMembershipId } }
+        : {}),
     });
     if (used >= limit) {
-      problem(409, 'CONFLICT', { title: 'Employee limit reached' });
+      problem(409, 'MEMBERSHIP_LIMIT_EXCEEDED', {
+        title: 'Employee limit reached',
+      });
     }
   }
 
@@ -2406,11 +2452,7 @@ function isOpenDeletionRequestDuplicate(error: unknown): boolean {
   };
   if (duplicate.code !== 11000) return false;
   const keys = Object.keys(duplicate.keyPattern || {}).sort();
-  if (
-    keys.length === 2 &&
-    keys[0] === 'profileId' &&
-    keys[1] === 'status'
-  ) {
+  if (keys.length === 2 && keys[0] === 'profileId' && keys[1] === 'status') {
     return true;
   }
   return (
@@ -2420,4 +2462,3 @@ function isOpenDeletionRequestDuplicate(error: unknown): boolean {
     )
   );
 }
-

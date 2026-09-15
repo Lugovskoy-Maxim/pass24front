@@ -33,6 +33,7 @@ export default function IntegrationCatalogPage() {
   >(null);
   const [manualTestingBusy, setManualTestingBusy] = useState(false);
   const [manualProfilesBusy, setManualProfilesBusy] = useState(false);
+  const [manualResetBusy, setManualResetBusy] = useState(false);
   const [manualTestProfiles, setManualTestProfiles] = useState<
     ManualTestProfile[]
   >([]);
@@ -141,6 +142,31 @@ export default function IntegrationCatalogPage() {
     }
   };
 
+  const resetManualProfiles = async () => {
+    if (
+      !window.confirm(
+        'Удалить тестовые бронирования и заявки, затем восстановить исходные часы, профили и права?',
+      )
+    ) {
+      return;
+    }
+    setManualResetBusy(true);
+    try {
+      const result = await api.admin.resetIntegrationManualTesting();
+      toast(
+        `Тестовые данные восстановлены. Удалено броней: ${result.mstyle.removedBookings}, заявок: ${result.mstyle.removedRequests}`,
+        'success',
+      );
+    } catch (err) {
+      toast(
+        getErrorMessage(err, 'Не удалось восстановить тестовые данные'),
+        'error',
+      );
+    } finally {
+      setManualResetBusy(false);
+    }
+  };
+
   if (error) {
     return (
       <AdminLayout title="API Mstyle">
@@ -220,10 +246,24 @@ export default function IntegrationCatalogPage() {
             <button
               type="button"
               className="btn btn-secondary"
-              disabled={manualProfilesBusy || !manualTestingEnabled}
+              disabled={
+                manualProfilesBusy || manualResetBusy || !manualTestingEnabled
+              }
               onClick={() => void prepareManualProfiles()}
             >
               {manualProfilesBusy ? 'Подготовка…' : 'Подготовить профили'}
+            </button>
+            <button
+              type="button"
+              className="btn btn-secondary"
+              disabled={
+                manualResetBusy || manualProfilesBusy || !manualTestingEnabled
+              }
+              onClick={() => void resetManualProfiles()}
+            >
+              {manualResetBusy
+                ? 'Восстановление…'
+                : 'Восстановить тестовые данные'}
             </button>
             <button
               type="button"
@@ -251,6 +291,13 @@ export default function IntegrationCatalogPage() {
                     ? 'ИП'
                     : 'ООО'}
               </div>
+              <p className="text-sm mt-2">{profile.scenario.description}</p>
+              <div className="text-sm text-[var(--muted)] mt-2">
+                Баланс: {profile.scenario.balanceMinutes / 60} ч.
+                {profile.scenario.office
+                  ? ` · ${profile.scenario.office.label}`
+                  : ' · Без офиса'}
+              </div>
               <div className="text-sm mt-2">
                 <div>{profile.owner.fullName}</div>
                 <div className="text-[var(--muted)]">{profile.owner.email}</div>
@@ -264,6 +311,32 @@ export default function IntegrationCatalogPage() {
                   <div className="text-[var(--muted)]">{employee.phone}</div>
                 </div>
               ))}
+              {profile.employeeCandidates.length ? (
+                <div className="text-sm mt-3 border-t pt-2">
+                  <div className="font-medium">Для добавления сотрудников</div>
+                  {profile.employeeCandidates.map((employee) => (
+                    <div key={employee.key} className="mt-2">
+                      <div>{employee.fullName}</div>
+                      <div className="text-[var(--muted)]">
+                        {employee.email}
+                      </div>
+                      <div className="text-[var(--muted)]">
+                        {employee.phone}
+                      </div>
+                    </div>
+                  ))}
+                </div>
+              ) : null}
+              <details className="text-sm mt-3">
+                <summary className="cursor-pointer">
+                  Ожидаемое состояние
+                </summary>
+                <ul className="mt-2 pl-5 list-disc">
+                  {profile.scenario.expected.map((item) => (
+                    <li key={item}>{item}</li>
+                  ))}
+                </ul>
+              </details>
               <details className="text-sm mt-3">
                 <summary className="cursor-pointer">Поля профиля</summary>
                 <pre className="text-xs overflow-auto mt-2 bg-[var(--surface-muted)] p-3 rounded whitespace-pre-wrap">

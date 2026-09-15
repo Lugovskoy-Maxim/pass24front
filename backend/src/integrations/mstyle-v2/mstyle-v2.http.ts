@@ -489,6 +489,13 @@ function m1m2ContextPolicy(
   actor: string,
 ): ContextPolicy | null {
   if (
+    method === 'PATCH' &&
+    /\/resident-profiles\/[^/]+$/.test(path) &&
+    actor.startsWith('wp-admin:')
+  ) {
+    return { actor: 'admin' };
+  }
+  if (
     method === 'GET' &&
     /\/resident-profiles\/[^/]+(?:\/memberships|\/contact-assignments)?$/.test(
       path,
@@ -628,6 +635,7 @@ function m1m2ContextPolicy(
       actor: 'delivery',
       purposes: [
         'booking_document_render',
+        'account_booking_view',
         'payment_receipt_delivery',
         'booking_notification_delivery',
       ],

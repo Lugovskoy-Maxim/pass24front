@@ -18,7 +18,12 @@ import {
   MAX_VERIFY_ATTEMPTS,
   RESEND_MIN_MS,
 } from './mstyle-v2.constants';
-import { encryptJson, hmacHex, maskContact } from './mstyle-v2.crypto';
+import {
+  encryptJson,
+  hmacHex,
+  manualTestOtpCode,
+  maskContact,
+} from './mstyle-v2.crypto';
 import { Ids } from './mstyle-v2.ids';
 import { problem } from './mstyle-v2.problem';
 import { MstyleRateLimitService } from './mstyle-v2.rate-limit';
@@ -66,7 +71,14 @@ export class MstyleContactProofService {
     const useSms = real && type === 'phone' && !useManualDelivery;
     if (useSms && !this.sms.isConfigured())
       problem(503, 'UPSTREAM_UNAVAILABLE');
-    const code = real ? generateOtpCode(CODE_LENGTH) : this.cfg.mockOtp();
+    const code = useManualDelivery
+      ? manualTestOtpCode(
+          this.cfg.rateLimitSecret(),
+          `contact-proof:${type}:${identifierHash}`,
+        )
+      : real
+        ? generateOtpCode(CODE_LENGTH)
+        : this.cfg.mockOtp();
     const now = Date.now();
     const challenge = await this.challenges.create({
       ...binding,

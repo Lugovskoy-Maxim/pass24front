@@ -23,7 +23,12 @@ import {
   RESEND_MIN_MS,
 } from './mstyle-v2.constants';
 import { MstyleV2Config } from './mstyle-v2.config';
-import { dummyHashWork, hmacHex, normalizeEmail } from './mstyle-v2.crypto';
+import {
+  dummyHashWork,
+  hmacHex,
+  manualTestOtpCode,
+  normalizeEmail,
+} from './mstyle-v2.crypto';
 import { Ids } from './mstyle-v2.ids';
 import {
   identityStatusFromUser,
@@ -189,10 +194,16 @@ export class MstyleAuthService {
     const useSmsAero =
       !useManualDelivery && this.useSmsAero(dto.identifier.type, dto.channel);
     if (useSmsAero) this.requireSmsAero();
-    const code = this.issueChallengeCode({
-      isDummy,
-      useSmsAero,
-    });
+    const identifierHash = hmacHex(
+      this.cfg.rateLimitSecret(),
+      `${dto.identifier.type}:${normalized}`,
+    );
+    const code = useManualDelivery
+      ? manualTestOtpCode(
+          this.cfg.rateLimitSecret(),
+          `auth:${dto.identifier.type}:${identifierHash}`,
+        )
+      : this.issueChallengeCode({ isDummy, useSmsAero });
     const mobileId =
       useSmsAero && !isDummy
         ? await this.sms.startMobileAuth(normalized)
@@ -206,10 +217,7 @@ export class MstyleAuthService {
       status: 'dispatch_pending',
       channel: dto.channel,
       identifierType: dto.identifier.type,
-      identifierHash: hmacHex(
-        this.cfg.rateLimitSecret(),
-        `${dto.identifier.type}:${normalized}`,
-      ),
+      identifierHash,
       subject,
       authVersion: isDummy ? undefined : identity!.authVersion,
       isDummy,
@@ -336,10 +344,15 @@ export class MstyleAuthService {
         challenge.mobileIdAuthType = mobileId.authType;
       }
     } else {
-      code = this.issueChallengeCode({
-        isDummy: Boolean(challenge.isDummy),
-        useSmsAero: false,
-      });
+      code = useManualDelivery
+        ? manualTestOtpCode(
+            this.cfg.rateLimitSecret(),
+            `auth:${challenge.identifierType}:${challenge.identifierHash}`,
+          )
+        : this.issueChallengeCode({
+            isDummy: Boolean(challenge.isDummy),
+            useSmsAero: false,
+          });
       challenge.codeHash = await bcrypt.hash(code, 8);
     }
     challenge.codeLength = CODE_LENGTH;

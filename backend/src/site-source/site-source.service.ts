@@ -171,6 +171,16 @@ export type SiteMysqlPublic = {
   pendingChanges: boolean;
 } & SiteMysqlMapping;
 
+export type ManualTestingPrincipalInput = {
+  profileKey: string;
+  identityKey: string;
+  subject: string;
+  role: 'owner' | 'employee';
+  balanceMinutes: number;
+  accrualOffsetDays: number | null;
+  expiresOffsetDays: number | null;
+};
+
 @Injectable()
 export class SiteSourceService implements OnModuleInit, OnModuleDestroy {
   private readonly logger = new Logger(SiteSourceService.name);
@@ -280,6 +290,165 @@ export class SiteSourceService implements OnModuleInit, OnModuleDestroy {
     } finally {
       await conn.end();
     }
+  }
+
+  /**
+   * Restores only principals that were resolved from Pass' built-in manual
+   * fixtures. This is intentionally independent from site-source writeEnabled:
+   * that switch controls catalog/ticket synchronization, while this operation
+   * is an explicit admin-only test-data reset guarded by the controller.
+   */
+  async prepareManualTestingData(
+    principals: ManualTestingPrincipalInput[],
+    resetActivity = false,
+  ) {
+    if (!principals.length) {
+      throw new BadRequestException('Нет тестовых субъектов для подготовки');
+    }
+    const subjects = principals.map((item) => item.subject);
+    if (
+      new Set(subjects).size !== subjects.length ||
+      principals.some(
+        (item) =>
+          !/^usr_[A-Za-z0-9_-]{16,}$/.test(item.subject) ||
+          !Number.isInteger(item.balanceMinutes) ||
+          item.balanceMinutes < 0,
+      )
+    ) {
+      throw new BadRequestException('Некорректный набор тестовых субъектов');
+    }
+
+    const cfg = await this.getPublicConfig();
+    const conn = await this.connect();
+    try {
+      const tables = await this.listTables(conn);
+      const prefix = await this.resolvePrefix(conn, tables);
+      const name = (suffix: string) => `${prefix}${suffix}`;
+      const principalTable = name('tf_pass_principals');
+      if (!tables.includes(principalTable)) {
+        throw new BadRequestException(`Таблица ${principalTable} не найдена`);
+      }
+
+      await conn.beginTransaction();
+      try {
+        let removedBookings = 0;
+        let removedRequests = 0;
+        if (resetActivity) {
+          const result = await this.removeManualTestingActivity(
+            conn,
+            tables,
+            prefix,
+            subjects,
+          );
+          removedBookings = result.bookings;
+          removedRequests = result.requests;
+        }
+
+        for (const principal of principals) {
+          await conn.query(
+            `INSERT INTO ${ident(principalTable)}
+              (pass_environment, pass_subject, identity_status, balance_min,
+               resident_hours_accrual_date, resident_hours_expires_date)
+             VALUES ('production', ?, 'active', ?, ?, ?)
+             ON DUPLICATE KEY UPDATE
+               identity_status = VALUES(identity_status),
+               balance_min = VALUES(balance_min),
+               resident_hours_accrual_date = VALUES(resident_hours_accrual_date),
+               resident_hours_expires_date = VALUES(resident_hours_expires_date),
+               updated_at = CURRENT_TIMESTAMP`,
+            [
+              principal.subject,
+              principal.balanceMinutes,
+              dateWithOffset(principal.accrualOffsetDays),
+              dateWithOffset(principal.expiresOffsetDays),
+            ],
+          );
+        }
+
+        await conn.commit();
+        return {
+          ok: true,
+          siteDatabase: cfg.database,
+          principals: principals.length,
+          resetActivity,
+          removedBookings,
+          removedRequests,
+        };
+      } catch (error) {
+        await conn.rollback();
+        throw error;
+      }
+    } finally {
+      await conn.end();
+    }
+  }
+
+  private async removeManualTestingActivity(
+    conn: mysql.Connection,
+    tables: string[],
+    prefix: string,
+    subjects: string[],
+  ) {
+    const principalTable = `${prefix}tf_pass_principals`;
+    const [principalRows] = await conn.query(
+      `SELECT id FROM ${ident(principalTable)} WHERE pass_environment = 'production' AND pass_subject IN (?)`,
+      [subjects],
+    );
+    const principalIds = (principalRows as Array<{ id: number }>).map((row) =>
+      Number(row.id),
+    );
+    if (!principalIds.length) return { bookings: 0, requests: 0 };
+
+    const bookingTable = `${prefix}tf_bookings`;
+    const [bookingRows] = tables.includes(bookingTable)
+      ? await conn.query(
+          `SELECT id FROM ${ident(bookingTable)} WHERE pass_principal_id IN (?) FOR UPDATE`,
+          [principalIds],
+        )
+      : [[]];
+    const bookingIds = (bookingRows as Array<{ id: number }>).map((row) =>
+      Number(row.id),
+    );
+    const requestTable = `${prefix}tf_service_requests`;
+    const [requestRows] = tables.includes(requestTable)
+      ? await conn.query(
+          `SELECT id FROM ${ident(requestTable)} WHERE pass_principal_id IN (?)${
+            bookingIds.length ? ' OR booking_id IN (?)' : ''
+          } FOR UPDATE`,
+          bookingIds.length ? [principalIds, bookingIds] : [principalIds],
+        )
+      : [[]];
+    const requestIds = (requestRows as Array<{ id: number }>).map((row) =>
+      Number(row.id),
+    );
+
+    const removeByIds = async (
+      suffix: string,
+      column: string,
+      ids: number[],
+    ) => {
+      const table = `${prefix}${suffix}`;
+      if (!ids.length || !tables.includes(table)) return;
+      await conn.query(
+        `DELETE FROM ${ident(table)} WHERE ${ident(column)} IN (?)`,
+        [ids],
+      );
+    };
+
+    await removeByIds('tf_service_request_messages', 'request_id', requestIds);
+    await removeByIds('tf_service_requests', 'id', requestIds);
+    await removeByIds('tf_booking_services', 'booking_id', bookingIds);
+    await removeByIds('tf_booking_segments', 'booking_id', bookingIds);
+    await removeByIds('tf_payments', 'booking_id', bookingIds);
+    await removeByIds('tf_booking_events', 'booking_id', bookingIds);
+    await removeByIds('tf_pass_booking_attendees', 'booking_id', bookingIds);
+    await removeByIds('tf_pass_operation_links', 'booking_id', bookingIds);
+    await removeByIds('tf_balance_transactions', 'booking_id', bookingIds);
+    await removeByIds('tf_invoices', 'booking_id', bookingIds);
+    await removeByIds('tf_bookings', 'id', bookingIds);
+    await removeByIds('tf_balance_transactions', 'principal_id', principalIds);
+
+    return { bookings: bookingIds.length, requests: requestIds.length };
   }
 
   async previewOffices() {
@@ -2073,6 +2242,14 @@ function tableName(prefix: string, suffix: string) {
   if (!name) return `${prefix}`;
   if (name.startsWith(prefix)) return name;
   return `${prefix}${name.replace(/^_/, '')}`;
+}
+
+function dateWithOffset(offsetDays: number | null): string | null {
+  if (offsetDays === null) return null;
+  const date = new Date();
+  date.setUTCHours(12, 0, 0, 0);
+  date.setUTCDate(date.getUTCDate() + offsetDays);
+  return date.toISOString().slice(0, 10);
 }
 
 function officeNumber(

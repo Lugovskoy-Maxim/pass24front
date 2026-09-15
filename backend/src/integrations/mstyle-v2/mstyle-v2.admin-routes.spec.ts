@@ -23,6 +23,13 @@ const routes = [
     'admin_support_review',
   ],
   [
+    'R-05',
+    'PATCH',
+    '/resident-profiles/prf_1',
+    'integration.admin.profile.write',
+    '',
+  ],
+  [
     'R-08',
     'POST',
     '/resident-onboarding',

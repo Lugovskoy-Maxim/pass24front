@@ -67,6 +67,10 @@ export function safeProfile(doc: MstyleProfile) {
     privateDataComplete: !!doc.privateDataComplete,
     memberPolicy: {
       employeeLimit: doc.memberPolicy?.employeeLimit ?? null,
+      residentHoursMonthlyQuotaMin: Math.max(
+        0,
+        doc.memberPolicy?.residentHoursMonthlyQuotaMin ?? 0,
+      ),
     },
     membershipSetRevision: doc.membershipSetRevision,
     contactAssignmentSetRevision: doc.assignmentSetRevision,

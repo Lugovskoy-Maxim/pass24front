@@ -70,6 +70,26 @@ describe('MstyleAuthService SMS Aero Mobile ID', () => {
     );
   });
 
+  it('keeps the manual-test code stable when delivery is repeated', async () => {
+    const phone = '+79990001001';
+    const f = createFixture({ phone, manualTesting: true });
+    await f.service.startCodeChallenge(
+      { ...challengeDto(), identifier: { type: 'phone', value: phone } },
+      'mstyle-backend-prod',
+      '192.0.2.10',
+    );
+    const firstCode = f.mail.sendManualTestCode.mock.calls[0][0].code;
+    f.challenge().resendAfter = new Date(Date.now() - 1);
+    await f.service.resend(
+      f.challenge().challengeId,
+      'mstyle-backend-prod',
+      '192.0.2.10',
+    );
+    const secondCode = f.mail.sendManualTestCode.mock.calls[1][0].code;
+    expect(secondCode).toBe(firstCode);
+    expect(secondCode).toMatch(/^\d{4}$/);
+  });
+
   it('rejects an SMS at its exact expiry without calling the provider', async () => {
     const f = createFixture();
     await f.service.startCodeChallenge(

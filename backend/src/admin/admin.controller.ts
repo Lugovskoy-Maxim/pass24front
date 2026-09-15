@@ -504,13 +504,50 @@ export class AdminController {
       throw new BadRequestException('Сначала включите тестовый режим');
     }
     const result = await this.mstyleManualTestingService.prepare();
+    const mstyle = await this.siteSourceService.prepareManualTestingData(
+      result.localPrincipals,
+      false,
+    );
     await this.auditService.log({
       action: 'integration.manual_testing.prepare',
       entityType: 'mstyle_test_profiles',
       actor: req.user,
-      details: { profiles: result.prepared.length },
+      details: {
+        profiles: result.prepared.length,
+        principals: mstyle.principals,
+      },
     });
-    return result;
+    return { ...result, mstyle };
+  }
+
+  @Post('integration/manual-testing/reset')
+  @RequireAllPermissions('admin.settings')
+  async resetIntegrationManualTesting(@Req() req: any) {
+    if (req.user?.role !== 'admin') {
+      throw new ForbiddenException('Доступно только администратору');
+    }
+    const settings =
+      await this.siteSettingsService.getMstyleManualTestingSettings();
+    if (!settings.enabled) {
+      throw new BadRequestException('Сначала включите тестовый режим');
+    }
+    const result = await this.mstyleManualTestingService.prepare();
+    const mstyle = await this.siteSourceService.prepareManualTestingData(
+      result.localPrincipals,
+      true,
+    );
+    await this.auditService.log({
+      action: 'integration.manual_testing.reset',
+      entityType: 'mstyle_test_profiles',
+      actor: req.user,
+      details: {
+        profiles: result.prepared.length,
+        principals: mstyle.principals,
+        removedBookings: mstyle.removedBookings,
+        removedRequests: mstyle.removedRequests,
+      },
+    });
+    return { ...result, mstyle };
   }
 
   @Post('integration/probe-token')

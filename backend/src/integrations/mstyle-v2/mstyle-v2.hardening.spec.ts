@@ -30,8 +30,16 @@ describe('resident consent response contract', () => {
       const savedHistory = JSON.stringify(doc.history);
       expect(Object.keys(consentItem(doc)).sort()).toEqual(
         [
-          'documentCode', 'documentVersion', 'documentDigest', 'documentUrl',
-          'locale', 'status', 'revision', 'acceptedAt', 'withdrawnAt', 'auditRef',
+          'documentCode',
+          'documentVersion',
+          'documentDigest',
+          'documentUrl',
+          'locale',
+          'status',
+          'revision',
+          'acceptedAt',
+          'withdrawnAt',
+          'auditRef',
         ].sort(),
       );
       expect(JSON.stringify(doc.history)).toBe(savedHistory);
@@ -121,7 +129,11 @@ describe('guest token scope boundary', () => {
 });
 
 describe('contact proof delivery and attempt accounting', () => {
-  function fixture(real = true, environment = 'production') {
+  function fixture(
+    real = true,
+    environment = 'production',
+    manualTesting = false,
+  ) {
     const cfg = {
       dispatchEnabled: () => real,
       environment: () => environment,
@@ -143,8 +155,16 @@ describe('contact proof delivery and attempt accounting', () => {
       })),
       verifyMobileAuth: jest.fn(async () => true),
     };
-    const mail = { sendEmailVerificationCode: jest.fn(async () => {}) };
+    const mail = {
+      sendEmailVerificationCode: jest.fn(async () => {}),
+      sendManualTestCode: jest.fn(async () => {}),
+    };
     const rates = { consume: jest.fn() };
+    const siteSettings = {
+      resolveManualTestContact: jest.fn(async () =>
+        manualTesting ? { enabled: true, deliveryEmail: 'ninzak@ya.ru' } : null,
+      ),
+    };
     return {
       rows,
       sms,
@@ -155,6 +175,7 @@ describe('contact proof delivery and attempt accounting', () => {
         sms as any,
         mail as any,
         rates as any,
+        siteSettings as any,
       ),
     };
   }
@@ -231,6 +252,26 @@ describe('contact proof delivery and attempt accounting', () => {
     expect(await bcrypt.compare(code, challenge.codeHash)).toBe(true);
     expect(challenge.code).toBeUndefined();
     expect(challenge.status).toBe('awaiting_code');
+  });
+  it('keeps repeated manual guest delivery on one stable code', async () => {
+    const f = fixture(true, 'production', true);
+    const first = await f.service.start(
+      { kind: 'guest_contact', guestPartyId: 'gst_test_1' },
+      'email',
+      'gost@example.invalid',
+      1,
+    );
+    const second = await f.service.start(
+      { kind: 'guest_contact', guestPartyId: 'gst_test_2' },
+      'email',
+      'gost@example.invalid',
+      1,
+    );
+    const firstCode = f.mail.sendManualTestCode.mock.calls[0][0].code;
+    const secondCode = f.mail.sendManualTestCode.mock.calls[1][0].code;
+    expect(first.challengeId).not.toBe(second.challengeId);
+    expect(secondCode).toBe(firstCode);
+    expect(secondCode).toMatch(/^\d{4}$/);
   });
   it('expires the attempt when delivery fails', async () => {
     const f = fixture();
@@ -473,4 +514,3 @@ describe('deletion request concurrency', () => {
     expect(deletions.findOne).toHaveBeenCalledTimes(2);
   });
 });
-

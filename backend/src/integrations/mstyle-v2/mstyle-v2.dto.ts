@@ -97,6 +97,20 @@ export class VerifyCodeDto extends SchemaVersionDto {
   context: AuthContextDto;
 }
 
+export class PatchMemberPolicyDto {
+  @IsOptional()
+  @Type(() => Number)
+  @IsInt()
+  @Min(0)
+  employeeLimit?: number | null;
+
+  @IsOptional()
+  @Type(() => Number)
+  @IsInt()
+  @Min(0)
+  residentHoursMonthlyQuotaMin?: number;
+}
+
 export class PatchProfileDto extends SchemaVersionDto {
   @IsOptional()
   @IsString()
@@ -109,8 +123,9 @@ export class PatchProfileDto extends SchemaVersionDto {
   companyShortName?: string | null;
 
   @IsOptional()
-  @IsObject()
-  memberPolicy?: { employeeLimit?: number | null };
+  @ValidateNested()
+  @Type(() => PatchMemberPolicyDto)
+  memberPolicy?: PatchMemberPolicyDto;
 }
 
 export class PatchIdentityDto extends SchemaVersionDto {
@@ -211,6 +226,12 @@ export class MemberPolicyDto {
   @IsInt()
   @Min(0)
   employeeLimit?: number | null;
+
+  @IsOptional()
+  @Type(() => Number)
+  @IsInt()
+  @Min(0)
+  residentHoursMonthlyQuotaMin?: number;
 }
 
 export class OnboardingProfileDto {
