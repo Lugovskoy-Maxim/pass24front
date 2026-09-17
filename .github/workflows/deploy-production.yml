@@ -35,8 +35,13 @@ jobs:
           script: |
             set -euo pipefail
             cd /opt/pass24front
+            git fetch origin main
+            UPDATE_SCRIPT=$(mktemp /tmp/pass24-update.XXXXXX)
+            trap 'rm -f "$UPDATE_SCRIPT"' EXIT
+            git show origin/main:scripts/update.sh > "$UPDATE_SCRIPT"
+            chmod +x "$UPDATE_SCRIPT"
             if [ "${{ github.event.inputs.no_cache }}" = "true" ]; then
-              NO_CACHE=1 ./scripts/update.sh
+              APP_DIR="$PWD" BRANCH=main NO_CACHE=1 "$UPDATE_SCRIPT"
             else
-              ./scripts/update.sh
+              APP_DIR="$PWD" BRANCH=main "$UPDATE_SCRIPT"
             fi
