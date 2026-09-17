@@ -152,6 +152,7 @@ export class MstyleDirectoryService {
             profile.memberPolicy?.residentHoursMonthlyQuotaMin ?? 0,
           ),
         },
+        officeIds: profile.officeIds || [],
         snapshotSources: {
           primary: {
             profile: profile.revision,
@@ -413,6 +414,7 @@ export class MstyleDirectoryService {
             row.memberPolicy?.residentHoursMonthlyQuotaMin ?? 0,
           ),
         },
+        officeIds: row.officeIds || [],
         updatedAt: (row as any).updatedAt?.toISOString?.() || nowIso(),
         display: { label: row.label, contactMasks: masks },
       });

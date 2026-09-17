@@ -219,6 +219,10 @@ export class MstyleProfile {
     residentHoursMonthlyQuotaMin?: number;
   };
 
+  /** Mstyle office identifiers taken from assigned Office.externalId values. */
+  @Prop({ type: [String], default: [] })
+  officeIds: string[];
+
   @Prop({ type: [Object], default: [] })
   sourceLinks: Array<{
     sourceSystem: string;

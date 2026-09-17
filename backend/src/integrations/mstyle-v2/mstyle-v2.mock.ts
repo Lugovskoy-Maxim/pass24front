@@ -185,6 +185,7 @@ const SAFE_PROFILE = {
   privateDataRevision: 1,
   privateDataComplete: true,
   memberPolicy: { employeeLimit: 10 },
+  officeIds: ['tf-room:107'],
   membershipSetRevision: 2,
   contactAssignmentSetRevision: 1,
   sourceLinks: [
@@ -554,6 +555,7 @@ export function createMstyleMockResponse(
               privateDataComplete: true,
               display: { label: SAFE_PROFILE.label },
               memberPolicy: { employeeLimit: 10 },
+              officeIds: SAFE_PROFILE.officeIds,
               membershipSetRevision: 2,
               contactAssignmentSetRevision: 1,
               snapshotSources: { primary: RESIDENT_SOURCE_REVISIONS },

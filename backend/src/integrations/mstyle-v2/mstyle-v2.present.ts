@@ -72,6 +72,7 @@ export function safeProfile(doc: MstyleProfile) {
         doc.memberPolicy?.residentHoursMonthlyQuotaMin ?? 0,
       ),
     },
+    officeIds: doc.officeIds || [],
     membershipSetRevision: doc.membershipSetRevision,
     contactAssignmentSetRevision: doc.assignmentSetRevision,
     sourceLinks: doc.sourceLinks || [],
