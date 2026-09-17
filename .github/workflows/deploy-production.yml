@@ -32,7 +32,6 @@ jobs:
           key: ${{ secrets.PROD_SSH_KEY }}
           port: ${{ secrets.PROD_SSH_PORT || 22 }}
           command_timeout: 40m
-          script_stop: true
           script: |
             set -euo pipefail
             cd /opt/pass24front
