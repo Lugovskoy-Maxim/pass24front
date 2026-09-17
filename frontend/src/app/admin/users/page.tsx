@@ -29,6 +29,7 @@ import { AdminLayout } from '@/components/AdminLayout';
 import { AdminModal } from '@/components/AdminModal';
 import {
   api,
+  AdminMstyleProfileState,
   AdminUser,
   BusinessCenter,
   CreateUserData,
@@ -85,6 +86,13 @@ const EMPTY: CreateUserData = {
   employeeLimit: null,
 };
 
+const EMPTY_MSTYLE_PROFILE: AdminMstyleProfileState = {
+  exists: false,
+  profileId: null,
+  status: null,
+  residentHoursMonthlyQuotaMin: 0,
+};
+
 const MAX_COMPANY_LOGO_BYTES = 80 * 1024;
 
 const EMPTY_NAME: PersonNameParts = {
@@ -136,6 +144,9 @@ function AdminUsersPageContent() {
   const [officePickerSearch, setOfficePickerSearch] = useState('');
   const [isActive, setIsActive] = useState(true);
   const [isBlocked, setIsBlocked] = useState(false);
+  const [mstyleProfile, setMstyleProfile] =
+    useState<AdminMstyleProfileState>(EMPTY_MSTYLE_PROFILE);
+  const [mstyleProfileLoading, setMstyleProfileLoading] = useState(false);
   const [deletingUserId, setDeletingUserId] = useState<string | null>(null);
   const [expandedOwners, setExpandedOwners] = useState<Record<string, boolean>>(
     {},
@@ -364,6 +375,8 @@ function AdminUsersPageContent() {
     setOfficePickerSearch('');
     setIsActive(true);
     setIsBlocked(false);
+    setMstyleProfile(EMPTY_MSTYLE_PROFILE);
+    setMstyleProfileLoading(false);
     setShowForm(true);
     setError('');
   };
@@ -406,6 +419,20 @@ function AdminUsersPageContent() {
     setOfficePickerSearch('');
     setIsActive(u.isActive && !u.invitePending);
     setIsBlocked(!!u.isBlocked);
+    setMstyleProfile(EMPTY_MSTYLE_PROFILE);
+    setMstyleProfileLoading(false);
+    if (u.role === 'tenant' && !u.parentTenantId) {
+      setMstyleProfileLoading(true);
+      void api.admin
+        .getUserMstyleProfile(u.id)
+        .then(({ profile }) => setMstyleProfile(profile))
+        .catch((err) =>
+          setError(
+            getErrorMessage(err, 'Не удалось загрузить профиль Mstyle'),
+          ),
+        )
+        .finally(() => setMstyleProfileLoading(false));
+    }
     setShowForm(true);
     setError('');
   };
@@ -618,6 +645,7 @@ function AdminUsersPageContent() {
             ? form.employeeLimit
             : undefined,
       };
+      let savedUserId = editId;
       if (editId) {
         // Сотрудник компании: роль не отправляем (бэкенд её не меняет)
         await api.admin.updateUser(editId, {
@@ -630,7 +658,7 @@ function AdminUsersPageContent() {
         });
       } else {
         // createUser требует role: UserRole
-        await api.admin.createUser({
+        const { user: createdUser } = await api.admin.createUser({
           email: form.email,
           password: form.password,
           role: form.role,
@@ -641,7 +669,23 @@ function AdminUsersPageContent() {
               ? propertyIds
               : undefined,
         });
+        savedUserId = createdUser.id;
       }
+
+      if (savedUserId && form.role === 'tenant' && !isCompanyEmployee) {
+        const writableStatus =
+          mstyleProfile.status === 'active' ||
+          mstyleProfile.status === 'suspended' ||
+          mstyleProfile.status === 'closed'
+            ? mstyleProfile.status
+            : undefined;
+        await api.admin.updateUserMstyleProfile(savedUserId, {
+          residentHoursMonthlyQuotaMin:
+            mstyleProfile.residentHoursMonthlyQuotaMin,
+          ...(editId && writableStatus ? { status: writableStatus } : {}),
+        });
+      }
+
       setShowForm(false);
       load();
     } catch (err) {
@@ -1172,6 +1216,31 @@ function AdminUsersPageContent() {
                       placeholder="по умолчанию 3"
                     />
                   </div>
+                  <div>
+                    <label className="label">
+                      Квота резидентских часов, ч/мес. (Mstyle)
+                    </label>
+                    <input
+                      className="input"
+                      type="number"
+                      min={0}
+                      step={0.5}
+                      value={mstyleProfile.residentHoursMonthlyQuotaMin / 60}
+                      disabled={mstyleProfileLoading}
+                      onChange={(e) => {
+                        const hours =
+                          e.target.value === '' ? 0 : Number(e.target.value);
+                        setMstyleProfile((prev) => ({
+                          ...prev,
+                          residentHoursMonthlyQuotaMin: Math.max(
+                            0,
+                            Math.round(hours * 60),
+                          ),
+                        }));
+                      }}
+                      placeholder="0"
+                    />
+                  </div>
                 </>
               )}
             {form.role === 'tenant' &&
@@ -1497,6 +1566,49 @@ function AdminUsersPageContent() {
                   />
                   Заблокирован (отзыв сессий Pass, +authVersion)
                 </label>
+                {form.role === 'tenant' &&
+                  !users
+                    .flatMap((x) => x.employees || [])
+                    .some((e) => e.id === editId) && (
+                    <label className="flex items-center gap-2 text-sm">
+                      <span>Статус профиля (Mstyle)</span>
+                      <select
+                        className="input w-auto py-1"
+                        value={mstyleProfile.status ?? 'active'}
+                        disabled={
+                          mstyleProfileLoading ||
+                          mstyleProfile.status === 'closed' ||
+                          mstyleProfile.status === 'deleted'
+                        }
+                        title={
+                          mstyleProfile.exists
+                            ? 'Статус MstyleProfile'
+                            : 'Профиль Mstyle будет создан при сохранении'
+                        }
+                        onChange={(e) =>
+                          setMstyleProfile((prev) => ({
+                            ...prev,
+                            status: e.target
+                              .value as AdminMstyleProfileState['status'],
+                          }))
+                        }
+                      >
+                        {mstyleProfile.status === 'draft' && (
+                          <option value="draft" disabled>
+                            Черновик
+                          </option>
+                        )}
+                        <option value="active">Активен</option>
+                        <option value="suspended">Приостановлен</option>
+                        <option value="closed">Закрыт</option>
+                        {mstyleProfile.status === 'deleted' && (
+                          <option value="deleted" disabled>
+                            Удалён
+                          </option>
+                        )}
+                      </select>
+                    </label>
+                  )}
               </>
             )}
           </div>
@@ -1539,8 +1651,16 @@ function AdminUsersPageContent() {
             })()}
           {error && <div className="text-sm text-red-600">{error}</div>}
           <div className="flex gap-2">
-            <button type="submit" className="btn btn-primary" disabled={saving}>
-              {saving ? 'Сохранение...' : 'Сохранить'}
+            <button
+              type="submit"
+              className="btn btn-primary"
+              disabled={saving || mstyleProfileLoading}
+            >
+              {saving
+                ? 'Сохранение...'
+                : mstyleProfileLoading
+                  ? 'Загрузка Mstyle...'
+                  : 'Сохранить'}
             </button>
             <button
               type="button"

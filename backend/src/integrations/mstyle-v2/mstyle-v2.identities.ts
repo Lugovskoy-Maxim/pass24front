@@ -52,6 +52,13 @@ export function normalizeOfficeExternalIds(
   ].sort();
 }
 
+export type MstyleAdminProfileState = {
+  exists: boolean;
+  profileId: string | null;
+  status: 'draft' | 'active' | 'suspended' | 'closed' | 'deleted' | null;
+  residentHoursMonthlyQuotaMin: number;
+};
+
 @Injectable()
 export class MstyleIdentityService {
   constructor(
@@ -490,6 +497,148 @@ export class MstyleIdentityService {
       profileId: profile.profileId,
       payload: { changedFieldCodes: ['officeIds'] },
     });
+  }
+
+  private async adminProfileForIdentity(identity: MstyleIdentityDocument) {
+    const membership = await this.memberships
+      .findOne({
+        subject: identity.subject,
+        role: 'owner',
+        status: { $ne: 'revoked' },
+      })
+      .sort({ updatedAt: -1 });
+    if (!membership) return null;
+    return this.profiles.findOne({ profileId: membership.profileId });
+  }
+
+  async getAdminProfileState(
+    user: UserDocument,
+  ): Promise<MstyleAdminProfileState> {
+    const identity = await this.findLinkedIdentity(user);
+    if (!identity) {
+      return {
+        exists: false,
+        profileId: null,
+        status: null,
+        residentHoursMonthlyQuotaMin: 0,
+      };
+    }
+    const profile = await this.adminProfileForIdentity(identity);
+    if (!profile) {
+      return {
+        exists: false,
+        profileId: null,
+        status: null,
+        residentHoursMonthlyQuotaMin: 0,
+      };
+    }
+    return {
+      exists: true,
+      profileId: profile.profileId,
+      status: profile.status as MstyleAdminProfileState['status'],
+      residentHoursMonthlyQuotaMin: Math.max(
+        0,
+        profile.memberPolicy?.residentHoursMonthlyQuotaMin ?? 0,
+      ),
+    };
+  }
+
+  async updateAdminProfileState(
+    user: UserDocument,
+    patch: {
+      residentHoursMonthlyQuotaMin?: number;
+      status?: 'active' | 'suspended' | 'closed';
+    },
+  ): Promise<MstyleAdminProfileState> {
+    const identity = await this.ensureFromUser(user);
+    const profile = await this.adminProfileForIdentity(identity);
+    if (!profile) {
+      problem(409, 'CONFLICT', {
+        title: 'Mstyle owner profile is missing',
+      });
+    }
+
+    const changedFieldCodes: string[] = [];
+    const nextQuota =
+      patch.residentHoursMonthlyQuotaMin === undefined
+        ? undefined
+        : Math.max(0, Math.trunc(patch.residentHoursMonthlyQuotaMin));
+
+    if (
+      nextQuota !== undefined &&
+      nextQuota !==
+        Math.max(0, profile.memberPolicy?.residentHoursMonthlyQuotaMin ?? 0)
+    ) {
+      profile.memberPolicy = {
+        ...(profile.memberPolicy || { employeeLimit: null }),
+        residentHoursMonthlyQuotaMin: nextQuota,
+      };
+      changedFieldCodes.push('memberPolicy.residentHoursMonthlyQuotaMin');
+    }
+
+    const statusChanged =
+      patch.status !== undefined && patch.status !== profile.status;
+    if (statusChanged) {
+      const allowed: Record<string, readonly string[]> = {
+        draft: ['active', 'closed'],
+        active: ['suspended', 'closed'],
+        suspended: ['active', 'closed'],
+      };
+      if (!allowed[profile.status]?.includes(patch.status!)) {
+        problem(409, 'CONFLICT', {
+          title: 'Invalid profile lifecycle transition',
+        });
+      }
+      if (patch.status === 'active') {
+        const owner = await this.memberships.findOne({
+          profileId: profile.profileId,
+          role: 'owner',
+          status: 'active',
+        });
+        if (!owner || !profile.privateDataComplete) {
+          problem(409, 'CONFLICT', {
+            title: 'Profile is not ready for activation',
+          });
+        }
+      }
+      profile.status = patch.status!;
+      changedFieldCodes.push('status');
+    }
+
+    if (changedFieldCodes.length) {
+      profile.revision += 1;
+      await profile.save();
+      const members = await this.memberships
+        .find({ profileId: profile.profileId, status: 'active' })
+        .select('subject')
+        .lean();
+      for (const member of members) await this.bumpContext(member.subject);
+      await this.events.emit({
+        type: 'profile.updated',
+        aggregate: {
+          type: 'resident_profile',
+          id: profile.profileId,
+          revision: profile.revision,
+        },
+        profileId: profile.profileId,
+        payload: {
+          changedFieldCodes,
+          ...(statusChanged
+            ? { status: profile.status, reasonCode: 'pass_admin_interface' }
+            : {}),
+        },
+      });
+    }
+
+    return {
+      exists: true,
+      profileId: profile.profileId,
+      status: profile.status as MstyleAdminProfileState['status'],
+      residentHoursMonthlyQuotaMin: Math.max(
+        0,
+        profile.memberPolicy?.residentHoursMonthlyQuotaMin ?? 0,
+      ),
+    };
   }
 
   async ensureStandalone(input: {

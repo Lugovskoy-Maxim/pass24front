@@ -38,6 +38,7 @@ import { CreateBusinessCenterDto } from './dto/create-business-center.dto';
 import { CreateOfficeDto } from './dto/create-office.dto';
 import { CreateUserDto } from './dto/create-user.dto';
 import { UpdateUserDto } from './dto/update-user.dto';
+import { UpdateMstyleProfileDto } from './dto/update-mstyle-profile.dto';
 import { MstyleIdentityService } from '../integrations/mstyle-v2/mstyle-v2.identities';
 import { UpdateBusinessCenterDto } from './dto/update-business-center.dto';
 import { BusinessCenterPassSettingsDto } from './dto/business-center-pass-settings.dto';
@@ -93,6 +94,44 @@ export class AdminService {
     } catch {
       /* User — источник; закрытый API подтянет при следующем входе */
     }
+  }
+
+  private async requireMstyleTenantOwner(id: string) {
+    const user = await this.userModel.findById(id);
+    if (!user) throw new NotFoundException('Пользователь не найден');
+    if (user.role !== 'tenant' || user.parentTenantId) {
+      throw new BadRequestException(
+        'Профиль Mstyle доступен только владельцу арендатора',
+      );
+    }
+    return user;
+  }
+
+  async getUserMstyleProfile(id: string) {
+    const user = await this.requireMstyleTenantOwner(id);
+    return { profile: await this.identities.getAdminProfileState(user) };
+  }
+
+  async updateUserMstyleProfile(
+    id: string,
+    dto: UpdateMstyleProfileDto,
+    actor?: AuditActor,
+  ) {
+    const user = await this.requireMstyleTenantOwner(id);
+    const profile = await this.identities.updateAdminProfileState(user, dto);
+    await this.auditService.log({
+      action: 'user.mstyle_profile.update',
+      entityType: 'user',
+      entityId: user._id,
+      actor,
+      details: {
+        profileId: profile.profileId,
+        status: profile.status,
+        residentHoursMonthlyQuotaMin:
+          profile.residentHoursMonthlyQuotaMin,
+      },
+    });
+    return { profile };
   }
 
   async assertRolesDeletable(roles: string[]) {

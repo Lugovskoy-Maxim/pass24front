@@ -919,6 +919,26 @@ export const api = {
         body: JSON.stringify(data),
       }),
 
+    getUserMstyleProfile: (id: string) =>
+      request<{ profile: AdminMstyleProfileState }>(
+        `/admin/users/${id}/mstyle-profile`,
+      ),
+
+    updateUserMstyleProfile: (
+      id: string,
+      data: {
+        residentHoursMonthlyQuotaMin?: number;
+        status?: 'active' | 'suspended' | 'closed';
+      },
+    ) =>
+      request<{ profile: AdminMstyleProfileState }>(
+        `/admin/users/${id}/mstyle-profile`,
+        {
+          method: 'PATCH',
+          body: JSON.stringify(data),
+        },
+      ),
+
     deleteUser: (id: string) =>
       request<{ message: string; id: string }>(`/admin/users/${id}`, {
         method: 'DELETE',
@@ -1659,6 +1679,13 @@ export interface UserFilters {
   isActive?: '' | 'true' | 'false';
   propertyId?: string;
   officeId?: string;
+}
+
+export interface AdminMstyleProfileState {
+  exists: boolean;
+  profileId: string | null;
+  status: 'draft' | 'active' | 'suspended' | 'closed' | 'deleted' | null;
+  residentHoursMonthlyQuotaMin: number;
 }
 
 export interface AdminUser {
