@@ -1,5 +1,5 @@
 #!/usr/bin/env bash
-# Обновление PASS24 на сервере: git pull main + пересборка контейнеров
+# Обновление PASS24 на сервере: синхронизация с origin/main + пересборка контейнеров
 #
 # Использование:
 #   cd /opt/pass24front && ./scripts/update.sh
@@ -17,16 +17,28 @@ cd "$APP_DIR"
 echo "==> Каталог: $APP_DIR"
 echo "==> Ветка: $BRANCH"
 
-# Сброс локальных правок на сервере (иначе pull может не пройти).
-# OAuth public keys are copied to the server outside git and must survive update.
-git checkout -- . 2>/dev/null || true
+# Production is a deployment checkout: make it exactly match the remote branch.
+# Preserve the previous server commit in a timestamped ref before moving a
+# diverged branch, so server-only commits remain recoverable.
+git fetch origin "$BRANCH"
+git checkout -f "$BRANCH"
+
+LOCAL_HEAD=$(git rev-parse HEAD)
+REMOTE_HEAD=$(git rev-parse "origin/$BRANCH")
+if [[ "$LOCAL_HEAD" != "$REMOTE_HEAD" ]]; then
+  SAFE_BRANCH=${BRANCH//\//-}
+  BACKUP_REF="refs/deploy-backups/${SAFE_BRANCH}-$(date -u +%Y%m%dT%H%M%SZ)"
+  git update-ref "$BACKUP_REF" "$LOCAL_HEAD"
+  echo "    Предыдущее состояние сервера сохранено: $BACKUP_REF ($LOCAL_HEAD)"
+fi
+
+git reset --hard "origin/$BRANCH"
+
+# OAuth public keys and backups are copied/generated outside git and must survive update.
 git clean -fd \
   -e backups/ -e backups/** \
   -e backend/config/oauth-public-keys/ -e backend/config/oauth-public-keys/** \
   2>/dev/null || true
-git fetch origin
-git checkout "$BRANCH"
-git pull --ff-only origin "$BRANCH"
 
 COMMIT=$(git rev-parse --short HEAD)
 SUBJECT=$(git log -1 --pretty=%s)
