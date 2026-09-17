@@ -1207,8 +1207,14 @@ export const api = {
           mockResponsesEnabled: boolean;
           mockResponsesOverridden: boolean;
           mockResponsesEnvironmentDefault: boolean;
+          manualTesting: {
+            enabled: boolean;
+            deliveryEmail: string;
+            expiresAt: string | null;
+          };
         };
         endpoints: IntegrationEndpoint[];
+        manualTestProfiles: ManualTestProfile[];
       }>('/admin/integration/catalog'),
 
     updateIntegrationMockMode: (mockResponsesEnabled: boolean) =>
@@ -1219,6 +1225,56 @@ export const api = {
           body: JSON.stringify({ mockResponsesEnabled }),
         },
       ),
+
+    updateIntegrationManualTesting: (data: {
+      enabled: boolean;
+      deliveryEmail: string;
+      expiresInHours?: number;
+    }) =>
+      request<{
+        settings: {
+          enabled: boolean;
+          deliveryEmail: string;
+          expiresAt: string | null;
+        };
+      }>('/admin/integration/manual-testing', {
+        method: 'PATCH',
+        body: JSON.stringify(data),
+      }),
+
+    prepareIntegrationManualTesting: () =>
+      request<{
+        prepared: Array<{
+          key: string;
+          title: string;
+          profileId: string;
+          subject: string;
+          employees: number;
+        }>;
+        mstyle: {
+          principals: number;
+          resetActivity: boolean;
+          removedBookings: number;
+          removedRequests: number;
+        };
+      }>('/admin/integration/manual-testing/prepare', { method: 'POST' }),
+
+    resetIntegrationManualTesting: () =>
+      request<{
+        prepared: Array<{
+          key: string;
+          title: string;
+          profileId: string;
+          subject: string;
+          employees: number;
+        }>;
+        mstyle: {
+          principals: number;
+          resetActivity: boolean;
+          removedBookings: number;
+          removedRequests: number;
+        };
+      }>('/admin/integration/manual-testing/reset', { method: 'POST' }),
 
     getSiteSettings: () =>
       request<{ settings: SiteSettings }>('/admin/site-settings'),
@@ -1352,6 +1408,43 @@ export interface IntegrationEndpoint {
     body: unknown;
     contentType?: string;
   }>;
+}
+
+export interface ManualTestIdentity {
+  key: string;
+  title: string;
+  fullName: string;
+  email: string;
+  phone: string;
+  role: 'owner' | 'employee';
+}
+
+export interface ManualTestProfile {
+  key: string;
+  title: string;
+  type: 'company' | 'individual';
+  legalForm: 'ooo' | 'ip' | null;
+  companyShortName: string | null;
+  employeeLimit: number | null;
+  owner: ManualTestIdentity;
+  employees: ManualTestIdentity[];
+  employeeCandidates: ManualTestIdentity[];
+  scenario: {
+    description: string;
+    balanceMinutes: number;
+    employeeBalanceMinutes: number;
+    accrualOffsetDays: number | null;
+    expiresOffsetDays: number | null;
+    office: {
+      externalId: string;
+      resourceId: string;
+      label: string;
+      validFromOffsetDays: number;
+      validUntilOffsetDays: number;
+    } | null;
+    expected: string[];
+  };
+  privateData: Record<string, unknown>;
 }
 
 export interface SiteMysqlSettings {

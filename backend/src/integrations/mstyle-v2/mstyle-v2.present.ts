@@ -67,6 +67,10 @@ export function safeProfile(doc: MstyleProfile) {
     privateDataComplete: !!doc.privateDataComplete,
     memberPolicy: {
       employeeLimit: doc.memberPolicy?.employeeLimit ?? null,
+      residentHoursMonthlyQuotaMin: Math.max(
+        0,
+        doc.memberPolicy?.residentHoursMonthlyQuotaMin ?? 0,
+      ),
     },
     officeIds: doc.officeIds || [],
     membershipSetRevision: doc.membershipSetRevision,
@@ -116,7 +120,6 @@ export function consentItem(doc: MstyleConsent) {
     acceptedAt: doc.acceptedAt ?? null,
     withdrawnAt: doc.withdrawnAt ?? null,
     auditRef: doc.auditRef ?? null,
-    history: doc.history || [],
   };
 }
 

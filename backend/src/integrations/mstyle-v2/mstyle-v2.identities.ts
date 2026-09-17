@@ -32,6 +32,7 @@ import {
   deriveIdentityStatus,
   normalizeLegalForm,
 } from '../../common/pass-identity';
+import { EMPLOYEE_SLOT_STATUSES } from './mstyle-v2.membership-policy';
 
 export function identityStatusFromUser(
   user: UserDocument | Record<string, any>,
@@ -384,7 +385,10 @@ export class MstyleIdentityService {
         revision: 1,
         privateDataRevision: null,
         privateDataComplete: false,
-        memberPolicy: { employeeLimit: user.employeeLimit ?? null },
+        memberPolicy: {
+          employeeLimit: user.employeeLimit ?? null,
+          residentHoursMonthlyQuotaMin: 0,
+        },
         officeIds: await this.officeExternalIds(ownerUserId),
         sourceLinks: [],
       });
@@ -620,10 +624,13 @@ export class MstyleIdentityService {
           (await this.memberships.countDocuments({
             profileId: profile.profileId,
             role: 'employee',
-            status: 'active',
+            status: { $in: [...EMPLOYEE_SLOT_STATUSES] },
+            membershipId: { $ne: membership.membershipId },
           })) >= limit
         )
-          problem(409, 'CONFLICT', { title: 'Employee limit reached' });
+          problem(409, 'MEMBERSHIP_LIMIT_EXCEEDED', {
+            title: 'Employee limit reached',
+          });
         membership.status = 'active';
         membership.revision += 1;
         await membership.save();

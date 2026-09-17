@@ -9,10 +9,175 @@ jest.mock('./mstyle-v2.schemas', () => ({
 
 import { MstyleAuthService } from './mstyle-v2.auth.service';
 import { ProblemException } from './mstyle-v2.problem';
+import { MstyleSmsSessionExpiredError } from './mstyle-v2.sms';
 
 describe('MstyleAuthService SMS Aero Mobile ID', () => {
   beforeEach(() => jest.useFakeTimers());
   afterEach(() => jest.useRealTimers());
+
+  it('advertises two minutes for SMS and resets that window on resend', async () => {
+    const f = createFixture();
+    const start = Date.now();
+    const first = await f.service.startCodeChallenge(
+      challengeDto(),
+      'mstyle-backend-prod',
+      '192.0.2.10',
+    );
+    expect(Date.parse(first.body.expiresAt) - start).toBe(120_000);
+    jest.setSystemTime(start + 60_001);
+    const next = await f.service.resend(
+      f.challenge().challengeId,
+      'mstyle-backend-prod',
+      '192.0.2.10',
+    );
+    expect(Date.parse(next.body.expiresAt) - Date.now()).toBe(120_000);
+  });
+
+  it('keeps five minutes for email', async () => {
+    const f = createFixture();
+    const result = await f.service.startCodeChallenge(
+      {
+        ...challengeDto(),
+        channel: 'email',
+        identifier: { type: 'email', value: 'test@example.com' },
+      },
+      'mstyle-backend-prod',
+      '192.0.2.10',
+    );
+    expect(Date.parse(result.body.expiresAt) - Date.now()).toBe(300_000);
+  });
+
+  it('sends a test phone code to email without calling SMS Aero', async () => {
+    const phone = '+79990001001';
+    const f = createFixture({ phone, manualTesting: true });
+    await f.service.startCodeChallenge(
+      {
+        ...challengeDto(),
+        identifier: { type: 'phone', value: phone },
+      },
+      'mstyle-backend-prod',
+      '192.0.2.10',
+    );
+    expect(f.sms.startMobileAuth).not.toHaveBeenCalled();
+    expect(f.challenge().verificationProvider).toBe('manual_test_email');
+    expect(f.mail.sendManualTestCode).toHaveBeenCalledWith(
+      expect.objectContaining({
+        to: 'ninzak@ya.ru',
+        channel: 'sms',
+        target: phone,
+        code: expect.stringMatching(/^\d{4}$/),
+      }),
+    );
+  });
+
+  it('keeps the manual-test code stable when delivery is repeated', async () => {
+    const phone = '+79990001001';
+    const f = createFixture({ phone, manualTesting: true });
+    await f.service.startCodeChallenge(
+      { ...challengeDto(), identifier: { type: 'phone', value: phone } },
+      'mstyle-backend-prod',
+      '192.0.2.10',
+    );
+    const firstCode = f.mail.sendManualTestCode.mock.calls[0][0].code;
+    f.challenge().resendAfter = new Date(Date.now() - 1);
+    await f.service.resend(
+      f.challenge().challengeId,
+      'mstyle-backend-prod',
+      '192.0.2.10',
+    );
+    const secondCode = f.mail.sendManualTestCode.mock.calls[1][0].code;
+    expect(secondCode).toBe(firstCode);
+    expect(secondCode).toMatch(/^\d{4}$/);
+  });
+
+  it('rejects an SMS at its exact expiry without calling the provider', async () => {
+    const f = createFixture();
+    await f.service.startCodeChallenge(
+      challengeDto(),
+      'mstyle-backend-prod',
+      '192.0.2.10',
+    );
+    jest.setSystemTime(f.challenge().expiresAt);
+    await expect(
+      f.service.verifyCode(
+        f.challenge().challengeId,
+        { schemaVersion: '2.0', code: '1234', context: challengeDto().context },
+        'mstyle-backend-prod',
+        '192.0.2.10',
+      ),
+    ).rejects.toMatchObject({ problemCode: 'CHALLENGE_EXPIRED' });
+    expect(f.sms.verifyMobileAuth).not.toHaveBeenCalled();
+  });
+
+  it('expires an older five-minute challenge when SMS Aero no longer has its session', async () => {
+    const f = createFixture();
+    await f.service.startCodeChallenge(
+      challengeDto(),
+      'mstyle-backend-prod',
+      '192.0.2.10',
+    );
+    f.challenge().expiresAt = new Date(Date.now() + 300_000);
+    f.sms.verifyMobileAuth.mockRejectedValueOnce(
+      new MstyleSmsSessionExpiredError(),
+    );
+    await expect(
+      f.service.verifyCode(
+        f.challenge().challengeId,
+        { schemaVersion: '2.0', code: '1234', context: challengeDto().context },
+        'mstyle-backend-prod',
+        '192.0.2.10',
+      ),
+    ).rejects.toMatchObject({ problemCode: 'CHALLENGE_EXPIRED' });
+    expect(f.challenge().status).toBe('expired');
+    expect(f.challenges.updateOne).toHaveBeenLastCalledWith(
+      expect.objectContaining({
+        mobileIdRequestId: 701,
+        status: 'awaiting_code',
+      }),
+      { $set: { status: 'expired' } },
+    );
+    expect(f.authentications.create).not.toHaveBeenCalled();
+  });
+
+  it('reports expired in A-04 when the provider session has ended', async () => {
+    const f = createFixture();
+    await f.service.startCodeChallenge(
+      challengeDto(),
+      'mstyle-backend-prod',
+      '192.0.2.10',
+    );
+    f.sms.isMobileAuthVerified.mockRejectedValueOnce(
+      new MstyleSmsSessionExpiredError(),
+    );
+    const result = await f.service.getChallenge(
+      f.challenge().challengeId,
+      'mstyle-backend-prod',
+    );
+    expect(result.body.status).toBe('expired');
+    expect(f.challenge().status).toBe('expired');
+    expect(f.authentications.create).not.toHaveBeenCalled();
+  });
+
+  it('keeps a provider connection failure retryable without expiring the challenge', async () => {
+    const f = createFixture();
+    await f.service.startCodeChallenge(
+      challengeDto(),
+      'mstyle-backend-prod',
+      '192.0.2.10',
+    );
+    f.sms.verifyMobileAuth.mockRejectedValueOnce(
+      new Error('network unavailable'),
+    );
+    await expect(
+      f.service.verifyCode(
+        f.challenge().challengeId,
+        { schemaVersion: '2.0', code: '1234', context: challengeDto().context },
+        'mstyle-backend-prod',
+        '192.0.2.10',
+      ),
+    ).rejects.toMatchObject({ problemCode: 'UPSTREAM_UNAVAILABLE' });
+    expect(f.challenge().status).toBe('awaiting_code');
+  });
 
   it('executes the lazy status update on start and resend', async () => {
     const fixture = createFixture();
@@ -326,14 +491,15 @@ function challengeDto() {
   };
 }
 
-function createFixture() {
+function createFixture(options?: { phone?: string; manualTesting?: boolean }) {
   let stored: any;
+  const phone = options?.phone || '+79990001234';
   const identity = {
     subject: 'usr_sms_aero',
     identityStatus: 'active',
     authVersion: 3,
     revision: 1,
-    phone: '+79990001234',
+    phone,
     email: 'test@example.com',
     save: jest.fn(async () => undefined),
   };
@@ -400,6 +566,7 @@ function createFixture() {
   };
   const mail = {
     sendEmailVerificationCode: jest.fn(async () => ({ sent: true })),
+    sendManualTestCode: jest.fn(async () => ({ sent: true })),
   };
   const telegramGateway = {
     isConfigured: jest.fn(() => false),
@@ -408,6 +575,18 @@ function createFixture() {
   };
   const authentications = {
     create: jest.fn(async (value: unknown) => value),
+  };
+  const siteSettings = {
+    resolveManualTestContact: jest.fn(async () =>
+      options?.manualTesting
+        ? {
+            enabled: true,
+            deliveryEmail: 'ninzak@ya.ru',
+            expiresAt: new Date(Date.now() + 86_400_000).toISOString(),
+            identity: { key: 'manual' },
+          }
+        : null,
+    ),
   };
   const service = new MstyleAuthService(
     config as any,
@@ -418,6 +597,7 @@ function createFixture() {
     sms as any,
     mail as any,
     telegramGateway as any,
+    siteSettings as any,
   );
 
   return {

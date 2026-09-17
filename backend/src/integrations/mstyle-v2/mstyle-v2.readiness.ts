@@ -52,17 +52,23 @@ export class MstyleReadinessService implements OnModuleInit {
   }
 
   private async initialize() {
+    let phase = 'configuration';
+    let collection = '-';
     try {
       this.cfg.assertReady();
+      phase = 'replica-set';
       const hello = await this.connection.db!.admin().command({ hello: 1 });
       if (!hello.setName && hello.msg !== 'isdbgrid')
         throw new Error('Transactions require a replica set or mongos');
       for (const definition of MSTYLE_MODELS) {
         const model = this.connection.model(definition.name);
+        collection = model.collection.collectionName;
         // These collections belong exclusively to Mstyle V2. syncIndexes
         // upgrades legacy index options (for example non-unique identity
         // indexes) and removes obsolete M1 indexes before creating M2 ones.
+        phase = 'create-collection';
         await model.createCollection();
+        phase = 'sync-indexes';
         const removed = await model.syncIndexes();
         if (removed.length > 0) {
           this.logger.warn(
@@ -77,7 +83,7 @@ export class MstyleReadinessService implements OnModuleInit {
       this.retryAt = Date.now() + 30000;
       // MongoDB error messages can contain private field values from duplicate keys.
       this.logger.error(
-        `Mstyle integration unavailable; error=${(error as Error).name || 'Error'}; code=${(error as { code?: number }).code || 'initialization'}`,
+        `Mstyle integration unavailable; phase=${phase}; collection=${collection}; error=${(error as Error).name || 'Error'}; code=${(error as { code?: number }).code || 'initialization'}`,
       );
     }
   }

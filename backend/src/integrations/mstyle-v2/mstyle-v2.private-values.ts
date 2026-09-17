@@ -4,6 +4,11 @@ import {
   RESIDENT_PRIVATE_FIELDS,
 } from './mstyle-v2.constants';
 import { problem } from './mstyle-v2.problem';
+import {
+  isValidRussianBik,
+  isValidRussianCorrespondentAccount,
+  isValidRussianSettlementAccount,
+} from './mstyle-v2.bank-details';
 export function hasValue(value: unknown): boolean {
   return value !== undefined && value !== null && String(value).trim() !== '';
 }
@@ -286,6 +291,7 @@ export function validateResidentValues(
     } else if (!hasValue(value)) message = 'Обязательное поле';
     if (message) errors.push({ field, code: 'invalid', message });
   }
+  validateBankDetails(values, errors);
   if (errors.length) problem(422, 'VALIDATION_FAILED', { errors });
   if (type === 'company' && legalForm !== 'ip')
     setPath(
@@ -294,4 +300,45 @@ export function validateResidentValues(
       String(getPath(values, 'company.fullName')).trim(),
     );
   return values;
+}
+
+function validateBankDetails(
+  values: Record<string, unknown>,
+  errors: { field: string; code: string; message: string }[],
+) {
+  const bik = getPath(values, 'bank.bik');
+  const account = getPath(values, 'bank.accountNumber');
+  const correspondent = getPath(values, 'bank.correspondentAccountNumber');
+  const hasBankDetails = [bik, account, correspondent].some(
+    (value) => value !== undefined && value !== null && value !== '',
+  );
+  if (!hasBankDetails) return;
+
+  if (!isValidRussianBik(bik)) {
+    errors.push({
+      field: 'bank.bik',
+      code: 'invalid',
+      message: 'БИК должен содержать 9 цифр',
+    });
+    return;
+  }
+  if (!isValidRussianSettlementAccount(bik, account)) {
+    errors.push({
+      field: 'bank.accountNumber',
+      code: 'invalid',
+      message: 'Расчётный счёт не соответствует БИК',
+    });
+  }
+  if (
+    correspondent !== undefined &&
+    correspondent !== null &&
+    correspondent !== '' &&
+    !isValidRussianCorrespondentAccount(bik, correspondent)
+  ) {
+    errors.push({
+      field: 'bank.correspondentAccountNumber',
+      code: 'invalid',
+      message: 'Корреспондентский счёт не соответствует БИК',
+    });
+  }
 }

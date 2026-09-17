@@ -717,9 +717,15 @@ export class MstylePrivateDataService {
     );
   }
 
-  async snapshotGuest(guestPartyId: string, dto: CreateSnapshotDto) {
-    await this.consentService.assertAccepted('guest', guestPartyId);
+  async snapshotGuest(
+    guestPartyId: string,
+    dto: CreateSnapshotDto,
+    clientId?: string,
+  ) {
     const guest = await this.requireGuest(guestPartyId);
+    if (guest.purpose === 'guest_participant_declaration')
+      return this.snapshotParticipant(guest, dto, clientId);
+    await this.consentService.assertAccepted('guest', guestPartyId);
     if (!guestWriteAllowed(guest.status) || !guest.primaryContact?.verifiedAt)
       problem(409, 'CONFLICT');
     const doc = await this.privateData.findOne({
@@ -776,6 +782,118 @@ export class MstylePrivateDataService {
       snapshotId,
       partyType: 'guest_party',
       partyId: guestPartyId,
+      snapshotRevision: 1,
+      contentDigest: {
+        algorithm: 'HMAC-SHA-256',
+        keyVersion: 1,
+        value: hmacHex(this.cfg.piiSecret(), JSON.stringify(payload)),
+      },
+      eventIds,
+      sourceRevisions,
+      payloadEnc: encryptJson(this.cfg.piiSecret(), payload),
+      createdAtIso: nowIso(),
+    });
+    return new MstyleResult(snapshotRef(snapshot), 201);
+  }
+
+  async validateDeclarationParent(
+    parentSnapshotId: string,
+    operationRef: unknown,
+    requireBinding = false,
+  ) {
+    const parent = await this.requireSnapshot(parentSnapshotId);
+    if (parent.partyType === 'guest_party') {
+      const primary = await this.requireGuest(parent.partyId);
+      if (
+        primary.purpose !== 'mstyle_booking' ||
+        primary.role === 'participant'
+      )
+        problem(409, 'CONFLICT');
+    }
+    const bindings = await this.bindings.find({
+      snapshotId: parent.snapshotId,
+    });
+    if (
+      bindings.length &&
+      !bindings.some(
+        (row) =>
+          canonicalJson(row.operationRef) === canonicalJson(operationRef),
+      )
+    )
+      problem(409, 'CONFLICT');
+    if (requireBinding && !bindings.length)
+      problem(409, 'CONFLICT', {
+        title: 'Booker snapshot is not bound yet',
+        retryable: true,
+      });
+    return parent;
+  }
+
+  private async snapshotParticipant(
+    guest: MstyleGuestPartyDocument,
+    dto: CreateSnapshotDto,
+    clientId?: string,
+  ) {
+    const declaration = guest.declaration;
+    if (!declaration || declaration.clientId !== clientId)
+      problem(403, 'INSUFFICIENT_SCOPE');
+    if (
+      guest.role !== 'participant' ||
+      guest.status !== 'declared' ||
+      guest.expiresAt.getTime() <= Date.now()
+    )
+      problem(409, 'CONFLICT');
+    await this.validateDeclarationParent(
+      declaration.parentSnapshotId,
+      declaration.operationRef,
+    );
+    const values = decryptJson<{
+      name: string;
+      phone: string | null;
+      email: string | null;
+    }>(this.cfg.piiSecret(), declaration.valuesEnc);
+    const sourceRevisions = {
+      guestParty: guest.revision,
+      guestContacts: {
+        phone: values.phone ? 1 : null,
+        email: values.email ? 1 : null,
+      },
+      privateData: 1,
+    };
+    if (
+      canonicalJson(dto.expectedSourceRevisions) !==
+      canonicalJson(sourceRevisions)
+    )
+      problem(412, 'PRECONDITION_FAILED');
+    const payload = {
+      values: { individual: { fullName: values.name } },
+      contacts: {
+        displayName: values.name,
+        phone: values.phone,
+        email: values.email,
+      },
+      sourceRevisions,
+      declaration: {
+        purpose: 'guest_participant_declaration',
+        parentSnapshotId: declaration.parentSnapshotId,
+        operationRef: declaration.operationRef,
+        noticeVersion: declaration.noticeVersion,
+        acknowledgedAt: declaration.acknowledgedAt,
+        contactsVerified: false,
+      },
+    };
+    const snapshotId = Ids.snapshot();
+    const eventIds = [
+      await this.events.emit({
+        type: 'guest_snapshot.created',
+        aggregate: { type: 'guest_snapshot', id: snapshotId, revision: 1 },
+        guestPartyId: guest.guestPartyId,
+      }),
+    ];
+    const snapshot = await this.snapshots.create({
+      snapshotId,
+      partyType: 'guest_party',
+      partyId: guest.guestPartyId,
       snapshotRevision: 1,
       contentDigest: {
         algorithm: 'HMAC-SHA-256',
@@ -932,9 +1050,23 @@ export class MstylePrivateDataService {
   ) {
     const rows = await this.bindings.find({ snapshotId });
     const expected = canonicalJson(operationRef);
-    if (!rows.some((row) => canonicalJson(row.operationRef) === expected)) {
+    if (rows.some((row) => canonicalJson(row.operationRef) === expected))
+      return;
+    const participant = await this.guests.findOne({
+      purpose: 'guest_participant_declaration',
+      'operationLink.snapshotId': snapshotId,
+      status: 'booked',
+    });
+    if (
+      !participant?.declaration ||
+      canonicalJson(participant.operationLink?.operationRef) !== expected
+    )
       problem(404, 'NOT_FOUND');
-    }
+    await this.validateDeclarationParent(
+      participant.declaration.parentSnapshotId,
+      operationRef,
+      true,
+    );
   }
 
   private assertSnapshotScope(

@@ -31,6 +31,7 @@ import { MstylePublicResponseService } from './mstyle-v2.public-response';
 import { MstyleContactSelectionService } from './mstyle-v2.contact-selection';
 import { MstyleReadinessService } from './mstyle-v2.readiness';
 import { MstyleContactProofService } from './mstyle-v2.contact-proof';
+import { MstyleManualTestingService } from './mstyle-v2.manual-testing.service';
 
 @Module({
   imports: [
@@ -41,7 +42,12 @@ import { MstyleContactProofService } from './mstyle-v2.contact-proof';
     ]),
     SmsModule,
   ],
-  exports: [MstyleIdentityService, MstyleOauthService, MstyleV2Config],
+  exports: [
+    MstyleIdentityService,
+    MstyleOauthService,
+    MstyleV2Config,
+    MstyleManualTestingService,
+  ],
   controllers: [MstyleOauthController, MstylePrivateController],
   providers: [
     MstyleConsentService,
@@ -56,6 +62,7 @@ import { MstyleContactProofService } from './mstyle-v2.contact-proof';
     MstyleContactSelectionService,
     MstyleReadinessService,
     MstyleContactProofService,
+    MstyleManualTestingService,
     MstyleOauthService,
     MstyleAuthService,
     MstyleIdentityService,

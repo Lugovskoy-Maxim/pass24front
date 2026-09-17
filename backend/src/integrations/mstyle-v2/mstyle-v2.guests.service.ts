@@ -87,14 +87,15 @@ export class MstyleGuestsService {
     private readonly privateData: MstylePrivateDataService,
   ) {}
 
-  async create(dto: CreateGuestDto) {
+  async create(dto: CreateGuestDto, clientId?: string) {
     if (dto.partyPurpose && dto.purpose && dto.partyPurpose !== dto.purpose)
       problem(422, 'VALIDATION_FAILED');
     const purpose = dto.partyPurpose ?? dto.purpose ?? 'mstyle_booking';
     if (!['mstyle_booking', 'guest_participant_declaration'].includes(purpose))
       problem(422, 'VALIDATION_FAILED');
-    // Participant declarations need a parent operation/flow contract; do not create unbound parties.
-    if (purpose !== 'mstyle_booking' || dto.role === 'participant')
+    if (purpose === 'guest_participant_declaration')
+      return this.createParticipant(dto, clientId);
+    if (dto.role === 'participant' || dto.declaration)
       problem(422, 'VALIDATION_FAILED');
     const guestPartyId = Ids.guest();
     const expiresAt = dto.expiresAt
@@ -133,6 +134,92 @@ export class MstyleGuestsService {
         expiresAt: expiresAt.toISOString(),
         guestFlowAccessToken: token,
         eventIds,
+      }),
+      201,
+      { 'Cache-Control': 'no-store' },
+    );
+  }
+
+  private async createParticipant(dto: CreateGuestDto, clientId?: string) {
+    const data = dto.declaration;
+    if (
+      dto.role !== 'participant' ||
+      !data ||
+      !clientId ||
+      data.organizerAcknowledged !== true ||
+      data.noticeVersion !== 'mstyle_participant_notice_v1'
+    )
+      problem(422, 'VALIDATION_FAILED');
+    const name = data.name.trim();
+    const phone = data.phone ? normalizeRuMobilePhone(data.phone) : null;
+    const email = data.email ? normalizeEmail(data.email) : null;
+    if (!name || (data.phone && !phone) || (data.email && !email))
+      problem(422, 'VALIDATION_FAILED');
+    const parent = await this.privateData.validateDeclarationParent(
+      data.parentSnapshotId,
+      data.operationRef,
+    );
+    const expiresAt = dto.expiresAt
+      ? new Date(dto.expiresAt)
+      : new Date(Date.now() + DEFAULT_GUEST_TTL_MS);
+    if (
+      !Number.isFinite(expiresAt.getTime()) ||
+      expiresAt.getTime() <= Date.now() ||
+      expiresAt.getTime() > Date.now() + DEFAULT_GUEST_TTL_MS
+    )
+      problem(422, 'VALIDATION_FAILED');
+    const guestPartyId = Ids.guest();
+    await this.guests.create({
+      guestPartyId,
+      purpose: 'guest_participant_declaration',
+      role: 'participant',
+      status: 'declared',
+      revision: 1,
+      privateDataRevision: 1,
+      expiresAt,
+      consentSetRevision: 1,
+      declaration: {
+        parentSnapshotId: parent.snapshotId,
+        operationRef: data.operationRef,
+        clientId,
+        noticeVersion: data.noticeVersion,
+        acknowledgedAt: nowIso(),
+        valuesEnc: encryptJson(this.cfg.piiSecret(), { name, phone, email }),
+      },
+    });
+    for (const [type, value] of Object.entries({ phone, email })) {
+      if (!value) continue;
+      await this.guestContacts.create({
+        contactId: Ids.contact(),
+        guestPartyId,
+        type,
+        valueEnc: encryptJson(this.cfg.piiSecret(), value),
+        valueHash: hmacHex(this.cfg.piiSecret(), `${type}:${value}`),
+        masked: maskContact(type as 'phone' | 'email', value),
+        verifiedAt: null,
+        revision: 1,
+      });
+    }
+    const eventIds = [
+      await this.events.emit({
+        type: 'guest_party.updated',
+        aggregate: { type: 'guest_party', id: guestPartyId, revision: 1 },
+        guestPartyId,
+        payload: { status: 'declared' },
+      }),
+    ];
+    return new MstyleResult(
+      schema({
+        guestPartyId,
+        revision: 1,
+        status: 'declared',
+        expiresAt: expiresAt.toISOString(),
+        eventIds,
+        sourceRevisions: {
+          guestParty: 1,
+          guestContacts: { phone: phone ? 1 : null, email: email ? 1 : null },
+          privateData: 1,
+        },
       }),
       201,
       { 'Cache-Control': 'no-store' },
@@ -292,6 +379,7 @@ export class MstyleGuestsService {
     guestPartyId: string,
     dto: ConfirmBookingDto,
     ifMatch?: string,
+    clientId?: string,
   ) {
     const guest = await this.requireGuest(guestPartyId);
     const snapshot = await this.privateData.requireSnapshot(dto.snapshotId);
@@ -300,6 +388,26 @@ export class MstyleGuestsService {
       snapshot.partyId !== guestPartyId
     )
       problem(404, 'NOT_FOUND');
+    const isParticipant = guest.purpose === 'guest_participant_declaration';
+    if (isParticipant) {
+      if (
+        dto.participantRole !== 'participant' ||
+        !guest.declaration ||
+        guest.declaration.clientId !== clientId
+      )
+        problem(403, 'INSUFFICIENT_SCOPE');
+      if (
+        canonicalJson(guest.declaration.operationRef) !==
+        canonicalJson(dto.operationRef)
+      )
+        problem(409, 'CONFLICT');
+      await this.privateData.validateDeclarationParent(
+        guest.declaration.parentSnapshotId,
+        dto.operationRef,
+        true,
+      );
+    } else if (dto.participantRole === 'participant')
+      problem(422, 'VALIDATION_FAILED');
     if (guest.operationLink) {
       if (
         guest.operationLink.snapshotId !== snapshot.snapshotId ||
@@ -319,17 +427,24 @@ export class MstyleGuestsService {
         { ETag: etag('guest', guest.revision) },
       );
     }
-    if (!guestWriteAllowed(guest.status) || guest.status === 'draft')
+    if (
+      (isParticipant
+        ? guest.status !== 'declared'
+        : !guestWriteAllowed(guest.status) || guest.status === 'draft') ||
+      guest.expiresAt.getTime() <= Date.now()
+    )
       problem(409, 'CONFLICT');
     this.assertMatch(ifMatch, guest.revision);
-    const binding = await this.privateData.bindSnapshot(snapshot.snapshotId, {
-      schemaVersion: '2.0',
-      operationRef: dto.operationRef,
-    });
+    const binding = isParticipant
+      ? null
+      : await this.privateData.bindSnapshot(snapshot.snapshotId, {
+          schemaVersion: '2.0',
+          operationRef: dto.operationRef,
+        });
     guest.status = 'booked';
     guest.revision += 1;
     const eventIds = [
-      ...(binding.body as any).eventIds,
+      ...(binding ? (binding.body as any).eventIds : []),
       await this.events.emit({
         type: 'guest_party.updated',
         aggregate: {
@@ -344,6 +459,12 @@ export class MstyleGuestsService {
     guest.operationLink = {
       schemaVersion: '2.0',
       id: Ids.operationLink(),
+      ...(isParticipant
+        ? {
+            participantRole: 'participant',
+            parentSnapshotId: guest.declaration!.parentSnapshotId,
+          }
+        : {}),
       operationRef: dto.operationRef,
       snapshotId: snapshot.snapshotId,
       revision: 1,

@@ -1,4 +1,18 @@
 /** Membership dates are an additional authorization boundary, including legacy rows. */
+export const EMPLOYEE_SLOT_STATUSES = ['active', 'invited'] as const;
+
+export function membershipOccupiesEmployeeSlot(membership: {
+  role?: string;
+  status?: string;
+}): boolean {
+  return (
+    membership.role === 'employee' &&
+    EMPLOYEE_SLOT_STATUSES.includes(
+      membership.status as (typeof EMPLOYEE_SLOT_STATUSES)[number],
+    )
+  );
+}
+
 export function membershipIsEffective<
   T extends {
     status?: string;

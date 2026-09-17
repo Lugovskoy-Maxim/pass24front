@@ -1,4 +1,6 @@
 import { MstyleNativeConsoleProof } from './mstyle-v2.native-console';
+import { findManualTestIdentity } from './mstyle-v2.manual-test-profiles';
+import { SiteSettingsService } from '../../site-settings/site-settings.service';
 import { MstyleIdentityService } from './mstyle-v2.identities';
 import { MSTYLE_ADMIN_PROBE_CLIENT_ID } from './mstyle-v2.constants';
 import { guestFlowRoute, guestWriteAllowed } from './mstyle-v2.guest-access';
@@ -49,7 +51,6 @@ import {
   MstyleServiceToken,
   MstyleServiceTokenDocument,
 } from './mstyle-v2.schemas';
-import { SiteSettingsService } from '../../site-settings/site-settings.service';
 
 export type MstyleRequest = Request & {
   mstyleRequestId: string;
@@ -149,7 +150,21 @@ export class MstyleServiceTokenGuard implements CanActivate {
     req.mstyleClientId = row.clientId;
     req.mstyleTokenScopes = [...(row.scopes || [])];
     req.mstyleScopes = expandMstyleScopes(row.scopes || []);
-    if (guestId) problem(403, 'INSUFFICIENT_SCOPE');
+    if (guestId) {
+      // A service client can freeze only declarations it created. Primary guest
+      // routes still require their own bearer token, including contact and PII writes.
+      const declaration =
+        method === 'POST' && /\/snapshots$/.test(path) && this.guests
+          ? await this.guests.findOne({ guestPartyId: guestId })
+          : null;
+      if (
+        !declaration ||
+        declaration.purpose !== 'guest_participant_declaration' ||
+        declaration.role !== 'participant' ||
+        declaration.declaration?.clientId !== row.clientId
+      )
+        problem(403, 'INSUFFICIENT_SCOPE');
+    }
     const needed = ROUTE_SCOPES.find(
       (rule) => rule.method === method && rule.match.test(path),
     );
@@ -226,6 +241,7 @@ export class MstyleRouteContextGuard implements CanActivate {
     @InjectModel(MstyleMembership.name)
     private readonly memberships: Model<MstyleMembership>,
     private readonly nativeConsole?: MstyleNativeConsoleProof,
+    private readonly siteSettings?: SiteSettingsService,
   ) {}
 
   async canActivate(ctx: ExecutionContext): Promise<boolean> {
@@ -272,7 +288,12 @@ export class MstyleRouteContextGuard implements CanActivate {
     }
     if (method === 'POST' && /\/guest-parties$/.test(path)) {
       requireHeaderValue('X-Actor-Ref', actor, 'guest:booking');
-      requirePurpose(purpose, ['guest_booking_registration']);
+      requirePurpose(purpose, [
+        req.body?.partyPurpose === 'guest_participant_declaration' ||
+        req.body?.purpose === 'guest_participant_declaration'
+          ? 'guest_participant_declaration'
+          : 'guest_booking_registration',
+      ]);
       return true;
     }
     if (isChanges) {
@@ -315,6 +336,16 @@ export class MstyleRouteContextGuard implements CanActivate {
         identity.authVersion !== session.authVersion
       )
         problem(401, 'STEP_UP_REQUIRED');
+      const manualIdentity = identity.email
+        ? findManualTestIdentity('email', identity.email)
+        : identity.phone
+          ? findManualTestIdentity('phone', identity.phone)
+          : null;
+      if (manualIdentity && this.siteSettings) {
+        const manualTesting =
+          await this.siteSettings.getMstyleManualTestingSettings();
+        if (!manualTesting.enabled) problem(401, 'STEP_UP_REQUIRED');
+      }
       if (req.params.subject && req.params.subject !== subject)
         problem(404, 'NOT_FOUND');
       if (req.params.profileId) {
@@ -458,6 +489,13 @@ function m1m2ContextPolicy(
   actor: string,
 ): ContextPolicy | null {
   if (
+    method === 'PATCH' &&
+    /\/resident-profiles\/[^/]+$/.test(path) &&
+    actor.startsWith('wp-admin:')
+  ) {
+    return { actor: 'admin' };
+  }
+  if (
     method === 'GET' &&
     /\/resident-profiles\/[^/]+(?:\/memberships|\/contact-assignments)?$/.test(
       path,
@@ -597,6 +635,7 @@ function m1m2ContextPolicy(
       actor: 'delivery',
       purposes: [
         'booking_document_render',
+        'account_booking_view',
         'payment_receipt_delivery',
         'booking_notification_delivery',
       ],

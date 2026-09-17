@@ -1,11 +1,15 @@
-import { Inject, Injectable } from '@nestjs/common';
+import { Inject, Injectable, Optional } from '@nestjs/common';
 import { InjectModel } from '@nestjs/mongoose';
 import { Model } from 'mongoose';
 import * as bcrypt from 'bcryptjs';
 import { MailService } from '../../mail/mail.service';
 import { SmsService } from '../../sms/sms.service';
 import { generateOtpCode } from '../../common/otp-code';
-import { MSTYLE_SMS_SERVICE } from './mstyle-v2.sms';
+import {
+  MSTYLE_SMS_SERVICE,
+  MSTYLE_SMS_CHALLENGE_TTL_MS,
+  MstyleSmsSessionExpiredError,
+} from './mstyle-v2.sms';
 import { MstyleV2Config } from './mstyle-v2.config';
 import { MstyleChallenge, MstyleChallengeDocument } from './mstyle-v2.schemas';
 import {
@@ -14,10 +18,16 @@ import {
   MAX_VERIFY_ATTEMPTS,
   RESEND_MIN_MS,
 } from './mstyle-v2.constants';
-import { encryptJson, hmacHex, maskContact } from './mstyle-v2.crypto';
+import {
+  encryptJson,
+  hmacHex,
+  manualTestOtpCode,
+  maskContact,
+} from './mstyle-v2.crypto';
 import { Ids } from './mstyle-v2.ids';
 import { problem } from './mstyle-v2.problem';
 import { MstyleRateLimitService } from './mstyle-v2.rate-limit';
+import { SiteSettingsService } from '../../site-settings/site-settings.service';
 
 type Binding =
   | { kind: 'contact'; subject: string }
@@ -32,6 +42,7 @@ export class MstyleContactProofService {
     @Inject(MSTYLE_SMS_SERVICE) private readonly sms: SmsService,
     private readonly mail: MailService,
     private readonly rates: MstyleRateLimitService,
+    @Optional() private readonly siteSettings?: SiteSettingsService,
   ) {}
 
   async start(
@@ -49,10 +60,25 @@ export class MstyleContactProofService {
     );
     this.rates.consume('startByIdentifier', identifierHash);
     this.rates.consume('startByIdentifier', JSON.stringify(binding));
-    const useSms = real && type === 'phone';
+    const manualTesting = await this.siteSettings?.resolveManualTestContact(
+      type,
+      value,
+    );
+    if (manualTesting && !manualTesting.enabled) {
+      problem(503, 'UPSTREAM_UNAVAILABLE', { retryable: false });
+    }
+    const useManualDelivery = !!manualTesting?.enabled;
+    const useSms = real && type === 'phone' && !useManualDelivery;
     if (useSms && !this.sms.isConfigured())
       problem(503, 'UPSTREAM_UNAVAILABLE');
-    const code = real ? generateOtpCode(CODE_LENGTH) : this.cfg.mockOtp();
+    const code = useManualDelivery
+      ? manualTestOtpCode(
+          this.cfg.rateLimitSecret(),
+          `contact-proof:${type}:${identifierHash}`,
+        )
+      : real
+        ? generateOtpCode(CODE_LENGTH)
+        : this.cfg.mockOtp();
     const now = Date.now();
     const challenge = await this.challenges.create({
       ...binding,
@@ -65,7 +91,11 @@ export class MstyleContactProofService {
       identifierHash,
       codeHash: await bcrypt.hash(code, 8),
       codeLength: CODE_LENGTH,
-      verificationProvider: useSms ? 'smsaero_mobile_id' : 'local',
+      verificationProvider: useManualDelivery
+        ? 'manual_test_email'
+        : useSms
+          ? 'smsaero_mobile_id'
+          : 'local',
       contactProofVersion: 1,
       contactType: type,
       displayMasked: maskContact(type, value),
@@ -73,7 +103,9 @@ export class MstyleContactProofService {
       expectedContactValueRevision: Math.max(1, baseRevision),
       pendingValueEnc: encryptJson(this.cfg.piiSecret(), value),
       verifyAttempts: 0,
-      expiresAt: new Date(now + CHALLENGE_TTL_MS),
+      expiresAt: new Date(
+        now + (useSms ? MSTYLE_SMS_CHALLENGE_TTL_MS : CHALLENGE_TTL_MS),
+      ),
       resendAfter: new Date(now + RESEND_MIN_MS),
     });
     try {
@@ -81,6 +113,14 @@ export class MstyleContactProofService {
         const delivery = await this.sms.startMobileAuth(value);
         challenge.mobileIdRequestId = delivery.requestId;
         challenge.mobileIdAuthType = delivery.authType;
+      } else if (useManualDelivery) {
+        await this.mail.sendManualTestCode({
+          to: manualTesting!.deliveryEmail,
+          code,
+          channel: type === 'phone' ? 'sms' : 'email',
+          target: value,
+          scenario: 'Подтверждение контакта Mstyle',
+        });
       } else if (real) await this.mail.sendEmailVerificationCode(value, code);
       challenge.status = 'awaiting_code';
       await challenge.save();
@@ -119,7 +159,19 @@ export class MstyleContactProofService {
           challenge.mobileIdRequestId,
           code,
         );
-      } catch {
+      } catch (error) {
+        if (error instanceof MstyleSmsSessionExpiredError) {
+          await this.challenges.updateOne(
+            {
+              ...binding,
+              challengeId,
+              mobileIdRequestId: challenge.mobileIdRequestId,
+              status: 'awaiting_code',
+            },
+            { $set: { status: 'expired' } },
+          );
+          problem(410, 'CHALLENGE_EXPIRED');
+        }
         problem(503, 'UPSTREAM_UNAVAILABLE', { retryable: true });
       }
     } else matches = await bcrypt.compare(code, challenge.codeHash);

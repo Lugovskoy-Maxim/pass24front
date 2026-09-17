@@ -15,6 +15,15 @@ export function hmacHex(secret: string, value: string): string {
   return createHmac('sha256', secret).update(value).digest('hex');
 }
 
+/** Stable only for explicitly configured manual-test delivery targets. */
+export function manualTestOtpCode(secret: string, scope: string): string {
+  const value = Number.parseInt(
+    hmacHex(secret, `mstyle-manual-test-otp-v1:${scope}`).slice(0, 8),
+    16,
+  );
+  return String(value % 10_000).padStart(4, '0');
+}
+
 export function safeEqualHex(a: string, b: string): boolean {
   const left = Buffer.from(a);
   const right = Buffer.from(b);

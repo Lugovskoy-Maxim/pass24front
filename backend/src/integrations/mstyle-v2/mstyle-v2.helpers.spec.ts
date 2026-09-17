@@ -139,7 +139,7 @@ describe('mstyle-v2 helpers', () => {
     expect(body.type).toContain('invalid-credentials');
   });
 
-  it('keeps consent history in public DTOs', () => {
+  it('publishes the current consent state and audit reference', () => {
     const item = consentItem({
       documentCode: 'pdn',
       documentVersion: '1.0',
@@ -164,8 +164,9 @@ describe('mstyle-v2 helpers', () => {
       ],
     } as any);
 
-    expect(item.history).toHaveLength(1);
-    expect(item.history[0].auditRef).toBe('evt_current');
+    expect(item.status).toBe('accepted');
+    expect(item.revision).toBe(2);
+    expect(item.auditRef).toBe('evt_current');
   });
 
   it('uses exact Office.externalId values for resident officeIds', () => {

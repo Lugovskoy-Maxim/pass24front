@@ -713,7 +713,7 @@ export class MstylePrivateController {
   @Idempotent()
   createGuest(@Body() dto: CreateGuestDto, @Req() req: MstyleRequest) {
     return this.withIdempotency(req, 'POST', '/guest-parties', dto, () =>
-      this.guests.create(dto),
+      this.guests.create(dto, req.mstyleClientId),
     );
   }
 
@@ -809,7 +809,8 @@ export class MstylePrivateController {
       'POST',
       `/guest-parties/${guestPartyId}/snapshots`,
       dto,
-      () => this.privateData.snapshotGuest(guestPartyId, dto),
+      () =>
+        this.privateData.snapshotGuest(guestPartyId, dto, req.mstyleClientId),
     );
   }
 
@@ -833,7 +834,13 @@ export class MstylePrivateController {
         },
         ifMatch,
       },
-      () => this.guests.confirmBooking(guestPartyId, dto, ifMatch),
+      () =>
+        this.guests.confirmBooking(
+          guestPartyId,
+          dto,
+          ifMatch,
+          req.mstyleClientId,
+        ),
     );
   }
 

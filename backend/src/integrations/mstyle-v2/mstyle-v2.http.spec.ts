@@ -208,6 +208,29 @@ describe('MstyleRouteContextGuard M1/M2 context', () => {
       ),
     ).resolves.toBe(true);
   });
+
+  it('allows account booking contacts only with the dedicated delivery purpose', async () => {
+    const route =
+      '/api/internal/integrations/mstyle/v2/private-data-snapshots/snp_1/contacts/reveal';
+    await expect(
+      guard.canActivate(
+        contextFor('POST', route, {
+          clientId: 'mstyle-backend-prod',
+          actorRef: 'system:delivery',
+          purposeCode: 'account_booking_view',
+        }),
+      ),
+    ).resolves.toBe(true);
+    await expect(
+      guard.canActivate(
+        contextFor('POST', route, {
+          clientId: 'mstyle-backend-prod',
+          actorRef: 'system:delivery',
+          purposeCode: 'account_profile_view',
+        }),
+      ),
+    ).rejects.toBeInstanceOf(ProblemException);
+  });
 });
 
 function signedAdmin(actor: string, purpose?: string): string {

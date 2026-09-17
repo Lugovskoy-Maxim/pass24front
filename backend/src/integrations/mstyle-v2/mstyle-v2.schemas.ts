@@ -131,7 +131,8 @@ export class MstyleIdentity {
   @Prop() userSecurityStamp?: string;
   @Prop() userSecurityStatus?: string;
   @Prop({ type: String, default: null }) userRestrictionPreviousStatus?:
-    string | null;
+    | string
+    | null;
 
   @Prop({
     required: true,
@@ -209,8 +210,14 @@ export class MstyleProfile {
   @Prop({ default: false })
   privateDataComplete: boolean;
 
-  @Prop({ type: Object, default: { employeeLimit: null } })
-  memberPolicy: { employeeLimit: number | null };
+  @Prop({
+    type: Object,
+    default: { employeeLimit: null, residentHoursMonthlyQuotaMin: 0 },
+  })
+  memberPolicy: {
+    employeeLimit: number | null;
+    residentHoursMonthlyQuotaMin?: number;
+  };
 
   /** Mstyle office identifiers taken from assigned Office.externalId values. */
   @Prop({ type: [String], default: [] })
@@ -513,7 +520,10 @@ export class MstyleChallenge {
   @Prop({ default: 4 })
   codeLength: number;
 
-  @Prop({ enum: ['local', 'smsaero_mobile_id'], default: 'local' })
+  @Prop({
+    enum: ['local', 'smsaero_mobile_id', 'manual_test_email'],
+    default: 'local',
+  })
   verificationProvider?: string;
 
   @Prop({ type: Number })
@@ -605,6 +615,16 @@ export class MstyleGuestParty {
 
   @Prop() displayName?: string;
 
+  @Prop({ type: Object })
+  declaration?: {
+    parentSnapshotId: string;
+    operationRef: OperationReference;
+    clientId: string;
+    noticeVersion: string;
+    acknowledgedAt: string;
+    valuesEnc: EncryptedBlob;
+  };
+
   @Prop({ default: 1 })
   consentSetRevision: number;
 
@@ -613,6 +633,8 @@ export class MstyleGuestParty {
     operationRef: OperationReference;
     snapshotId: string;
     bindingRevision?: number;
+    participantRole?: string;
+    parentSnapshotId?: string;
     schemaVersion?: string;
     id?: string;
     revision?: number;
@@ -903,7 +925,7 @@ export class MstyleDeletionRequest {
   @Prop({ required: true, unique: true })
   deletionRequestId: string;
 
-  @Prop({ required: true })
+  @Prop({ required: true, index: true })
   profileId: string;
 
   @Prop({ required: true, enum: ['anonymize', 'delete'] })
@@ -935,11 +957,22 @@ export const MstyleDeletionRequestSchema = SchemaFactory.createForClass(
   MstyleDeletionRequest,
 );
 MstyleDeletionRequestSchema.index(
-  { profileId: 1 },
+  { profileId: 1, status: 1 },
   {
     unique: true,
-    name: 'one_open_deletion_request_per_profile',
-    partialFilterExpression: { completedAt: { $exists: false } },
+    name: 'one_pending_deletion_request_per_profile',
+    partialFilterExpression: { status: 'pending' },
+  },
+);
+// MongoDB 4.4 cannot use $in in a partial index or create two indexes with
+// identical key patterns. These filters preserve the original (profile,status)
+// uniqueness rule. The service checks both open statuses before creation.
+MstyleDeletionRequestSchema.index(
+  { status: 1, profileId: 1 },
+  {
+    unique: true,
+    name: 'one_blocked_deletion_request_per_profile',
+    partialFilterExpression: { status: 'blocked' },
   },
 );
 
@@ -1017,3 +1050,10 @@ export const MSTYLE_MODELS = [
   { name: MstyleDeletionRequest.name, schema: MstyleDeletionRequestSchema },
   { name: MstyleAccessGrant.name, schema: MstyleAccessGrantSchema },
 ];
+
+// Readiness owns integration index creation and upgrades. Native Pass schemas
+// keep their existing startup behavior.
+for (const { schema: modelSchema } of MSTYLE_MODELS) {
+  modelSchema.set('autoIndex', false);
+  modelSchema.set('autoCreate', false);
+}

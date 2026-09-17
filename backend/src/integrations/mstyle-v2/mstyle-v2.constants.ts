@@ -412,6 +412,7 @@ export const ROUTE_SCOPES: Array<{
     method: 'PATCH',
     match: /\/resident-profiles\/[^/]+$/,
     scope: 'mstyle.resident.profile.write',
+    alternatives: ['mstyle.integration.admin.profile.write'],
   },
   {
     method: 'PATCH',
@@ -494,6 +495,7 @@ export const ROUTE_SCOPES: Array<{
     method: 'POST',
     match: /\/guest-parties\/[^/]+\/snapshots$/,
     scope: 'mstyle.guest.snapshot.create',
+    alternatives: ['mstyle.guest.create'],
   },
   {
     method: 'POST',
