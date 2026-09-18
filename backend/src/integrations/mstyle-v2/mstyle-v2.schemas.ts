@@ -224,7 +224,15 @@ export class MstyleProfile {
     residentHoursMonthlyResetDay?: number;
   };
 
-  /** Mstyle office identifiers taken from assigned Office.externalId values. */
+  /**
+   * null = standalone profile;
+   * self profileId = primary resource owner;
+   * another profileId = secondary profile using that primary's Mstyle resources.
+   */
+  @Prop({ type: String, default: null })
+  resourceOwnerProfileId: string | null;
+
+  /** Native Pass office ids. Mstyle projection may inherit them from resource owner. */
   @Prop({ type: [String], default: [] })
   officeIds: string[];
 
@@ -248,6 +256,7 @@ export class MstyleProfile {
 }
 export type MstyleProfileDocument = MstyleProfile & Document;
 export const MstyleProfileSchema = SchemaFactory.createForClass(MstyleProfile);
+MstyleProfileSchema.index({ resourceOwnerProfileId: 1 });
 MstyleProfileSchema.index(
   {
     'sourceLinks.sourceSystem': 1,

@@ -54,7 +54,10 @@ export function safeIdentity(doc: MstyleIdentity) {
   };
 }
 
-export function safeProfile(doc: MstyleProfile) {
+export function safeProfile(
+  doc: MstyleProfile,
+  resourceOwner: MstyleProfile = doc,
+) {
   return {
     id: doc.profileId,
     type: doc.type,
@@ -65,21 +68,25 @@ export function safeProfile(doc: MstyleProfile) {
     revision: doc.revision,
     privateDataRevision: doc.privateDataRevision ?? null,
     privateDataComplete: !!doc.privateDataComplete,
+    resourceOwnerProfileId: resourceOwner.profileId,
+    resourceOwnerProfileRevision: resourceOwner.revision,
     memberPolicy: {
       employeeLimit: doc.memberPolicy?.employeeLimit ?? null,
       residentHoursMonthlyQuotaMin: Math.max(
         0,
-        doc.memberPolicy?.residentHoursMonthlyQuotaMin ?? 0,
+        resourceOwner.memberPolicy?.residentHoursMonthlyQuotaMin ?? 0,
       ),
       residentHoursMonthlyResetDay: Math.min(
         31,
         Math.max(
           1,
-          Math.trunc(doc.memberPolicy?.residentHoursMonthlyResetDay ?? 1),
+          Math.trunc(
+            resourceOwner.memberPolicy?.residentHoursMonthlyResetDay ?? 1,
+          ),
         ),
       ),
     },
-    officeIds: doc.officeIds || [],
+    officeIds: resourceOwner.officeIds || [],
     membershipSetRevision: doc.membershipSetRevision,
     contactAssignmentSetRevision: doc.assignmentSetRevision,
     sourceLinks: doc.sourceLinks || [],

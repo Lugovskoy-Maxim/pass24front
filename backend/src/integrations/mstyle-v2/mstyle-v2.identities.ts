@@ -58,6 +58,10 @@ export type MstyleAdminProfileState = {
   status: 'draft' | 'active' | 'suspended' | 'closed' | 'deleted' | null;
   residentHoursMonthlyQuotaMin: number;
   residentHoursMonthlyResetDay: number;
+  resourceRole: 'standalone' | 'primary' | 'secondary';
+  resourceOwnerProfileId: string | null;
+  resourceOwnerUserId: string | null;
+  secondaryUserIds: string[];
 };
 
 @Injectable()
@@ -499,6 +503,266 @@ export class MstyleIdentityService {
       profileId: profile.profileId,
       payload: { changedFieldCodes: ['officeIds'] },
     });
+    if (this.profileResourceRole(profile) === 'primary') {
+      await this.propagateResourceProjectionChange(profile.profileId, [
+        'officeIds',
+      ]);
+    }
+  }
+
+  private profileResourceRole(
+    profile: MstyleProfile | MstyleProfileDocument,
+  ): 'standalone' | 'primary' | 'secondary' {
+    const ownerId = String(profile.resourceOwnerProfileId || '').trim();
+    if (!ownerId) return 'standalone';
+    return ownerId === profile.profileId ? 'primary' : 'secondary';
+  }
+
+  private async resolveResourceOwnerProfile(
+    profile: MstyleProfileDocument,
+  ): Promise<MstyleProfileDocument> {
+    const role = this.profileResourceRole(profile);
+    if (role !== 'secondary') return profile;
+    const owner = await this.profiles.findOne({
+      profileId: profile.resourceOwnerProfileId,
+    });
+    if (!owner) {
+      problem(409, 'CONFLICT', {
+        title: 'Mstyle resource owner profile is missing',
+      });
+    }
+    if (this.profileResourceRole(owner) !== 'primary') {
+      problem(409, 'CONFLICT', {
+        title: 'Mstyle resource owner must be a primary profile',
+      });
+    }
+    return owner;
+  }
+
+  private async ownerUserIdForProfile(profileId: string): Promise<string | null> {
+    const membership = await this.memberships.findOne({
+      profileId,
+      role: 'owner',
+      status: 'active',
+    });
+    if (!membership) return null;
+    const identity = await this.identities.findOne({
+      subject: membership.subject,
+    });
+    return identity?.userId ? String(identity.userId) : null;
+  }
+
+  private async secondaryUserIdsForProfile(profileId: string): Promise<string[]> {
+    const children = await this.profiles
+      .find({
+        resourceOwnerProfileId: profileId,
+        profileId: { $ne: profileId },
+      })
+      .select('profileId')
+      .lean();
+    if (!children.length) return [];
+    const profileIds = children.map((child) => child.profileId);
+    const memberships = await this.memberships
+      .find({
+        profileId: { $in: profileIds },
+        role: 'owner',
+        status: 'active',
+      })
+      .select('profileId subject')
+      .lean();
+    const subjects = memberships.map((membership) => membership.subject);
+    const identities = subjects.length
+      ? await this.identities
+          .find({ subject: { $in: subjects } })
+          .select('subject userId')
+          .lean()
+      : [];
+    const userBySubject = new Map(
+      identities
+        .filter((identity) => !!identity.userId)
+        .map((identity) => [identity.subject, String(identity.userId)]),
+    );
+    return memberships
+      .map((membership) => userBySubject.get(membership.subject))
+      .filter((userId): userId is string => !!userId);
+  }
+
+  private async tenantOwnerProfileForUserId(
+    userId: string,
+  ): Promise<MstyleProfileDocument> {
+    const user = await this.users.findById(userId);
+    if (!user || user.role !== 'tenant' || user.parentTenantId) {
+      problem(409, 'CONFLICT', {
+        title: 'Secondary profile must belong to a tenant owner',
+      });
+    }
+    const identity = await this.ensureFromUser(user);
+    const profile = await this.adminProfileForIdentity(identity);
+    if (!profile) {
+      problem(409, 'CONFLICT', {
+        title: 'Secondary Mstyle profile is missing',
+      });
+    }
+    return profile;
+  }
+
+  private async touchProfileProjection(
+    profile: MstyleProfileDocument,
+    changedFieldCodes: string[],
+  ): Promise<void> {
+    profile.revision += 1;
+    await profile.save();
+    const members = await this.memberships
+      .find({ profileId: profile.profileId, status: 'active' })
+      .select('subject')
+      .lean();
+    for (const member of members) await this.bumpContext(member.subject);
+    await this.events.emit({
+      type: 'profile.updated',
+      aggregate: {
+        type: 'resident_profile',
+        id: profile.profileId,
+        revision: profile.revision,
+      },
+      profileId: profile.profileId,
+      payload: { changedFieldCodes },
+    });
+  }
+
+  private async propagateResourceProjectionChange(
+    resourceProfileId: string,
+    changedFieldCodes: string[],
+  ): Promise<void> {
+    if (!changedFieldCodes.length) return;
+    const children = await this.profiles.find({
+      resourceOwnerProfileId: resourceProfileId,
+      profileId: { $ne: resourceProfileId },
+    });
+    for (const child of children) {
+      await this.touchProfileProjection(child, changedFieldCodes);
+    }
+  }
+
+  private async updateResourceRelations(
+    profile: MstyleProfileDocument,
+    patch: {
+      isPrimaryProfile?: boolean;
+      secondaryUserIds?: string[];
+    },
+  ): Promise<void> {
+    const relationTouched =
+      patch.isPrimaryProfile !== undefined ||
+      patch.secondaryUserIds !== undefined;
+    if (!relationTouched) return;
+
+    const currentRole = this.profileResourceRole(profile);
+    if (currentRole === 'secondary') {
+      problem(409, 'CONFLICT', {
+        title: 'Detach the secondary profile from its primary profile first',
+      });
+    }
+
+    const currentChildren = await this.profiles.find({
+      resourceOwnerProfileId: profile.profileId,
+      profileId: { $ne: profile.profileId },
+    });
+
+    if (
+      currentRole === 'primary' &&
+      patch.isPrimaryProfile === false &&
+      currentChildren.length > 0
+    ) {
+      problem(409, 'CONFLICT', {
+        title:
+          'Detach all secondary profiles before disabling the primary profile',
+      });
+    }
+
+    const desiredPrimary =
+      patch.isPrimaryProfile === undefined
+        ? currentRole === 'primary'
+        : patch.isPrimaryProfile;
+
+    let desiredChildren: MstyleProfileDocument[] = currentChildren;
+    if (patch.secondaryUserIds !== undefined) {
+      const uniqueUserIds = [...new Set(patch.secondaryUserIds)];
+      desiredChildren = [];
+      for (const userId of uniqueUserIds) {
+        const child = await this.tenantOwnerProfileForUserId(userId);
+        if (child.profileId === profile.profileId) {
+          problem(409, 'CONFLICT', {
+            title: 'A profile cannot be secondary to itself',
+          });
+        }
+        const childRole = this.profileResourceRole(child);
+        if (childRole === 'primary') {
+          problem(409, 'CONFLICT', {
+            title: 'A primary profile cannot be attached as secondary',
+          });
+        }
+        if (
+          childRole === 'secondary' &&
+          child.resourceOwnerProfileId !== profile.profileId
+        ) {
+          problem(409, 'CONFLICT', {
+            title: 'Secondary profile is already linked to another primary',
+          });
+        }
+        const hasChildren = await this.profiles.exists({
+          resourceOwnerProfileId: child.profileId,
+          profileId: { $ne: child.profileId },
+        });
+        if (hasChildren) {
+          problem(409, 'CONFLICT', {
+            title: 'A profile with secondary profiles cannot become secondary',
+          });
+        }
+        desiredChildren.push(child);
+      }
+    }
+
+    if (!desiredPrimary && desiredChildren.length) {
+      problem(409, 'CONFLICT', {
+        title: 'Primary profile cannot be disabled while secondary profiles are linked',
+      });
+    }
+
+    const projectionFields = [
+      'resourceOwnerProfileId',
+      'officeIds',
+      'memberPolicy.residentHoursMonthlyQuotaMin',
+      'memberPolicy.residentHoursMonthlyResetDay',
+    ];
+
+    if (
+      desiredPrimary &&
+      String(profile.resourceOwnerProfileId || '') !== profile.profileId
+    ) {
+      profile.resourceOwnerProfileId = profile.profileId;
+      await this.touchProfileProjection(profile, ['resourceOwnerProfileId']);
+    }
+
+    const desiredIds = new Set(desiredChildren.map((child) => child.profileId));
+    for (const child of currentChildren) {
+      if (desiredIds.has(child.profileId)) continue;
+      child.resourceOwnerProfileId = null;
+      await this.touchProfileProjection(child, projectionFields);
+    }
+
+    const currentIds = new Set(currentChildren.map((child) => child.profileId));
+    for (const child of desiredChildren) {
+      if (currentIds.has(child.profileId)) continue;
+      child.resourceOwnerProfileId = profile.profileId;
+      await this.touchProfileProjection(child, projectionFields);
+    }
+
+    if (
+      !desiredPrimary &&
+      String(profile.resourceOwnerProfileId || '') === profile.profileId
+    ) {
+      profile.resourceOwnerProfileId = null;
+      await this.touchProfileProjection(profile, ['resourceOwnerProfileId']);
+    }
   }
 
   private async adminProfileForIdentity(identity: MstyleIdentityDocument) {
@@ -524,6 +788,10 @@ export class MstyleIdentityService {
         status: null,
         residentHoursMonthlyQuotaMin: 0,
         residentHoursMonthlyResetDay: 1,
+        resourceRole: 'standalone',
+        resourceOwnerProfileId: null,
+        resourceOwnerUserId: null,
+        secondaryUserIds: [],
       };
     }
     const profile = await this.adminProfileForIdentity(identity);
@@ -534,23 +802,45 @@ export class MstyleIdentityService {
         status: null,
         residentHoursMonthlyQuotaMin: 0,
         residentHoursMonthlyResetDay: 1,
+        resourceRole: 'standalone',
+        resourceOwnerProfileId: null,
+        resourceOwnerUserId: null,
+        secondaryUserIds: [],
       };
     }
+
+    const resourceRole = this.profileResourceRole(profile);
+    const resourceOwner = await this.resolveResourceOwnerProfile(profile);
     return {
       exists: true,
       profileId: profile.profileId,
       status: profile.status as MstyleAdminProfileState['status'],
       residentHoursMonthlyQuotaMin: Math.max(
         0,
-        profile.memberPolicy?.residentHoursMonthlyQuotaMin ?? 0,
+        resourceOwner.memberPolicy?.residentHoursMonthlyQuotaMin ?? 0,
       ),
       residentHoursMonthlyResetDay: Math.min(
         31,
         Math.max(
           1,
-          Math.trunc(profile.memberPolicy?.residentHoursMonthlyResetDay ?? 1),
+          Math.trunc(
+            resourceOwner.memberPolicy?.residentHoursMonthlyResetDay ?? 1,
+          ),
         ),
       ),
+      resourceRole,
+      resourceOwnerProfileId:
+        resourceRole === 'standalone'
+          ? null
+          : String(profile.resourceOwnerProfileId),
+      resourceOwnerUserId:
+        resourceRole === 'secondary'
+          ? await this.ownerUserIdForProfile(resourceOwner.profileId)
+          : null,
+      secondaryUserIds:
+        resourceRole === 'primary'
+          ? await this.secondaryUserIdsForProfile(profile.profileId)
+          : [],
     };
   }
 
@@ -560,6 +850,8 @@ export class MstyleIdentityService {
       residentHoursMonthlyQuotaMin?: number;
       residentHoursMonthlyResetDay?: number;
       status?: 'active' | 'suspended' | 'closed';
+      isPrimaryProfile?: boolean;
+      secondaryUserIds?: string[];
     },
   ): Promise<MstyleAdminProfileState> {
     const identity = await this.ensureFromUser(user);
@@ -570,7 +862,13 @@ export class MstyleIdentityService {
       });
     }
 
+    await this.updateResourceRelations(profile, patch);
+
+    const resourceRole = this.profileResourceRole(profile);
+    const resourceOwner = await this.resolveResourceOwnerProfile(profile);
     const changedFieldCodes: string[] = [];
+    const resourceChangedFieldCodes: string[] = [];
+
     const nextQuota =
       patch.residentHoursMonthlyQuotaMin === undefined
         ? undefined
@@ -583,34 +881,69 @@ export class MstyleIdentityService {
             Math.max(1, Math.trunc(patch.residentHoursMonthlyResetDay)),
           );
 
-    if (
-      nextQuota !== undefined &&
-      nextQuota !==
-        Math.max(0, profile.memberPolicy?.residentHoursMonthlyQuotaMin ?? 0)
-    ) {
-      profile.memberPolicy = {
-        ...(profile.memberPolicy || { employeeLimit: null }),
-        residentHoursMonthlyQuotaMin: nextQuota,
-      };
-      changedFieldCodes.push('memberPolicy.residentHoursMonthlyQuotaMin');
-    }
-
-    if (
-      nextResetDay !== undefined &&
-      nextResetDay !==
-        Math.min(
-          31,
-          Math.max(
-            1,
-            Math.trunc(profile.memberPolicy?.residentHoursMonthlyResetDay ?? 1),
+    if (resourceRole === 'secondary') {
+      const currentQuota = Math.max(
+        0,
+        resourceOwner.memberPolicy?.residentHoursMonthlyQuotaMin ?? 0,
+      );
+      const currentResetDay = Math.min(
+        31,
+        Math.max(
+          1,
+          Math.trunc(
+            resourceOwner.memberPolicy?.residentHoursMonthlyResetDay ?? 1,
           ),
-        )
-    ) {
-      profile.memberPolicy = {
-        ...(profile.memberPolicy || { employeeLimit: null }),
-        residentHoursMonthlyResetDay: nextResetDay,
-      };
-      changedFieldCodes.push('memberPolicy.residentHoursMonthlyResetDay');
+        ),
+      );
+      if (
+        (nextQuota !== undefined && nextQuota !== currentQuota) ||
+        (nextResetDay !== undefined && nextResetDay !== currentResetDay)
+      ) {
+        problem(409, 'CONFLICT', {
+          title: 'Resident-hours policy is inherited from the primary profile',
+        });
+      }
+    } else {
+      if (
+        nextQuota !== undefined &&
+        nextQuota !==
+          Math.max(
+            0,
+            profile.memberPolicy?.residentHoursMonthlyQuotaMin ?? 0,
+          )
+      ) {
+        profile.memberPolicy = {
+          ...(profile.memberPolicy || { employeeLimit: null }),
+          residentHoursMonthlyQuotaMin: nextQuota,
+        };
+        changedFieldCodes.push('memberPolicy.residentHoursMonthlyQuotaMin');
+        resourceChangedFieldCodes.push(
+          'memberPolicy.residentHoursMonthlyQuotaMin',
+        );
+      }
+
+      if (
+        nextResetDay !== undefined &&
+        nextResetDay !==
+          Math.min(
+            31,
+            Math.max(
+              1,
+              Math.trunc(
+                profile.memberPolicy?.residentHoursMonthlyResetDay ?? 1,
+              ),
+            ),
+          )
+      ) {
+        profile.memberPolicy = {
+          ...(profile.memberPolicy || { employeeLimit: null }),
+          residentHoursMonthlyResetDay: nextResetDay,
+        };
+        changedFieldCodes.push('memberPolicy.residentHoursMonthlyResetDay');
+        resourceChangedFieldCodes.push(
+          'memberPolicy.residentHoursMonthlyResetDay',
+        );
+      }
     }
 
     const statusChanged =
@@ -665,24 +998,15 @@ export class MstyleIdentityService {
             : {}),
         },
       });
+      if (resourceChangedFieldCodes.length) {
+        await this.propagateResourceProjectionChange(
+          profile.profileId,
+          resourceChangedFieldCodes,
+        );
+      }
     }
 
-    return {
-      exists: true,
-      profileId: profile.profileId,
-      status: profile.status as MstyleAdminProfileState['status'],
-      residentHoursMonthlyQuotaMin: Math.max(
-        0,
-        profile.memberPolicy?.residentHoursMonthlyQuotaMin ?? 0,
-      ),
-      residentHoursMonthlyResetDay: Math.min(
-        31,
-        Math.max(
-          1,
-          Math.trunc(profile.memberPolicy?.residentHoursMonthlyResetDay ?? 1),
-        ),
-      ),
-    };
+    return this.getAdminProfileState(user);
   }
 
   async ensureStandalone(input: {

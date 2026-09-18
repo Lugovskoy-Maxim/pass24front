@@ -930,6 +930,8 @@ export const api = {
         residentHoursMonthlyQuotaMin?: number;
         residentHoursMonthlyResetDay?: number;
         status?: 'active' | 'suspended' | 'closed';
+        isPrimaryProfile?: boolean;
+        secondaryUserIds?: string[];
       },
     ) =>
       request<{ profile: AdminMstyleProfileState }>(
@@ -1688,6 +1690,10 @@ export interface AdminMstyleProfileState {
   status: 'draft' | 'active' | 'suspended' | 'closed' | 'deleted' | null;
   residentHoursMonthlyQuotaMin: number;
   residentHoursMonthlyResetDay: number;
+  resourceRole: 'standalone' | 'primary' | 'secondary';
+  resourceOwnerProfileId: string | null;
+  resourceOwnerUserId: string | null;
+  secondaryUserIds: string[];
 }
 
 export interface AdminUser {

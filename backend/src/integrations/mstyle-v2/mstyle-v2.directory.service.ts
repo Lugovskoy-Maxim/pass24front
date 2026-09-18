@@ -130,6 +130,7 @@ export class MstyleDirectoryService {
         profileId: membership.profileId,
       });
       if (!profile) continue;
+      const resourceOwner = await this.resolveResourceOwnerProfile(profile);
       const selected = await this.contactSelection.select(profile.profileId);
       profiles.push({
         profileId: profile.profileId,
@@ -145,21 +146,25 @@ export class MstyleDirectoryService {
         privateDataRevision: profile.privateDataRevision,
         privateDataComplete: profile.privateDataComplete,
         display: { label: profile.label },
+        resourceOwnerProfileId: resourceOwner.profileId,
+        resourceOwnerProfileRevision: resourceOwner.revision,
         memberPolicy: {
           employeeLimit: profile.memberPolicy?.employeeLimit ?? null,
           residentHoursMonthlyQuotaMin: Math.max(
             0,
-            profile.memberPolicy?.residentHoursMonthlyQuotaMin ?? 0,
+            resourceOwner.memberPolicy?.residentHoursMonthlyQuotaMin ?? 0,
           ),
           residentHoursMonthlyResetDay: Math.min(
             31,
             Math.max(
               1,
-              Math.trunc(profile.memberPolicy?.residentHoursMonthlyResetDay ?? 1),
+              Math.trunc(
+                resourceOwner.memberPolicy?.residentHoursMonthlyResetDay ?? 1,
+              ),
             ),
           ),
         },
-        officeIds: profile.officeIds || [],
+        officeIds: resourceOwner.officeIds || [],
         snapshotSources: {
           primary: {
             profile: profile.revision,
@@ -254,7 +259,8 @@ export class MstyleDirectoryService {
 
   async getProfile(profileId: string): Promise<MstyleResult> {
     const profile = await this.requireProfile(profileId);
-    return new MstyleResult(schema(safeProfile(profile)), 200, {
+    const resourceOwner = await this.resolveResourceOwnerProfile(profile);
+    return new MstyleResult(schema(safeProfile(profile, resourceOwner)), 200, {
       ETag: etag('profile', profile.revision),
     });
   }
@@ -266,6 +272,27 @@ export class MstyleDirectoryService {
   ): Promise<MstyleResult> {
     const profile = await this.requireProfile(profileId);
     this.assertMatch(ifMatch, 'profile', profile.revision);
+    const resourceOwner = await this.resolveResourceOwnerProfile(profile);
+    if (
+      resourceOwner.profileId !== profile.profileId &&
+      (dto.memberPolicy?.residentHoursMonthlyQuotaMin !== undefined ||
+        dto.memberPolicy?.residentHoursMonthlyResetDay !== undefined)
+    ) {
+      problem(409, 'CONFLICT', {
+        title: 'Resident-hours policy belongs to the primary profile',
+      });
+    }
+    const resourceChangedFieldCodes: string[] = [];
+    if (dto.memberPolicy?.residentHoursMonthlyQuotaMin !== undefined) {
+      resourceChangedFieldCodes.push(
+        'memberPolicy.residentHoursMonthlyQuotaMin',
+      );
+    }
+    if (dto.memberPolicy?.residentHoursMonthlyResetDay !== undefined) {
+      resourceChangedFieldCodes.push(
+        'memberPolicy.residentHoursMonthlyResetDay',
+      );
+    }
     if (dto.label !== undefined) profile.label = dto.label;
     if (dto.companyShortName !== undefined) {
       profile.companyShortName = dto.companyShortName;
@@ -311,9 +338,15 @@ export class MstyleDirectoryService {
       }),
     ];
     const contextRevision = await this.bumpMembersContext(profileId);
+    if (resourceChangedFieldCodes.length) {
+      await this.propagateResourceProjectionChange(
+        profile.profileId,
+        resourceChangedFieldCodes,
+      );
+    }
     return new MstyleResult(
       schema({
-        ...safeProfile(profile),
+        ...safeProfile(profile, resourceOwner),
         contextRevision,
         eventIds,
       }),
@@ -417,6 +450,7 @@ export class MstyleDirectoryService {
     const slice = hasMore ? rows.slice(0, limit) : rows;
     const items: Record<string, unknown>[] = [];
     for (const row of slice) {
+      const resourceOwner = await this.resolveResourceOwnerProfile(row);
       const masks = await this.profileContactMasks(row.profileId);
       items.push({
         profileId: row.profileId,
@@ -426,21 +460,25 @@ export class MstyleDirectoryService {
         profileRevision: row.revision,
         privateDataRevision: row.privateDataRevision,
         privateDataComplete: row.privateDataComplete,
+        resourceOwnerProfileId: resourceOwner.profileId,
+        resourceOwnerProfileRevision: resourceOwner.revision,
         memberPolicy: {
           employeeLimit: row.memberPolicy?.employeeLimit ?? null,
           residentHoursMonthlyQuotaMin: Math.max(
             0,
-            row.memberPolicy?.residentHoursMonthlyQuotaMin ?? 0,
+            resourceOwner.memberPolicy?.residentHoursMonthlyQuotaMin ?? 0,
           ),
           residentHoursMonthlyResetDay: Math.min(
             31,
             Math.max(
               1,
-              Math.trunc(row.memberPolicy?.residentHoursMonthlyResetDay ?? 1),
+              Math.trunc(
+                resourceOwner.memberPolicy?.residentHoursMonthlyResetDay ?? 1,
+              ),
             ),
           ),
         },
-        officeIds: row.officeIds || [],
+        officeIds: resourceOwner.officeIds || [],
         updatedAt: (row as any).updatedAt?.toISOString?.() || nowIso(),
         display: { label: row.label, contactMasks: masks },
       });
@@ -2148,6 +2186,60 @@ export class MstyleDirectoryService {
         ? normalizeRuMobilePhone(identity.phone || '')
         : normalizeEmail(identity.email || '');
     return currentValue === normalized ? identity : null;
+  }
+
+  private async resolveResourceOwnerProfile(
+    profile: MstyleProfile | MstyleProfileDocument | Record<string, any>,
+  ): Promise<MstyleProfile | MstyleProfileDocument> {
+    const profileId = String(profile.profileId || '');
+    const resourceOwnerProfileId = String(
+      profile.resourceOwnerProfileId || '',
+    ).trim();
+    if (!resourceOwnerProfileId || resourceOwnerProfileId === profileId) {
+      return profile as MstyleProfile | MstyleProfileDocument;
+    }
+    const owner = await this.profiles.findOne({
+      profileId: resourceOwnerProfileId,
+    });
+    if (!owner) {
+      problem(409, 'CONFLICT', {
+        title: 'Mstyle resource owner profile is missing',
+      });
+    }
+    if (
+      String(owner.resourceOwnerProfileId || '').trim() !== owner.profileId
+    ) {
+      problem(409, 'CONFLICT', {
+        title: 'Mstyle resource owner must be a primary profile',
+      });
+    }
+    return owner;
+  }
+
+  private async propagateResourceProjectionChange(
+    resourceProfileId: string,
+    changedFieldCodes: string[],
+  ): Promise<void> {
+    if (!changedFieldCodes.length) return;
+    const children = await this.profiles.find({
+      resourceOwnerProfileId: resourceProfileId,
+      profileId: { $ne: resourceProfileId },
+    });
+    for (const child of children) {
+      child.revision += 1;
+      await child.save();
+      await this.bumpMembersContext(child.profileId);
+      await this.events.emit({
+        type: 'profile.updated',
+        aggregate: {
+          type: 'resident_profile',
+          id: child.profileId,
+          revision: child.revision,
+        },
+        profileId: child.profileId,
+        payload: { changedFieldCodes },
+      });
+    }
   }
 
   private async requireProfile(profileId: string) {

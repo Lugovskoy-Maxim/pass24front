@@ -105,6 +105,8 @@ const PROFILE = {
   revision: 2,
   privateDataRevision: 1,
   privateDataComplete: true,
+  resourceOwnerProfileId: 'prf_01J5Q8K2M7N4P6R9T1V3X5Z7BB',
+  resourceOwnerProfileRevision: 2,
   memberPolicy: { employeeLimit: 3, residentHoursMonthlyQuotaMin: 0, residentHoursMonthlyResetDay: 1 },
   officeIds: ['tf-room:107'],
   sourceLinks: [],
@@ -339,6 +341,8 @@ const MSTYLE_V2_CATALOG_BASE: CatalogEndpoint[] = [
             privateDataRevision: 1,
             privateDataComplete: true,
             display: { label: 'ООО Пример' },
+            resourceOwnerProfileId: PROFILE.id,
+            resourceOwnerProfileRevision: 2,
             memberPolicy: { employeeLimit: 3, residentHoursMonthlyQuotaMin: 0, residentHoursMonthlyResetDay: 1 },
             officeIds: ['tf-room:107'],
             snapshotSources: {

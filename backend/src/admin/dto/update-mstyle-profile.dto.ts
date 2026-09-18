@@ -1,5 +1,5 @@
 import { Type } from 'class-transformer';
-import { IsIn, IsInt, IsOptional, Max, Min } from 'class-validator';
+import { IsArray, IsBoolean, IsIn, IsInt, IsMongoId, IsOptional, Max, Min } from 'class-validator';
 
 export class UpdateMstyleProfileDto {
   @IsOptional()
@@ -14,6 +14,15 @@ export class UpdateMstyleProfileDto {
   @Min(1)
   @Max(31)
   residentHoursMonthlyResetDay?: number;
+
+  @IsOptional()
+  @IsBoolean()
+  isPrimaryProfile?: boolean;
+
+  @IsOptional()
+  @IsArray()
+  @IsMongoId({ each: true })
+  secondaryUserIds?: string[];
 
   @IsOptional()
   @IsIn(['active', 'suspended', 'closed'])

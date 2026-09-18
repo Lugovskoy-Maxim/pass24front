@@ -92,6 +92,10 @@ const EMPTY_MSTYLE_PROFILE: AdminMstyleProfileState = {
   status: null,
   residentHoursMonthlyQuotaMin: 0,
   residentHoursMonthlyResetDay: 1,
+  resourceRole: 'standalone',
+  resourceOwnerProfileId: null,
+  resourceOwnerUserId: null,
+  secondaryUserIds: [],
 };
 
 const MAX_COMPANY_LOGO_BYTES = 80 * 1024;
@@ -148,6 +152,10 @@ function AdminUsersPageContent() {
   const [mstyleProfile, setMstyleProfile] =
     useState<AdminMstyleProfileState>(EMPTY_MSTYLE_PROFILE);
   const [mstyleProfileLoading, setMstyleProfileLoading] = useState(false);
+  const [mstyleTenantOptions, setMstyleTenantOptions] = useState<AdminUser[]>([]);
+  const [secondaryProfileSearch, setSecondaryProfileSearch] = useState('');
+  const [secondaryProfilesExpanded, setSecondaryProfilesExpanded] =
+    useState(false);
   const [deletingUserId, setDeletingUserId] = useState<string | null>(null);
   const [expandedOwners, setExpandedOwners] = useState<Record<string, boolean>>(
     {},
@@ -377,6 +385,9 @@ function AdminUsersPageContent() {
     setIsActive(true);
     setIsBlocked(false);
     setMstyleProfile(EMPTY_MSTYLE_PROFILE);
+    setMstyleTenantOptions([]);
+    setSecondaryProfileSearch('');
+    setSecondaryProfilesExpanded(false);
     setMstyleProfileLoading(false);
     setShowForm(true);
     setError('');
@@ -421,12 +432,22 @@ function AdminUsersPageContent() {
     setIsActive(u.isActive && !u.invitePending);
     setIsBlocked(!!u.isBlocked);
     setMstyleProfile(EMPTY_MSTYLE_PROFILE);
+    setMstyleTenantOptions([]);
+    setSecondaryProfileSearch('');
+    setSecondaryProfilesExpanded(false);
     setMstyleProfileLoading(false);
     if (u.role === 'tenant' && !u.parentTenantId) {
       setMstyleProfileLoading(true);
-      void api.admin
-        .getUserMstyleProfile(u.id)
-        .then(({ profile }) => setMstyleProfile(profile))
+      void Promise.all([
+        api.admin.getUserMstyleProfile(u.id),
+        api.admin.getUsers({ category: 'tenants' }),
+      ])
+        .then(([{ profile }, { users: tenantOptions }]) => {
+          setMstyleProfile(profile);
+          setMstyleTenantOptions(
+            tenantOptions.filter((item) => !item.parentTenantId),
+          );
+        })
         .catch((err) =>
           setError(
             getErrorMessage(err, 'Не удалось загрузить профиль Mstyle'),
@@ -681,10 +702,19 @@ function AdminUsersPageContent() {
             ? mstyleProfile.status
             : undefined;
         await api.admin.updateUserMstyleProfile(savedUserId, {
-          residentHoursMonthlyQuotaMin:
-            mstyleProfile.residentHoursMonthlyQuotaMin,
-          residentHoursMonthlyResetDay:
-            mstyleProfile.residentHoursMonthlyResetDay,
+          ...(mstyleProfile.resourceRole === 'secondary'
+            ? {}
+            : {
+                residentHoursMonthlyQuotaMin:
+                  mstyleProfile.residentHoursMonthlyQuotaMin,
+                residentHoursMonthlyResetDay:
+                  mstyleProfile.residentHoursMonthlyResetDay,
+                isPrimaryProfile: mstyleProfile.resourceRole === 'primary',
+                secondaryUserIds:
+                  mstyleProfile.resourceRole === 'primary'
+                    ? mstyleProfile.secondaryUserIds
+                    : [],
+              }),
           ...(editId && writableStatus ? { status: writableStatus } : {}),
         });
       }
@@ -1219,6 +1249,63 @@ function AdminUsersPageContent() {
                       placeholder="по умолчанию 3"
                     />
                   </div>
+                  <div className="sm:col-span-2">
+                    {mstyleProfile.resourceRole === 'secondary' ? (
+                      <div className="rounded-lg border border-[var(--border)] bg-[var(--surface-muted)] p-3 text-sm">
+                        <div className="font-medium">Второстепенный профиль</div>
+                        <div className="text-xs text-[var(--muted)] mt-1">
+                          Основной профиль:{' '}
+                          {mstyleTenantOptions.find(
+                            (item) => item.id === mstyleProfile.resourceOwnerUserId,
+                          )?.companyShortName ||
+                            mstyleTenantOptions.find(
+                              (item) => item.id === mstyleProfile.resourceOwnerUserId,
+                            )?.company ||
+                            mstyleTenantOptions.find(
+                              (item) => item.id === mstyleProfile.resourceOwnerUserId,
+                            )?.fullName ||
+                            mstyleProfile.resourceOwnerProfileId ||
+                            'не найден'}
+                        </div>
+                        <div className="text-xs text-[var(--muted)] mt-1">
+                          Квота, дата сброса и Mstyle-офисы наследуются от
+                          основного профиля.
+                        </div>
+                      </div>
+                    ) : (
+                      <label className="flex items-center gap-2 text-sm">
+                        <input
+                          type="checkbox"
+                          checked={mstyleProfile.resourceRole === 'primary'}
+                          disabled={
+                            mstyleProfileLoading ||
+                            (mstyleProfile.resourceRole === 'primary' &&
+                              mstyleProfile.secondaryUserIds.length > 0)
+                          }
+                          onChange={(e) =>
+                            setMstyleProfile((prev) => ({
+                              ...prev,
+                              resourceRole: e.target.checked
+                                ? 'primary'
+                                : 'standalone',
+                              resourceOwnerProfileId: e.target.checked
+                                ? prev.profileId
+                                : null,
+                            }))
+                          }
+                        />
+                        Основной профиль
+                      </label>
+                    )}
+                    {mstyleProfile.resourceRole === 'primary' &&
+                      mstyleProfile.secondaryUserIds.length > 0 && (
+                        <p className="text-xs text-[var(--muted)] mt-1">
+                          Чтобы отключить основной профиль, сначала отвяжите все
+                          второстепенные профили и сохраните изменения.
+                        </p>
+                      )}
+                  </div>
+
                   <div>
                     <label className="label">
                       Квота резидентских часов, ч/мес. (Mstyle)
@@ -1229,7 +1316,10 @@ function AdminUsersPageContent() {
                       min={0}
                       step={0.5}
                       value={mstyleProfile.residentHoursMonthlyQuotaMin / 60}
-                      disabled={mstyleProfileLoading}
+                      disabled={
+                        mstyleProfileLoading ||
+                        mstyleProfile.resourceRole === 'secondary'
+                      }
                       onChange={(e) => {
                         const hours =
                           e.target.value === '' ? 0 : Number(e.target.value);
@@ -1244,6 +1334,7 @@ function AdminUsersPageContent() {
                       placeholder="0"
                     />
                   </div>
+
                   <div>
                     <label className="label">
                       Дата сброса квоты (Mstyle)
@@ -1255,7 +1346,10 @@ function AdminUsersPageContent() {
                       max={31}
                       step={1}
                       value={mstyleProfile.residentHoursMonthlyResetDay}
-                      disabled={mstyleProfileLoading}
+                      disabled={
+                        mstyleProfileLoading ||
+                        mstyleProfile.resourceRole === 'secondary'
+                      }
                       onChange={(e) => {
                         const day =
                           e.target.value === '' ? 1 : Number(e.target.value);
@@ -1270,6 +1364,127 @@ function AdminUsersPageContent() {
                       placeholder="1"
                     />
                   </div>
+
+                  {mstyleProfile.resourceRole === 'primary' && (
+                    <div className="sm:col-span-2 border border-[var(--border)] rounded-lg bg-[var(--surface-muted)]">
+                      <button
+                        type="button"
+                        className="w-full flex items-center justify-between gap-3 p-4 text-left"
+                        onClick={() =>
+                          setSecondaryProfilesExpanded((value) => !value)
+                        }
+                      >
+                        <span className="flex items-center gap-2">
+                          <Link2 className="w-4 h-4 text-[var(--primary)]" />
+                          <span className="font-medium text-sm">
+                            Привязать второстепенные профили
+                          </span>
+                          {mstyleProfile.secondaryUserIds.length > 0 && (
+                            <span className="text-xs text-[var(--muted)]">
+                              ({mstyleProfile.secondaryUserIds.length})
+                            </span>
+                          )}
+                        </span>
+                        {secondaryProfilesExpanded ? (
+                          <ChevronDown className="w-4 h-4" />
+                        ) : (
+                          <ChevronRight className="w-4 h-4" />
+                        )}
+                      </button>
+
+                      {secondaryProfilesExpanded && (
+                        <div className="border-t border-[var(--border)] p-4 space-y-3">
+                          <p className="text-xs text-[var(--muted)]">
+                            Второстепенные профили сохраняют собственные
+                            реквизиты и доступы Pass, но используют
+                            Mstyle-ресурсы основного профиля.
+                          </p>
+                          <div className="relative">
+                            <Search className="absolute left-3 top-1/2 -translate-y-1/2 w-4 h-4 text-[var(--muted)]" />
+                            <input
+                              className="input input--icon-left text-sm"
+                              value={secondaryProfileSearch}
+                              onChange={(e) =>
+                                setSecondaryProfileSearch(e.target.value)
+                              }
+                              placeholder="Поиск профиля..."
+                            />
+                          </div>
+                          <div className="border border-[var(--border)] rounded-lg divide-y divide-[var(--border)] max-h-64 overflow-y-auto bg-[var(--surface)]">
+                            {mstyleTenantOptions
+                              .filter((item) => item.id !== editId)
+                              .filter((item) => {
+                                const needle = secondaryProfileSearch
+                                  .trim()
+                                  .toLowerCase();
+                                if (!needle) return true;
+                                return [
+                                  item.companyShortName,
+                                  item.company,
+                                  item.fullName,
+                                  item.email,
+                                  item.phone,
+                                ]
+                                  .filter(Boolean)
+                                  .some((value) =>
+                                    String(value).toLowerCase().includes(needle),
+                                  );
+                              })
+                              .map((item) => {
+                                const checked =
+                                  mstyleProfile.secondaryUserIds.includes(
+                                    item.id,
+                                  );
+                                const label =
+                                  item.companyShortName ||
+                                  item.company ||
+                                  item.fullName ||
+                                  item.email;
+                                return (
+                                  <label
+                                    key={item.id}
+                                    className={`flex items-start gap-2.5 text-sm cursor-pointer px-3 py-2 ${
+                                      checked
+                                        ? 'bg-[var(--status-approved-soft)]'
+                                        : 'hover:bg-[var(--surface-muted)]'
+                                    }`}
+                                  >
+                                    <input
+                                      type="checkbox"
+                                      className="mt-0.5"
+                                      checked={checked}
+                                      onChange={() =>
+                                        setMstyleProfile((prev) => ({
+                                          ...prev,
+                                          secondaryUserIds: checked
+                                            ? prev.secondaryUserIds.filter(
+                                                (id) => id !== item.id,
+                                              )
+                                            : [
+                                                ...prev.secondaryUserIds,
+                                                item.id,
+                                              ],
+                                        }))
+                                      }
+                                    />
+                                    <span className="min-w-0">
+                                      <span className="font-medium">
+                                        {label}
+                                      </span>
+                                      {item.email && label !== item.email && (
+                                        <span className="block text-[11px] text-[var(--muted)]">
+                                          {item.email}
+                                        </span>
+                                      )}
+                                    </span>
+                                  </label>
+                                );
+                              })}
+                          </div>
+                        </div>
+                      )}
+                    </div>
+                  )}
                 </>
               )}
             {form.role === 'tenant' &&

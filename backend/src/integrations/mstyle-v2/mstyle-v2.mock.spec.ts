@@ -89,6 +89,8 @@ const REQUIRED_TOP_LEVEL: Record<string, string[]> = {
     'revision',
     'privateDataRevision',
     'privateDataComplete',
+    'resourceOwnerProfileId',
+    'resourceOwnerProfileRevision',
     'memberPolicy',
     'officeIds',
     'sourceLinks',
