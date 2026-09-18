@@ -105,7 +105,7 @@ const PROFILE = {
   revision: 2,
   privateDataRevision: 1,
   privateDataComplete: true,
-  memberPolicy: { employeeLimit: 3 },
+  memberPolicy: { employeeLimit: 3, residentHoursMonthlyQuotaMin: 0, residentHoursMonthlyResetDay: 1 },
   officeIds: ['tf-room:107'],
   sourceLinks: [],
   createdAt: '2026-08-01T10:00:00Z',
@@ -339,7 +339,7 @@ const MSTYLE_V2_CATALOG_BASE: CatalogEndpoint[] = [
             privateDataRevision: 1,
             privateDataComplete: true,
             display: { label: 'ООО Пример' },
-            memberPolicy: { employeeLimit: 3 },
+            memberPolicy: { employeeLimit: 3, residentHoursMonthlyQuotaMin: 0, residentHoursMonthlyResetDay: 1 },
             officeIds: ['tf-room:107'],
             snapshotSources: {
               primary: {
@@ -1420,7 +1420,7 @@ const M1_M2_CATALOG_OVERRIDES: Record<string, M1M2CatalogOverride> = {
         legalForm: 'ooo',
         label: 'Вадим тест',
         companyShortName: 'Вадим тест',
-        memberPolicy: { employeeLimit: 5 },
+        memberPolicy: { employeeLimit: 5, residentHoursMonthlyQuotaMin: 0, residentHoursMonthlyResetDay: 1 },
       },
       privateData: {
         profileType: 'company',

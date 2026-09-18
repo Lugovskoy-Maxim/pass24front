@@ -1,5 +1,5 @@
 import { Type } from 'class-transformer';
-import { IsIn, IsInt, IsOptional, Min } from 'class-validator';
+import { IsIn, IsInt, IsOptional, Max, Min } from 'class-validator';
 
 export class UpdateMstyleProfileDto {
   @IsOptional()
@@ -7,6 +7,13 @@ export class UpdateMstyleProfileDto {
   @IsInt()
   @Min(0)
   residentHoursMonthlyQuotaMin?: number;
+
+  @IsOptional()
+  @Type(() => Number)
+  @IsInt()
+  @Min(1)
+  @Max(31)
+  residentHoursMonthlyResetDay?: number;
 
   @IsOptional()
   @IsIn(['active', 'suspended', 'closed'])

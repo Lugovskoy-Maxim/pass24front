@@ -109,6 +109,13 @@ export class PatchMemberPolicyDto {
   @IsInt()
   @Min(0)
   residentHoursMonthlyQuotaMin?: number;
+
+  @IsOptional()
+  @Type(() => Number)
+  @IsInt()
+  @Min(1)
+  @Max(31)
+  residentHoursMonthlyResetDay?: number;
 }
 
 export class PatchProfileDto extends SchemaVersionDto {
@@ -232,6 +239,13 @@ export class MemberPolicyDto {
   @IsInt()
   @Min(0)
   residentHoursMonthlyQuotaMin?: number;
+
+  @IsOptional()
+  @Type(() => Number)
+  @IsInt()
+  @Min(1)
+  @Max(31)
+  residentHoursMonthlyResetDay?: number;
 }
 
 export class OnboardingProfileDto {

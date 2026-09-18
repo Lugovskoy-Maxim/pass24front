@@ -151,6 +151,13 @@ export class MstyleDirectoryService {
             0,
             profile.memberPolicy?.residentHoursMonthlyQuotaMin ?? 0,
           ),
+          residentHoursMonthlyResetDay: Math.min(
+            31,
+            Math.max(
+              1,
+              Math.trunc(profile.memberPolicy?.residentHoursMonthlyResetDay ?? 1),
+            ),
+          ),
         },
         officeIds: profile.officeIds || [],
         snapshotSources: {
@@ -276,6 +283,18 @@ export class MstyleDirectoryService {
                 profile.memberPolicy?.residentHoursMonthlyQuotaMin ?? 0,
               )
             : dto.memberPolicy.residentHoursMonthlyQuotaMin,
+        residentHoursMonthlyResetDay:
+          dto.memberPolicy.residentHoursMonthlyResetDay === undefined
+            ? Math.min(
+                31,
+                Math.max(
+                  1,
+                  Math.trunc(
+                    profile.memberPolicy?.residentHoursMonthlyResetDay ?? 1,
+                  ),
+                ),
+              )
+            : dto.memberPolicy.residentHoursMonthlyResetDay,
       };
     }
     profile.revision += 1;
@@ -412,6 +431,13 @@ export class MstyleDirectoryService {
           residentHoursMonthlyQuotaMin: Math.max(
             0,
             row.memberPolicy?.residentHoursMonthlyQuotaMin ?? 0,
+          ),
+          residentHoursMonthlyResetDay: Math.min(
+            31,
+            Math.max(
+              1,
+              Math.trunc(row.memberPolicy?.residentHoursMonthlyResetDay ?? 1),
+            ),
           ),
         },
         officeIds: row.officeIds || [],
@@ -595,6 +621,8 @@ export class MstyleDirectoryService {
         employeeLimit: dto.profile.memberPolicy?.employeeLimit ?? null,
         residentHoursMonthlyQuotaMin:
           dto.profile.memberPolicy?.residentHoursMonthlyQuotaMin ?? 0,
+        residentHoursMonthlyResetDay:
+          dto.profile.memberPolicy?.residentHoursMonthlyResetDay ?? 1,
       },
       sourceLinks: [{ ...dto.sourceLink, linkedAt: nowIso() }],
       assignmentSetRevision: 1,

@@ -91,6 +91,7 @@ const EMPTY_MSTYLE_PROFILE: AdminMstyleProfileState = {
   profileId: null,
   status: null,
   residentHoursMonthlyQuotaMin: 0,
+  residentHoursMonthlyResetDay: 1,
 };
 
 const MAX_COMPANY_LOGO_BYTES = 80 * 1024;
@@ -682,6 +683,8 @@ function AdminUsersPageContent() {
         await api.admin.updateUserMstyleProfile(savedUserId, {
           residentHoursMonthlyQuotaMin:
             mstyleProfile.residentHoursMonthlyQuotaMin,
+          residentHoursMonthlyResetDay:
+            mstyleProfile.residentHoursMonthlyResetDay,
           ...(editId && writableStatus ? { status: writableStatus } : {}),
         });
       }
@@ -1239,6 +1242,32 @@ function AdminUsersPageContent() {
                         }));
                       }}
                       placeholder="0"
+                    />
+                  </div>
+                  <div>
+                    <label className="label">
+                      Дата сброса квоты (Mstyle)
+                    </label>
+                    <input
+                      className="input"
+                      type="number"
+                      min={1}
+                      max={31}
+                      step={1}
+                      value={mstyleProfile.residentHoursMonthlyResetDay}
+                      disabled={mstyleProfileLoading}
+                      onChange={(e) => {
+                        const day =
+                          e.target.value === '' ? 1 : Number(e.target.value);
+                        setMstyleProfile((prev) => ({
+                          ...prev,
+                          residentHoursMonthlyResetDay: Math.min(
+                            31,
+                            Math.max(1, Math.trunc(day)),
+                          ),
+                        }));
+                      }}
+                      placeholder="1"
                     />
                   </div>
                 </>

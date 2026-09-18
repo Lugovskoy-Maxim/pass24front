@@ -314,6 +314,7 @@ export class MstyleManualTestingService {
         0,
         fixture.scenario.balanceMinutes,
       ),
+      residentHoursMonthlyResetDay: 1,
     };
     profile.sourceLinks = [
       {

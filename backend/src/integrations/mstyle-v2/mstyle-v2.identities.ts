@@ -57,6 +57,7 @@ export type MstyleAdminProfileState = {
   profileId: string | null;
   status: 'draft' | 'active' | 'suspended' | 'closed' | 'deleted' | null;
   residentHoursMonthlyQuotaMin: number;
+  residentHoursMonthlyResetDay: number;
 };
 
 @Injectable()
@@ -395,6 +396,7 @@ export class MstyleIdentityService {
         memberPolicy: {
           employeeLimit: user.employeeLimit ?? null,
           residentHoursMonthlyQuotaMin: 0,
+          residentHoursMonthlyResetDay: 1,
         },
         officeIds: await this.officeExternalIds(ownerUserId),
         sourceLinks: [],
@@ -521,6 +523,7 @@ export class MstyleIdentityService {
         profileId: null,
         status: null,
         residentHoursMonthlyQuotaMin: 0,
+        residentHoursMonthlyResetDay: 1,
       };
     }
     const profile = await this.adminProfileForIdentity(identity);
@@ -530,6 +533,7 @@ export class MstyleIdentityService {
         profileId: null,
         status: null,
         residentHoursMonthlyQuotaMin: 0,
+        residentHoursMonthlyResetDay: 1,
       };
     }
     return {
@@ -540,6 +544,13 @@ export class MstyleIdentityService {
         0,
         profile.memberPolicy?.residentHoursMonthlyQuotaMin ?? 0,
       ),
+      residentHoursMonthlyResetDay: Math.min(
+        31,
+        Math.max(
+          1,
+          Math.trunc(profile.memberPolicy?.residentHoursMonthlyResetDay ?? 1),
+        ),
+      ),
     };
   }
 
@@ -547,6 +558,7 @@ export class MstyleIdentityService {
     user: UserDocument,
     patch: {
       residentHoursMonthlyQuotaMin?: number;
+      residentHoursMonthlyResetDay?: number;
       status?: 'active' | 'suspended' | 'closed';
     },
   ): Promise<MstyleAdminProfileState> {
@@ -563,6 +575,13 @@ export class MstyleIdentityService {
       patch.residentHoursMonthlyQuotaMin === undefined
         ? undefined
         : Math.max(0, Math.trunc(patch.residentHoursMonthlyQuotaMin));
+    const nextResetDay =
+      patch.residentHoursMonthlyResetDay === undefined
+        ? undefined
+        : Math.min(
+            31,
+            Math.max(1, Math.trunc(patch.residentHoursMonthlyResetDay)),
+          );
 
     if (
       nextQuota !== undefined &&
@@ -574,6 +593,24 @@ export class MstyleIdentityService {
         residentHoursMonthlyQuotaMin: nextQuota,
       };
       changedFieldCodes.push('memberPolicy.residentHoursMonthlyQuotaMin');
+    }
+
+    if (
+      nextResetDay !== undefined &&
+      nextResetDay !==
+        Math.min(
+          31,
+          Math.max(
+            1,
+            Math.trunc(profile.memberPolicy?.residentHoursMonthlyResetDay ?? 1),
+          ),
+        )
+    ) {
+      profile.memberPolicy = {
+        ...(profile.memberPolicy || { employeeLimit: null }),
+        residentHoursMonthlyResetDay: nextResetDay,
+      };
+      changedFieldCodes.push('memberPolicy.residentHoursMonthlyResetDay');
     }
 
     const statusChanged =
@@ -637,6 +674,13 @@ export class MstyleIdentityService {
       residentHoursMonthlyQuotaMin: Math.max(
         0,
         profile.memberPolicy?.residentHoursMonthlyQuotaMin ?? 0,
+      ),
+      residentHoursMonthlyResetDay: Math.min(
+        31,
+        Math.max(
+          1,
+          Math.trunc(profile.memberPolicy?.residentHoursMonthlyResetDay ?? 1),
+        ),
       ),
     };
   }
