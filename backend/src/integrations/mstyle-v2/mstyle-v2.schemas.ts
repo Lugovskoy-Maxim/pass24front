@@ -212,11 +212,16 @@ export class MstyleProfile {
 
   @Prop({
     type: Object,
-    default: { employeeLimit: null, residentHoursMonthlyQuotaMin: 0 },
+    default: {
+      employeeLimit: null,
+      residentHoursMonthlyQuotaMin: 0,
+      residentHoursMonthlyResetDay: 1,
+    },
   })
   memberPolicy: {
     employeeLimit: number | null;
     residentHoursMonthlyQuotaMin?: number;
+    residentHoursMonthlyResetDay?: number;
   };
 
   /** Mstyle office identifiers taken from assigned Office.externalId values. */

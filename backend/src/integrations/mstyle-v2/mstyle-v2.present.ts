@@ -71,6 +71,13 @@ export function safeProfile(doc: MstyleProfile) {
         0,
         doc.memberPolicy?.residentHoursMonthlyQuotaMin ?? 0,
       ),
+      residentHoursMonthlyResetDay: Math.min(
+        31,
+        Math.max(
+          1,
+          Math.trunc(doc.memberPolicy?.residentHoursMonthlyResetDay ?? 1),
+        ),
+      ),
     },
     officeIds: doc.officeIds || [],
     membershipSetRevision: doc.membershipSetRevision,

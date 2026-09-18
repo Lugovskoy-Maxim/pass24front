@@ -928,6 +928,7 @@ export const api = {
       id: string,
       data: {
         residentHoursMonthlyQuotaMin?: number;
+        residentHoursMonthlyResetDay?: number;
         status?: 'active' | 'suspended' | 'closed';
       },
     ) =>
@@ -1686,6 +1687,7 @@ export interface AdminMstyleProfileState {
   profileId: string | null;
   status: 'draft' | 'active' | 'suspended' | 'closed' | 'deleted' | null;
   residentHoursMonthlyQuotaMin: number;
+  residentHoursMonthlyResetDay: number;
 }
 
 export interface AdminUser {

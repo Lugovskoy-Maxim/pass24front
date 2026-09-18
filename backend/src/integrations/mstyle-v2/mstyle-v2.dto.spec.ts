@@ -1,7 +1,7 @@
 import 'reflect-metadata';
 import { plainToInstance } from 'class-transformer';
 import { validate } from 'class-validator';
-import { VerifyCodeDto } from './mstyle-v2.dto';
+import { PatchMemberPolicyDto, VerifyCodeDto } from './mstyle-v2.dto';
 
 describe('Mstyle v2 VerifyCodeDto', () => {
   const input = (code: string) =>
@@ -26,4 +26,19 @@ describe('Mstyle v2 VerifyCodeDto', () => {
       expect(errors.some((error) => error.property === 'code')).toBe(true);
     },
   );
+});
+describe('Mstyle v2 resident-hours reset day', () => {
+  const policy = (residentHoursMonthlyResetDay: number) =>
+    plainToInstance(PatchMemberPolicyDto, { residentHoursMonthlyResetDay });
+
+  it.each([1, 15, 31])('accepts reset day %p', async (day) => {
+    await expect(validate(policy(day))).resolves.toHaveLength(0);
+  });
+
+  it.each([0, 32, 1.5])('rejects invalid reset day %p', async (day) => {
+    const errors = await validate(policy(day));
+    expect(
+      errors.some((error) => error.property === 'residentHoursMonthlyResetDay'),
+    ).toBe(true);
+  });
 });

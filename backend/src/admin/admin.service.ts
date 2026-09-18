@@ -129,6 +129,8 @@ export class AdminService {
         status: profile.status,
         residentHoursMonthlyQuotaMin:
           profile.residentHoursMonthlyQuotaMin,
+        residentHoursMonthlyResetDay:
+          profile.residentHoursMonthlyResetDay,
       },
     });
     return { profile };
