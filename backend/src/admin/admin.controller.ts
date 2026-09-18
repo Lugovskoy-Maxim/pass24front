@@ -34,6 +34,7 @@ import { CreateOfficeDto } from './dto/create-office.dto';
 import { ImportOfficesDto } from './dto/import-offices.dto';
 import { CreateUserDto } from './dto/create-user.dto';
 import { UpdateUserDto } from './dto/update-user.dto';
+import { UpdateMstyleProfileDto } from './dto/update-mstyle-profile.dto';
 import { UpdateAccessConfigDto } from './dto/update-access-config.dto';
 import { UpdateBusinessCenterDto } from './dto/update-business-center.dto';
 
@@ -145,6 +146,22 @@ export class AdminController {
     @Req() req: any,
   ) {
     return this.adminService.updateUser(id, dto, req.user);
+  }
+
+  @Get('users/:id/mstyle-profile')
+  @RequireAllPermissions('admin.users')
+  getUserMstyleProfile(@Param('id') id: string) {
+    return this.adminService.getUserMstyleProfile(id);
+  }
+
+  @Patch('users/:id/mstyle-profile')
+  @RequireAllPermissions('admin.users')
+  updateUserMstyleProfile(
+    @Param('id') id: string,
+    @Body() dto: UpdateMstyleProfileDto,
+    @Req() req: any,
+  ) {
+    return this.adminService.updateUserMstyleProfile(id, dto, req.user);
   }
 
   @Delete('users/:id')
