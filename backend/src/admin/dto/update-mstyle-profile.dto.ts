@@ -43,6 +43,10 @@ export class UpdateMstyleProfileDto {
   privateData?: Record<string, unknown>;
 
   @IsOptional()
+  @IsBoolean()
+  selfServiceEnabled?: boolean;
+
+  @IsOptional()
   @IsInt()
   @Min(0)
   privateDataRevision?: number;

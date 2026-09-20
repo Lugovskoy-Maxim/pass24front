@@ -934,6 +934,7 @@ export const api = {
         secondaryUserIds?: string[];
         privateData?: Record<string, unknown>;
         privateDataRevision?: number;
+        selfServiceEnabled?: boolean;
       },
     ) =>
       request<{ profile: AdminMstyleProfileState }>(
@@ -1698,6 +1699,7 @@ export interface AdminMstyleProfileState {
   secondaryUserIds: string[];
   privateData: Record<string, unknown>;
   privateDataRevision: number;
+  editPolicy: 'initial' | 'self_service' | 'request_only' | 'locked';
 }
 
 export interface AdminUser {

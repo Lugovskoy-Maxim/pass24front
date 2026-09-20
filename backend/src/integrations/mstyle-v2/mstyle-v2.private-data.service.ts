@@ -115,7 +115,50 @@ export class MstylePrivateDataService {
     return {
       values: canonicalPrivateValues(stored, profile.type, profile.legalForm),
       revision: doc?.revision ?? 0,
+      editPolicy: doc?.editPolicy ?? 'initial',
     };
+  }
+
+  async setAdminResidentSelfService(profileId: string, enabled: boolean) {
+    const profile = await this.requireProfile(profileId);
+    const doc = await this.privateData.findOne({
+      partyType: 'resident_profile',
+      partyId: profileId,
+    });
+    if (!doc) {
+      problem(409, 'CONFLICT', {
+        title: 'Private data is not initialized yet',
+      });
+    }
+    if (doc.editPolicy === 'locked') {
+      problem(409, 'CONFLICT', {
+        title: 'Private data edit policy is locked',
+      });
+    }
+
+    const nextPolicy = enabled ? 'self_service' : 'request_only';
+    if (doc.editPolicy === nextPolicy) {
+      return { editPolicy: doc.editPolicy, revision: doc.revision };
+    }
+
+    doc.editPolicy = nextPolicy;
+    doc.revision += 1;
+    await doc.save();
+
+    profile.privateDataRevision = doc.revision;
+    await profile.save();
+    await this.bumpMemberContexts(profileId);
+    await this.events.emit({
+      type: 'resident_private_data.updated',
+      aggregate: {
+        type: 'resident_private_data',
+        id: profileId,
+        revision: doc.revision,
+      },
+      profileId,
+    });
+
+    return { editPolicy: doc.editPolicy, revision: doc.revision };
   }
 
   async adminPatchResident(
@@ -160,12 +203,13 @@ export class MstylePrivateDataService {
         profileType: profile.type,
         legalForm: profile.legalForm,
         revision: 1,
-        editPolicy: 'self_service',
+        editPolicy: 'request_only',
         valuesEnc: encryptJson(this.cfg.piiSecret(), merged),
       });
     } else {
       doc.valuesEnc = encryptJson(this.cfg.piiSecret(), merged);
       doc.revision += 1;
+      if (doc.editPolicy === 'initial') doc.editPolicy = 'request_only';
       await doc.save();
     }
     const canonical = canonicalPrivateValues(
@@ -333,13 +377,13 @@ export class MstylePrivateDataService {
         profileType: profile.type,
         legalForm: profile.legalForm,
         revision: 1,
-        editPolicy: 'self_service',
+        editPolicy: 'request_only',
         valuesEnc: encryptJson(this.cfg.piiSecret(), merged),
       });
     } else {
       doc.valuesEnc = encryptJson(this.cfg.piiSecret(), merged);
       doc.revision += 1;
-      doc.editPolicy = 'self_service';
+      if (doc.editPolicy === 'initial') doc.editPolicy = 'request_only';
       await doc.save();
     }
     const canonicalMerged = canonicalPrivateValues(

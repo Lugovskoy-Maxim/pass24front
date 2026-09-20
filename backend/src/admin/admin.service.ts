@@ -114,7 +114,12 @@ export class AdminService {
     const profile = await this.identities.getAdminProfileState(user);
     if (!profile.exists || !profile.profileId) {
       return {
-        profile: { ...profile, privateData: {}, privateDataRevision: 0 },
+        profile: {
+          ...profile,
+          privateData: {},
+          privateDataRevision: 0,
+          editPolicy: 'initial',
+        },
       };
     }
     const privateState = await this.mstylePrivateData.adminResidentValues(
@@ -125,6 +130,7 @@ export class AdminService {
         ...profile,
         privateData: privateState.values,
         privateDataRevision: privateState.revision,
+        editPolicy: privateState.editPolicy,
       },
     };
   }
@@ -202,13 +208,25 @@ export class AdminService {
       }
     }
 
+    if (dto.selfServiceEnabled !== undefined) {
+      if (!profile.profileId) {
+        throw new ConflictException('Профиль Mstyle ещё не создан');
+      }
+      await this.mstylePrivateData.setAdminResidentSelfService(
+        profile.profileId,
+        dto.selfServiceEnabled,
+      );
+      profile = await this.identities.getAdminProfileState(user);
+    }
+
     const privateState = profile.profileId
       ? await this.mstylePrivateData.adminResidentValues(profile.profileId)
-      : { values: {}, revision: 0 };
+      : { values: {}, revision: 0, editPolicy: 'initial' };
     const responseProfile = {
       ...profile,
       privateData: privateState.values,
       privateDataRevision: privateState.revision,
+      editPolicy: privateState.editPolicy,
     };
     await this.auditService.log({
       action: 'user.mstyle_profile.update',

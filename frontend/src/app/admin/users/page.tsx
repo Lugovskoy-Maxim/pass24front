@@ -99,6 +99,7 @@ const EMPTY_MSTYLE_PROFILE: AdminMstyleProfileState = {
   secondaryUserIds: [],
   privateData: {},
   privateDataRevision: 0,
+  editPolicy: 'initial',
 };
 
 const MAX_COMPANY_LOGO_BYTES = 80 * 1024;
@@ -242,6 +243,7 @@ function AdminUsersPageContent() {
     useState(false);
   const [residentDataExpanded, setResidentDataExpanded] = useState(false);
   const [residentPrivateDirty, setResidentPrivateDirty] = useState(false);
+  const [mstyleEditPolicyDirty, setMstyleEditPolicyDirty] = useState(false);
   const [deletingUserId, setDeletingUserId] = useState<string | null>(null);
   const [expandedOwners, setExpandedOwners] = useState<Record<string, boolean>>(
     {},
@@ -476,6 +478,7 @@ function AdminUsersPageContent() {
     setSecondaryProfilesExpanded(false);
     setResidentDataExpanded(false);
     setResidentPrivateDirty(false);
+    setMstyleEditPolicyDirty(false);
     setMstyleProfileLoading(false);
     setShowForm(true);
     setError('');
@@ -527,6 +530,7 @@ function AdminUsersPageContent() {
     setSecondaryProfilesExpanded(false);
     setResidentDataExpanded(false);
     setResidentPrivateDirty(false);
+    setMstyleEditPolicyDirty(false);
     setMstyleProfileLoading(false);
     if (u.role === 'tenant' && !u.parentTenantId) {
       setMstyleProfileLoading(true);
@@ -815,6 +819,11 @@ function AdminUsersPageContent() {
             ? {
                 privateData: mstyleProfile.privateData,
                 privateDataRevision: mstyleProfile.privateDataRevision,
+              }
+            : {}),
+          ...(mstyleEditPolicyDirty
+            ? {
+                selfServiceEnabled: mstyleProfile.editPolicy === 'self_service',
               }
             : {}),
         });
@@ -1382,6 +1391,32 @@ function AdminUsersPageContent() {
                       </button>
                       {residentDataExpanded && (
                         <div className="border-t border-[var(--border)] p-4 grid grid-cols-1 sm:grid-cols-2 gap-3">
+                          <label
+                            className="sm:col-span-2 flex items-center gap-2 text-sm"
+                            title="Как правило, реквизиты профиля зафиксированы потому что на них заключён договор аренды. Проверьте нужно ли разрешать этому профилю редактирование своих данных"
+                          >
+                            <input
+                              type="checkbox"
+                              checked={
+                                mstyleProfile.editPolicy === 'self_service'
+                              }
+                              disabled={
+                                mstyleProfileLoading ||
+                                mstyleProfile.editPolicy === 'initial' ||
+                                mstyleProfile.editPolicy === 'locked'
+                              }
+                              onChange={(e) => {
+                                setMstyleEditPolicyDirty(true);
+                                setMstyleProfile((prev) => ({
+                                  ...prev,
+                                  editPolicy: e.target.checked
+                                    ? 'self_service'
+                                    : 'request_only',
+                                }));
+                              }}
+                            />
+                            Разрешено редактировать свой профиль
+                          </label>
                           {residentPrivateFields(
                             form.profileType,
                             form.legalForm,
