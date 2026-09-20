@@ -11,6 +11,7 @@ import {
   Max,
   Min,
   MinLength,
+  Matches,
   ValidateIf,
 } from 'class-validator';
 import { Type } from 'class-transformer';
@@ -38,6 +39,11 @@ export class CreateUserDto {
   @IsOptional()
   @IsString()
   middleName?: string;
+
+  @IsOptional()
+  @IsString()
+  @Matches(/^\d{4}-\d{2}-\d{2}$/)
+  birthDate?: string;
 
   @IsOptional()
   @IsString()

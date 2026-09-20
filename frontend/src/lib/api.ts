@@ -932,6 +932,8 @@ export const api = {
         status?: 'active' | 'suspended' | 'closed';
         isPrimaryProfile?: boolean;
         secondaryUserIds?: string[];
+        privateData?: Record<string, unknown>;
+        privateDataRevision?: number;
       },
     ) =>
       request<{ profile: AdminMstyleProfileState }>(
@@ -1694,6 +1696,8 @@ export interface AdminMstyleProfileState {
   resourceOwnerProfileId: string | null;
   resourceOwnerUserId: string | null;
   secondaryUserIds: string[];
+  privateData: Record<string, unknown>;
+  privateDataRevision: number;
 }
 
 export interface AdminUser {
@@ -1706,6 +1710,7 @@ export interface AdminUser {
   lastName?: string;
   firstName?: string;
   middleName?: string;
+  birthDate?: string;
   phone?: string;
   company?: string;
   companyLogo?: string;
@@ -1755,6 +1760,7 @@ export interface CreateUserData {
   lastName?: string;
   firstName?: string;
   middleName?: string;
+  birthDate?: string;
   phone?: string;
   company?: string;
   companyLogo?: string;

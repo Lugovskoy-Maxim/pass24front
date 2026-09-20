@@ -11,6 +11,7 @@ import {
   Max,
   Min,
   MinLength,
+  Matches,
   ValidateIf,
 } from 'class-validator';
 
@@ -40,6 +41,12 @@ export class UpdateUserDto {
   @IsOptional()
   @IsString()
   middleName?: string;
+
+  @IsOptional()
+  @ValidateIf((_, v) => v !== null && v !== undefined && v !== '')
+  @IsString()
+  @Matches(/^\d{4}-\d{2}-\d{2}$/)
+  birthDate?: string | null;
 
   @IsOptional()
   @IsString()

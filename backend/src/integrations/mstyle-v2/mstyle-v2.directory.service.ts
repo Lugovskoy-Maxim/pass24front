@@ -191,11 +191,17 @@ export class MstyleDirectoryService {
         authVersion: identity.authVersion,
         identityDisplay: {
           displayName: identity.displayName || '',
+          name: {
+            lastName: identity.name?.lastName ?? null,
+            firstName: identity.name?.firstName ?? null,
+            middleName: identity.name?.middleName ?? null,
+          },
+          birthDate:
+            identity.birthDate ??
+            (manualTestIdentity?.role === 'employee'
+              ? (manualTestIdentity.birthDate ?? null)
+              : null),
           contactMasks: identityContactMasks,
-          ...(manualTestIdentity?.role === 'employee' &&
-          manualTestIdentity.birthDate
-            ? { birthDate: manualTestIdentity.birthDate }
-            : {}),
         },
         profiles,
         physicalAccessFacts: {
@@ -223,14 +229,20 @@ export class MstyleDirectoryService {
   ): Promise<MstyleResult> {
     const identity = await this.requireIdentity(subject);
     this.assertMatch(ifMatch, 'identity', identity.revision);
+    await this.identities.syncNativePersonFromIdentityPatch(identity, dto);
     if (dto.displayName !== undefined) identity.displayName = dto.displayName;
     if (dto.name) {
       identity.name = {
         lastName: dto.name.lastName ?? identity.name?.lastName ?? null,
         firstName: dto.name.firstName ?? identity.name?.firstName ?? null,
-        middleName: dto.name.middleName ?? identity.name?.middleName ?? null,
+        middleName:
+          dto.name.middleName !== undefined
+            ? dto.name.middleName
+            : (identity.name?.middleName ?? null),
       };
     }
+    if (dto.birthDate !== undefined)
+      identity.birthDate = dto.birthDate?.trim() || undefined;
     identity.revision += 1;
     identity.contextRevision += 1;
     await identity.save();
@@ -296,6 +308,14 @@ export class MstyleDirectoryService {
     if (dto.label !== undefined) profile.label = dto.label;
     if (dto.companyShortName !== undefined) {
       profile.companyShortName = dto.companyShortName;
+    }
+    if (dto.companyName !== undefined) {
+      const companyName = dto.companyName?.trim() || null;
+      await this.identities.updateNativeCompanyForProfile(
+        profile.profileId,
+        companyName,
+      );
+      profile.companyName = companyName;
     }
     if (dto.memberPolicy) {
       profile.memberPolicy = {
@@ -2206,9 +2226,7 @@ export class MstyleDirectoryService {
         title: 'Mstyle resource owner profile is missing',
       });
     }
-    if (
-      String(owner.resourceOwnerProfileId || '').trim() !== owner.profileId
-    ) {
+    if (String(owner.resourceOwnerProfileId || '').trim() !== owner.profileId) {
       problem(409, 'CONFLICT', {
         title: 'Mstyle resource owner must be a primary profile',
       });
@@ -2523,22 +2541,8 @@ function privateDataIsComplete(
       legalForm === 'ip' ? ['inn', 'ogrnip'] : ['fullName', 'inn', 'ogrn'];
     return required.every((field) => hasPrivateInputValue(data, field));
   }
-  return (
-    hasPrivateInputValue(data, 'birthDate') &&
-    (hasPrivateInputValue(data, 'fullName') ||
-      hasValueAtPath(data, 'passport.fullName') ||
-      hasValueAtPath(data, 'individual.passport.fullName'))
-  );
-}
-
-function hasValueAtPath(data: Record<string, unknown>, path: string): boolean {
-  let value: unknown = data;
-  for (const part of path.split('.')) {
-    if (!value || typeof value !== 'object' || Array.isArray(value))
-      return false;
-    value = (value as Record<string, unknown>)[part];
-  }
-  return value !== undefined && value !== null && String(value).trim() !== '';
+  // FIO is canonical on identity.name.*; passport.fullName is legacy-only.
+  return hasPrivateInputValue(data, 'birthDate');
 }
 
 function hasPrivateInputValue(

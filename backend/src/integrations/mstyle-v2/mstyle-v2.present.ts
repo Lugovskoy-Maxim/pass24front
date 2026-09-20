@@ -50,6 +50,7 @@ export function safeIdentity(doc: MstyleIdentity) {
       firstName: doc.name?.firstName ?? null,
       middleName: doc.name?.middleName ?? null,
     },
+    birthDate: doc.birthDate ?? null,
     contactMasks: [] as Array<{ type: 'phone' | 'email'; masked: string }>,
   };
 }
@@ -65,6 +66,7 @@ export function safeProfile(
     status: doc.status,
     label: doc.label,
     companyShortName: doc.companyShortName ?? null,
+    companyName: doc.companyName ?? null,
     revision: doc.revision,
     privateDataRevision: doc.privateDataRevision ?? null,
     privateDataComplete: !!doc.privateDataComplete,

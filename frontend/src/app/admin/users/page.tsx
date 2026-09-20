@@ -84,6 +84,7 @@ const EMPTY: CreateUserData = {
   legalForm: null,
   companyShortName: '',
   employeeLimit: null,
+  birthDate: '',
 };
 
 const EMPTY_MSTYLE_PROFILE: AdminMstyleProfileState = {
@@ -96,6 +97,8 @@ const EMPTY_MSTYLE_PROFILE: AdminMstyleProfileState = {
   resourceOwnerProfileId: null,
   resourceOwnerUserId: null,
   secondaryUserIds: [],
+  privateData: {},
+  privateDataRevision: 0,
 };
 
 const MAX_COMPANY_LOGO_BYTES = 80 * 1024;
@@ -105,6 +108,85 @@ const EMPTY_NAME: PersonNameParts = {
   firstName: '',
   middleName: '',
 };
+
+type ResidentPrivateField = {
+  path: string;
+  label: string;
+  type?: 'text' | 'date';
+};
+const BANK_PRIVATE_FIELDS: ResidentPrivateField[] = [
+  { path: 'bank.name', label: 'Наименование банка' },
+  { path: 'bank.bik', label: 'БИК' },
+  { path: 'bank.accountNumber', label: 'Расчётный счёт' },
+  { path: 'bank.correspondentAccountNumber', label: 'Корреспондентский счёт' },
+];
+function residentPrivateFields(
+  profileType?: 'individual' | 'company',
+  legalForm?: 'ip' | 'ooo' | null,
+): ResidentPrivateField[] {
+  if (profileType === 'company' && legalForm === 'ip')
+    return [
+      { path: 'entrepreneur.inn', label: 'ИНН ИП' },
+      { path: 'entrepreneur.ogrnip', label: 'ОГРНИП' },
+      {
+        path: 'entrepreneur.registrationAddress',
+        label: 'Адрес регистрации ИП',
+      },
+      ...BANK_PRIVATE_FIELDS,
+    ];
+  if (profileType === 'company')
+    return [
+      { path: 'company.fullName', label: 'Полное название компании' },
+      { path: 'company.legalAddress', label: 'Юридический адрес' },
+      { path: 'company.actualAddress', label: 'Фактический адрес' },
+      { path: 'company.generalDirector', label: 'Генеральный директор' },
+      { path: 'company.ogrn', label: 'ОГРН' },
+      { path: 'company.inn', label: 'ИНН' },
+      { path: 'company.kpp', label: 'КПП' },
+      ...BANK_PRIVATE_FIELDS,
+    ];
+  return [
+    { path: 'individual.inn', label: 'ИНН физического лица' },
+    { path: 'individual.registrationAddress', label: 'Адрес регистрации' },
+    { path: 'individual.passport.gender', label: 'Пол' },
+    { path: 'individual.passport.number', label: 'Серия и номер паспорта' },
+    { path: 'individual.passport.departmentCode', label: 'Код подразделения' },
+    {
+      path: 'individual.passport.issuedDate',
+      label: 'Дата выдачи',
+      type: 'date',
+    },
+    { path: 'individual.passport.issuedBy', label: 'Кем выдан' },
+    ...BANK_PRIVATE_FIELDS,
+  ];
+}
+function privateString(source: Record<string, unknown>, path: string): string {
+  let value: unknown = source;
+  for (const part of path.split('.')) {
+    if (!value || typeof value !== 'object' || Array.isArray(value)) return '';
+    value = (value as Record<string, unknown>)[part];
+  }
+  return typeof value === 'string' ? value : value == null ? '' : String(value);
+}
+function setPrivateString(
+  source: Record<string, unknown>,
+  path: string,
+  value: string,
+) {
+  const result: Record<string, unknown> = JSON.parse(
+    JSON.stringify(source || {}),
+  );
+  const parts = path.split('.');
+  let cursor = result;
+  for (const part of parts.slice(0, -1)) {
+    const child = cursor[part];
+    if (!child || typeof child !== 'object' || Array.isArray(child))
+      cursor[part] = {};
+    cursor = cursor[part] as Record<string, unknown>;
+  }
+  cursor[parts[parts.length - 1]] = value;
+  return result;
+}
 
 const STAFF_ROLES: UserRole[] = ['security', 'bc_admin', 'admin'];
 
@@ -152,10 +234,14 @@ function AdminUsersPageContent() {
   const [mstyleProfile, setMstyleProfile] =
     useState<AdminMstyleProfileState>(EMPTY_MSTYLE_PROFILE);
   const [mstyleProfileLoading, setMstyleProfileLoading] = useState(false);
-  const [mstyleTenantOptions, setMstyleTenantOptions] = useState<AdminUser[]>([]);
+  const [mstyleTenantOptions, setMstyleTenantOptions] = useState<AdminUser[]>(
+    [],
+  );
   const [secondaryProfileSearch, setSecondaryProfileSearch] = useState('');
   const [secondaryProfilesExpanded, setSecondaryProfilesExpanded] =
     useState(false);
+  const [residentDataExpanded, setResidentDataExpanded] = useState(false);
+  const [residentPrivateDirty, setResidentPrivateDirty] = useState(false);
   const [deletingUserId, setDeletingUserId] = useState<string | null>(null);
   const [expandedOwners, setExpandedOwners] = useState<Record<string, boolean>>(
     {},
@@ -388,6 +474,8 @@ function AdminUsersPageContent() {
     setMstyleTenantOptions([]);
     setSecondaryProfileSearch('');
     setSecondaryProfilesExpanded(false);
+    setResidentDataExpanded(false);
+    setResidentPrivateDirty(false);
     setMstyleProfileLoading(false);
     setShowForm(true);
     setError('');
@@ -410,10 +498,12 @@ function AdminUsersPageContent() {
       companyLogo: u.companyLogo || '',
       office: u.office || '',
       floor: u.floor || '',
-      profileType: (u.profileType as CreateUserData['profileType']) || 'individual',
+      profileType:
+        (u.profileType as CreateUserData['profileType']) || 'individual',
       legalForm: u.legalForm ?? null,
       companyShortName: u.companyShortName || '',
       employeeLimit: u.employeeLimit ?? null,
+      birthDate: u.birthDate || '',
     });
     setNameParts(
       u.lastName || u.firstName
@@ -435,6 +525,8 @@ function AdminUsersPageContent() {
     setMstyleTenantOptions([]);
     setSecondaryProfileSearch('');
     setSecondaryProfilesExpanded(false);
+    setResidentDataExpanded(false);
+    setResidentPrivateDirty(false);
     setMstyleProfileLoading(false);
     if (u.role === 'tenant' && !u.parentTenantId) {
       setMstyleProfileLoading(true);
@@ -449,9 +541,7 @@ function AdminUsersPageContent() {
           );
         })
         .catch((err) =>
-          setError(
-            getErrorMessage(err, 'Не удалось загрузить профиль Mstyle'),
-          ),
+          setError(getErrorMessage(err, 'Не удалось загрузить профиль Mstyle')),
         )
         .finally(() => setMstyleProfileLoading(false));
     }
@@ -618,8 +708,13 @@ function AdminUsersPageContent() {
       const base = {
         lastName: nameParts.lastName.trim(),
         firstName: nameParts.firstName.trim(),
-        middleName: nameParts.middleName.trim() || undefined,
+        middleName: editId
+          ? nameParts.middleName.trim()
+          : nameParts.middleName.trim() || undefined,
         fullName: buildFullName(nameParts),
+        birthDate: editId
+          ? (form.birthDate ?? '').trim()
+          : (form.birthDate ?? '').trim() || undefined,
         username: form.username?.trim() || '',
         displayName: form.displayName?.trim() || undefined,
         emailVerified: form.emailVerified !== false,
@@ -716,6 +811,12 @@ function AdminUsersPageContent() {
                     : [],
               }),
           ...(editId && writableStatus ? { status: writableStatus } : {}),
+          ...(residentPrivateDirty
+            ? {
+                privateData: mstyleProfile.privateData,
+                privateDataRevision: mstyleProfile.privateDataRevision,
+              }
+            : {}),
         });
       }
 
@@ -731,8 +832,8 @@ function AdminUsersPageContent() {
   return (
     <AdminLayout title="Пользователи">
       <p className="text-[var(--muted)] -mt-4 mb-6">
-        Учётные записи живут в Pass. Арендаторы и сотрудники компании · охрана
-        и админы БЦ
+        Учётные записи живут в Pass. Арендаторы и сотрудники компании · охрана и
+        админы БЦ
       </p>
 
       {loadError && (
@@ -772,7 +873,9 @@ function AdminUsersPageContent() {
             <Search className="absolute left-3 top-1/2 -translate-y-1/2 w-4 h-4 text-[var(--muted)]" />
             <input
               className="input input--icon-left"
-              placeholder={ph.userSearch || 'ФИО, email, телефон, компания, usr_…'}
+              placeholder={
+                ph.userSearch || 'ФИО, email, телефон, компания, usr_…'
+              }
               value={filters.search}
               onChange={(e) =>
                 setFilters((prev) => ({ ...prev, search: e.target.value }))
@@ -1082,9 +1185,7 @@ function AdminUsersPageContent() {
               <input
                 className="input"
                 value={form.username || ''}
-                onChange={(e) =>
-                  setForm({ ...form, username: e.target.value })
-                }
+                onChange={(e) => setForm({ ...form, username: e.target.value })}
                 placeholder="необязательно"
                 autoComplete="off"
               />
@@ -1171,6 +1272,17 @@ function AdminUsersPageContent() {
                 onChange={(e) => setForm({ ...form, phone: e.target.value })}
               />
             </div>
+            <div>
+              <label className="label">Дата рождения</label>
+              <input
+                className="input"
+                type="date"
+                value={form.birthDate || ''}
+                onChange={(e) =>
+                  setForm({ ...form, birthDate: e.target.value })
+                }
+              />
+            </div>
             {form.role === 'tenant' &&
               !users
                 .flatMap((x) => x.employees || [])
@@ -1185,7 +1297,8 @@ function AdminUsersPageContent() {
                         onChange={(e) =>
                           setForm({
                             ...form,
-                            profileType: e.target.value as 'individual' | 'company',
+                            profileType: e.target.value as
+                              'individual' | 'company',
                             legalForm:
                               e.target.value === 'company'
                                 ? form.legalForm || 'ooo'
@@ -1249,20 +1362,77 @@ function AdminUsersPageContent() {
                       placeholder="по умолчанию 3"
                     />
                   </div>
+                  {editId && mstyleProfile.exists && (
+                    <div className="sm:col-span-2 border border-[var(--border)] rounded-lg bg-[var(--surface-muted)]">
+                      <button
+                        type="button"
+                        className="w-full flex items-center justify-between gap-3 p-4 text-left"
+                        onClick={() =>
+                          setResidentDataExpanded((value) => !value)
+                        }
+                      >
+                        <span className="font-medium text-sm">
+                          Дополнительные данные резидента
+                        </span>
+                        {residentDataExpanded ? (
+                          <ChevronDown className="w-4 h-4" />
+                        ) : (
+                          <ChevronRight className="w-4 h-4" />
+                        )}
+                      </button>
+                      {residentDataExpanded && (
+                        <div className="border-t border-[var(--border)] p-4 grid grid-cols-1 sm:grid-cols-2 gap-3">
+                          {residentPrivateFields(
+                            form.profileType,
+                            form.legalForm,
+                          ).map((field) => (
+                            <div key={field.path}>
+                              <label className="label">{field.label}</label>
+                              <input
+                                className="input"
+                                type={field.type || 'text'}
+                                value={privateString(
+                                  mstyleProfile.privateData,
+                                  field.path,
+                                )}
+                                onChange={(e) => {
+                                  setResidentPrivateDirty(true);
+                                  setMstyleProfile((prev) => ({
+                                    ...prev,
+                                    privateData: setPrivateString(
+                                      prev.privateData,
+                                      field.path,
+                                      e.target.value,
+                                    ),
+                                  }));
+                                }}
+                              />
+                            </div>
+                          ))}
+                        </div>
+                      )}
+                    </div>
+                  )}
+
                   <div className="sm:col-span-2">
                     {mstyleProfile.resourceRole === 'secondary' ? (
                       <div className="rounded-lg border border-[var(--border)] bg-[var(--surface-muted)] p-3 text-sm">
-                        <div className="font-medium">Второстепенный профиль</div>
+                        <div className="font-medium">
+                          Второстепенный профиль
+                        </div>
                         <div className="text-xs text-[var(--muted)] mt-1">
                           Основной профиль:{' '}
                           {mstyleTenantOptions.find(
-                            (item) => item.id === mstyleProfile.resourceOwnerUserId,
+                            (item) =>
+                              item.id === mstyleProfile.resourceOwnerUserId,
                           )?.companyShortName ||
                             mstyleTenantOptions.find(
-                              (item) => item.id === mstyleProfile.resourceOwnerUserId,
+                              (item) =>
+                                item.id === mstyleProfile.resourceOwnerUserId,
                             )?.company ||
                             mstyleTenantOptions.find(
-                              (item) => item.id === mstyleProfile.resourceOwnerUserId,
+                              (item) =>
+                                item.id === mstyleProfile.resourceOwnerUserId,
                             )?.fullName ||
                             mstyleProfile.resourceOwnerProfileId ||
                             'не найден'}
@@ -1336,9 +1506,7 @@ function AdminUsersPageContent() {
                   </div>
 
                   <div>
-                    <label className="label">
-                      Дата сброса квоты (Mstyle)
-                    </label>
+                    <label className="label">Дата сброса квоты (Mstyle)</label>
                     <input
                       className="input"
                       type="number"
@@ -1427,7 +1595,9 @@ function AdminUsersPageContent() {
                                 ]
                                   .filter(Boolean)
                                   .some((value) =>
-                                    String(value).toLowerCase().includes(needle),
+                                    String(value)
+                                      .toLowerCase()
+                                      .includes(needle),
                                   );
                               })
                               .map((item) => {

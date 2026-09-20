@@ -130,6 +130,12 @@ export class PatchProfileDto extends SchemaVersionDto {
   companyShortName?: string | null;
 
   @IsOptional()
+  @ValidateIf((_, value) => value !== null)
+  @IsString()
+  @MaxLength(200)
+  companyName?: string | null;
+
+  @IsOptional()
   @ValidateNested()
   @Type(() => PatchMemberPolicyDto)
   memberPolicy?: PatchMemberPolicyDto;
@@ -148,6 +154,12 @@ export class PatchIdentityDto extends SchemaVersionDto {
     firstName?: string | null;
     middleName?: string | null;
   };
+
+  @IsOptional()
+  @ValidateIf((_, value) => value !== null)
+  @IsString()
+  @Matches(/^\d{4}-\d{2}-\d{2}$/)
+  birthDate?: string | null;
 }
 
 export class UpdatedAtSortDto {

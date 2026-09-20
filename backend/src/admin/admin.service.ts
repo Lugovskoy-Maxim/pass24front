@@ -40,6 +40,7 @@ import { CreateUserDto } from './dto/create-user.dto';
 import { UpdateUserDto } from './dto/update-user.dto';
 import { UpdateMstyleProfileDto } from './dto/update-mstyle-profile.dto';
 import { MstyleIdentityService } from '../integrations/mstyle-v2/mstyle-v2.identities';
+import { MstylePrivateDataService } from '../integrations/mstyle-v2/mstyle-v2.private-data.service';
 import { UpdateBusinessCenterDto } from './dto/update-business-center.dto';
 import { BusinessCenterPassSettingsDto } from './dto/business-center-pass-settings.dto';
 import { TestDataSeedService } from '../database/test-data-seed.service';
@@ -84,6 +85,7 @@ export class AdminService {
     private passesService: PassesService,
     private testDataSeedService: TestDataSeedService,
     private identities: MstyleIdentityService,
+    private mstylePrivateData: MstylePrivateDataService,
     private siteSource: SiteSourceService,
   ) {}
 
@@ -109,7 +111,22 @@ export class AdminService {
 
   async getUserMstyleProfile(id: string) {
     const user = await this.requireMstyleTenantOwner(id);
-    return { profile: await this.identities.getAdminProfileState(user) };
+    const profile = await this.identities.getAdminProfileState(user);
+    if (!profile.exists || !profile.profileId) {
+      return {
+        profile: { ...profile, privateData: {}, privateDataRevision: 0 },
+      };
+    }
+    const privateState = await this.mstylePrivateData.adminResidentValues(
+      profile.profileId,
+    );
+    return {
+      profile: {
+        ...profile,
+        privateData: privateState.values,
+        privateDataRevision: privateState.revision,
+      },
+    };
   }
 
   async updateUserMstyleProfile(
@@ -118,7 +135,81 @@ export class AdminService {
     actor?: AuditActor,
   ) {
     const user = await this.requireMstyleTenantOwner(id);
-    const profile = await this.identities.updateAdminProfileState(user, dto);
+
+    // If privateData and status are saved together, persist privateData first.
+    // Activation checks profile.privateDataComplete, which is recalculated by
+    // adminPatchResident().
+    const profilePatch = {
+      residentHoursMonthlyQuotaMin: dto.residentHoursMonthlyQuotaMin,
+      residentHoursMonthlyResetDay: dto.residentHoursMonthlyResetDay,
+      isPrimaryProfile: dto.isPrimaryProfile,
+      secondaryUserIds: dto.secondaryUserIds,
+      ...(dto.privateData === undefined ? { status: dto.status } : {}),
+    };
+    let profile = await this.identities.updateAdminProfileState(
+      user,
+      profilePatch,
+    );
+
+    if (dto.privateData !== undefined) {
+      if (!profile.profileId) {
+        throw new ConflictException('Профиль Mstyle ещё не создан');
+      }
+      const currentPrivateState =
+        await this.mstylePrivateData.adminResidentValues(profile.profileId);
+      const privateData = JSON.parse(JSON.stringify(dto.privateData)) as Record<
+        string,
+        any
+      >;
+      const personBirthDate = user.birthDate?.trim() || '';
+      if (user.profileType !== 'company' && personBirthDate) {
+        const currentIndividual =
+          currentPrivateState.values.individual &&
+          typeof currentPrivateState.values.individual === 'object' &&
+          !Array.isArray(currentPrivateState.values.individual)
+            ? (currentPrivateState.values.individual as Record<string, unknown>)
+            : {};
+        const patchIndividual =
+          privateData.individual &&
+          typeof privateData.individual === 'object' &&
+          !Array.isArray(privateData.individual)
+            ? (privateData.individual as Record<string, unknown>)
+            : {};
+        const currentProfileBirthDate = String(
+          currentIndividual.birthDate ?? '',
+        ).trim();
+        const incomingProfileBirthDate = String(
+          patchIndividual.birthDate ?? '',
+        ).trim();
+        if (!currentProfileBirthDate && !incomingProfileBirthDate) {
+          privateData.individual = {
+            ...patchIndividual,
+            birthDate: personBirthDate,
+          };
+        }
+      }
+      await this.mstylePrivateData.adminPatchResident(
+        profile.profileId,
+        privateData,
+        dto.privateDataRevision ?? 0,
+      );
+      profile = await this.identities.getAdminProfileState(user);
+
+      if (dto.status !== undefined) {
+        profile = await this.identities.updateAdminProfileState(user, {
+          status: dto.status,
+        });
+      }
+    }
+
+    const privateState = profile.profileId
+      ? await this.mstylePrivateData.adminResidentValues(profile.profileId)
+      : { values: {}, revision: 0 };
+    const responseProfile = {
+      ...profile,
+      privateData: privateState.values,
+      privateDataRevision: privateState.revision,
+    };
     await this.auditService.log({
       action: 'user.mstyle_profile.update',
       entityType: 'user',
@@ -127,13 +218,11 @@ export class AdminService {
       details: {
         profileId: profile.profileId,
         status: profile.status,
-        residentHoursMonthlyQuotaMin:
-          profile.residentHoursMonthlyQuotaMin,
-        residentHoursMonthlyResetDay:
-          profile.residentHoursMonthlyResetDay,
+        residentHoursMonthlyQuotaMin: profile.residentHoursMonthlyQuotaMin,
+        residentHoursMonthlyResetDay: profile.residentHoursMonthlyResetDay,
       },
     });
-    return { profile };
+    return { profile: responseProfile };
   }
 
   async assertRolesDeletable(roles: string[]) {
@@ -457,7 +546,9 @@ export class AdminService {
           .select('tenantId tenantIds')
           .lean();
         const occupantIds = [
-          ...new Set(offices.flatMap((office) => collectOfficeTenantIds(office))),
+          ...new Set(
+            offices.flatMap((office) => collectOfficeTenantIds(office)),
+          ),
         ].map((id) => new Types.ObjectId(id));
         filter._id = { $in: occupantIds };
         filter.role = 'tenant';
@@ -500,6 +591,7 @@ export class AdminService {
       lastName: personName.lastName,
       firstName: personName.firstName,
       middleName: personName.middleName,
+      birthDate: dto.birthDate?.trim() || undefined,
       phone: dto.phone,
       company: dto.company,
       companyLogo:
@@ -793,6 +885,11 @@ export class AdminService {
     }
     if (dto.privateDataComplete !== undefined) {
       user.privateDataComplete = dto.privateDataComplete;
+    }
+    if (dto.birthDate !== undefined) {
+      const birthDate = dto.birthDate?.trim() || '';
+      if (birthDate) user.birthDate = birthDate;
+      else user.set('birthDate', undefined);
     }
     if (dto.phone !== undefined) user.phone = dto.phone;
     if (dto.company !== undefined) user.company = dto.company;
@@ -1117,7 +1214,9 @@ export class AdminService {
     if (code) {
       const clash = await this.propertyModel.findOne({ code });
       if (clash) {
-        throw new ConflictException(`Код «${code}» уже занят БЦ «${clash.name}»`);
+        throw new ConflictException(
+          `Код «${code}» уже занят БЦ «${clash.name}»`,
+        );
       }
     }
     const property = await this.propertyModel.create({
@@ -1156,7 +1255,9 @@ export class AdminService {
     const { offices } = await this.getOffices();
     const { buildOfficeCsv } = await import('../common/office-csv.js');
     const tenantIds = [
-      ...new Set(offices.flatMap((o) => o.tenantIds || (o.tenantId ? [o.tenantId] : []))),
+      ...new Set(
+        offices.flatMap((o) => o.tenantIds || (o.tenantId ? [o.tenantId] : [])),
+      ),
     ].map((id) => new Types.ObjectId(id));
     const tenants = tenantIds.length
       ? await this.userModel.find({ _id: { $in: tenantIds } }).lean()
@@ -1172,10 +1273,11 @@ export class AdminService {
         floor: office.floor,
         areaSqm: office.areaSqm,
         company: office.company,
-        tenantEmail: (office.tenantIds || (office.tenantId ? [office.tenantId] : []))
-          .map((id) => tenantEmailMap.get(id))
-          .filter(Boolean)
-          .join(', ') || undefined,
+        tenantEmail:
+          (office.tenantIds || (office.tenantId ? [office.tenantId] : []))
+            .map((id) => tenantEmailMap.get(id))
+            .filter(Boolean)
+            .join(', ') || undefined,
         isActive: office.isActive,
       })),
     );
@@ -1296,9 +1398,7 @@ export class AdminService {
     );
     const propertyMap = new Map(properties.map((p) => [p._id.toString(), p]));
     const tenantMap = new Map(tenants.map((t) => [t._id.toString(), t]));
-    const visible = offices.filter(
-      (o) => !hidden.has(o.property?.toString()),
-    );
+    const visible = offices.filter((o) => !hidden.has(o.property?.toString()));
 
     return {
       offices: visible.map((o) => this.mapOffice(o, propertyMap, tenantMap)),
@@ -1723,9 +1823,7 @@ export class AdminService {
   ) {
     const property = propertyMap.get(office.property?.toString());
     const occupantIds = collectOfficeTenantIds(office);
-    const tenants = occupantIds
-      .map((id) => tenantMap.get(id))
-      .filter(Boolean);
+    const tenants = occupantIds.map((id) => tenantMap.get(id)).filter(Boolean);
     const primary = tenants[0] || null;
     return {
       id: office._id.toString(),
@@ -1809,6 +1907,7 @@ export class AdminService {
       lastName: nameParts.lastName,
       firstName: nameParts.firstName,
       middleName: nameParts.middleName,
+      birthDate: user.birthDate || undefined,
       phone: user.phone,
       company: extra?.company ?? user.company,
       companyLogo: user.companyLogo || undefined,

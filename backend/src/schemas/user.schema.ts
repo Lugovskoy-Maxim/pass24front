@@ -30,6 +30,10 @@ export class User {
   @Prop({ trim: true })
   middleName?: string;
 
+  /** Canonical person birth date, YYYY-MM-DD. Additive for legacy users. */
+  @Prop({ trim: true })
+  birthDate?: string;
+
   @Prop({ trim: true, lowercase: true, unique: true, sparse: true })
   username?: string;
 
