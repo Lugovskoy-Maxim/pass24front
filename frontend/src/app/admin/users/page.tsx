@@ -84,6 +84,7 @@ const EMPTY: CreateUserData = {
   legalForm: null,
   companyShortName: '',
   employeeLimit: null,
+  birthDate: '',
 };
 
 const EMPTY_MSTYLE_PROFILE: AdminMstyleProfileState = {
@@ -96,6 +97,8 @@ const EMPTY_MSTYLE_PROFILE: AdminMstyleProfileState = {
   resourceOwnerProfileId: null,
   resourceOwnerUserId: null,
   secondaryUserIds: [],
+  privateData: {},
+  privateDataRevision: 0,
 };
 
 const MAX_COMPANY_LOGO_BYTES = 80 * 1024;
@@ -105,6 +108,65 @@ const EMPTY_NAME: PersonNameParts = {
   firstName: '',
   middleName: '',
 };
+
+type ResidentPrivateField = { path: string; label: string; type?: 'text' | 'date' };
+const BANK_PRIVATE_FIELDS: ResidentPrivateField[] = [
+  { path: 'bank.name', label: 'Наименование банка' },
+  { path: 'bank.bik', label: 'БИК' },
+  { path: 'bank.accountNumber', label: 'Расчётный счёт' },
+  { path: 'bank.correspondentAccountNumber', label: 'Корреспондентский счёт' },
+];
+function residentPrivateFields(
+  profileType?: 'individual' | 'company',
+  legalForm?: 'ip' | 'ooo' | null,
+): ResidentPrivateField[] {
+  if (profileType === 'company' && legalForm === 'ip') return [
+    { path: 'entrepreneur.inn', label: 'ИНН ИП' },
+    { path: 'entrepreneur.ogrnip', label: 'ОГРНИП' },
+    { path: 'entrepreneur.registrationAddress', label: 'Адрес регистрации ИП' },
+    ...BANK_PRIVATE_FIELDS,
+  ];
+  if (profileType === 'company') return [
+    { path: 'company.fullName', label: 'Полное название компании' },
+    { path: 'company.legalAddress', label: 'Юридический адрес' },
+    { path: 'company.actualAddress', label: 'Фактический адрес' },
+    { path: 'company.generalDirector', label: 'Генеральный директор' },
+    { path: 'company.ogrn', label: 'ОГРН' },
+    { path: 'company.inn', label: 'ИНН' },
+    { path: 'company.kpp', label: 'КПП' },
+    ...BANK_PRIVATE_FIELDS,
+  ];
+  return [
+    { path: 'individual.inn', label: 'ИНН физического лица' },
+    { path: 'individual.registrationAddress', label: 'Адрес регистрации' },
+    { path: 'individual.passport.gender', label: 'Пол' },
+    { path: 'individual.passport.number', label: 'Серия и номер паспорта' },
+    { path: 'individual.passport.departmentCode', label: 'Код подразделения' },
+    { path: 'individual.passport.issuedDate', label: 'Дата выдачи', type: 'date' },
+    { path: 'individual.passport.issuedBy', label: 'Кем выдан' },
+    ...BANK_PRIVATE_FIELDS,
+  ];
+}
+function privateString(source: Record<string, unknown>, path: string): string {
+  let value: unknown = source;
+  for (const part of path.split('.')) {
+    if (!value || typeof value !== 'object' || Array.isArray(value)) return '';
+    value = (value as Record<string, unknown>)[part];
+  }
+  return typeof value === 'string' ? value : value == null ? '' : String(value);
+}
+function setPrivateString(source: Record<string, unknown>, path: string, value: string) {
+  const result: Record<string, unknown> = JSON.parse(JSON.stringify(source || {}));
+  const parts = path.split('.');
+  let cursor = result;
+  for (const part of parts.slice(0, -1)) {
+    const child = cursor[part];
+    if (!child || typeof child !== 'object' || Array.isArray(child)) cursor[part] = {};
+    cursor = cursor[part] as Record<string, unknown>;
+  }
+  cursor[parts[parts.length - 1]] = value;
+  return result;
+}
 
 const STAFF_ROLES: UserRole[] = ['security', 'bc_admin', 'admin'];
 
@@ -156,6 +218,8 @@ function AdminUsersPageContent() {
   const [secondaryProfileSearch, setSecondaryProfileSearch] = useState('');
   const [secondaryProfilesExpanded, setSecondaryProfilesExpanded] =
     useState(false);
+  const [residentDataExpanded, setResidentDataExpanded] = useState(false);
+  const [residentPrivateDirty, setResidentPrivateDirty] = useState(false);
   const [deletingUserId, setDeletingUserId] = useState<string | null>(null);
   const [expandedOwners, setExpandedOwners] = useState<Record<string, boolean>>(
     {},
@@ -388,6 +452,8 @@ function AdminUsersPageContent() {
     setMstyleTenantOptions([]);
     setSecondaryProfileSearch('');
     setSecondaryProfilesExpanded(false);
+    setResidentDataExpanded(false);
+    setResidentPrivateDirty(false);
     setMstyleProfileLoading(false);
     setShowForm(true);
     setError('');
@@ -414,6 +480,7 @@ function AdminUsersPageContent() {
       legalForm: u.legalForm ?? null,
       companyShortName: u.companyShortName || '',
       employeeLimit: u.employeeLimit ?? null,
+      birthDate: u.birthDate || '',
     });
     setNameParts(
       u.lastName || u.firstName
@@ -435,6 +502,8 @@ function AdminUsersPageContent() {
     setMstyleTenantOptions([]);
     setSecondaryProfileSearch('');
     setSecondaryProfilesExpanded(false);
+    setResidentDataExpanded(false);
+    setResidentPrivateDirty(false);
     setMstyleProfileLoading(false);
     if (u.role === 'tenant' && !u.parentTenantId) {
       setMstyleProfileLoading(true);
@@ -618,8 +687,13 @@ function AdminUsersPageContent() {
       const base = {
         lastName: nameParts.lastName.trim(),
         firstName: nameParts.firstName.trim(),
-        middleName: nameParts.middleName.trim() || undefined,
+        middleName: editId
+          ? nameParts.middleName.trim()
+          : nameParts.middleName.trim() || undefined,
         fullName: buildFullName(nameParts),
+        birthDate: editId
+          ? form.birthDate?.trim() || ''
+          : form.birthDate?.trim() || undefined,
         username: form.username?.trim() || '',
         displayName: form.displayName?.trim() || undefined,
         emailVerified: form.emailVerified !== false,
@@ -716,6 +790,12 @@ function AdminUsersPageContent() {
                     : [],
               }),
           ...(editId && writableStatus ? { status: writableStatus } : {}),
+          ...(residentPrivateDirty
+            ? {
+                privateData: mstyleProfile.privateData,
+                privateDataRevision: mstyleProfile.privateDataRevision,
+              }
+            : {}),
         });
       }
 
@@ -1171,6 +1251,15 @@ function AdminUsersPageContent() {
                 onChange={(e) => setForm({ ...form, phone: e.target.value })}
               />
             </div>
+            <div>
+              <label className="label">Дата рождения</label>
+              <input
+                className="input"
+                type="date"
+                value={form.birthDate || ''}
+                onChange={(e) => setForm({ ...form, birthDate: e.target.value })}
+              />
+            </div>
             {form.role === 'tenant' &&
               !users
                 .flatMap((x) => x.employees || [])
@@ -1249,6 +1338,40 @@ function AdminUsersPageContent() {
                       placeholder="по умолчанию 3"
                     />
                   </div>
+                  {editId && mstyleProfile.exists && (
+                    <div className="sm:col-span-2 border border-[var(--border)] rounded-lg bg-[var(--surface-muted)]">
+                      <button
+                        type="button"
+                        className="w-full flex items-center justify-between gap-3 p-4 text-left"
+                        onClick={() => setResidentDataExpanded((value) => !value)}
+                      >
+                        <span className="font-medium text-sm">Дополнительные данные резидента</span>
+                        {residentDataExpanded ? <ChevronDown className="w-4 h-4" /> : <ChevronRight className="w-4 h-4" />}
+                      </button>
+                      {residentDataExpanded && (
+                        <div className="border-t border-[var(--border)] p-4 grid grid-cols-1 sm:grid-cols-2 gap-3">
+                          {residentPrivateFields(form.profileType, form.legalForm).map((field) => (
+                            <div key={field.path}>
+                              <label className="label">{field.label}</label>
+                              <input
+                                className="input"
+                                type={field.type || 'text'}
+                                value={privateString(mstyleProfile.privateData, field.path)}
+                                onChange={(e) => {
+                                  setResidentPrivateDirty(true);
+                                  setMstyleProfile((prev) => ({
+                                    ...prev,
+                                    privateData: setPrivateString(prev.privateData, field.path, e.target.value),
+                                  }));
+                                }}
+                              />
+                            </div>
+                          ))}
+                        </div>
+                      )}
+                    </div>
+                  )}
+
                   <div className="sm:col-span-2">
                     {mstyleProfile.resourceRole === 'secondary' ? (
                       <div className="rounded-lg border border-[var(--border)] bg-[var(--surface-muted)] p-3 text-sm">

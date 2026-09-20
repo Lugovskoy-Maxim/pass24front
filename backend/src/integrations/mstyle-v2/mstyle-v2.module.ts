@@ -44,6 +44,7 @@ import { MstyleManualTestingService } from './mstyle-v2.manual-testing.service';
   ],
   exports: [
     MstyleIdentityService,
+    MstylePrivateDataService,
     MstyleOauthService,
     MstyleV2Config,
     MstyleManualTestingService,

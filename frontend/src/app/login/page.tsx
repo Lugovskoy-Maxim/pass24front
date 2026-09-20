@@ -92,6 +92,7 @@ function LoginPageInner() {
     middleName: '',
   });
   const [company, setCompany] = useState('');
+  const [birthDate, setBirthDate] = useState('');
   const [phone, setPhone] = useState('');
   const [verifiedPhone, setVerifiedPhone] = useState('');
   const [resetPhone, setResetPhone] = useState('');
@@ -348,6 +349,7 @@ function LoginPageInner() {
       lastName: string;
       firstName: string;
       middleName?: string;
+      birthDate?: string;
       fullName: string;
       company: string;
     } = {
@@ -357,6 +359,7 @@ function LoginPageInner() {
       lastName: nameParts.lastName.trim(),
       firstName: nameParts.firstName.trim(),
       middleName: nameParts.middleName.trim() || undefined,
+      birthDate: birthDate || undefined,
       fullName: buildFullName(nameParts),
       company: company.trim(),
     };
@@ -753,6 +756,14 @@ function LoginPageInner() {
                   errors={fieldErrors}
                   onClearError={clearFieldError}
                 />
+                <FormField id="birthDate" label="Дата рождения">
+                  <FormInput
+                    id="birthDate"
+                    type="date"
+                    value={birthDate}
+                    onChange={(e) => setBirthDate(e.target.value)}
+                  />
+                </FormField>
                 <FormField
                   id="company"
                   label="Компания (арендатор)"

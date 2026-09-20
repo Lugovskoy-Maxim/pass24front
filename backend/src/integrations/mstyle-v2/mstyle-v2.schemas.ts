@@ -159,6 +159,9 @@ export class MstyleIdentity {
     middleName: string | null;
   };
 
+  @Prop({ trim: true })
+  birthDate?: string;
+
   @Prop({ lowercase: true, trim: true })
   login?: string;
 
@@ -200,6 +203,10 @@ export class MstyleProfile {
 
   @Prop({ type: String, default: null })
   companyShortName: string | null;
+
+  /** Native User.company projection; separate from companyShortName. */
+  @Prop({ type: String, default: null })
+  companyName: string | null;
 
   @Prop({ required: true, default: 1 })
   revision: number;

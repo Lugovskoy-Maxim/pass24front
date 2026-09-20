@@ -71,6 +71,7 @@ export interface ProfileChangeRequest {
   last_name: string;
   first_name: string;
   middle_name?: string;
+  birth_date?: string | null;
   full_name: string;
   phone?: string;
   company?: string;
@@ -90,6 +91,7 @@ export interface User {
   last_name?: string;
   first_name?: string;
   middle_name?: string;
+  birth_date?: string;
   profile_change_request?: ProfileChangeRequest | null;
   phone?: string;
   company?: string;
@@ -128,6 +130,7 @@ export interface TenantEmployee {
   last_name?: string;
   first_name?: string;
   middle_name?: string;
+  birth_date?: string;
   phone?: string;
   is_active: boolean;
   /** true — письмо-приглашение отправлено, пароль ещё не задан */
@@ -380,6 +383,7 @@ export const api = {
     lastName?: string;
     firstName?: string;
     middleName?: string;
+    birthDate?: string;
     company: string;
   }) =>
     request<{
@@ -477,6 +481,7 @@ export const api = {
     lastName: string;
     firstName: string;
     middleName?: string;
+    birthDate?: string | null;
     phone?: string;
     company?: string;
     companyShortName?: string;
@@ -506,6 +511,7 @@ export const api = {
     lastName: string;
     firstName: string;
     middleName?: string;
+    birthDate?: string;
     phone?: string;
   }) =>
     request<{ message: string; employee: TenantEmployee }>(
@@ -911,7 +917,11 @@ export const api = {
     updateUser: (
       id: string,
       data: Partial<
-        CreateUserData & { isActive: boolean; isBlocked?: boolean }
+        Omit<CreateUserData, 'birthDate'> & {
+          birthDate: string | null;
+          isActive: boolean;
+          isBlocked?: boolean;
+        }
       >,
     ) =>
       request<{ user: AdminUser }>(`/admin/users/${id}`, {
@@ -932,6 +942,8 @@ export const api = {
         status?: 'active' | 'suspended' | 'closed';
         isPrimaryProfile?: boolean;
         secondaryUserIds?: string[];
+        privateData?: Record<string, unknown>;
+        privateDataRevision?: number;
       },
     ) =>
       request<{ profile: AdminMstyleProfileState }>(
@@ -1694,6 +1706,8 @@ export interface AdminMstyleProfileState {
   resourceOwnerProfileId: string | null;
   resourceOwnerUserId: string | null;
   secondaryUserIds: string[];
+  privateData: Record<string, unknown>;
+  privateDataRevision: number;
 }
 
 export interface AdminUser {
@@ -1706,6 +1720,7 @@ export interface AdminUser {
   lastName?: string;
   firstName?: string;
   middleName?: string;
+  birthDate?: string;
   phone?: string;
   company?: string;
   companyLogo?: string;
@@ -1755,6 +1770,7 @@ export interface CreateUserData {
   lastName?: string;
   firstName?: string;
   middleName?: string;
+  birthDate?: string;
   phone?: string;
   company?: string;
   companyLogo?: string;

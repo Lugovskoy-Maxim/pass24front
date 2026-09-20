@@ -115,7 +115,7 @@ export class MstyleDirectoryService {
     private readonly consentService: MstyleConsentService,
   ) {}
 
-  async getContext(subject: string): Promise<MstyleResult> {
+  async getContext(subject: string, personProjection = false): Promise<MstyleResult> {
     const identity = await this.requireIdentity(subject);
     const manualTestIdentity = identity.email
       ? findManualTestIdentity('email', identity.email)
@@ -191,11 +191,21 @@ export class MstyleDirectoryService {
         authVersion: identity.authVersion,
         identityDisplay: {
           displayName: identity.displayName || '',
-          contactMasks: identityContactMasks,
-          ...(manualTestIdentity?.role === 'employee' &&
-          manualTestIdentity.birthDate
-            ? { birthDate: manualTestIdentity.birthDate }
+          name: {
+            lastName: identity.name?.lastName ?? null,
+            firstName: identity.name?.firstName ?? null,
+            middleName: identity.name?.middleName ?? null,
+          },
+          ...(personProjection
+            ? {
+                birthDate:
+                  identity.birthDate ??
+                  (manualTestIdentity?.role === 'employee'
+                    ? manualTestIdentity.birthDate ?? null
+                    : null),
+              }
             : {}),
+          contactMasks: identityContactMasks,
         },
         profiles,
         physicalAccessFacts: {
@@ -208,9 +218,9 @@ export class MstyleDirectoryService {
     );
   }
 
-  async getIdentity(subject: string): Promise<MstyleResult> {
+  async getIdentity(subject: string, personProjection = false): Promise<MstyleResult> {
     const identity = await this.requireIdentity(subject);
-    const dto = await this.identityWithMasks(identity);
+    const dto = await this.identityWithMasks(identity, personProjection);
     return new MstyleResult(schema({ identity: dto }), 200, {
       ETag: etag('identity', identity.revision),
     });
@@ -220,17 +230,23 @@ export class MstyleDirectoryService {
     subject: string,
     dto: PatchIdentityDto,
     ifMatch?: string,
+    personProjection = false,
   ): Promise<MstyleResult> {
     const identity = await this.requireIdentity(subject);
     this.assertMatch(ifMatch, 'identity', identity.revision);
+    await this.identities.syncNativePersonFromIdentityPatch(identity, dto);
     if (dto.displayName !== undefined) identity.displayName = dto.displayName;
     if (dto.name) {
       identity.name = {
         lastName: dto.name.lastName ?? identity.name?.lastName ?? null,
         firstName: dto.name.firstName ?? identity.name?.firstName ?? null,
-        middleName: dto.name.middleName ?? identity.name?.middleName ?? null,
+        middleName:
+          dto.name.middleName !== undefined
+            ? dto.name.middleName
+            : identity.name?.middleName ?? null,
       };
     }
+    if (dto.birthDate !== undefined) identity.birthDate = dto.birthDate?.trim() || undefined;
     identity.revision += 1;
     identity.contextRevision += 1;
     await identity.save();
@@ -247,7 +263,7 @@ export class MstyleDirectoryService {
     ];
     return new MstyleResult(
       schema({
-        identity: await this.identityWithMasks(identity),
+        identity: await this.identityWithMasks(identity, personProjection),
         identityRevision: identity.revision,
         contextRevision: identity.contextRevision,
         eventIds,
@@ -257,10 +273,10 @@ export class MstyleDirectoryService {
     );
   }
 
-  async getProfile(profileId: string): Promise<MstyleResult> {
+  async getProfile(profileId: string, personProjection = false): Promise<MstyleResult> {
     const profile = await this.requireProfile(profileId);
     const resourceOwner = await this.resolveResourceOwnerProfile(profile);
-    return new MstyleResult(schema(safeProfile(profile, resourceOwner)), 200, {
+    return new MstyleResult(schema(safeProfile(profile, resourceOwner, personProjection)), 200, {
       ETag: etag('profile', profile.revision),
     });
   }
@@ -269,6 +285,7 @@ export class MstyleDirectoryService {
     profileId: string,
     dto: PatchProfileDto,
     ifMatch?: string,
+    personProjection = false,
   ): Promise<MstyleResult> {
     const profile = await this.requireProfile(profileId);
     this.assertMatch(ifMatch, 'profile', profile.revision);
@@ -296,6 +313,11 @@ export class MstyleDirectoryService {
     if (dto.label !== undefined) profile.label = dto.label;
     if (dto.companyShortName !== undefined) {
       profile.companyShortName = dto.companyShortName;
+    }
+    if (dto.companyName !== undefined) {
+      const companyName = dto.companyName?.trim() || null;
+      await this.identities.updateNativeCompanyForProfile(profile.profileId, companyName);
+      profile.companyName = companyName;
     }
     if (dto.memberPolicy) {
       profile.memberPolicy = {
@@ -346,7 +368,7 @@ export class MstyleDirectoryService {
     }
     return new MstyleResult(
       schema({
-        ...safeProfile(profile, resourceOwner),
+        ...safeProfile(profile, resourceOwner, personProjection),
         contextRevision,
         eventIds,
       }),
@@ -1838,6 +1860,11 @@ export class MstyleDirectoryService {
       .sort({ revision: -1 });
     if ((latest?.revision ?? 0) !== challenge.baseContactValueRevision)
       problem(412, 'PRECONDITION_FAILED');
+    await this.identities.syncNativeContactFromIdentityVerification(
+      identity,
+      type,
+      value,
+    );
     const contact = await this.identities.syncContact(subject, type, value);
     if (!contact) problem(422, 'VALIDATION_FAILED');
     contact.verifiedAt = nowIso();
@@ -2304,8 +2331,11 @@ export class MstyleDirectoryService {
     return identity?.contextRevision || 0;
   }
 
-  private async identityWithMasks(identity: MstyleIdentityDocument) {
-    const dto = safeIdentity(identity);
+  private async identityWithMasks(
+    identity: MstyleIdentityDocument,
+    personProjection = false,
+  ) {
+    const dto = safeIdentity(identity, personProjection);
     dto.contactMasks = await this.contactMasks(identity.subject);
     return dto;
   }
@@ -2523,12 +2553,8 @@ function privateDataIsComplete(
       legalForm === 'ip' ? ['inn', 'ogrnip'] : ['fullName', 'inn', 'ogrn'];
     return required.every((field) => hasPrivateInputValue(data, field));
   }
-  return (
-    hasPrivateInputValue(data, 'birthDate') &&
-    (hasPrivateInputValue(data, 'fullName') ||
-      hasValueAtPath(data, 'passport.fullName') ||
-      hasValueAtPath(data, 'individual.passport.fullName'))
-  );
+  // FIO is canonical on identity.name.*; passport.fullName is legacy-only.
+  return hasPrivateInputValue(data, 'birthDate');
 }
 
 function hasValueAtPath(data: Record<string, unknown>, path: string): boolean {

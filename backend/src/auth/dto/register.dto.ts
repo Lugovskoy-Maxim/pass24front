@@ -4,6 +4,7 @@ import {
   IsNotEmpty,
   IsOptional,
   IsString,
+  Matches,
   MinLength,
   ValidateIf,
 } from 'class-validator';
@@ -45,6 +46,11 @@ export class RegisterDto {
 
   @IsOptional()
   middleName?: string;
+
+  @IsOptional()
+  @IsString()
+  @Matches(/^\d{4}-\d{2}-\d{2}$/)
+  birthDate?: string;
 
   @IsNotEmpty({ message: 'Укажите название компании' })
   company: string;

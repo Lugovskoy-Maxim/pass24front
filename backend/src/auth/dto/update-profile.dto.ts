@@ -3,6 +3,7 @@ import {
   IsInt,
   IsOptional,
   IsString,
+  Matches,
   Max,
   Min,
   ValidateIf,
@@ -21,6 +22,12 @@ export class UpdateProfileDto {
   @IsOptional()
   @IsString()
   middleName?: string;
+
+  @IsOptional()
+  @ValidateIf((_, value) => value !== null && value !== '')
+  @IsString()
+  @Matches(/^\d{4}-\d{2}-\d{2}$/)
+  birthDate?: string | null;
 
   @IsOptional()
   @IsString()

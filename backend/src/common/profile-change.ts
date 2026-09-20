@@ -2,6 +2,7 @@ export interface ProfileChangeRequestData {
   lastName?: string;
   firstName?: string;
   middleName?: string;
+  birthDate?: string | null;
   fullName?: string;
   phone?: string;
   company?: string;
@@ -18,6 +19,7 @@ export function mapProfileChangeRequest(req?: ProfileChangeRequestData | null) {
     last_name: req.lastName || '',
     first_name: req.firstName || '',
     middle_name: req.middleName || '',
+    birth_date: req.birthDate ?? null,
     full_name: req.fullName || '',
     phone: req.phone,
     company: req.company,
@@ -34,6 +36,7 @@ export function profileFieldsEqual(
     lastName?: string;
     firstName?: string;
     middleName?: string;
+    birthDate?: string | null;
     phone?: string;
     company?: string;
     companyShortName?: string;
@@ -45,6 +48,7 @@ export function profileFieldsEqual(
     lastName?: string;
     firstName?: string;
     middleName?: string;
+    birthDate?: string | null;
     phone?: string;
     company?: string;
     companyShortName?: string;
@@ -57,6 +61,7 @@ export function profileFieldsEqual(
     (current.lastName || '') === (next.lastName || '') &&
     (current.firstName || '') === (next.firstName || '') &&
     (current.middleName || '') === (next.middleName || '') &&
+    (current.birthDate || '') === (next.birthDate || '') &&
     (current.phone || '') === (next.phone || '') &&
     (current.company || '') === (next.company || '') &&
     (current.companyShortName || '') === (next.companyShortName || '') &&

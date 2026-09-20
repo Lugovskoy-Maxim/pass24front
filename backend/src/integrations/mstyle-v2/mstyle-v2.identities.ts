@@ -303,6 +303,7 @@ export class MstyleIdentityService {
         existing.userId = userId;
         await existing.save();
       }
+      await this.syncIdentityProjectionFromUser(user, existing);
       const refreshed = (await this.refreshUserSecurity(existing))!;
       await this.syncProfileOfficeIds(user, refreshed);
       return refreshed;
@@ -348,6 +349,7 @@ export class MstyleIdentityService {
         firstName: user.firstName ?? null,
         middleName: user.middleName ?? null,
       },
+      birthDate: user.birthDate?.trim() || undefined,
       login: user.username || undefined,
       phone,
       email,
@@ -394,6 +396,7 @@ export class MstyleIdentityService {
         status: 'active',
         label: company,
         companyShortName: user.companyShortName || user.company || null,
+        companyName: user.company?.trim() || null,
         revision: 1,
         privateDataRevision: null,
         privateDataComplete: false,
@@ -459,6 +462,123 @@ export class MstyleIdentityService {
     return normalizeOfficeExternalIds(offices);
   }
 
+  private async syncIdentityProjectionFromUser(
+    user: UserDocument,
+    identity: MstyleIdentityDocument,
+  ): Promise<void> {
+    const nextName = {
+      lastName: user.lastName ?? null,
+      firstName: user.firstName ?? null,
+      middleName: user.middleName ?? null,
+    };
+    const nextBirthDate = user.birthDate?.trim() || undefined;
+    const nextDisplayName =
+      user.displayName?.trim() ||
+      user.fullName?.trim() ||
+      [user.lastName, user.firstName, user.middleName].filter(Boolean).join(' ');
+    const nextLogin = user.username?.trim().toLowerCase() || undefined;
+    const nextPhone = normalizeRuMobilePhone(user.phone || '') || undefined;
+    const nextEmail = normalizeEmail(user.email || '') || undefined;
+    const currentName = {
+      lastName: identity.name?.lastName ?? null,
+      firstName: identity.name?.firstName ?? null,
+      middleName: identity.name?.middleName ?? null,
+    };
+    const changed =
+      JSON.stringify(currentName) !== JSON.stringify(nextName) ||
+      (identity.birthDate || undefined) !== nextBirthDate ||
+      identity.displayName !== nextDisplayName ||
+      (identity.login || undefined) !== nextLogin ||
+      (identity.phone || undefined) !== nextPhone ||
+      (identity.email || undefined) !== nextEmail;
+
+    if (changed) {
+      identity.name = nextName;
+      identity.birthDate = nextBirthDate;
+      identity.displayName = nextDisplayName;
+      identity.login = nextLogin;
+      identity.phone = nextPhone;
+      identity.email = nextEmail;
+      identity.revision += 1;
+      identity.contextRevision += 1;
+      await identity.save();
+      await this.events.emit({
+        type: 'identity.updated',
+        aggregate: { type: 'identity', id: identity.subject, revision: identity.revision },
+        subject: identity.subject,
+      });
+    }
+    await this.syncContact(identity.subject, 'phone', nextPhone, false);
+    await this.syncContact(identity.subject, 'email', nextEmail, !!user.emailVerified);
+  }
+
+  async syncNativePersonFromIdentityPatch(
+    identity: MstyleIdentityDocument,
+    patch: {
+      displayName?: string;
+      name?: { lastName?: string | null; firstName?: string | null; middleName?: string | null };
+      birthDate?: string | null;
+    },
+  ): Promise<void> {
+    if (!identity.userId) return;
+    const user = await this.users.findById(identity.userId);
+    if (!user) return;
+    if (patch.name) {
+      const lastName = patch.name.lastName ?? user.lastName ?? '';
+      const firstName = patch.name.firstName ?? user.firstName ?? '';
+      const middleName =
+        patch.name.middleName !== undefined
+          ? patch.name.middleName ?? ''
+          : user.middleName ?? '';
+      user.lastName = lastName || undefined;
+      user.firstName = firstName || undefined;
+      user.middleName = middleName || undefined;
+      user.fullName = [lastName, firstName, middleName]
+        .map((part) => String(part || '').trim()).filter(Boolean).join(' ');
+    }
+    if (patch.birthDate !== undefined) {
+      const value = patch.birthDate?.trim() || '';
+      if (value) user.birthDate = value;
+      else user.set('birthDate', undefined);
+    }
+    if (patch.displayName !== undefined) {
+      user.displayName = patch.displayName.trim() || user.fullName;
+    }
+    await user.save();
+  }
+
+  async syncNativeContactFromIdentityVerification(
+    identity: MstyleIdentityDocument,
+    type: 'phone' | 'email',
+    value: string,
+  ): Promise<void> {
+    if (!identity.userId) return;
+    const user = await this.users.findById(identity.userId);
+    if (!user) return;
+    if (type === 'phone') {
+      user.phone = value;
+    } else {
+      user.email = value;
+      user.emailVerified = true;
+    }
+    await user.save();
+  }
+
+  async updateNativeCompanyForProfile(profileId: string, companyName: string | null): Promise<void> {
+    const membership = await this.memberships.findOne({
+      profileId, role: 'owner', status: { $ne: 'revoked' },
+    });
+    if (!membership) return;
+    const identity = await this.identities.findOne({ subject: membership.subject });
+    if (!identity?.userId) return;
+    const user = await this.users.findById(identity.userId);
+    if (!user) return;
+    const value = companyName?.trim() || '';
+    if (value) user.company = value;
+    else user.set('company', undefined);
+    await user.save();
+  }
+
   private async syncProfileOfficeIds(
     user: UserDocument,
     identity: MstyleIdentityDocument,
@@ -468,45 +588,38 @@ export class MstyleIdentityService {
       status: 'active',
     });
     if (!membership) return;
-    const profile = await this.profiles.findOne({
-      profileId: membership.profileId,
-    });
+    const profile = await this.profiles.findOne({ profileId: membership.profileId });
     if (!profile) return;
 
-    const ownerUserId = user.parentTenantId
-      ? String(user.parentTenantId)
-      : String(user._id);
+    const ownerUserId = user.parentTenantId ? String(user.parentTenantId) : String(user._id);
     const officeIds = await this.officeExternalIds(ownerUserId);
     const current = profile.officeIds || [];
-    if (
-      current.length === officeIds.length &&
-      current.every((id, index) => id === officeIds[index])
-    ) {
-      return;
-    }
+    const officeIdsChanged =
+      current.length !== officeIds.length ||
+      !current.every((id, index) => id === officeIds[index]);
+    const nextCompanyName = user.parentTenantId
+      ? profile.companyName ?? null
+      : user.company?.trim() || null;
+    const companyNameChanged = (profile.companyName ?? null) !== nextCompanyName;
+    if (!officeIdsChanged && !companyNameChanged) return;
 
-    profile.officeIds = officeIds;
+    const changedFieldCodes: string[] = [];
+    if (officeIdsChanged) { profile.officeIds = officeIds; changedFieldCodes.push('officeIds'); }
+    if (companyNameChanged) { profile.companyName = nextCompanyName; changedFieldCodes.push('companyName'); }
     profile.revision += 1;
     await profile.save();
     const members = await this.memberships
       .find({ profileId: profile.profileId, status: 'active' })
-      .select('subject')
-      .lean();
+      .select('subject').lean();
     for (const member of members) await this.bumpContext(member.subject);
     await this.events.emit({
       type: 'profile.updated',
-      aggregate: {
-        type: 'resident_profile',
-        id: profile.profileId,
-        revision: profile.revision,
-      },
+      aggregate: { type: 'resident_profile', id: profile.profileId, revision: profile.revision },
       profileId: profile.profileId,
-      payload: { changedFieldCodes: ['officeIds'] },
+      payload: { changedFieldCodes },
     });
-    if (this.profileResourceRole(profile) === 'primary') {
-      await this.propagateResourceProjectionChange(profile.profileId, [
-        'officeIds',
-      ]);
+    if (officeIdsChanged && this.profileResourceRole(profile) === 'primary') {
+      await this.propagateResourceProjectionChange(profile.profileId, ['officeIds']);
     }
   }
 

@@ -593,10 +593,9 @@ export const GUEST_PRIVATE_FIELDS = [
   'documentNumber',
 ] as const;
 
-export const REQUIRED_INDIVIDUAL_FIELDS = [
-  'individual.birthDate',
-  'individual.passport.fullName',
-] as const;
+// FIO is canonical on identity.name.*. passport.fullName remains readable
+// for legacy records but is not an independent completion requirement.
+export const REQUIRED_INDIVIDUAL_FIELDS = ['individual.birthDate'] as const;
 export const REQUIRED_COMPANY_FIELDS = [
   'company.fullName',
   'company.inn',

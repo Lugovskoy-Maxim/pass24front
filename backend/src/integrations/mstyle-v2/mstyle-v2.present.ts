@@ -38,7 +38,7 @@ export function schema<T extends object>(
   return { schemaVersion: MSTYLE_SCHEMA_VERSION, ...extra };
 }
 
-export function safeIdentity(doc: MstyleIdentity) {
+export function safeIdentity(doc: MstyleIdentity, personProjection = false) {
   return {
     subject: doc.subject,
     identityStatus: doc.identityStatus,
@@ -50,6 +50,7 @@ export function safeIdentity(doc: MstyleIdentity) {
       firstName: doc.name?.firstName ?? null,
       middleName: doc.name?.middleName ?? null,
     },
+    ...(personProjection ? { birthDate: doc.birthDate ?? null } : {}),
     contactMasks: [] as Array<{ type: 'phone' | 'email'; masked: string }>,
   };
 }
@@ -57,6 +58,7 @@ export function safeIdentity(doc: MstyleIdentity) {
 export function safeProfile(
   doc: MstyleProfile,
   resourceOwner: MstyleProfile = doc,
+  personProjection = false,
 ) {
   return {
     id: doc.profileId,
@@ -65,6 +67,7 @@ export function safeProfile(
     status: doc.status,
     label: doc.label,
     companyShortName: doc.companyShortName ?? null,
+    ...(personProjection ? { companyName: doc.companyName ?? null } : {}),
     revision: doc.revision,
     privateDataRevision: doc.privateDataRevision ?? null,
     privateDataComplete: !!doc.privateDataComplete,
