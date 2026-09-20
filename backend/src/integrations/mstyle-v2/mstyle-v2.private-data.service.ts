@@ -99,6 +99,24 @@ export class MstylePrivateDataService {
     private readonly consentService: MstyleConsentService,
   ) {}
 
+  private async inTransaction<T>(run: () => Promise<T>): Promise<T> {
+    this.privateData.db.base.set('transactionAsyncLocalStorage', true);
+    if (
+      (this.privateData.db.base as any).transactionAsyncLocalStorage?.getStore()
+        ?.session
+    ) {
+      return run();
+    }
+    return this.privateData.db.transaction(run, {
+      readConcern: { level: 'snapshot' },
+      writeConcern: { w: 'majority' },
+    });
+  }
+
+  async runAdminMutation<T>(run: () => Promise<T>): Promise<T> {
+    return this.inTransaction(run);
+  }
+
   /** Admin-only caller wrapper is enforced by AdminController permissions. */
   async adminResidentValues(profileId: string) {
     const profile = await this.requireProfile(profileId);
@@ -120,45 +138,47 @@ export class MstylePrivateDataService {
   }
 
   async setAdminResidentSelfService(profileId: string, enabled: boolean) {
-    const profile = await this.requireProfile(profileId);
-    const doc = await this.privateData.findOne({
-      partyType: 'resident_profile',
-      partyId: profileId,
-    });
-    if (!doc) {
-      problem(409, 'CONFLICT', {
-        title: 'Private data is not initialized yet',
+    return this.inTransaction(async () => {
+      const profile = await this.requireProfile(profileId);
+      const doc = await this.privateData.findOne({
+        partyType: 'resident_profile',
+        partyId: profileId,
       });
-    }
-    if (doc.editPolicy === 'locked') {
-      problem(409, 'CONFLICT', {
-        title: 'Private data edit policy is locked',
-      });
-    }
+      if (!doc) {
+        problem(409, 'CONFLICT', {
+          title: 'Private data is not initialized yet',
+        });
+      }
+      if (doc.editPolicy === 'locked') {
+        problem(409, 'CONFLICT', {
+          title: 'Private data edit policy is locked',
+        });
+      }
 
-    const nextPolicy = enabled ? 'self_service' : 'request_only';
-    if (doc.editPolicy === nextPolicy) {
+      const nextPolicy = enabled ? 'self_service' : 'request_only';
+      if (doc.editPolicy === nextPolicy) {
+        return { editPolicy: doc.editPolicy, revision: doc.revision };
+      }
+
+      doc.editPolicy = nextPolicy;
+      doc.revision += 1;
+      await doc.save();
+
+      profile.privateDataRevision = doc.revision;
+      await profile.save();
+      await this.bumpMemberContexts(profileId);
+      await this.events.emit({
+        type: 'resident_private_data.updated',
+        aggregate: {
+          type: 'resident_private_data',
+          id: profileId,
+          revision: doc.revision,
+        },
+        profileId,
+      });
+
       return { editPolicy: doc.editPolicy, revision: doc.revision };
-    }
-
-    doc.editPolicy = nextPolicy;
-    doc.revision += 1;
-    await doc.save();
-
-    profile.privateDataRevision = doc.revision;
-    await profile.save();
-    await this.bumpMemberContexts(profileId);
-    await this.events.emit({
-      type: 'resident_private_data.updated',
-      aggregate: {
-        type: 'resident_private_data',
-        id: profileId,
-        revision: doc.revision,
-      },
-      profileId,
     });
-
-    return { editPolicy: doc.editPolicy, revision: doc.revision };
   }
 
   async adminPatchResident(
@@ -166,75 +186,77 @@ export class MstylePrivateDataService {
     patchInput: Record<string, unknown>,
     expectedRevision: number,
   ) {
-    const profile = await this.requireProfile(profileId);
-    let doc = await this.privateData.findOne({
-      partyType: 'resident_profile',
-      partyId: profileId,
-    });
-    const currentRevision = doc?.revision ?? 0;
-    if (currentRevision !== expectedRevision) {
-      problem(409, 'CONFLICT', {
-        title: 'Private data changed; reload user card',
-      });
-    }
-    const current = doc
-      ? decryptJson<Record<string, unknown>>(
-          this.cfg.piiSecret(),
-          doc.valuesEnc,
-        )
-      : {};
-    const patch = normalizeResidentInput(
-      patchInput,
-      profile.type,
-      profile.legalForm,
-    );
-    const merged = validateResidentValues(
-      mergeObjects(
-        normalizeResidentInput(current, profile.type, profile.legalForm),
-        patch,
-      ),
-      profile.type,
-      profile.legalForm,
-    );
-    if (!doc) {
-      doc = await this.privateData.create({
+    return this.inTransaction(async () => {
+      const profile = await this.requireProfile(profileId);
+      let doc = await this.privateData.findOne({
         partyType: 'resident_profile',
         partyId: profileId,
-        profileType: profile.type,
-        legalForm: profile.legalForm,
-        revision: 1,
-        editPolicy: 'request_only',
-        valuesEnc: encryptJson(this.cfg.piiSecret(), merged),
       });
-    } else {
-      doc.valuesEnc = encryptJson(this.cfg.piiSecret(), merged);
-      doc.revision += 1;
-      if (doc.editPolicy === 'initial') doc.editPolicy = 'request_only';
-      await doc.save();
-    }
-    const canonical = canonicalPrivateValues(
-      merged,
-      profile.type,
-      profile.legalForm,
-    );
-    const missing = requiredResidentFields(
-      profile.type,
-      profile.legalForm,
-    ).filter((field) => !hasValue(getPath(canonical, field)));
-    profile.privateDataRevision = doc.revision;
-    profile.privateDataComplete = missing.length === 0;
-    await profile.save();
-    const contextRevision = await this.bumpMemberContexts(profileId);
-    await this.events.emit({
-      type: 'resident_private_data.updated',
-      aggregate: {
-        type: 'resident_private_data',
-        id: profileId,
-        revision: doc.revision,
-      },
-      profileId,
+      const currentRevision = doc?.revision ?? 0;
+      if (currentRevision !== expectedRevision) {
+        problem(409, 'CONFLICT', {
+          title: 'Private data changed; reload user card',
+        });
+      }
+      const current = doc
+        ? decryptJson<Record<string, unknown>>(
+            this.cfg.piiSecret(),
+            doc.valuesEnc,
+          )
+        : {};
+      const patch = normalizeResidentInput(
+        patchInput,
+        profile.type,
+        profile.legalForm,
+      );
+      const merged = validateResidentValues(
+        mergeObjects(
+          normalizeResidentInput(current, profile.type, profile.legalForm),
+          patch,
+        ),
+        profile.type,
+        profile.legalForm,
+      );
+      if (!doc) {
+        doc = await this.privateData.create({
+          partyType: 'resident_profile',
+          partyId: profileId,
+          profileType: profile.type,
+          legalForm: profile.legalForm,
+          revision: 1,
+          editPolicy: 'request_only',
+          valuesEnc: encryptJson(this.cfg.piiSecret(), merged),
+        });
+      } else {
+        doc.valuesEnc = encryptJson(this.cfg.piiSecret(), merged);
+        doc.revision += 1;
+        if (doc.editPolicy === 'initial') doc.editPolicy = 'request_only';
+        await doc.save();
+      }
+      const canonical = canonicalPrivateValues(
+        merged,
+        profile.type,
+        profile.legalForm,
+      );
+      const missing = requiredResidentFields(
+        profile.type,
+        profile.legalForm,
+      ).filter((field) => !hasValue(getPath(canonical, field)));
+      profile.privateDataRevision = doc.revision;
+      profile.privateDataComplete = missing.length === 0;
+      await profile.save();
+      const contextRevision = await this.bumpMemberContexts(profileId);
+      await this.events.emit({
+        type: 'resident_private_data.updated',
+        aggregate: {
+          type: 'resident_private_data',
+          id: profileId,
+          revision: doc.revision,
+        },
+        profileId,
+      });
+      return { values: canonical, revision: doc.revision, contextRevision };
     });
-    return { values: canonical, revision: doc.revision, contextRevision };
   }
 
   async residentStatus(profileId: string) {

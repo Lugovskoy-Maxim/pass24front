@@ -142,104 +142,115 @@ export class AdminService {
   ) {
     const user = await this.requireMstyleTenantOwner(id);
 
-    // If privateData and status are saved together, persist privateData first.
-    // Activation checks profile.privateDataComplete, which is recalculated by
-    // adminPatchResident().
-    const profilePatch = {
-      residentHoursMonthlyQuotaMin: dto.residentHoursMonthlyQuotaMin,
-      residentHoursMonthlyResetDay: dto.residentHoursMonthlyResetDay,
-      isPrimaryProfile: dto.isPrimaryProfile,
-      secondaryUserIds: dto.secondaryUserIds,
-      ...(dto.privateData === undefined ? { status: dto.status } : {}),
-    };
-    let profile = await this.identities.updateAdminProfileState(
-      user,
-      profilePatch,
+    const responseProfile = await this.mstylePrivateData.runAdminMutation(
+      async () => {
+        // If privateData and status are saved together, persist privateData first.
+        // Activation checks profile.privateDataComplete, which is recalculated by
+        // adminPatchResident().
+        const profilePatch = {
+          residentHoursMonthlyQuotaMin: dto.residentHoursMonthlyQuotaMin,
+          residentHoursMonthlyResetDay: dto.residentHoursMonthlyResetDay,
+          isPrimaryProfile: dto.isPrimaryProfile,
+          secondaryUserIds: dto.secondaryUserIds,
+          ...(dto.privateData === undefined ? { status: dto.status } : {}),
+        };
+        let profile = await this.identities.updateAdminProfileState(
+          user,
+          profilePatch,
+        );
+
+        if (dto.privateData !== undefined) {
+          if (!profile.profileId) {
+            throw new ConflictException('Профиль Mstyle ещё не создан');
+          }
+          const currentPrivateState =
+            await this.mstylePrivateData.adminResidentValues(profile.profileId);
+          const privateData = JSON.parse(
+            JSON.stringify(dto.privateData),
+          ) as Record<string, any>;
+          const personBirthDate = user.birthDate?.trim() || '';
+          if (user.profileType !== 'company' && personBirthDate) {
+            const currentIndividual =
+              currentPrivateState.values.individual &&
+              typeof currentPrivateState.values.individual === 'object' &&
+              !Array.isArray(currentPrivateState.values.individual)
+                ? (currentPrivateState.values.individual as Record<
+                    string,
+                    unknown
+                  >)
+                : {};
+            const patchIndividual =
+              privateData.individual &&
+              typeof privateData.individual === 'object' &&
+              !Array.isArray(privateData.individual)
+                ? (privateData.individual as Record<string, unknown>)
+                : {};
+            const currentProfileBirthDate = String(
+              currentIndividual.birthDate ?? '',
+            ).trim();
+            const incomingProfileBirthDate = String(
+              patchIndividual.birthDate ?? '',
+            ).trim();
+            if (!currentProfileBirthDate && !incomingProfileBirthDate) {
+              privateData.individual = {
+                ...patchIndividual,
+                birthDate: personBirthDate,
+              };
+            }
+          }
+          await this.mstylePrivateData.adminPatchResident(
+            profile.profileId,
+            privateData,
+            dto.privateDataRevision ?? 0,
+          );
+          profile = await this.identities.getAdminProfileState(user);
+
+          if (dto.status !== undefined) {
+            profile = await this.identities.updateAdminProfileState(user, {
+              status: dto.status,
+            });
+          }
+        }
+
+        if (dto.selfServiceEnabled !== undefined) {
+          if (!profile.profileId) {
+            throw new ConflictException('Профиль Mstyle ещё не создан');
+          }
+          await this.mstylePrivateData.setAdminResidentSelfService(
+            profile.profileId,
+            dto.selfServiceEnabled,
+          );
+          profile = await this.identities.getAdminProfileState(user);
+        }
+
+        const privateState = profile.profileId
+          ? await this.mstylePrivateData.adminResidentValues(profile.profileId)
+          : { values: {}, revision: 0, editPolicy: 'initial' };
+
+        return {
+          ...profile,
+          privateData: privateState.values,
+          privateDataRevision: privateState.revision,
+          editPolicy: privateState.editPolicy,
+        };
+      },
     );
 
-    if (dto.privateData !== undefined) {
-      if (!profile.profileId) {
-        throw new ConflictException('Профиль Mstyle ещё не создан');
-      }
-      const currentPrivateState =
-        await this.mstylePrivateData.adminResidentValues(profile.profileId);
-      const privateData = JSON.parse(JSON.stringify(dto.privateData)) as Record<
-        string,
-        any
-      >;
-      const personBirthDate = user.birthDate?.trim() || '';
-      if (user.profileType !== 'company' && personBirthDate) {
-        const currentIndividual =
-          currentPrivateState.values.individual &&
-          typeof currentPrivateState.values.individual === 'object' &&
-          !Array.isArray(currentPrivateState.values.individual)
-            ? (currentPrivateState.values.individual as Record<string, unknown>)
-            : {};
-        const patchIndividual =
-          privateData.individual &&
-          typeof privateData.individual === 'object' &&
-          !Array.isArray(privateData.individual)
-            ? (privateData.individual as Record<string, unknown>)
-            : {};
-        const currentProfileBirthDate = String(
-          currentIndividual.birthDate ?? '',
-        ).trim();
-        const incomingProfileBirthDate = String(
-          patchIndividual.birthDate ?? '',
-        ).trim();
-        if (!currentProfileBirthDate && !incomingProfileBirthDate) {
-          privateData.individual = {
-            ...patchIndividual,
-            birthDate: personBirthDate,
-          };
-        }
-      }
-      await this.mstylePrivateData.adminPatchResident(
-        profile.profileId,
-        privateData,
-        dto.privateDataRevision ?? 0,
-      );
-      profile = await this.identities.getAdminProfileState(user);
-
-      if (dto.status !== undefined) {
-        profile = await this.identities.updateAdminProfileState(user, {
-          status: dto.status,
-        });
-      }
-    }
-
-    if (dto.selfServiceEnabled !== undefined) {
-      if (!profile.profileId) {
-        throw new ConflictException('Профиль Mstyle ещё не создан');
-      }
-      await this.mstylePrivateData.setAdminResidentSelfService(
-        profile.profileId,
-        dto.selfServiceEnabled,
-      );
-      profile = await this.identities.getAdminProfileState(user);
-    }
-
-    const privateState = profile.profileId
-      ? await this.mstylePrivateData.adminResidentValues(profile.profileId)
-      : { values: {}, revision: 0, editPolicy: 'initial' };
-    const responseProfile = {
-      ...profile,
-      privateData: privateState.values,
-      privateDataRevision: privateState.revision,
-      editPolicy: privateState.editPolicy,
-    };
     await this.auditService.log({
       action: 'user.mstyle_profile.update',
       entityType: 'user',
       entityId: user._id,
       actor,
       details: {
-        profileId: profile.profileId,
-        status: profile.status,
-        residentHoursMonthlyQuotaMin: profile.residentHoursMonthlyQuotaMin,
-        residentHoursMonthlyResetDay: profile.residentHoursMonthlyResetDay,
+        profileId: responseProfile.profileId,
+        status: responseProfile.status,
+        residentHoursMonthlyQuotaMin:
+          responseProfile.residentHoursMonthlyQuotaMin,
+        residentHoursMonthlyResetDay:
+          responseProfile.residentHoursMonthlyResetDay,
       },
     });
+
     return { profile: responseProfile };
   }
 
