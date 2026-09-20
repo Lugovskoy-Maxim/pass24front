@@ -33,7 +33,10 @@ export type AdminAssertionClaims = {
   requestId: string;
 };
 export type AdminAssertionReason =
-  'required' | 'invalid' | 'expired' | 'replayed';
+  | 'required'
+  | 'invalid'
+  | 'expired'
+  | 'replayed';
 export class AdminAssertionException extends ProblemException {
   constructor(
     reason: AdminAssertionReason,

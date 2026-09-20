@@ -107,7 +107,11 @@ const PROFILE = {
   privateDataComplete: true,
   resourceOwnerProfileId: 'prf_01J5Q8K2M7N4P6R9T1V3X5Z7BB',
   resourceOwnerProfileRevision: 2,
-  memberPolicy: { employeeLimit: 3, residentHoursMonthlyQuotaMin: 0, residentHoursMonthlyResetDay: 1 },
+  memberPolicy: {
+    employeeLimit: 3,
+    residentHoursMonthlyQuotaMin: 0,
+    residentHoursMonthlyResetDay: 1,
+  },
   officeIds: ['tf-room:107'],
   sourceLinks: [],
   createdAt: '2026-08-01T10:00:00Z',
@@ -343,7 +347,11 @@ const MSTYLE_V2_CATALOG_BASE: CatalogEndpoint[] = [
             display: { label: 'ООО Пример' },
             resourceOwnerProfileId: PROFILE.id,
             resourceOwnerProfileRevision: 2,
-            memberPolicy: { employeeLimit: 3, residentHoursMonthlyQuotaMin: 0, residentHoursMonthlyResetDay: 1 },
+            memberPolicy: {
+              employeeLimit: 3,
+              residentHoursMonthlyQuotaMin: 0,
+              residentHoursMonthlyResetDay: 1,
+            },
             officeIds: ['tf-room:107'],
             snapshotSources: {
               primary: {
@@ -1424,7 +1432,11 @@ const M1_M2_CATALOG_OVERRIDES: Record<string, M1M2CatalogOverride> = {
         legalForm: 'ooo',
         label: 'Вадим тест',
         companyShortName: 'Вадим тест',
-        memberPolicy: { employeeLimit: 5, residentHoursMonthlyQuotaMin: 0, residentHoursMonthlyResetDay: 1 },
+        memberPolicy: {
+          employeeLimit: 5,
+          residentHoursMonthlyQuotaMin: 0,
+          residentHoursMonthlyResetDay: 1,
+        },
       },
       privateData: {
         profileType: 'company',

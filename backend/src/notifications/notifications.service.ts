@@ -150,11 +150,12 @@ export class NotificationsService implements OnModuleInit {
   }
 
   async saveNativeToken(userId: string, dto: SaveNativePushTokenDto) {
-    const provider = dto.provider === 'fcm' || dto.provider === 'google'
-      ? 'firebase'
-      : dto.provider === 'rustore'
-        ? 'rustore'
-        : 'firebase';
+    const provider =
+      dto.provider === 'fcm' || dto.provider === 'google'
+        ? 'firebase'
+        : dto.provider === 'rustore'
+          ? 'rustore'
+          : 'firebase';
     await this.nativeDeviceModel.findOneAndUpdate(
       { token: dto.token },
       {
@@ -326,7 +327,9 @@ export class NotificationsService implements OnModuleInit {
       extra?: Record<string, unknown>;
     },
   ) {
-    const projectId = this.config.get<string>('RUSTORE_PUSH_PROJECT_ID')?.trim();
+    const projectId = this.config
+      .get<string>('RUSTORE_PUSH_PROJECT_ID')
+      ?.trim();
     const serviceToken = this.config
       .get<string>('RUSTORE_PUSH_SERVICE_TOKEN')
       ?.trim();
@@ -373,9 +376,7 @@ export class NotificationsService implements OnModuleInit {
       input.paymentStatus === 'overdue'
         ? 'Просрочена оплата офиса'
         : 'Офис не оплачен';
-    const until = input.paidUntil
-      ? ` до ${input.paidUntil}`
-      : '';
+    const until = input.paidUntil ? ` до ${input.paidUntil}` : '';
     await this.pushToTenant(input.tenantId, {
       title: label,
       body: `${input.officeLabel}${until}`,

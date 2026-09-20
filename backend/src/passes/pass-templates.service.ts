@@ -224,10 +224,7 @@ export class PassTemplatesService {
     if (!office || !office.isActive)
       throw new NotFoundException('Офис не найден');
 
-    if (
-      isTenantCompanyUser(user) &&
-      !officeHasTenant(office, tenantOwnerId)
-    ) {
+    if (isTenantCompanyUser(user) && !officeHasTenant(office, tenantOwnerId)) {
       throw new ForbiddenException(
         'Можно использовать только офисы своей компании',
       );
