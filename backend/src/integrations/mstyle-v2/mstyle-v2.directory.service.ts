@@ -211,6 +211,13 @@ export class MstyleDirectoryService {
         contextRevision: identity.contextRevision,
         generatedAt: nowIso(),
       }),
+      200,
+      // R-07 updates identity with optimistic concurrency. The resident
+      // bootstrap (R-01) is the safe resident-readable source that already
+      // carries the current identity, so expose that identity revision as
+      // the response ETag. Mstyle must not need admin-only R-14 merely to
+      // obtain the version required for a resident-owned identity update.
+      { ETag: etag('identity', identity.revision) },
     );
   }
 
