@@ -167,6 +167,7 @@ export class User {
     lastName?: string;
     firstName?: string;
     middleName?: string;
+    birthDate?: string | null;
     fullName?: string;
     phone?: string;
     company?: string;

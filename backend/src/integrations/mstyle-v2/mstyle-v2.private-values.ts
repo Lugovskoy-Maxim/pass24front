@@ -259,6 +259,27 @@ export function normalizeResidentInput(
     });
   return values;
 }
+
+/**
+ * Проверяет запись по канонической структуре и сохраняет все старые ключи,
+ * уже находящиеся в зашифрованной записи. При чтении приоритет имеют
+ * канонические поля; старые имена остаются только для совместимости.
+ */
+export function mergeResidentValuesPreservingLegacy(
+  current: Record<string, unknown>,
+  patchInput: Record<string, unknown>,
+  type: string,
+  legalForm?: string | null,
+): Record<string, unknown> {
+  const currentCanonical = normalizeResidentInput(current, type, legalForm);
+  const patch = normalizeResidentInput(patchInput, type, legalForm);
+  const canonicalMerged = validateResidentValues(
+    mergeObjects(currentCanonical, patch),
+    type,
+    legalForm,
+  );
+  return mergeObjects(current, canonicalMerged);
+}
 export function validateResidentValues(
   values: Record<string, unknown>,
   type: string,

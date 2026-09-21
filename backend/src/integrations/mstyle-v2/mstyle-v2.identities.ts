@@ -564,6 +564,23 @@ export class MstyleIdentityService {
     await user.save();
   }
 
+  async syncNativeContactFromIdentityVerification(
+    identity: MstyleIdentityDocument,
+    type: 'phone' | 'email',
+    value: string,
+  ): Promise<void> {
+    if (!identity.userId) return;
+    const user = await this.users.findById(identity.userId);
+    if (!user) return;
+    if (type === 'phone') {
+      user.phone = value;
+    } else {
+      user.email = value;
+      user.emailVerified = true;
+    }
+    await user.save();
+  }
+
   async updateNativeCompanyForProfile(
     profileId: string,
     companyName: string | null,

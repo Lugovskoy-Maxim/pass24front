@@ -786,6 +786,11 @@ export class AdminService {
     user.lastName = req.lastName;
     user.firstName = req.firstName;
     user.middleName = req.middleName;
+    if (req.birthDate !== undefined) {
+      const birthDate = req.birthDate?.trim() || '';
+      if (birthDate) user.birthDate = birthDate;
+      else user.set('birthDate', undefined);
+    }
     user.fullName = req.fullName;
     if (req.phone !== undefined) user.phone = req.phone;
     if (req.company !== undefined) user.company = req.company;

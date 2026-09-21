@@ -48,6 +48,9 @@ export class RegistrationPending {
   @Prop({ trim: true })
   middleName?: string;
 
+  @Prop({ trim: true })
+  birthDate?: string;
+
   @Prop({ required: true, trim: true })
   company: string;
 }

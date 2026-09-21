@@ -201,6 +201,7 @@ export class AuthService {
       lastName: personName.lastName,
       firstName: personName.firstName,
       middleName: personName.middleName,
+      birthDate: dto.birthDate?.trim() || undefined,
       company: dto.company.trim(),
     };
     if (email) pendingData.email = email;
@@ -393,6 +394,7 @@ export class AuthService {
         lastName: pending.lastName,
         firstName: pending.firstName,
         middleName: pending.middleName,
+        birthDate: pending.birthDate,
         company: pending.company,
         role: 'tenant',
         password: pending.password,
@@ -1034,6 +1036,10 @@ export class AuthService {
       lastName: personName.lastName,
       firstName: personName.firstName,
       middleName: personName.middleName,
+      birthDate:
+        dto.birthDate !== undefined
+          ? dto.birthDate?.trim() || ''
+          : user.birthDate || '',
       phone: dto.phone?.trim() || '',
       company: dto.company?.trim() || '',
       companyShortName:
@@ -1055,6 +1061,7 @@ export class AuthService {
       profileFieldsEqual(
         {
           ...current,
+          birthDate: user.birthDate || '',
           phone: user.phone || '',
           company: user.company || '',
           companyShortName: user.companyShortName || '',
@@ -1077,6 +1084,7 @@ export class AuthService {
       lastName: requested.lastName,
       firstName: requested.firstName,
       middleName: requested.middleName,
+      birthDate: requested.birthDate || null,
       fullName: personName.fullName,
       phone: requested.phone || undefined,
       company: requested.company || undefined,
@@ -1257,6 +1265,7 @@ export class AuthService {
       lastName: personName.lastName,
       firstName: personName.firstName,
       middleName: personName.middleName,
+      birthDate: dto.birthDate?.trim() || undefined,
       phone: dto.phone?.trim() || undefined,
       company: owner.company,
       role: employeeRole,
@@ -1531,6 +1540,7 @@ export class AuthService {
       last_name: e.lastName,
       first_name: e.firstName,
       middle_name: e.middleName,
+      birth_date: e.birthDate,
       phone: e.phone,
       is_active: e.isActive !== false && !invitePending,
       invite_pending: invitePending,
@@ -1795,6 +1805,7 @@ export class AuthService {
       last_name: user.lastName,
       first_name: user.firstName,
       middle_name: user.middleName,
+      birth_date: user.birthDate,
       phone: user.phone,
       company,
       company_logo: companyLogo,

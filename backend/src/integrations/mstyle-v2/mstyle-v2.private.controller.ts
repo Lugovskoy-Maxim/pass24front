@@ -208,8 +208,11 @@ export class MstylePrivateController {
   }
 
   @Get('residents/:subject/context')
-  getContext(@Param('subject') subject: string) {
-    return this.directory.getContext(subject);
+  getContext(
+    @Param('subject') subject: string,
+    @Headers('x-mstyle-projection') projection?: string,
+  ) {
+    return this.directory.getContext(subject, projection === 'person-v1');
   }
 
   @Patch('residents/:subject/identity')
@@ -218,6 +221,7 @@ export class MstylePrivateController {
     @Param('subject') subject: string,
     @Body() dto: PatchIdentityDto,
     @Headers('if-match') ifMatch: string | undefined,
+    @Headers('x-mstyle-projection') projection: string | undefined,
     @Req() req: MstyleRequest,
   ) {
     return this.withIdempotency(
@@ -225,7 +229,13 @@ export class MstylePrivateController {
       'PATCH',
       `/residents/${subject}/identity`,
       { dto, ifMatch },
-      () => this.directory.patchIdentity(subject, dto, ifMatch),
+      () =>
+        this.directory.patchIdentity(
+          subject,
+          dto,
+          ifMatch,
+          projection === 'person-v1',
+        ),
     );
   }
 
@@ -319,8 +329,11 @@ export class MstylePrivateController {
   }
 
   @Get('identities/:subject')
-  getIdentity(@Param('subject') subject: string) {
-    return this.directory.getIdentity(subject);
+  getIdentity(
+    @Param('subject') subject: string,
+    @Headers('x-mstyle-projection') projection?: string,
+  ) {
+    return this.directory.getIdentity(subject, projection === 'person-v1');
   }
 
   @Get('changes')
@@ -550,8 +563,11 @@ export class MstylePrivateController {
   }
 
   @Get('resident-profiles/:profileId')
-  getProfile(@Param('profileId') profileId: string) {
-    return this.directory.getProfile(profileId);
+  getProfile(
+    @Param('profileId') profileId: string,
+    @Headers('x-mstyle-projection') projection?: string,
+  ) {
+    return this.directory.getProfile(profileId, projection === 'person-v1');
   }
 
   @Patch('resident-profiles/:profileId')
@@ -560,6 +576,7 @@ export class MstylePrivateController {
     @Param('profileId') profileId: string,
     @Body() dto: PatchProfileDto,
     @Headers('if-match') ifMatch: string | undefined,
+    @Headers('x-mstyle-projection') projection: string | undefined,
     @Req() req: MstyleRequest,
   ) {
     return this.withIdempotency(
@@ -567,7 +584,13 @@ export class MstylePrivateController {
       'PATCH',
       `/resident-profiles/${profileId}`,
       { dto, ifMatch },
-      () => this.directory.patchProfile(profileId, dto, ifMatch),
+      () =>
+        this.directory.patchProfile(
+          profileId,
+          dto,
+          ifMatch,
+          projection === 'person-v1',
+        ),
     );
   }
 

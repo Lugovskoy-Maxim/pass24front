@@ -94,6 +94,7 @@ export default function ProfilePage() {
     middleName: '',
   });
   const [phone, setPhone] = useState('');
+  const [birthDate, setBirthDate] = useState('');
   const [company, setCompany] = useState('');
   const [companyShortName, setCompanyShortName] = useState('');
   const [profileType, setProfileType] = useState<'individual' | 'company'>(
@@ -120,6 +121,7 @@ export default function ProfilePage() {
   });
   const [employeeEmail, setEmployeeEmail] = useState('');
   const [employeePhone, setEmployeePhone] = useState('');
+  const [employeeBirthDate, setEmployeeBirthDate] = useState('');
   const [emailVerifyStep, setEmailVerifyStep] = useState<'idle' | 'code'>(
     'idle',
   );
@@ -156,6 +158,7 @@ export default function ProfilePage() {
           : splitFullName(user.full_name),
     );
     setPhone((pending?.phone ?? user.phone) || '');
+    setBirthDate((pending?.birth_date ?? user.birth_date) || '');
     setCompany((pending?.company ?? user.company) || '');
     setCompanyShortName(
       (pending?.company_short_name ?? user.company_short_name) || '',
@@ -251,6 +254,7 @@ export default function ProfilePage() {
         lastName: nameParts.lastName.trim(),
         firstName: nameParts.firstName.trim(),
         middleName: nameParts.middleName.trim() || undefined,
+        birthDate: birthDate || null,
         phone: phone.trim() || undefined,
         company: company.trim() || undefined,
         companyShortName: companyShortName.trim() || undefined,
@@ -331,11 +335,13 @@ export default function ProfilePage() {
         lastName: employeeNameParts.lastName.trim(),
         firstName: employeeNameParts.firstName.trim(),
         middleName: employeeNameParts.middleName.trim() || undefined,
+        birthDate: employeeBirthDate || undefined,
         phone: employeePhone.trim() || undefined,
       });
       setEmployees((prev) => [employee, ...prev]);
       setEmployeeEmail('');
       setEmployeePhone('');
+      setEmployeeBirthDate('');
       setEmployeeNameParts({ lastName: '', firstName: '', middleName: '' });
       toast(message || 'Приглашение отправлено', 'success');
     } catch (err) {
@@ -557,6 +563,13 @@ export default function ProfilePage() {
             label="ФИО"
             value={buildFullName(currentName)}
           />
+          {user.birth_date && (
+            <ProfileInfoRow
+              icon={UserIcon}
+              label="Дата рождения"
+              value={user.birth_date}
+            />
+          )}
           {(user.email || user.username) && (
             <ProfileInfoRow
               icon={Mail}
@@ -744,6 +757,14 @@ export default function ProfilePage() {
             />
 
             <div className="form-grid-2">
+              <FormField id="birthDate" label="Дата рождения">
+                <FormInput
+                  id="birthDate"
+                  type="date"
+                  value={birthDate}
+                  onChange={(e) => setBirthDate(e.target.value)}
+                />
+              </FormField>
               <FormField id="phone" label="Телефон">
                 <FormInput
                   id="phone"
@@ -1009,6 +1030,14 @@ export default function ProfilePage() {
                       value={employeePhone}
                       onChange={(e) => setEmployeePhone(e.target.value)}
                       placeholder={ph.phone}
+                    />
+                  </FormField>
+                  <FormField id="employeeBirthDate" label="Дата рождения">
+                    <FormInput
+                      id="employeeBirthDate"
+                      type="date"
+                      value={employeeBirthDate}
+                      onChange={(e) => setEmployeeBirthDate(e.target.value)}
                     />
                   </FormField>
                 </div>

@@ -10,6 +10,7 @@ import {
   requiredResidentFields,
   canonicalPrivateValues,
   normalizeResidentInput,
+  mergeResidentValuesPreservingLegacy,
   validateResidentValues,
 } from './mstyle-v2.private-values';
 import { Injectable } from '@nestjs/common';
@@ -204,16 +205,9 @@ export class MstylePrivateDataService {
             doc.valuesEnc,
           )
         : {};
-      const patch = normalizeResidentInput(
+      const merged = mergeResidentValuesPreservingLegacy(
+        current,
         patchInput,
-        profile.type,
-        profile.legalForm,
-      );
-      const merged = validateResidentValues(
-        mergeObjects(
-          normalizeResidentInput(current, profile.type, profile.legalForm),
-          patch,
-        ),
         profile.type,
         profile.legalForm,
       );
@@ -363,11 +357,6 @@ export class MstylePrivateDataService {
         ],
       });
     }
-    const patch = normalizeResidentInput(
-      dto.privateData.data,
-      profile.type,
-      profile.legalForm,
-    );
     let doc = await this.privateData.findOne({
       partyType: 'resident_profile',
       partyId: profileId,
@@ -384,11 +373,9 @@ export class MstylePrivateDataService {
           doc.valuesEnc,
         )
       : {};
-    const merged = validateResidentValues(
-      mergeObjects(
-        normalizeResidentInput(current, profile.type, profile.legalForm),
-        patch,
-      ),
+    const merged = mergeResidentValuesPreservingLegacy(
+      current,
+      dto.privateData.data,
       profile.type,
       profile.legalForm,
     );

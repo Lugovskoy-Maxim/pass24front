@@ -115,7 +115,10 @@ export class MstyleDirectoryService {
     private readonly consentService: MstyleConsentService,
   ) {}
 
-  async getContext(subject: string): Promise<MstyleResult> {
+  async getContext(
+    subject: string,
+    personProjection = false,
+  ): Promise<MstyleResult> {
     const identity = await this.requireIdentity(subject);
     const manualTestIdentity = identity.email
       ? findManualTestIdentity('email', identity.email)
@@ -196,11 +199,15 @@ export class MstyleDirectoryService {
             firstName: identity.name?.firstName ?? null,
             middleName: identity.name?.middleName ?? null,
           },
-          birthDate:
-            identity.birthDate ??
-            (manualTestIdentity?.role === 'employee'
-              ? (manualTestIdentity.birthDate ?? null)
-              : null),
+          ...(personProjection
+            ? {
+                birthDate:
+                  identity.birthDate ??
+                  (manualTestIdentity?.role === 'employee'
+                    ? (manualTestIdentity.birthDate ?? null)
+                    : null),
+              }
+            : {}),
           contactMasks: identityContactMasks,
         },
         profiles,
@@ -221,9 +228,12 @@ export class MstyleDirectoryService {
     );
   }
 
-  async getIdentity(subject: string): Promise<MstyleResult> {
+  async getIdentity(
+    subject: string,
+    personProjection = false,
+  ): Promise<MstyleResult> {
     const identity = await this.requireIdentity(subject);
-    const dto = await this.identityWithMasks(identity);
+    const dto = await this.identityWithMasks(identity, personProjection);
     return new MstyleResult(schema({ identity: dto }), 200, {
       ETag: etag('identity', identity.revision),
     });
@@ -233,6 +243,7 @@ export class MstyleDirectoryService {
     subject: string,
     dto: PatchIdentityDto,
     ifMatch?: string,
+    personProjection = false,
   ): Promise<MstyleResult> {
     const identity = await this.requireIdentity(subject);
     this.assertMatch(ifMatch, 'identity', identity.revision);
@@ -266,7 +277,7 @@ export class MstyleDirectoryService {
     ];
     return new MstyleResult(
       schema({
-        identity: await this.identityWithMasks(identity),
+        identity: await this.identityWithMasks(identity, personProjection),
         identityRevision: identity.revision,
         contextRevision: identity.contextRevision,
         eventIds,
@@ -276,18 +287,26 @@ export class MstyleDirectoryService {
     );
   }
 
-  async getProfile(profileId: string): Promise<MstyleResult> {
+  async getProfile(
+    profileId: string,
+    personProjection = false,
+  ): Promise<MstyleResult> {
     const profile = await this.requireProfile(profileId);
     const resourceOwner = await this.resolveResourceOwnerProfile(profile);
-    return new MstyleResult(schema(safeProfile(profile, resourceOwner)), 200, {
-      ETag: etag('profile', profile.revision),
-    });
+    return new MstyleResult(
+      schema(safeProfile(profile, resourceOwner, personProjection)),
+      200,
+      {
+        ETag: etag('profile', profile.revision),
+      },
+    );
   }
 
   async patchProfile(
     profileId: string,
     dto: PatchProfileDto,
     ifMatch?: string,
+    personProjection = false,
   ): Promise<MstyleResult> {
     const profile = await this.requireProfile(profileId);
     this.assertMatch(ifMatch, 'profile', profile.revision);
@@ -373,7 +392,7 @@ export class MstyleDirectoryService {
     }
     return new MstyleResult(
       schema({
-        ...safeProfile(profile, resourceOwner),
+        ...safeProfile(profile, resourceOwner, personProjection),
         contextRevision,
         eventIds,
       }),
@@ -1865,6 +1884,11 @@ export class MstyleDirectoryService {
       .sort({ revision: -1 });
     if ((latest?.revision ?? 0) !== challenge.baseContactValueRevision)
       problem(412, 'PRECONDITION_FAILED');
+    await this.identities.syncNativeContactFromIdentityVerification(
+      identity,
+      type,
+      value,
+    );
     const contact = await this.identities.syncContact(subject, type, value);
     if (!contact) problem(422, 'VALIDATION_FAILED');
     contact.verifiedAt = nowIso();
@@ -2329,8 +2353,11 @@ export class MstyleDirectoryService {
     return identity?.contextRevision || 0;
   }
 
-  private async identityWithMasks(identity: MstyleIdentityDocument) {
-    const dto = safeIdentity(identity);
+  private async identityWithMasks(
+    identity: MstyleIdentityDocument,
+    personProjection = false,
+  ) {
+    const dto = safeIdentity(identity, personProjection);
     dto.contactMasks = await this.contactMasks(identity.subject);
     return dto;
   }
