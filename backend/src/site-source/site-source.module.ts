@@ -1,3 +1,4 @@
+import { MstyleV2Module } from '../integrations/mstyle-v2/mstyle-v2.module';
 import { Module } from '@nestjs/common';
 import { MongooseModule } from '@nestjs/mongoose';
 import { AuthModule } from '../auth/auth.module';
@@ -15,6 +16,7 @@ import { ServiceRequestsController } from './service-requests.controller';
 @Module({
   imports: [
     AuthModule,
+    MstyleV2Module,
     MongooseModule.forFeature([
       { name: AppSettings.name, schema: AppSettingsSchema },
       { name: Office.name, schema: OfficeSchema },

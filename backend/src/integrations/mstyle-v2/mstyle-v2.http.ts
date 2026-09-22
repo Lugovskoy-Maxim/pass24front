@@ -127,7 +127,11 @@ export class MstyleServiceTokenGuard implements CanActivate {
         problem(401, 'INVALID_SERVICE_TOKEN');
       if (!guestId || guestId !== guest.guestPartyId)
         problem(403, 'INSUFFICIENT_SCOPE');
-      if (method !== 'GET' && !guestWriteAllowed(guest.status))
+      if (
+        method !== 'GET' &&
+        !guestWriteAllowed(guest.status) &&
+        !(guest.status === 'booked' && /\/operations$/.test(path))
+      )
         problem(409, 'CONFLICT');
       const scope = ROUTE_SCOPES.find(
         (rule) => rule.method === method && rule.match.test(path),
@@ -488,6 +492,8 @@ function m1m2ContextPolicy(
   path: string,
   actor: string,
 ): ContextPolicy | null {
+  if (method === 'POST' && /\/operations\/resident$/.test(path))
+    return { actor: 'resident', purposes: ['operations'] };
   if (
     method === 'PATCH' &&
     /\/resident-profiles\/[^/]+$/.test(path) &&

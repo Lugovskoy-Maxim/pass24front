@@ -5,11 +5,12 @@ WORKDIR /app
 
 # Install dependencies
 COPY package*.json ./
+ENV MONGOMS_DISABLE_POSTINSTALL=1
 RUN npm ci
 
 # Copy source and build
 COPY . .
-RUN npm run build
+RUN npm run build && npm prune --omit=dev
 
 # Production image
 FROM node:20-alpine
@@ -20,6 +21,7 @@ WORKDIR /app
 COPY --from=builder /app/package*.json ./
 COPY --from=builder /app/node_modules ./node_modules
 COPY --from=builder /app/dist ./dist
+COPY --from=builder /app/scripts ./scripts
 
 # Expose port
 EXPOSE 4000

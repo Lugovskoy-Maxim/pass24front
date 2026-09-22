@@ -1010,183 +1010,17 @@ export class SiteSourceService implements OnModuleInit, OnModuleDestroy {
     actor: ServiceRequestActor,
     input: CreateServiceRequestInput,
   ) {
-    const cfg = await this.getPublicConfig();
-    if (!cfg.writeEnabled) {
-      throw new BadRequestException(
-        'Создание заявок выключено в настройках MySQL.',
-      );
-    }
-
-    const conn = await this.connect();
-    try {
-      const tables = await this.listTables(conn);
-      const prefix = await this.resolvePrefix(conn, tables);
-      const mapping = await this.currentMapping();
-      const table = tableName(prefix, mapping.serviceRequestsTable);
-      if (!tables.includes(table)) {
-        throw new BadRequestException(`Таблица ${table} не найдена`);
-      }
-
-      const columns = await this.tableColumns(conn, table);
-      const titleColumn = firstColumn(columns, [
-        'title',
-        'subject',
-        'name',
-        'request_title',
-      ]);
-      const emailColumn = firstColumn(columns, [
-        'requester_email',
-        'user_email',
-        'author_email',
-        'email',
-      ]);
-      const ownerColumn = firstColumn(columns, [
-        'tenant_external_id',
-        'owner_external_id',
-        'pass_user_id',
-        'requester_external_id',
-      ]);
-      if (!titleColumn) {
-        throw new BadRequestException(
-          `В ${table} не найдена колонка заголовка заявки`,
-        );
-      }
-      if (!emailColumn && !ownerColumn) {
-        throw new BadRequestException(
-          `В ${table} нужна колонка email или внешнего идентификатора владельца`,
-        );
-      }
-
-      const values = new Map<string, unknown>();
-      const put = (column: string | undefined, value: unknown) => {
-        if (column && value != null && String(value).trim() !== '') {
-          values.set(column, value);
-        }
-      };
-      put(titleColumn, input.subject.trim());
-      put(firstColumn(columns, ['status', 'state', 'request_status']), 'new');
-      put(
-        firstColumn(columns, ['topic', 'category', 'type', 'request_type']),
-        input.topic,
-      );
-      put(
-        firstColumn(columns, [
-          'description',
-          'body',
-          'content',
-          'message',
-          'text',
-        ]),
-        input.body.trim(),
-      );
-      put(
-        firstColumn(columns, [
-          'office',
-          'room',
-          'room_number',
-          'office_number',
-        ]),
-        input.office?.trim(),
-      );
-      put(emailColumn, actor.email?.trim().toLowerCase());
-      put(ownerColumn, actor.parentTenantId || actor.userId);
-      put(
-        firstColumn(columns, [
-          'requester',
-          'requester_name',
-          'author_name',
-          'user_name',
-        ]),
-        actor.fullName,
-      );
-      put(
-        firstColumn(columns, ['company', 'company_name', 'organization']),
-        actor.company,
-      );
-      put(
-        firstColumn(columns, ['created_at', 'created', 'date', 'post_date']),
-        new Date(),
-      );
-
-      const insertColumns = [...values.keys()];
-      const [insertResult] = await conn.query(
-        `INSERT INTO ${ident(table)} (${insertColumns.map(ident).join(', ')}) VALUES (${insertColumns
-          .map(() => '?')
-          .join(', ')})`,
-        insertColumns.map((column) => values.get(column)),
-      );
-      const ticketId = String((insertResult as mysql.ResultSetHeader).insertId);
-
-      const messagesTable = tableName(
-        prefix,
-        mapping.serviceRequestMessagesTable,
-      );
-      if (tables.includes(messagesTable)) {
-        await this.addTicketMessage(ticketId, input.body, actor);
-      }
-
-      return {
-        stored: true,
-        message: 'Заявка создана',
-        ticket: {
-          id: ticketId,
-          status: 'new',
-          title: input.subject.trim(),
-          topic: input.topic,
-          office: input.office || '',
-          created: new Date().toISOString(),
-          requester: actor.fullName || '',
-          company: actor.company || '',
-          raw: Object.fromEntries(values),
-        },
-      };
-    } finally {
-      await conn.end();
-    }
+    void [actor, input];
+    throw new BadRequestException(
+      'Обращения перенесены в /api/admin/service-requests. Запись в MySQL прекращена.',
+    );
   }
 
   async updateTicketStatus(id: string, status: string) {
-    const cfg = await this.getPublicConfig();
-    if (!cfg.writeEnabled) {
-      throw new BadRequestException('Запись в MySQL выключена.');
-    }
-
-    const conn = await this.connect();
-    try {
-      const tables = await this.listTables(conn);
-      const prefix = await this.resolvePrefix(conn, tables);
-      const mapping = await this.currentMapping();
-      const table = tableName(prefix, mapping.serviceRequestsTable);
-      if (!tables.includes(table)) {
-        throw new BadRequestException(`Таблица ${table} не найдена`);
-      }
-      const columns = await this.tableColumns(conn, table);
-      const idColumn = firstColumn(columns, ['id', 'ID', 'request_id']);
-      const statusColumn = firstColumn(columns, [
-        'status',
-        'state',
-        'request_status',
-      ]);
-      if (!idColumn || !statusColumn) {
-        throw new BadRequestException(
-          `В ${table} не найдены колонки id/status`,
-        );
-      }
-      const [result] = await conn.query(
-        `UPDATE ${ident(table)} SET ${ident(statusColumn)} = ? WHERE ${ident(idColumn)} = ? LIMIT 1`,
-        [status, id],
-      );
-      if ((result as mysql.ResultSetHeader).affectedRows === 0) {
-        throw new NotFoundException('Заявка не найдена');
-      }
-      return {
-        stored: true,
-        message: 'Статус заявки изменён',
-        ticket: { id, status, raw: { [idColumn]: id, [statusColumn]: status } },
-      };
-    } finally {
-      await conn.end();
-    }
+    void [id, status];
+    throw new BadRequestException(
+      'Обращения перенесены в /api/admin/service-requests. Запись в MySQL прекращена.',
+    );
   }
 
   async getTicket(id: string) {
@@ -1240,86 +1074,10 @@ export class SiteSourceService implements OnModuleInit, OnModuleDestroy {
     body: string,
     actor?: ServiceRequestActor,
   ) {
-    const cfg = await this.getPublicConfig();
-    if (!cfg.writeEnabled) {
-      throw new BadRequestException(
-        'Запись в MySQL выключена. Включите writeEnabled.',
-      );
-    }
-    const conn = await this.connect();
-    try {
-      const tables = await this.listTables(conn);
-      const prefix = await this.resolvePrefix(conn, tables);
-      const mapping = await this.currentMapping();
-      const messagesTable = tableName(
-        prefix,
-        mapping.serviceRequestMessagesTable,
-      );
-      if (!tables.includes(messagesTable)) {
-        return {
-          stub: true,
-          stored: false,
-          note: `Нет ${messagesTable}. Сообщение не записано.`,
-          draft: { ticketId: id, body, at: new Date().toISOString() },
-        };
-      }
-      const cols = await this.tableColumns(conn, messagesTable);
-      const fk = [
-        'request_id',
-        'service_request_id',
-        'ticket_id',
-        'parent_id',
-      ].find((name) => cols.includes(name));
-      const textCol = ['message', 'body', 'content', 'text', 'comment'].find(
-        (name) => cols.includes(name),
-      );
-      if (!fk || !textCol) {
-        return {
-          stub: true,
-          stored: false,
-          note: `Не нашёл колонки связи/текста в ${messagesTable}: ${cols.join(', ')}`,
-          draft: { ticketId: id, body },
-        };
-      }
-      const extra: string[] = [];
-      const extraVals: unknown[] = [];
-      if (cols.includes('created_at')) {
-        extra.push('created_at');
-        extraVals.push(new Date());
-      } else if (cols.includes('date')) {
-        extra.push('date');
-        extraVals.push(new Date());
-      }
-      const authorColumn = firstColumn(cols, [
-        'author_name',
-        'sender_name',
-        'user_name',
-        'author',
-      ]);
-      if (authorColumn && actor?.fullName && !extra.includes(authorColumn)) {
-        extra.push(authorColumn);
-        extraVals.push(actor.fullName);
-      }
-      const emailColumn = firstColumn(cols, [
-        'author_email',
-        'sender_email',
-        'user_email',
-        'email',
-      ]);
-      if (emailColumn && actor?.email && !extra.includes(emailColumn)) {
-        extra.push(emailColumn);
-        extraVals.push(actor.email);
-      }
-      await conn.query(
-        `INSERT INTO ${ident(messagesTable)} (${ident(fk)}, ${ident(textCol)}${
-          extra.length ? `, ${extra.map(ident).join(', ')}` : ''
-        }) VALUES (?, ?${extra.map(() => ', ?').join('')})`,
-        [id, body, ...extraVals],
-      );
-      return { stub: false, stored: true, ticketId: id };
-    } finally {
-      await conn.end();
-    }
+    void [id, body, actor];
+    throw new BadRequestException(
+      'Обращения перенесены в /api/admin/service-requests. Запись в MySQL прекращена.',
+    );
   }
 
   private async resolveOfficeSource(

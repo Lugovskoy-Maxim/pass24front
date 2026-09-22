@@ -72,6 +72,26 @@ export const ALL_PERMISSIONS = [
     label: 'Права и типы пропусков',
     group: 'Администрирование',
   },
+  {
+    key: 'bookings.manage',
+    label: 'Управление бронированиями',
+    group: 'Заявки и обращения',
+  },
+  {
+    key: 'bookings.finance',
+    label: 'Оплаты и счета',
+    group: 'Заявки и обращения',
+  },
+  {
+    key: 'resident_hours.adjust',
+    label: 'Корректировка резидентских часов',
+    group: 'Заявки и обращения',
+  },
+  {
+    key: 'support.manage',
+    label: 'Обращения в сервисную службу',
+    group: 'Заявки и обращения',
+  },
 ] as const;
 
 export const DEFAULT_ROLE_PERMISSIONS: Record<string, string[]> = {
@@ -89,6 +109,10 @@ export const DEFAULT_ROLE_PERMISSIONS: Record<string, string[]> = {
     'passes.lookup',
   ],
   bc_admin: [
+    'bookings.manage',
+    'bookings.finance',
+    'resident_hours.adjust',
+    'support.manage',
     'passes.view_all',
     'passes.approve',
     'passes.reception',

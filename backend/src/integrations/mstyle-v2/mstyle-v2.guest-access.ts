@@ -5,6 +5,7 @@ export function guestFlowRoute(
 ): string | undefined {
   const match = path.match(/\/guest-parties\/([^/]+)\/(.+)$/);
   if (!match) return undefined;
+  if (method === 'POST' && match[2] === 'operations') return match[1];
   const route = match[2];
   const allowed =
     (method === 'GET' &&

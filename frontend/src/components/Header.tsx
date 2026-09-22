@@ -31,6 +31,7 @@ import {
 import { getUiLabels } from '@/lib/ui-labels';
 import { useOverdueGuests } from '@/hooks/useOverdueGuests';
 import { OverdueGuestsAlert } from '@/components/OverdueGuestsAlert';
+import { WorkQueueIndicator } from '@/components/WorkQueueIndicator';
 import { ThemeToggle } from '@/components/ThemeToggle';
 import { useTheme } from '@/components/ThemeProvider';
 
@@ -164,6 +165,7 @@ export function Header() {
                 : user.office && ` · оф. ${user.office}`}
             </div>
           </div>
+          <WorkQueueIndicator />
           <ThemeToggle compact />
           <button
             onClick={logout}

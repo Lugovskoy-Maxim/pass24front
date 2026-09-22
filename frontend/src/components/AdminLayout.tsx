@@ -9,6 +9,8 @@ import Link from 'next/link';
 import { usePathname } from 'next/navigation';
 import {
   LayoutDashboard,
+  CalendarDays,
+  MessagesSquare,
   Users,
   ScrollText,
   ArrowLeft,
@@ -26,9 +28,22 @@ import { ProtectedLayout } from './ProtectedLayout';
 import { useAuth } from '@/lib/auth';
 import { getHomePath, hasPermission } from '@/lib/permissions';
 import { api } from '@/lib/api';
+import { useWorkQueue } from '@/hooks/useWorkQueue';
 import { useAutoRefresh } from '@/hooks/useAutoRefresh';
 
 const NAV = [
+  {
+    href: '/admin/booking-requests',
+    label: 'Заявки',
+    icon: CalendarDays,
+    permission: 'bookings.manage',
+  },
+  {
+    href: '/admin/service-requests',
+    label: 'Обращения в сервисную службу',
+    icon: MessagesSquare,
+    permission: 'support.manage',
+  },
   { href: '/admin', label: 'Обзор', icon: LayoutDashboard, exact: true },
   {
     href: '/admin/users',
@@ -86,6 +101,7 @@ export function AdminLayout({
 }) {
   const pathname = usePathname();
   const { user } = useAuth();
+  const { counts } = useWorkQueue();
   const [registrationPending, setRegistrationPending] = useState(0);
   const [compactNav, setCompactNav] = useState(true);
 
@@ -136,7 +152,17 @@ export function AdminLayout({
   );
 
   return (
-    <ProtectedLayout permissions={['admin.panel']} wide>
+    <ProtectedLayout
+      permissions={[
+        'admin.panel',
+        ...(pathname.startsWith('/admin/booking-requests')
+          ? ['bookings.manage']
+          : pathname.startsWith('/admin/service-requests')
+            ? ['support.manage']
+            : []),
+      ]}
+      wide
+    >
       <div
         className={`flex flex-col lg:flex-row ${compactNav ? 'gap-4' : 'gap-6'}`}
       >
@@ -165,13 +191,20 @@ export function AdminLayout({
                   ? pathname === href
                   : pathname.startsWith(href) ||
                     (also || []).some((path) => pathname.startsWith(path));
-                const showBadge =
-                  href === '/admin/users' && registrationPending > 0;
+                const badge =
+                  href === '/admin/users'
+                    ? registrationPending
+                    : href === '/admin/booking-requests'
+                      ? counts?.bookings || 0
+                      : href === '/admin/service-requests'
+                        ? counts?.support || 0
+                        : 0;
+                const showBadge = badge > 0;
                 return (
                   <Link
                     key={href}
                     href={
-                      showBadge
+                      showBadge && href === '/admin/users'
                         ? '/admin/users?category=tenants&highlight=registration'
                         : href
                     }
@@ -182,20 +215,20 @@ export function AdminLayout({
                   >
                     <Icon className="w-4 h-4 shrink-0" />
                     <span
-                      className={`whitespace-nowrap ${compactNav ? 'lg:sr-only' : 'lg:flex-1'}`}
+                      className={`whitespace-nowrap ${compactNav ? 'lg:sr-only' : 'lg:flex-1 lg:whitespace-normal lg:min-w-0'}`}
                     >
                       {label}
                     </span>
                     {showBadge && (
                       <span
-                        className={`inline-flex items-center justify-center min-w-[1.25rem] h-5 px-1.5 rounded-[var(--radius-sm)] text-[10px] font-bold text-[var(--on-accent)] bg-[var(--danger)] ${
+                        className={`inline-flex shrink-0 items-center justify-center min-w-[1.25rem] h-5 px-1.5 rounded-[var(--radius-sm)] text-[10px] font-bold text-[var(--on-accent)] bg-[var(--danger)] ${
                           compactNav
                             ? 'lg:absolute lg:-right-1 lg:-top-1 lg:min-w-4 lg:h-4 lg:px-1 lg:text-[9px]'
                             : ''
                         }`}
-                        title={`Заявок на регистрацию: ${registrationPending}`}
+                        title={`${label}: ${badge}`}
                       >
-                        {registrationPending > 99 ? '99+' : registrationPending}
+                        {badge > 99 ? '99+' : badge}
                       </span>
                     )}
                     {compactNav && (

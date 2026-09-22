@@ -1,137 +1,186 @@
 import {
   Body,
   Controller,
-  ForbiddenException,
   Get,
+  Headers,
   Param,
   Patch,
   Post,
   Req,
+  UseFilters,
   UseGuards,
 } from '@nestjs/common';
 import { AuthGuard } from '@nestjs/passport';
-import { AuthService } from '../auth/auth.service';
+import { randomUUID } from 'crypto';
+import { OperationsIdentity } from '../operations/operations.identity';
+import { OperationsSupport } from '../operations/operations.support';
+import { OperationsExceptionFilter } from '../operations/operations.controller';
+import {
+  fail,
+  integer,
+  OperationsActor,
+  requirePermission,
+} from '../operations/operations.rules';
 import {
   CreateServiceRequestDto,
   TicketMessageDto,
   UpdateServiceRequestStatusDto,
 } from './site-source.dto';
-import { ServiceRequestActor, SiteSourceService } from './site-source.service';
 
+/** Compatibility shape for the existing Pass client; all writes use Mongo services. */
 @Controller('service-requests')
 @UseGuards(AuthGuard('jwt'))
+@UseFilters(OperationsExceptionFilter)
 export class ServiceRequestsController {
   constructor(
-    private readonly siteSourceService: SiteSourceService,
-    private readonly authService: AuthService,
+    private readonly identity: OperationsIdentity,
+    private readonly support: OperationsSupport,
   ) {}
-
+  private async actor(user: any): Promise<OperationsActor> {
+    if (
+      user.permissions?.includes('support.manage') &&
+      user.permissions?.includes('admin.panel')
+    )
+      return this.identity.nativeActor(user);
+    if (
+      !user.permissions?.some((p: string) =>
+        ['requests.view_own', 'requests.create', 'passes.view_own'].includes(p),
+      )
+    )
+      fail('forbidden', 'Нет доступа.', 403);
+    const person = await this.identity.store
+      .canonical('identities')
+      .findOne({ userId: String(user.userId), identityStatus: 'active' });
+    if (!person) fail('forbidden', 'Профиль пользователя недоступен.', 403);
+    return {
+      kind: 'resident',
+      ref: 'resident:' + person.subject,
+      subject: person.subject,
+      name: person.displayName,
+    };
+  }
+  private ticket(row: any) {
+    return {
+      id: String(row.id),
+      status: row.status,
+      title: row.subject,
+      topic: row.topic_key,
+      created: row.created_at,
+      requester: row.requester_name,
+      raw: { ...row },
+    };
+  }
   @Get()
-  list(@Req() req: any) {
-    const actor = this.actor(req.user);
-    const canManage = this.canManage(req.user);
-    this.assertCanRead(req.user, canManage);
-    return this.siteSourceService.listTicketsForActor(actor, canManage);
+  async list(@Req() req: any) {
+    const result = await this.support.list(await this.actor(req.user), {
+      per_page: 100,
+    });
+    return {
+      stub: false,
+      fields: [],
+      items: result.items.map((row) => this.ticket(row)),
+      total: result.total,
+    };
   }
-
-  @Post()
-  async create(@Req() req: any, @Body() dto: CreateServiceRequestDto) {
-    this.assertTenant(req.user);
-    const profile = await this.authService.getServiceRequestIdentity(
-      String(req.user.userId),
-    );
-    return this.siteSourceService.createTicket(
-      { ...this.actor(req.user), company: profile.company },
-      { ...dto, office: profile.office },
-    );
-  }
-
   @Get(':id')
-  get(@Param('id') id: string, @Req() req: any) {
-    const canManage = this.canManage(req.user);
-    this.assertCanRead(req.user, canManage);
-    return this.siteSourceService.getTicketForActor(
-      id,
-      this.actor(req.user),
-      canManage,
+  async get(@Param('id') id: string, @Req() req: any) {
+    const result = await this.support.detail(
+      await this.actor(req.user),
+      integer(id, 'id', 1),
     );
+    return {
+      stub: false,
+      ticket: this.ticket(result.ticket),
+      messages: result.messages.map((row) => ({
+        ...row,
+        body: row.message_text,
+      })),
+    };
   }
-
+  @Post()
+  async create(
+    @Req() req: any,
+    @Body() dto: CreateServiceRequestDto,
+    @Headers('idempotency-key') key: string,
+  ) {
+    const actor = await this.actor(req.user);
+    if (
+      actor.kind !== 'resident' ||
+      !req.user.permissions?.some((p: string) =>
+        ['requests.create', 'passes.view_own'].includes(p),
+      )
+    )
+      fail('forbidden', 'Создание обращений недоступно.', 403);
+    const topic =
+      (
+        {
+          access: 'guest_pass',
+          office: 'services',
+          parking: 'services',
+          engineering: 'plumbing',
+          cleaning: 'services',
+          security: 'services',
+          other: 'services',
+        } as Record<string, string>
+      )[dto.topic] || dto.topic;
+    const result = await this.support.create(
+      actor,
+      { topic_key: topic, subject: dto.subject, message_text: dto.body },
+      key || randomUUID(),
+    );
+    return {
+      stored: true,
+      message: 'Обращение создано',
+      ticket: this.ticket(result.ticket),
+    };
+  }
   @Post(':id/messages')
-  async addMessage(
+  async reply(
+    @Req() req: any,
     @Param('id') id: string,
     @Body() dto: TicketMessageDto,
-    @Req() req: any,
+    @Headers('idempotency-key') key: string,
   ) {
-    const canManage = this.canManage(req.user);
-    this.assertCanRead(req.user, canManage);
-    await this.siteSourceService.getTicketForActor(
-      id,
-      this.actor(req.user),
-      canManage,
+    const result = await this.support.reply(
+      await this.actor(req.user),
+      integer(id, 'id', 1),
+      { message_text: dto.body },
+      key || randomUUID(),
     );
-    return this.siteSourceService.addTicketMessage(
-      id,
-      dto.body,
-      this.actor(req.user),
-    );
+    return {
+      stored: true,
+      message: 'Ответ отправлен',
+      ticket: this.ticket(result.ticket),
+    };
   }
-
   @Patch(':id/status')
-  updateStatus(
+  async status(
+    @Req() req: any,
     @Param('id') id: string,
     @Body() dto: UpdateServiceRequestStatusDto,
-    @Req() req: any,
+    @Headers('idempotency-key') key: string,
   ) {
-    if (!this.canManage(req.user)) {
-      throw new ForbiddenException(
-        'Статус заявки может менять только администратор',
-      );
-    }
-    return this.siteSourceService.updateTicketStatus(id, dto.status);
-  }
-
-  private canManage(user: any): boolean {
-    return Boolean(
-      ['bc_admin', 'admin'].includes(String(user?.role || '')) &&
-      (user?.permissions?.includes('requests.manage') ||
-        user?.permissions?.includes('admin.settings')),
+    const actor = await this.actor(req.user);
+    requirePermission(actor, 'support.manage');
+    const detail = await this.support.detail(actor, integer(id, 'id', 1));
+    const status =
+      (
+        {
+          resolved: 'completed',
+          closed: 'completed',
+          open: 'in_progress',
+        } as Record<string, string>
+      )[dto.status] || dto.status;
+    const result = await this.support.status(
+      actor,
+      integer(id, 'id', 1),
+      { status, revision: detail.ticket.revision },
+      key || randomUUID(),
     );
-  }
-
-  private isTenant(user: any): boolean {
-    return Boolean(user?.role === 'tenant' || user?.parentTenantId);
-  }
-
-  private assertTenant(user: any) {
-    if (
-      !this.isTenant(user) ||
-      (!user?.permissions?.includes('requests.create') &&
-        !user?.permissions?.includes('passes.view_own'))
-    ) {
-      throw new ForbiddenException('Создание заявок недоступно');
-    }
-  }
-
-  private assertCanRead(user: any, canManage: boolean) {
-    if (
-      !canManage &&
-      (!this.isTenant(user) ||
-        (!user?.permissions?.includes('requests.view_own') &&
-          !user?.permissions?.includes('passes.view_own')))
-    ) {
-      throw new ForbiddenException('Просмотр заявок недоступен');
-    }
-  }
-
-  private actor(user: any): ServiceRequestActor {
     return {
-      userId: String(user.userId),
-      parentTenantId: user.parentTenantId,
-      email: user.email,
-      fullName: user.fullName,
-      company: user.company,
-      role: user.role,
+      stored: true,
+      message: 'Статус изменён',
+      ticket: this.ticket(result.ticket),
     };
   }
 }

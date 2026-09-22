@@ -52,6 +52,9 @@ export class AccessConfig {
   })
   rolePermissions: Record<string, string[]>;
 
+  @Prop({ default: 0 })
+  operationsPermissionsVersion: number;
+
   @Prop({ type: Object, default: {} })
   roleLabels: Record<string, string>;
 }

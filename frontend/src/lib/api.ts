@@ -248,7 +248,7 @@ export interface Pass {
   updatedAt: string;
 }
 
-function getToken(): string | null {
+export function getToken(): string | null {
   if (typeof window === 'undefined') return null;
   return localStorage.getItem('pass24_token');
 }
@@ -270,7 +270,10 @@ function parseContentDispositionFilename(
   return plainMatch?.[1]?.trim() || fallback;
 }
 
-async function downloadFileResponse(res: Response, fallbackName: string) {
+export async function downloadFileResponse(
+  res: Response,
+  fallbackName: string,
+) {
   if (!res.ok) {
     await throwForResponse(res);
   }
@@ -298,7 +301,10 @@ async function downloadFileResponse(res: Response, fallbackName: string) {
   }, 1000);
 }
 
-async function request<T>(path: string, options: RequestInit = {}): Promise<T> {
+export async function request<T>(
+  path: string,
+  options: RequestInit = {},
+): Promise<T> {
   const token = getToken();
   const headers: Record<string, string> = {
     'Content-Type': 'application/json',

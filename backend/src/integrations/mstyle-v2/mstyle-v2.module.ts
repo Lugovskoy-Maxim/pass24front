@@ -1,6 +1,17 @@
 import { MstyleConsentService } from './mstyle-v2.consent.service';
 import { MstyleNativeConsoleProof } from './mstyle-v2.native-console';
 import { Module } from '@nestjs/common';
+import { OperationsStore } from '../../operations/operations.store';
+import { OperationsIdentity } from '../../operations/operations.identity';
+import { OperationsSupport } from '../../operations/operations.support';
+import { OperationsHours } from '../../operations/operations.hours';
+import { OperationsCatalog } from '../../operations/operations.catalog';
+import { OperationsBookings } from '../../operations/operations.bookings';
+import { OperationsPayments } from '../../operations/operations.payments';
+import {
+  OperationsAdminController,
+  OperationsPrivateController,
+} from '../../operations/operations.controller';
 import { ConfigService } from '@nestjs/config';
 import { createMstyleSmsService, MSTYLE_SMS_SERVICE } from './mstyle-v2.sms';
 import { MongooseModule } from '@nestjs/mongoose';
@@ -43,14 +54,29 @@ import { MstyleManualTestingService } from './mstyle-v2.manual-testing.service';
     SmsModule,
   ],
   exports: [
+    OperationsStore,
+    OperationsIdentity,
+    OperationsSupport,
     MstyleIdentityService,
     MstylePrivateDataService,
     MstyleOauthService,
     MstyleV2Config,
     MstyleManualTestingService,
   ],
-  controllers: [MstyleOauthController, MstylePrivateController],
+  controllers: [
+    MstyleOauthController,
+    MstylePrivateController,
+    OperationsAdminController,
+    OperationsPrivateController,
+  ],
   providers: [
+    OperationsStore,
+    OperationsIdentity,
+    OperationsSupport,
+    OperationsHours,
+    OperationsCatalog,
+    OperationsBookings,
+    OperationsPayments,
     MstyleConsentService,
     MstyleNativeConsoleProof,
     {

@@ -232,6 +232,9 @@ export function expandMstyleScopes(scopes: readonly string[]): string[] {
 }
 
 export const DEFAULT_DATA_SCOPES = expandMstyleScopes([
+  'mstyle.operations.resident',
+  'mstyle.operations.public',
+  'mstyle.operations.system',
   ...MSTYLE_REQUIRED_M0_SCOPES,
   ...MSTYLE_REQUIRED_M1_M2_SCOPES,
   ...LEGACY_DATA_SCOPES,
@@ -244,6 +247,26 @@ export const ROUTE_SCOPES: Array<{
   scope: string;
   alternatives?: readonly string[];
 }> = [
+  {
+    method: 'POST',
+    match: /\/operations\/resident$/,
+    scope: 'mstyle.operations.resident',
+  },
+  {
+    method: 'POST',
+    match: /\/operations\/public$/,
+    scope: 'mstyle.operations.public',
+  },
+  {
+    method: 'POST',
+    match: /\/operations\/system$/,
+    scope: 'mstyle.operations.system',
+  },
+  {
+    method: 'POST',
+    match: /\/guest-parties\/[^/]+\/operations$/,
+    scope: 'mstyle.guest.booking.create',
+  },
   {
     method: 'POST',
     match: /\/auth\/residents\/password(?::verify|-verify)$/,

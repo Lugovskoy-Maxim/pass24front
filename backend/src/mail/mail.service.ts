@@ -47,6 +47,32 @@ export class MailService {
     return !!this.transporter;
   }
 
+  async sendBookingInvoice(data: {
+    to: string;
+    number: string;
+    filename: string;
+    content: Buffer;
+    messageId: string;
+  }) {
+    return this.sendMail({
+      to: data.to,
+      subject: 'Счёт за бронирование ' + data.number,
+      text:
+        'Здравствуйте! Во вложении счёт за бронирование ' + data.number + '.',
+      messageId:
+        '<' +
+        Buffer.from(data.messageId).toString('hex').slice(0, 160) +
+        '@pass.mstyle.ru>',
+      attachments: [
+        {
+          filename: data.filename,
+          content: data.content,
+          contentType: 'application/pdf',
+        },
+      ],
+    });
+  }
+
   async sendPassTicket(data: PassTicketEmailData) {
     if (!this.transporter) {
       throw new BadRequestException(

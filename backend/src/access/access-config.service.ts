@@ -1,6 +1,7 @@
 import { BadRequestException, Injectable, OnModuleInit } from '@nestjs/common';
 import { InjectModel } from '@nestjs/mongoose';
 import { Model } from 'mongoose';
+import { OPERATION_PERMISSIONS } from '../operations/operations.rules';
 import {
   AccessConfig,
   AccessConfigDocument,
@@ -42,6 +43,7 @@ export class AccessConfigService implements OnModuleInit {
     if (!existing) {
       await this.accessConfigModel.create({
         key: 'default',
+        operationsPermissionsVersion: 1,
         enabledPassTypes: [...ALL_PASS_TYPES],
         rolePermissions: {
           ...DEFAULT_ROLE_PERMISSIONS,
@@ -53,6 +55,19 @@ export class AccessConfigService implements OnModuleInit {
     }
 
     let changed = false;
+    if ((existing.operationsPermissionsVersion || 0) < 1) {
+      for (const role of ['admin', 'bc_admin']) {
+        existing.rolePermissions[role] = [
+          ...new Set([
+            ...(existing.rolePermissions[role] ||
+              DEFAULT_ROLE_PERMISSIONS[role]),
+            ...OPERATION_PERMISSIONS,
+          ]),
+        ];
+      }
+      existing.operationsPermissionsVersion = 1;
+      changed = true;
+    }
     const validKeys = new Set<string>(ALL_PERMISSIONS.map((p) => p.key));
 
     if (!existing.roleLabels) {
@@ -86,7 +101,9 @@ export class AccessConfigService implements OnModuleInit {
         DEFAULT_EMPLOYEE_ROLE_PERMISSIONS[role] ||
         [];
 
-      for (const perm of defaults) {
+      for (const perm of defaults.filter(
+        (p) => !OPERATION_PERMISSIONS.includes(p as any),
+      )) {
         if (!sanitized.includes(perm)) {
           sanitized.push(perm);
           changed = true;
@@ -184,7 +201,9 @@ export class AccessConfigService implements OnModuleInit {
             'passes.view_all',
             'passes.reception',
             'passes.lookup',
-            ...defaults,
+            ...defaults.filter(
+              (p) => !OPERATION_PERMISSIONS.includes(p as any),
+            ),
           ]) {
             if (!current.includes(perm)) current.push(perm);
           }
