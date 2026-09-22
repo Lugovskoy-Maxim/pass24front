@@ -24,9 +24,9 @@ import {
   Download,
   Upload,
   AlertTriangle,
+  ArrowLeft,
 } from 'lucide-react';
 import { AdminLayout } from '@/components/AdminLayout';
-import { AdminModal } from '@/components/AdminModal';
 import { useToast } from '@/components/Toast';
 import { useDebounce } from '@/hooks/useDebounce';
 import {
@@ -712,8 +712,12 @@ export default function AdminOfficesPage() {
     </div>
   );
 
+  const officeFormOpen = showForm || !!editingId;
+  const officeFormTitle = editingId ? 'Редактирование офиса' : 'Новый офис';
+
   return (
-    <AdminLayout title="Реестр офисов">
+    <AdminLayout title={officeFormOpen ? officeFormTitle : 'Реестр офисов'}>
+      <div className={officeFormOpen ? 'hidden' : undefined}>
       <p className="text-[var(--muted)] -mt-4 mb-6">
         Бизнес-центры, офисы и параметры пропускного режима для каждого БЦ.
         Привязка арендатора к офису — только администратором.
@@ -1525,12 +1529,19 @@ export default function AdminOfficesPage() {
           </div>
         </div>
       )}
+      </div>
 
-      <AdminModal
-        open={showForm || !!editingId}
-        title={editingId ? 'Редактирование офиса' : 'Новый офис'}
-        onClose={resetForm}
-      >
+      {officeFormOpen && (
+        <section className="space-y-4">
+          <button
+            type="button"
+            className="btn btn-secondary text-sm"
+            onClick={resetForm}
+          >
+            <ArrowLeft className="w-4 h-4" />
+            Назад к офисам
+          </button>
+          <div className="card p-4 sm:p-5">
         <form
           onSubmit={
             editingId
@@ -1632,8 +1643,11 @@ export default function AdminOfficesPage() {
             </button>
           </div>
         </form>
-      </AdminModal>
+          </div>
+        </section>
+      )}
 
+      <div className={officeFormOpen ? 'hidden' : undefined}>
       {loading ? (
         <div className="animate-pulse text-[var(--muted)]">Загрузка...</div>
       ) : offices.length === 0 ? (
@@ -1993,6 +2007,7 @@ export default function AdminOfficesPage() {
           <OfficeSiteStatusNote />
         </div>
       )}
+      </div>
     </AdminLayout>
   );
 }

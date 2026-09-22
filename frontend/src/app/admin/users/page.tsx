@@ -24,9 +24,9 @@ import {
   ChevronDown,
   ChevronRight,
   User,
+  ArrowLeft,
 } from 'lucide-react';
 import { AdminLayout } from '@/components/AdminLayout';
-import { AdminModal } from '@/components/AdminModal';
 import {
   api,
   AdminMstyleProfileState,
@@ -99,7 +99,8 @@ const EMPTY_MSTYLE_PROFILE: AdminMstyleProfileState = {
   secondaryUserIds: [],
   privateData: {},
   privateDataRevision: 0,
-  editPolicy: 'initial',
+  // самостоятельное редактирование - офф.
+  editPolicy: 'request_only',
 };
 
 const MAX_COMPANY_LOGO_BYTES = 80 * 1024;
@@ -821,7 +822,7 @@ function AdminUsersPageContent() {
                 privateDataRevision: mstyleProfile.privateDataRevision,
               }
             : {}),
-          ...(mstyleEditPolicyDirty
+          ...(!editId || mstyleEditPolicyDirty
             ? {
                 selfServiceEnabled: mstyleProfile.editPolicy === 'self_service',
               }
@@ -838,8 +839,17 @@ function AdminUsersPageContent() {
     }
   };
 
+  const formTitle = editId
+    ? users
+        .flatMap((x) => x.employees || [])
+        .some((employee) => employee.id === editId)
+      ? 'Редактирование сотрудника компании'
+      : 'Редактирование пользователя'
+    : 'Новый пользователь';
+
   return (
-    <AdminLayout title="Пользователи">
+    <AdminLayout title={showForm ? formTitle : 'Пользователи'}>
+      <div className={showForm ? 'hidden' : undefined}>
       <p className="text-[var(--muted)] -mt-4 mb-6">
         Учётные записи живут в Pass. Арендаторы и сотрудники компании · охрана и
         админы БЦ
@@ -1145,27 +1155,26 @@ function AdminUsersPageContent() {
           ))}
         </div>
       )}
+      </div>
 
-      <AdminModal
-        open={showForm}
-        wide
-        title={
-          editId
-            ? users
-                .flatMap((x) => x.employees || [])
-                .some((e) => e.id === editId)
-              ? 'Редактирование сотрудника компании'
-              : 'Редактирование пользователя'
-            : 'Новый пользователь'
-        }
-        onClose={() => setShowForm(false)}
-      >
+      {showForm && (
+        <section className="space-y-4">
+          <button
+            type="button"
+            className="btn btn-secondary text-sm"
+            onClick={() => setShowForm(false)}
+          >
+            <ArrowLeft className="w-4 h-4" />
+            Назад к пользователям
+          </button>
+          <div className="card p-4 sm:p-5">
         <form
           id="admin-user-form"
           onSubmit={handleSubmit}
-          className="space-y-4"
+          className="admin-user-form space-y-3"
+          autoComplete="off"
         >
-          <div className="grid sm:grid-cols-2 gap-3">
+          <div className="admin-user-form__grid grid sm:grid-cols-2 lg:grid-cols-3 gap-3">
             <div>
               <label className="label">Email *</label>
               <input
@@ -1174,6 +1183,7 @@ function AdminUsersPageContent() {
                 value={form.email}
                 onChange={(e) => setForm({ ...form, email: e.target.value })}
                 required
+                autoComplete="off"
               />
             </div>
             <div>
@@ -1187,6 +1197,7 @@ function AdminUsersPageContent() {
                 onChange={(e) => setForm({ ...form, password: e.target.value })}
                 required={!editId}
                 minLength={6}
+                autoComplete="new-password"
               />
             </div>
             <div>
@@ -1277,8 +1288,10 @@ function AdminUsersPageContent() {
               <label className="label">Телефон</label>
               <input
                 className="input"
+                type="tel"
                 value={form.phone}
                 onChange={(e) => setForm({ ...form, phone: e.target.value })}
+                autoComplete="off"
               />
             </div>
             <div>
@@ -1371,7 +1384,7 @@ function AdminUsersPageContent() {
                       placeholder="по умолчанию 3"
                     />
                   </div>
-                  {editId && mstyleProfile.exists && (
+                  {editId && (
                     <div className="sm:col-span-2 border border-[var(--border)] rounded-lg bg-[var(--surface-muted)]">
                       <button
                         type="button"
@@ -2120,9 +2133,11 @@ function AdminUsersPageContent() {
             </button>
           </div>
         </form>
-      </AdminModal>
+          </div>
+        </section>
+      )}
 
-      <div className="card overflow-hidden">
+      {!showForm && <div className="card overflow-hidden">
         <div className="overflow-x-auto">
           <table className="admin-users-table w-full text-sm min-w-[760px]">
             <thead className="surface-muted text-[var(--muted)]">
@@ -2455,7 +2470,7 @@ function AdminUsersPageContent() {
             </tbody>
           </table>
         </div>
-      </div>
+      </div>}
     </AdminLayout>
   );
 }

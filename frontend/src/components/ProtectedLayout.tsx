@@ -108,7 +108,7 @@ export function ProtectedLayout({
     <>
       <Header />
       <main
-        className={`app-main w-full mx-auto px-4 py-6 ${wide ? 'max-w-[1600px]' : 'max-w-6xl'}`}
+        className={`app-main w-full mx-auto px-4 py-6 ${wide ? 'max-w-none' : 'max-w-6xl'}`}
       >
         <PendingApprovalBanner user={user} />
         {children}
