@@ -454,14 +454,20 @@ export class MstylePrivateDataService {
       profile.type,
       profile.legalForm,
     );
+    // A booking request needs an authenticated resident and a verified contact,
+    // not a completed legal questionnaire. Keep legal snapshots strict.
+    const missing = requiredResidentFields(
+      profile.type,
+      profile.legalForm,
+    ).filter((field) => !hasValue(getPath(canonical, field)));
     if (
-      !doc ||
-      !profile.privateDataComplete ||
-      requiredResidentFields(profile.type, profile.legalForm).some(
-        (field) => !hasValue(getPath(canonical, field)),
-      )
+      dto.snapshotKind !== 'booking_request_snapshot' &&
+      (!doc || !profile.privateDataComplete || missing.length > 0)
     ) {
-      problem(409, 'CONFLICT', { title: 'Private data is incomplete' });
+      problem(409, 'PRIVATE_DATA_REQUIRED', {
+        title: 'Complete resident data before preparing documents',
+        errors: missing.map((field) => ({ field, code: 'required' })),
+      });
     }
     const contacts = await this.revealProfileContactsValues(
       profileId,

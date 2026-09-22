@@ -627,10 +627,14 @@ export class ResidentSourceRevisionsDto {
   @ValidateNested()
   @Type(() => ContactSourceRevisionsDto)
   identityContacts: ContactSourceRevisionsDto;
-  @IsInt() @Min(1) privateData: number;
+  @ValidateIf((_object, value) => value !== null)
+  @IsInt()
+  @Min(1)
+  privateData: number | null;
 }
 export class ResidentCreateSnapshotDto extends SchemaVersionDto {
-  @IsIn(['booking_legal_snapshot']) snapshotKind: string;
+  @IsIn(['booking_legal_snapshot', 'booking_request_snapshot'])
+  snapshotKind: string;
   @IsIn(['primary']) contactPurpose: 'primary';
   @IsDefined()
   @ValidateNested()
