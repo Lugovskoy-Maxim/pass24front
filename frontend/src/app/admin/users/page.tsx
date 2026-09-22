@@ -1415,7 +1415,6 @@ function AdminUsersPageContent() {
                               }
                               disabled={
                                 mstyleProfileLoading ||
-                                mstyleProfile.editPolicy === 'initial' ||
                                 mstyleProfile.editPolicy === 'locked'
                               }
                               onChange={(e) => {
