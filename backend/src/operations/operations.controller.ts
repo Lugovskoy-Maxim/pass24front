@@ -9,6 +9,7 @@ import {
   Headers,
   HttpCode,
   HttpException,
+  Logger,
   Param,
   Patch,
   Post,
@@ -50,6 +51,7 @@ import {
 
 @Catch()
 export class OperationsExceptionFilter implements ExceptionFilter {
+  private readonly logger = new Logger(OperationsExceptionFilter.name);
   catch(error: unknown, host: ArgumentsHost) {
     const response = host.switchToHttp().getResponse<Response>();
     response.setHeader('Cache-Control', 'no-store');
@@ -62,6 +64,18 @@ export class OperationsExceptionFilter implements ExceptionFilter {
         );
     if (error instanceof HttpException)
       return response.status(error.getStatus()).json(error.getResponse());
+    // Only the exception class and code location: messages may contain private data.
+    const location =
+      error instanceof Error
+        ? error.stack
+            ?.split('\n')
+            .slice(1, 3)
+            .map((line) => line.trim())
+            .join(' | ')
+        : '';
+    this.logger.error(
+      `Unhandled operations error: ${error instanceof Error ? error.name : typeof error}; ${location || 'no stack'}`,
+    );
     return response.status(503).json({
       ok: false,
       error: {
