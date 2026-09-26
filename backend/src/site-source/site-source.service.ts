@@ -302,6 +302,7 @@ export class SiteSourceService implements OnModuleInit, OnModuleDestroy {
     principals: ManualTestingPrincipalInput[],
     resetActivity = false,
   ) {
+    await this.assertLegacyOperationsWritable();
     if (!principals.length) {
       throw new BadRequestException('Нет тестовых субъектов для подготовки');
     }
@@ -380,6 +381,17 @@ export class SiteSourceService implements OnModuleInit, OnModuleDestroy {
       }
     } finally {
       await conn.end();
+    }
+  }
+
+  async assertLegacyOperationsWritable(): Promise<void> {
+    const state = await this.settings.db
+      .collection('mstyle_ops_settings')
+      .findOne({ key: 'ownership' });
+    if (state && (state.mode !== 'mstyle' || state.ever_opened)) {
+      throw new BadRequestException(
+        'Сброс прежних тестовых заявок и балансов отключён после переноса операций в Pass.',
+      );
     }
   }
 

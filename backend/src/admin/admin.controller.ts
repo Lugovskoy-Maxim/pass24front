@@ -515,6 +515,7 @@ export class AdminController {
     if (req.user?.role !== 'admin') {
       throw new ForbiddenException('Доступно только администратору');
     }
+    await this.siteSourceService.assertLegacyOperationsWritable();
     const settings =
       await this.siteSettingsService.getMstyleManualTestingSettings();
     if (!settings.enabled) {
@@ -543,6 +544,7 @@ export class AdminController {
     if (req.user?.role !== 'admin') {
       throw new ForbiddenException('Доступно только администратору');
     }
+    await this.siteSourceService.assertLegacyOperationsWritable();
     const settings =
       await this.siteSettingsService.getMstyleManualTestingSettings();
     if (!settings.enabled) {
