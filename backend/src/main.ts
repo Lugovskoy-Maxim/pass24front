@@ -8,23 +8,19 @@
  * - CORS origins перечислены явно; для нового dev-порта добавьте origin сюда или через env (если расширите).
  */
 import { NestFactory } from '@nestjs/core';
-import { json } from 'express';
 import { BadRequestException, ValidationPipe } from '@nestjs/common';
 import { DocumentBuilder, SwaggerModule } from '@nestjs/swagger';
 import { AppModule } from './app.module';
 import { AllExceptionsFilter } from './common/http-exception.filter';
+import { configureBodyParsers } from './common/body-parsers';
 
 async function bootstrap() {
-  const app = await NestFactory.create(AppModule);
+  const app = await NestFactory.create(AppModule, { bodyParser: false });
 
   // Должен совпадать с путём на фронте: `/api/...`
   app.setGlobalPrefix('api');
   // Files remain limited to 10 MiB after base64 decoding and signature validation.
-  app.use('/api/admin/service-requests/attachments', json({ limit: '15mb' }));
-  app.use(
-    '/api/internal/integrations/mstyle/v2/operations/resident',
-    json({ limit: '15mb' }),
-  );
+  configureBodyParsers(app);
 
   app.enableCors({
     // Консоль эндпоинтов открывают как файл или с другого хоста —
