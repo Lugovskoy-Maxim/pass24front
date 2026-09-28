@@ -66,7 +66,13 @@ export class ServiceRequestsController {
       title: row.subject,
       topic: row.topic_key,
       created: row.created_at,
+      created_at: row.created_at,
       requester: row.requester_name,
+      requester_name: row.requester_name,
+      office: row.office || null,
+      office_id: row.office_id || null,
+      office_ids: row.office_ids || [],
+      office_label: row.office_label || null,
       raw: { ...row },
     };
   }
@@ -94,6 +100,7 @@ export class ServiceRequestsController {
       messages: result.messages.map((row) => ({
         ...row,
         body: row.message_text,
+        text: row.message_text,
       })),
     };
   }

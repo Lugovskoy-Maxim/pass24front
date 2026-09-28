@@ -130,9 +130,11 @@ export class OperationsSupport {
       (row) => (row.last_support_seq || 0) > (row.customer_read_seq || 0),
     ).length;
     return {
-      items: items
-        .slice((page - 1) * perPage, page * perPage)
-        .map((row) => this.present(row)),
+      items: await Promise.all(
+        items
+          .slice((page - 1) * perPage, page * perPage)
+          .map((row) => this.present(row)),
+      ),
       total,
       page,
       per_page: perPage,
@@ -141,11 +143,43 @@ export class OperationsSupport {
       statuses: SUPPORT_STATUSES,
     };
   }
-  present(row: any) {
+  async present(row: any) {
     const safe = { ...row };
     delete safe._id;
+    const profile = safe.profile_id
+      ? await this.store
+          .canonical('profiles')
+          .findOne(
+            { profileId: safe.profile_id },
+            { projection: { officeIds: 1 } },
+          )
+      : null;
+    const officeIds = Array.from(
+      new Set(
+        [
+          ...(Array.isArray(safe.office_ids) ? safe.office_ids : []),
+          ...(profile?.officeIds || []),
+        ]
+          .map(String)
+          .filter(Boolean),
+      ),
+    );
+    const office =
+      safe.office ||
+      (officeIds.length
+        ? {
+            id: officeIds[0],
+            externalId: officeIds[0],
+            number: officeNumberFromExternalId(officeIds[0]),
+          }
+        : null);
     return {
       ...safe,
+      office_ids: officeIds,
+      office_id: safe.office_id || office?.id || null,
+      office,
+      office_label:
+        safe.office_label || office?.label || office?.number || null,
       needs_action: supportNeedsAction(row),
       status_label: SUPPORT_STATUSES[row.status],
       unread_for_customer:
@@ -164,9 +198,15 @@ export class OperationsSupport {
       .find({ request_id: id }, { session, projection: { _id: 0 } })
       .sort({ id: 1 })
       .toArray();
+    const compatibleMessages = messages.map((message) => ({
+      ...message,
+      body: message.message_text,
+      text: message.message_text,
+      author: message.author_label,
+    }));
     return {
-      ticket: this.present(row),
-      messages,
+      ticket: await this.present(row),
+      messages: compatibleMessages,
       can_reply: !['completed', 'cancelled'].includes(row.status),
     };
   }
@@ -505,4 +545,9 @@ export class OperationsSupport {
       bytes: Buffer.concat(chunks),
     };
   }
+}
+
+function officeNumberFromExternalId(value: string) {
+  const match = String(value).match(/(\d+)(?:$|[^\d]*)/);
+  return match?.[1] || value;
 }
