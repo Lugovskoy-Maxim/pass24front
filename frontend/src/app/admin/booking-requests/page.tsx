@@ -183,6 +183,10 @@ export default function BookingRequestsPage() {
     }
   };
   const b = detail?.booking;
+  const bookingModeLabel = (mode?: string) =>
+    mode === 'day_office' ? 'Офис на день' : 'Почасовая бронь';
+  const roomOfficeNumber = (room: Booking['room']) =>
+    room.office_number ?? room.number ?? room.title;
   return (
     <AdminLayout title="Заявки">
       {counts && !writable && (
@@ -475,6 +479,12 @@ export default function BookingRequestsPage() {
               </div>
               <div>
                 <h3 className="font-semibold">{b.room.title}</h3>
+                <p className="text-sm text-[var(--muted)]">
+                  Офис: {roomOfficeNumber(b.room)}
+                </p>
+                <p className="text-sm text-[var(--muted)]">
+                  Тип заявки: {bookingModeLabel(b.booking_mode)}
+                </p>
                 {b.segments.map((s, i) => (
                   <p key={i}>
                     {s.date} · {clock(s.start_minute)}–{clock(s.end_minute)}
@@ -530,6 +540,16 @@ export default function BookingRequestsPage() {
               </div>
             )}
             <div className="flex flex-wrap gap-2">
+              <button
+                type="button"
+                className="btn btn-secondary"
+                onClick={() => {
+                  setDetail(null);
+                  setAction('');
+                }}
+              >
+                Выйти из заявки
+              </button>
               {canBookingAction(b.status, 'confirm') && (
                 <>
                   <button

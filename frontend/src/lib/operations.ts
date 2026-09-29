@@ -47,11 +47,14 @@ export type Booking = {
   room: {
     title: string;
     type: string;
+    number?: string | number;
+    office_number?: string | number;
     business_center?: { id: number; name: string };
   };
   segments: Segment[];
   date: string;
   status: string;
+  booking_mode?: 'slots' | 'day_office' | string;
   status_label: string;
   payment_status: string;
   payment_method: string;
