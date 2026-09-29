@@ -98,9 +98,7 @@ export function SiteFooter() {
 
         <div className="mt-4 pt-4 border-t border-[var(--border)] flex flex-col gap-3 text-xs">
           <div className="flex flex-col sm:flex-row gap-2 sm:items-center sm:justify-between">
-            <p>
-              Copyright © {year} ООО «М-Стиль Офис». Все права защищены.
-            </p>
+            <p>Copyright © {year} ООО «М-Стиль Офис». Все права защищены.</p>
             <div className="flex flex-wrap gap-x-4 gap-y-1">
               <span>Версия сайта: {version}</span>
               <a

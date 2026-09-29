@@ -74,9 +74,7 @@ describe('Operations with real replica-set transactions', () => {
   beforeAll(async () => {
     mongo = await MongoMemoryReplSet.create({
       binary: {
-        version:
-          process.env.MONGOMS_VERSION ||
-          (process.platform === 'win32' ? '4.4.29' : '7.0.24'),
+        version: process.env.MONGOMS_VERSION || '7.0.24',
       },
       replSet: { count: 1, storageEngine: 'wiredTiger' },
     });

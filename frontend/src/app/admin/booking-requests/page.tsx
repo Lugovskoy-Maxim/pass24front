@@ -37,6 +37,7 @@ import {
   params,
   paymentLabels,
 } from '@/lib/operations';
+import { canBookingAction } from '@/lib/booking-status';
 
 export default function BookingRequestsPage() {
   const { user } = useAuth();
@@ -529,7 +530,7 @@ export default function BookingRequestsPage() {
               </div>
             )}
             <div className="flex flex-wrap gap-2">
-              {b.status !== 'cancelled' && b.status !== 'blocked' && (
+              {canBookingAction(b.status, 'confirm') && (
                 <>
                   <button
                     className="btn btn-primary"
@@ -570,7 +571,7 @@ export default function BookingRequestsPage() {
                   </button>
                 </>
               )}
-              {b.status !== 'cancelled' && (
+              {canBookingAction(b.status, 'cancel') && (
                 <button
                   className="btn btn-secondary"
                   disabled={!writable}
@@ -589,15 +590,20 @@ export default function BookingRequestsPage() {
               >
                 Комментарий
               </button>
-              {b.requires_attention && finance && (
-                <button
-                  className="btn btn-secondary"
-                  disabled={!writable}
-                  onClick={() => setAction('resolve-attention')}
-                >
-                  Конфликт разобран
-                </button>
-              )}
+              {canBookingAction(
+                b.status,
+                'resolve-attention',
+                b.requires_attention,
+              ) &&
+                finance && (
+                  <button
+                    className="btn btn-secondary"
+                    disabled={!writable}
+                    onClick={() => setAction('resolve-attention')}
+                  >
+                    Конфликт разобран
+                  </button>
+                )}
               <Link
                 className="btn btn-secondary"
                 href={`/admin/service-requests?booking_id=${b.id}`}

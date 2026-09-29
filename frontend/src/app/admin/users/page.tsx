@@ -350,7 +350,7 @@ function AdminUsersPageContent() {
       setProfileRequests([]);
       setRegistrationRequests([]);
     }
-  }, [category]);
+  }, [category, loadProfileRequests, loadRegistrationRequests]);
 
   // из письма / меню: ?highlight=registration
   useEffect(() => {
@@ -850,311 +850,316 @@ function AdminUsersPageContent() {
   return (
     <AdminLayout title={showForm ? formTitle : 'Пользователи'}>
       <div className={showForm ? 'hidden' : undefined}>
-      <p className="text-[var(--muted)] -mt-4 mb-6">
-        Учётные записи живут в Pass. Арендаторы и сотрудники компании · охрана и
-        админы БЦ
-      </p>
+        <p className="text-[var(--muted)] -mt-4 mb-6">
+          Учётные записи живут в Pass. Арендаторы и сотрудники компании · охрана
+          и админы БЦ
+        </p>
 
-      {loadError && (
-        <PageError
-          className="mb-6"
-          message={loadError}
-          error={loadErrorCause}
-          onRetry={load}
-          retryLabel="Повторить"
-        />
-      )}
+        {loadError && (
+          <PageError
+            className="mb-6"
+            message={loadError}
+            error={loadErrorCause}
+            onRetry={load}
+            retryLabel="Повторить"
+          />
+        )}
 
-      <div className="flex flex-wrap gap-2 mb-6">
-        <button
-          type="button"
-          onClick={() => switchCategory('tenants')}
-          className={`btn text-sm ${category === 'tenants' ? 'btn-primary' : 'btn-secondary'}`}
-        >
-          <Building2 className="w-4 h-4" />
-          Арендаторы
-          <span className="ml-1 opacity-80">({counts.tenants})</span>
-        </button>
-        <button
-          type="button"
-          onClick={() => switchCategory('staff')}
-          className={`btn text-sm ${category === 'staff' ? 'btn-primary' : 'btn-secondary'}`}
-        >
-          <UserCog className="w-4 h-4" />
-          Сотрудники
-          <span className="ml-1 opacity-80">({counts.staff})</span>
-        </button>
-      </div>
-
-      <div className="card p-4 mb-6 space-y-4">
-        <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-4 gap-3">
-          <div className="relative sm:col-span-2 lg:col-span-1">
-            <Search className="absolute left-3 top-1/2 -translate-y-1/2 w-4 h-4 text-[var(--muted)]" />
-            <input
-              className="input input--icon-left"
-              placeholder={
-                ph.userSearch || 'ФИО, email, телефон, компания, usr_…'
-              }
-              value={filters.search}
-              onChange={(e) =>
-                setFilters((prev) => ({ ...prev, search: e.target.value }))
-              }
-              onKeyDown={(e) => {
-                if (e.key === 'Enter') applyFilters();
-              }}
-            />
-          </div>
-
-          <div className="select-wrap">
-            <select
-              className="input"
-              value={filters.isActive}
-              onChange={(e) =>
-                setFilters((prev) => ({
-                  ...prev,
-                  isActive: e.target.value as UserFilters['isActive'],
-                }))
-              }
-            >
-              <option value="">Все статусы</option>
-              <option value="true">Активные</option>
-              <option value="false">Неактивные / ожидают подтверждения</option>
-            </select>
-          </div>
-
-          <div className="select-wrap">
-            <select
-              className="input"
-              value={filters.propertyId}
-              onChange={(e) =>
-                setFilters((prev) => ({
-                  ...prev,
-                  propertyId: e.target.value,
-                  officeId: e.target.value ? prev.officeId : '',
-                }))
-              }
-            >
-              <option value="">Все бизнес-центры</option>
-              {businessCenters.map((bc) => (
-                <option key={bc.id} value={bc.id}>
-                  {bc.name}
-                </option>
-              ))}
-            </select>
-          </div>
-
-          {category === 'tenants' ? (
-            <div className="select-wrap">
-              <select
-                className="input"
-                value={filters.officeId}
-                onChange={(e) =>
-                  setFilters((prev) => ({ ...prev, officeId: e.target.value }))
-                }
-              >
-                <option value="">Все офисы</option>
-                {officesForFilter.map((office) => (
-                  <option key={office.id} value={office.id}>
-                    {office.businessCenterName
-                      ? `${office.businessCenterName}: `
-                      : ''}
-                    оф. {office.number}
-                  </option>
-                ))}
-              </select>
-            </div>
-          ) : (
-            <div className="select-wrap">
-              <select
-                className="input"
-                value={filters.role}
-                onChange={(e) =>
-                  setFilters((prev) => ({ ...prev, role: e.target.value }))
-                }
-              >
-                <option value="">Все роли</option>
-                {STAFF_ROLES.map((role) => (
-                  <option key={role} value={role}>
-                    {getRoleLabel(role)}
-                  </option>
-                ))}
-              </select>
-            </div>
-          )}
-        </div>
-
-        <div className="flex flex-wrap items-center gap-2">
+        <div className="flex flex-wrap gap-2 mb-6">
           <button
             type="button"
-            className="btn btn-primary text-sm"
-            onClick={applyFilters}
+            onClick={() => switchCategory('tenants')}
+            className={`btn text-sm ${category === 'tenants' ? 'btn-primary' : 'btn-secondary'}`}
           >
-            Применить
+            <Building2 className="w-4 h-4" />
+            Арендаторы
+            <span className="ml-1 opacity-80">({counts.tenants})</span>
           </button>
-          {hasActiveFilters && (
+          <button
+            type="button"
+            onClick={() => switchCategory('staff')}
+            className={`btn text-sm ${category === 'staff' ? 'btn-primary' : 'btn-secondary'}`}
+          >
+            <UserCog className="w-4 h-4" />
+            Сотрудники
+            <span className="ml-1 opacity-80">({counts.staff})</span>
+          </button>
+        </div>
+
+        <div className="card p-4 mb-6 space-y-4">
+          <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-4 gap-3">
+            <div className="relative sm:col-span-2 lg:col-span-1">
+              <Search className="absolute left-3 top-1/2 -translate-y-1/2 w-4 h-4 text-[var(--muted)]" />
+              <input
+                className="input input--icon-left"
+                placeholder={
+                  ph.userSearch || 'ФИО, email, телефон, компания, usr_…'
+                }
+                value={filters.search}
+                onChange={(e) =>
+                  setFilters((prev) => ({ ...prev, search: e.target.value }))
+                }
+                onKeyDown={(e) => {
+                  if (e.key === 'Enter') applyFilters();
+                }}
+              />
+            </div>
+
+            <div className="select-wrap">
+              <select
+                className="input"
+                value={filters.isActive}
+                onChange={(e) =>
+                  setFilters((prev) => ({
+                    ...prev,
+                    isActive: e.target.value as UserFilters['isActive'],
+                  }))
+                }
+              >
+                <option value="">Все статусы</option>
+                <option value="true">Активные</option>
+                <option value="false">
+                  Неактивные / ожидают подтверждения
+                </option>
+              </select>
+            </div>
+
+            <div className="select-wrap">
+              <select
+                className="input"
+                value={filters.propertyId}
+                onChange={(e) =>
+                  setFilters((prev) => ({
+                    ...prev,
+                    propertyId: e.target.value,
+                    officeId: e.target.value ? prev.officeId : '',
+                  }))
+                }
+              >
+                <option value="">Все бизнес-центры</option>
+                {businessCenters.map((bc) => (
+                  <option key={bc.id} value={bc.id}>
+                    {bc.name}
+                  </option>
+                ))}
+              </select>
+            </div>
+
+            {category === 'tenants' ? (
+              <div className="select-wrap">
+                <select
+                  className="input"
+                  value={filters.officeId}
+                  onChange={(e) =>
+                    setFilters((prev) => ({
+                      ...prev,
+                      officeId: e.target.value,
+                    }))
+                  }
+                >
+                  <option value="">Все офисы</option>
+                  {officesForFilter.map((office) => (
+                    <option key={office.id} value={office.id}>
+                      {office.businessCenterName
+                        ? `${office.businessCenterName}: `
+                        : ''}
+                      оф. {office.number}
+                    </option>
+                  ))}
+                </select>
+              </div>
+            ) : (
+              <div className="select-wrap">
+                <select
+                  className="input"
+                  value={filters.role}
+                  onChange={(e) =>
+                    setFilters((prev) => ({ ...prev, role: e.target.value }))
+                  }
+                >
+                  <option value="">Все роли</option>
+                  {STAFF_ROLES.map((role) => (
+                    <option key={role} value={role}>
+                      {getRoleLabel(role)}
+                    </option>
+                  ))}
+                </select>
+              </div>
+            )}
+          </div>
+
+          <div className="flex flex-wrap items-center gap-2">
             <button
               type="button"
-              className="btn btn-secondary text-sm"
-              onClick={resetFilters}
+              className="btn btn-primary text-sm"
+              onClick={applyFilters}
             >
-              <X className="w-4 h-4" />
-              Сбросить
+              Применить
             </button>
+            {hasActiveFilters && (
+              <button
+                type="button"
+                className="btn btn-secondary text-sm"
+                onClick={resetFilters}
+              >
+                <X className="w-4 h-4" />
+                Сбросить
+              </button>
+            )}
+            <button
+              type="button"
+              className="btn btn-primary text-sm ml-auto"
+              onClick={openCreate}
+            >
+              <Plus className="w-4 h-4" />
+              {category === 'tenants'
+                ? 'Добавить арендатора'
+                : 'Добавить сотрудника'}
+            </button>
+          </div>
+
+          {hasActiveFilters && (
+            <p className="text-xs text-[var(--muted)] flex items-center gap-1.5">
+              <Users className="w-3.5 h-3.5" />
+              Найдено: {total}
+            </p>
           )}
-          <button
-            type="button"
-            className="btn btn-primary text-sm ml-auto"
-            onClick={openCreate}
+        </div>
+
+        {category === 'tenants' && registrationRequests.length > 0 && (
+          <div
+            id="registration-requests"
+            className="card p-5 mb-6 border-2 border-[var(--status-pending-border)] theme-alert-subtle space-y-3 scroll-mt-24 shadow-[0_0_0_3px_var(--status-pending-soft)]"
           >
-            <Plus className="w-4 h-4" />
-            {category === 'tenants'
-              ? 'Добавить арендатора'
-              : 'Добавить сотрудника'}
-          </button>
-        </div>
-
-        {hasActiveFilters && (
-          <p className="text-xs text-[var(--muted)] flex items-center gap-1.5">
-            <Users className="w-3.5 h-3.5" />
-            Найдено: {total}
-          </p>
+            <div className="flex items-center gap-2 font-semibold text-amber-900 dark:text-amber-200">
+              <Clock className="w-4 h-4" />
+              Заявки на регистрацию ({registrationRequests.length})
+              <span className="text-[10px] uppercase tracking-wide font-bold px-1.5 py-0.5 rounded-[var(--radius-sm)] bg-[var(--status-pending)] text-[var(--status-badge-on)]">
+                нужно действие
+              </span>
+            </div>
+            <p className="text-sm text-amber-900/80 dark:text-amber-100/80">
+              После подтверждения назначьте офис арендатору в карточке
+              пользователя.
+            </p>
+            {registrationRequests.map((u) => (
+              <div
+                key={u.id}
+                className="rounded-lg border border-[var(--alert-border)] bg-[var(--surface)] p-4 flex flex-col lg:flex-row lg:items-center justify-between gap-4"
+              >
+                <div className="text-sm">
+                  <div className="font-medium">{u.fullName}</div>
+                  <div className="text-[var(--muted)] mt-1">
+                    {u.email || '—'}
+                    {u.email && (
+                      <span
+                        className={`ml-2 text-[10px] px-1.5 py-0.5 rounded-full ${u.emailVerified ? 'bg-emerald-50 text-emerald-700' : 'bg-slate-100 text-slate-600'}`}
+                      >
+                        {u.emailVerified
+                          ? 'email подтверждён'
+                          : 'email не подтверждён'}
+                      </span>
+                    )}
+                  </div>
+                  <div className="text-[var(--muted)] mt-1">
+                    {u.company && `Компания: ${u.company}`}
+                    {u.phone ? ` · Тел.: ${u.phone}` : ''}
+                    {u.createdAt
+                      ? ` · ${new Date(u.createdAt).toLocaleString('ru-RU')}`
+                      : ''}
+                  </div>
+                </div>
+                <div className="flex flex-wrap gap-2 shrink-0">
+                  <button
+                    type="button"
+                    className="btn btn-success text-sm"
+                    disabled={moderatingId === u.id}
+                    onClick={() => handleApproveRegistration(u.id)}
+                  >
+                    <Check className="w-4 h-4" />
+                    Подтвердить
+                  </button>
+                  <button
+                    type="button"
+                    className="btn btn-secondary text-sm"
+                    disabled={moderatingId === u.id}
+                    onClick={() => openEdit(u)}
+                  >
+                    <Pencil className="w-4 h-4" />
+                    Назначить офис
+                  </button>
+                  <button
+                    type="button"
+                    className="btn btn-danger text-sm"
+                    disabled={moderatingId === u.id}
+                    onClick={() => handleRejectRegistration(u.id)}
+                  >
+                    <X className="w-4 h-4" />
+                    Отклонить
+                  </button>
+                </div>
+              </div>
+            ))}
+          </div>
         )}
-      </div>
 
-      {category === 'tenants' && registrationRequests.length > 0 && (
-        <div
-          id="registration-requests"
-          className="card p-5 mb-6 border-2 border-[var(--status-pending-border)] theme-alert-subtle space-y-3 scroll-mt-24 shadow-[0_0_0_3px_var(--status-pending-soft)]"
-        >
-          <div className="flex items-center gap-2 font-semibold text-amber-900 dark:text-amber-200">
-            <Clock className="w-4 h-4" />
-            Заявки на регистрацию ({registrationRequests.length})
-            <span className="text-[10px] uppercase tracking-wide font-bold px-1.5 py-0.5 rounded-[var(--radius-sm)] bg-[var(--status-pending)] text-[var(--status-badge-on)]">
-              нужно действие
-            </span>
-          </div>
-          <p className="text-sm text-amber-900/80 dark:text-amber-100/80">
-            После подтверждения назначьте офис арендатору в карточке
-            пользователя.
-          </p>
-          {registrationRequests.map((u) => (
-            <div
-              key={u.id}
-              className="rounded-lg border border-[var(--alert-border)] bg-[var(--surface)] p-4 flex flex-col lg:flex-row lg:items-center justify-between gap-4"
-            >
-              <div className="text-sm">
-                <div className="font-medium">{u.fullName}</div>
-                <div className="text-[var(--muted)] mt-1">
-                  {u.email || '—'}
-                  {u.email && (
-                    <span
-                      className={`ml-2 text-[10px] px-1.5 py-0.5 rounded-full ${u.emailVerified ? 'bg-emerald-50 text-emerald-700' : 'bg-slate-100 text-slate-600'}`}
-                    >
-                      {u.emailVerified
-                        ? 'email подтверждён'
-                        : 'email не подтверждён'}
+        {category === 'tenants' && profileRequests.length > 0 && (
+          <div className="card p-5 mb-6 border theme-alert-subtle space-y-3">
+            <div className="flex items-center gap-2 font-semibold text-amber-900">
+              <Clock className="w-4 h-4" />
+              Заявки на изменение профиля ({profileRequests.length})
+            </div>
+            {profileRequests.map(({ user: u, request }) => (
+              <div
+                key={u.id}
+                className="rounded-lg border border-[var(--alert-border)] bg-[var(--surface)] p-4 flex flex-col lg:flex-row lg:items-center justify-between gap-4"
+              >
+                <div className="text-sm">
+                  <div className="font-medium">
+                    {u.fullName} →{' '}
+                    <span className="text-[var(--primary)]">
+                      {request.full_name}
                     </span>
-                  )}
+                  </div>
+                  <div className="text-[var(--muted)] mt-1">{u.email}</div>
+                  <div className="text-[var(--muted)] mt-1">
+                    {(request.company || u.company) &&
+                      `Компания: ${u.company || '—'} → ${request.company || '—'} · `}
+                    {(request.company_short_name || u.companyShortName) &&
+                      `Кратко: ${u.companyShortName || '—'} → ${request.company_short_name || '—'} · `}
+                    {(request.profile_type || u.profileType) &&
+                      `Тип: ${profileTypeLabel(u.profileType)} → ${profileTypeLabel(request.profile_type)} · `}
+                    {(request.legal_form || u.legalForm) &&
+                      `Форма: ${legalFormLabel(u.legalForm)} → ${legalFormLabel(request.legal_form)} · `}
+                    {(request.phone || u.phone) &&
+                      `Тел.: ${u.phone || '—'} → ${request.phone || '—'} · `}
+                    {new Date(request.requested_at).toLocaleString('ru-RU')}
+                  </div>
                 </div>
-                <div className="text-[var(--muted)] mt-1">
-                  {u.company && `Компания: ${u.company}`}
-                  {u.phone ? ` · Тел.: ${u.phone}` : ''}
-                  {u.createdAt
-                    ? ` · ${new Date(u.createdAt).toLocaleString('ru-RU')}`
-                    : ''}
+                <div className="flex gap-2 shrink-0">
+                  <button
+                    type="button"
+                    className="btn btn-success text-sm"
+                    disabled={moderatingId === u.id}
+                    onClick={() => handleApproveProfile(u.id)}
+                  >
+                    <Check className="w-4 h-4" />
+                    Подтвердить
+                  </button>
+                  <button
+                    type="button"
+                    className="btn btn-danger text-sm"
+                    disabled={moderatingId === u.id}
+                    onClick={() => handleRejectProfile(u.id)}
+                  >
+                    <X className="w-4 h-4" />
+                    Отклонить
+                  </button>
                 </div>
               </div>
-              <div className="flex flex-wrap gap-2 shrink-0">
-                <button
-                  type="button"
-                  className="btn btn-success text-sm"
-                  disabled={moderatingId === u.id}
-                  onClick={() => handleApproveRegistration(u.id)}
-                >
-                  <Check className="w-4 h-4" />
-                  Подтвердить
-                </button>
-                <button
-                  type="button"
-                  className="btn btn-secondary text-sm"
-                  disabled={moderatingId === u.id}
-                  onClick={() => openEdit(u)}
-                >
-                  <Pencil className="w-4 h-4" />
-                  Назначить офис
-                </button>
-                <button
-                  type="button"
-                  className="btn btn-danger text-sm"
-                  disabled={moderatingId === u.id}
-                  onClick={() => handleRejectRegistration(u.id)}
-                >
-                  <X className="w-4 h-4" />
-                  Отклонить
-                </button>
-              </div>
-            </div>
-          ))}
-        </div>
-      )}
-
-      {category === 'tenants' && profileRequests.length > 0 && (
-        <div className="card p-5 mb-6 border theme-alert-subtle space-y-3">
-          <div className="flex items-center gap-2 font-semibold text-amber-900">
-            <Clock className="w-4 h-4" />
-            Заявки на изменение профиля ({profileRequests.length})
+            ))}
           </div>
-          {profileRequests.map(({ user: u, request }) => (
-            <div
-              key={u.id}
-              className="rounded-lg border border-[var(--alert-border)] bg-[var(--surface)] p-4 flex flex-col lg:flex-row lg:items-center justify-between gap-4"
-            >
-              <div className="text-sm">
-                <div className="font-medium">
-                  {u.fullName} →{' '}
-                  <span className="text-[var(--primary)]">
-                    {request.full_name}
-                  </span>
-                </div>
-                <div className="text-[var(--muted)] mt-1">{u.email}</div>
-                <div className="text-[var(--muted)] mt-1">
-                  {(request.company || u.company) &&
-                    `Компания: ${u.company || '—'} → ${request.company || '—'} · `}
-                  {(request.company_short_name || u.companyShortName) &&
-                    `Кратко: ${u.companyShortName || '—'} → ${request.company_short_name || '—'} · `}
-                  {(request.profile_type || u.profileType) &&
-                    `Тип: ${profileTypeLabel(u.profileType)} → ${profileTypeLabel(request.profile_type)} · `}
-                  {(request.legal_form || u.legalForm) &&
-                    `Форма: ${legalFormLabel(u.legalForm)} → ${legalFormLabel(request.legal_form)} · `}
-                  {(request.phone || u.phone) &&
-                    `Тел.: ${u.phone || '—'} → ${request.phone || '—'} · `}
-                  {new Date(request.requested_at).toLocaleString('ru-RU')}
-                </div>
-              </div>
-              <div className="flex gap-2 shrink-0">
-                <button
-                  type="button"
-                  className="btn btn-success text-sm"
-                  disabled={moderatingId === u.id}
-                  onClick={() => handleApproveProfile(u.id)}
-                >
-                  <Check className="w-4 h-4" />
-                  Подтвердить
-                </button>
-                <button
-                  type="button"
-                  className="btn btn-danger text-sm"
-                  disabled={moderatingId === u.id}
-                  onClick={() => handleRejectProfile(u.id)}
-                >
-                  <X className="w-4 h-4" />
-                  Отклонить
-                </button>
-              </div>
-            </div>
-          ))}
-        </div>
-      )}
+        )}
       </div>
 
       {showForm && (
@@ -1168,1308 +1173,1355 @@ function AdminUsersPageContent() {
             Назад к пользователям
           </button>
           <div className="card p-4 sm:p-5">
-        <form
-          id="admin-user-form"
-          onSubmit={handleSubmit}
-          className="admin-user-form space-y-3"
-          autoComplete="off"
-        >
-          <div className="admin-user-form__grid grid sm:grid-cols-2 lg:grid-cols-3 gap-3">
-            <div>
-              <label className="label">Email *</label>
-              <input
-                className="input"
-                type="email"
-                value={form.email}
-                onChange={(e) => setForm({ ...form, email: e.target.value })}
-                required
-                autoComplete="off"
-              />
-            </div>
-            <div>
-              <label className="label">
-                {editId ? 'Новый пароль' : 'Пароль *'}
-              </label>
-              <input
-                className="input"
-                type="password"
-                value={form.password}
-                onChange={(e) => setForm({ ...form, password: e.target.value })}
-                required={!editId}
-                minLength={6}
-                autoComplete="new-password"
-              />
-            </div>
-            <div>
-              <label className="label">Логин (username)</label>
-              <input
-                className="input"
-                value={form.username || ''}
-                onChange={(e) => setForm({ ...form, username: e.target.value })}
-                placeholder="необязательно"
-                autoComplete="off"
-              />
-            </div>
-            <div>
-              <label className="label">Отображаемое имя</label>
-              <input
-                className="input"
-                value={form.displayName || ''}
-                onChange={(e) =>
-                  setForm({ ...form, displayName: e.target.value })
-                }
-                placeholder="по умолчанию ФИО"
-              />
-            </div>
-            <div className="sm:col-span-2">
-              <PersonNameFields
-                value={nameParts}
-                labels={getUserNameLabels(
-                  form.role === 'tenant' || form.role === 'tenant_employee'
-                    ? 'tenant'
-                    : form.role,
-                )}
-                onChange={setNameParts}
-              />
-            </div>
-            <div>
-              <label className="label">Роль *</label>
-              <div className="select-wrap">
-                <select
-                  className="input"
-                  value={form.role}
-                  onChange={(e) =>
-                    setForm({ ...form, role: e.target.value as UserRole })
-                  }
-                  disabled={
-                    !!editId &&
-                    !!users
-                      .flatMap((x) => x.employees || [])
-                      .some((e) => e.id === editId)
-                  }
-                >
-                  {form.role === 'tenant_employee' && (
-                    <option value="tenant_employee">
-                      {getRoleLabel('tenant_employee')}
-                    </option>
-                  )}
-                  {category === 'tenants' && form.role !== 'tenant_employee' ? (
-                    <option value="tenant">{ROLE_LABELS.tenant}</option>
-                  ) : null}
-                  {category === 'staff' &&
-                    form.role !== 'tenant_employee' &&
-                    STAFF_ROLES.map((role) => (
-                      <option key={role} value={role}>
-                        {getRoleLabel(role)}
-                      </option>
-                    ))}
-                  {category === 'staff' && form.role !== 'tenant_employee' && (
-                    <option value="tenant">{ROLE_LABELS.tenant}</option>
-                  )}
-                  {category === 'tenants' &&
-                    form.role !== 'tenant_employee' &&
-                    form.role !== 'tenant' && (
-                      <option value={form.role}>
-                        {getRoleLabel(form.role)}
-                      </option>
-                    )}
-                </select>
-              </div>
-            </div>
-            <div>
-              <label className="label">Компания</label>
-              <input
-                className="input"
-                value={form.company}
-                onChange={(e) => setForm({ ...form, company: e.target.value })}
-              />
-            </div>
-            <div>
-              <label className="label">Телефон</label>
-              <input
-                className="input"
-                type="tel"
-                value={form.phone}
-                onChange={(e) => setForm({ ...form, phone: e.target.value })}
-                autoComplete="off"
-              />
-            </div>
-            <div>
-              <label className="label">Дата рождения</label>
-              <input
-                className="input"
-                type="date"
-                value={form.birthDate || ''}
-                onChange={(e) =>
-                  setForm({ ...form, birthDate: e.target.value })
-                }
-              />
-            </div>
-            {form.role === 'tenant' &&
-              !users
-                .flatMap((x) => x.employees || [])
-                .some((e) => e.id === editId) && (
-                <>
-                  <div>
-                    <label className="label">Тип профиля</label>
-                    <div className="select-wrap">
-                      <select
-                        className="input"
-                        value={form.profileType || 'individual'}
-                        onChange={(e) =>
-                          setForm({
-                            ...form,
-                            profileType: e.target.value as
-                              'individual' | 'company',
-                            legalForm:
-                              e.target.value === 'company'
-                                ? form.legalForm || 'ooo'
-                                : null,
-                          })
-                        }
-                      >
-                        <option value="individual">Физлицо</option>
-                        <option value="company">Компания</option>
-                      </select>
-                    </div>
-                  </div>
-                  {form.profileType === 'company' && (
-                    <div>
-                      <label className="label">Правовая форма</label>
-                      <div className="select-wrap">
-                        <select
-                          className="input"
-                          value={form.legalForm || 'ooo'}
-                          onChange={(e) =>
-                            setForm({
-                              ...form,
-                              legalForm: e.target.value as 'ip' | 'ooo',
-                            })
-                          }
-                        >
-                          <option value="ooo">ООО</option>
-                          <option value="ip">ИП</option>
-                        </select>
-                      </div>
-                    </div>
-                  )}
-                  <div>
-                    <label className="label">Краткое название</label>
-                    <input
-                      className="input"
-                      value={form.companyShortName || ''}
-                      onChange={(e) =>
-                        setForm({ ...form, companyShortName: e.target.value })
-                      }
-                      placeholder="для документов и снимков"
-                    />
-                  </div>
-                  <div>
-                    <label className="label">Лимит сотрудников</label>
-                    <input
-                      className="input"
-                      type="number"
-                      min={0}
-                      max={200}
-                      value={form.employeeLimit ?? ''}
-                      onChange={(e) =>
-                        setForm({
-                          ...form,
-                          employeeLimit:
-                            e.target.value === ''
-                              ? null
-                              : Number(e.target.value),
-                        })
-                      }
-                      placeholder="по умолчанию 3"
-                    />
-                  </div>
-                  {editId && (
-                    <div className="sm:col-span-2 border border-[var(--border)] rounded-lg bg-[var(--surface-muted)]">
-                      <button
-                        type="button"
-                        className="w-full flex items-center justify-between gap-3 p-4 text-left"
-                        onClick={() =>
-                          setResidentDataExpanded((value) => !value)
-                        }
-                      >
-                        <span className="font-medium text-sm">
-                          Дополнительные данные резидента
-                        </span>
-                        {residentDataExpanded ? (
-                          <ChevronDown className="w-4 h-4" />
-                        ) : (
-                          <ChevronRight className="w-4 h-4" />
-                        )}
-                      </button>
-                      {residentDataExpanded && (
-                        <div className="border-t border-[var(--border)] p-4 grid grid-cols-1 sm:grid-cols-2 gap-3">
-                          <label
-                            className="sm:col-span-2 flex items-center gap-2 text-sm"
-                            title="Как правило, реквизиты профиля зафиксированы потому что на них заключён договор аренды. Проверьте нужно ли разрешать этому профилю редактирование своих данных"
-                          >
-                            <input
-                              type="checkbox"
-                              checked={
-                                mstyleProfile.editPolicy === 'self_service'
-                              }
-                              disabled={
-                                mstyleProfileLoading ||
-                                mstyleProfile.editPolicy === 'locked'
-                              }
-                              onChange={(e) => {
-                                setMstyleEditPolicyDirty(true);
-                                setMstyleProfile((prev) => ({
-                                  ...prev,
-                                  editPolicy: e.target.checked
-                                    ? 'self_service'
-                                    : 'request_only',
-                                }));
-                              }}
-                            />
-                            Разрешено редактировать свой профиль
-                          </label>
-                          {residentPrivateFields(
-                            form.profileType,
-                            form.legalForm,
-                          ).map((field) => (
-                            <div key={field.path}>
-                              <label className="label">{field.label}</label>
-                              <input
-                                className="input"
-                                type={field.type || 'text'}
-                                value={privateString(
-                                  mstyleProfile.privateData,
-                                  field.path,
-                                )}
-                                onChange={(e) => {
-                                  setResidentPrivateDirty(true);
-                                  setMstyleProfile((prev) => ({
-                                    ...prev,
-                                    privateData: setPrivateString(
-                                      prev.privateData,
-                                      field.path,
-                                      e.target.value,
-                                    ),
-                                  }));
-                                }}
-                              />
-                            </div>
-                          ))}
-                        </div>
-                      )}
-                    </div>
-                  )}
-
-                  <div className="sm:col-span-2">
-                    {mstyleProfile.resourceRole === 'secondary' ? (
-                      <div className="rounded-lg border border-[var(--border)] bg-[var(--surface-muted)] p-3 text-sm">
-                        <div className="font-medium">
-                          Второстепенный профиль
-                        </div>
-                        <div className="text-xs text-[var(--muted)] mt-1">
-                          Основной профиль:{' '}
-                          {mstyleTenantOptions.find(
-                            (item) =>
-                              item.id === mstyleProfile.resourceOwnerUserId,
-                          )?.companyShortName ||
-                            mstyleTenantOptions.find(
-                              (item) =>
-                                item.id === mstyleProfile.resourceOwnerUserId,
-                            )?.company ||
-                            mstyleTenantOptions.find(
-                              (item) =>
-                                item.id === mstyleProfile.resourceOwnerUserId,
-                            )?.fullName ||
-                            mstyleProfile.resourceOwnerProfileId ||
-                            'не найден'}
-                        </div>
-                        <div className="text-xs text-[var(--muted)] mt-1">
-                          Квота, дата сброса и Mstyle-офисы наследуются от
-                          основного профиля.
-                        </div>
-                      </div>
-                    ) : (
-                      <label className="flex items-center gap-2 text-sm">
-                        <input
-                          type="checkbox"
-                          checked={mstyleProfile.resourceRole === 'primary'}
-                          disabled={
-                            mstyleProfileLoading ||
-                            (mstyleProfile.resourceRole === 'primary' &&
-                              mstyleProfile.secondaryUserIds.length > 0)
-                          }
-                          onChange={(e) =>
-                            setMstyleProfile((prev) => ({
-                              ...prev,
-                              resourceRole: e.target.checked
-                                ? 'primary'
-                                : 'standalone',
-                              resourceOwnerProfileId: e.target.checked
-                                ? prev.profileId
-                                : null,
-                            }))
-                          }
-                        />
-                        Основной профиль
-                      </label>
-                    )}
-                    {mstyleProfile.resourceRole === 'primary' &&
-                      mstyleProfile.secondaryUserIds.length > 0 && (
-                        <p className="text-xs text-[var(--muted)] mt-1">
-                          Чтобы отключить основной профиль, сначала отвяжите все
-                          второстепенные профили и сохраните изменения.
-                        </p>
-                      )}
-                  </div>
-
-                  <div>
-                    <label className="label">
-                      Квота резидентских часов, ч/мес. (Mstyle)
-                    </label>
-                    <input
-                      className="input"
-                      type="number"
-                      min={0}
-                      step={0.5}
-                      value={mstyleProfile.residentHoursMonthlyQuotaMin / 60}
-                      disabled={
-                        mstyleProfileLoading ||
-                        mstyleProfile.resourceRole === 'secondary'
-                      }
-                      onChange={(e) => {
-                        const hours =
-                          e.target.value === '' ? 0 : Number(e.target.value);
-                        setMstyleProfile((prev) => ({
-                          ...prev,
-                          residentHoursMonthlyQuotaMin: Math.max(
-                            0,
-                            Math.round(hours * 60),
-                          ),
-                        }));
-                      }}
-                      placeholder="0"
-                    />
-                  </div>
-
-                  <div>
-                    <label className="label">Дата сброса квоты (Mstyle)</label>
-                    <input
-                      className="input"
-                      type="number"
-                      min={1}
-                      max={31}
-                      step={1}
-                      value={mstyleProfile.residentHoursMonthlyResetDay}
-                      disabled={
-                        mstyleProfileLoading ||
-                        mstyleProfile.resourceRole === 'secondary'
-                      }
-                      onChange={(e) => {
-                        const day =
-                          e.target.value === '' ? 1 : Number(e.target.value);
-                        setMstyleProfile((prev) => ({
-                          ...prev,
-                          residentHoursMonthlyResetDay: Math.min(
-                            31,
-                            Math.max(1, Math.trunc(day)),
-                          ),
-                        }));
-                      }}
-                      placeholder="1"
-                    />
-                  </div>
-
-                  {mstyleProfile.resourceRole === 'primary' && (
-                    <div className="sm:col-span-2 border border-[var(--border)] rounded-lg bg-[var(--surface-muted)]">
-                      <button
-                        type="button"
-                        className="w-full flex items-center justify-between gap-3 p-4 text-left"
-                        onClick={() =>
-                          setSecondaryProfilesExpanded((value) => !value)
-                        }
-                      >
-                        <span className="flex items-center gap-2">
-                          <Link2 className="w-4 h-4 text-[var(--primary)]" />
-                          <span className="font-medium text-sm">
-                            Привязать второстепенные профили
-                          </span>
-                          {mstyleProfile.secondaryUserIds.length > 0 && (
-                            <span className="text-xs text-[var(--muted)]">
-                              ({mstyleProfile.secondaryUserIds.length})
-                            </span>
-                          )}
-                        </span>
-                        {secondaryProfilesExpanded ? (
-                          <ChevronDown className="w-4 h-4" />
-                        ) : (
-                          <ChevronRight className="w-4 h-4" />
-                        )}
-                      </button>
-
-                      {secondaryProfilesExpanded && (
-                        <div className="border-t border-[var(--border)] p-4 space-y-3">
-                          <p className="text-xs text-[var(--muted)]">
-                            Второстепенные профили сохраняют собственные
-                            реквизиты и доступы Pass, но используют
-                            Mstyle-ресурсы основного профиля.
-                          </p>
-                          <div className="relative">
-                            <Search className="absolute left-3 top-1/2 -translate-y-1/2 w-4 h-4 text-[var(--muted)]" />
-                            <input
-                              className="input input--icon-left text-sm"
-                              value={secondaryProfileSearch}
-                              onChange={(e) =>
-                                setSecondaryProfileSearch(e.target.value)
-                              }
-                              placeholder="Поиск профиля..."
-                            />
-                          </div>
-                          <div className="border border-[var(--border)] rounded-lg divide-y divide-[var(--border)] max-h-64 overflow-y-auto bg-[var(--surface)]">
-                            {mstyleTenantOptions
-                              .filter((item) => item.id !== editId)
-                              .filter((item) => {
-                                const needle = secondaryProfileSearch
-                                  .trim()
-                                  .toLowerCase();
-                                if (!needle) return true;
-                                return [
-                                  item.companyShortName,
-                                  item.company,
-                                  item.fullName,
-                                  item.email,
-                                  item.phone,
-                                ]
-                                  .filter(Boolean)
-                                  .some((value) =>
-                                    String(value)
-                                      .toLowerCase()
-                                      .includes(needle),
-                                  );
-                              })
-                              .map((item) => {
-                                const checked =
-                                  mstyleProfile.secondaryUserIds.includes(
-                                    item.id,
-                                  );
-                                const label =
-                                  item.companyShortName ||
-                                  item.company ||
-                                  item.fullName ||
-                                  item.email;
-                                return (
-                                  <label
-                                    key={item.id}
-                                    className={`flex items-start gap-2.5 text-sm cursor-pointer px-3 py-2 ${
-                                      checked
-                                        ? 'bg-[var(--status-approved-soft)]'
-                                        : 'hover:bg-[var(--surface-muted)]'
-                                    }`}
-                                  >
-                                    <input
-                                      type="checkbox"
-                                      className="mt-0.5"
-                                      checked={checked}
-                                      onChange={() =>
-                                        setMstyleProfile((prev) => ({
-                                          ...prev,
-                                          secondaryUserIds: checked
-                                            ? prev.secondaryUserIds.filter(
-                                                (id) => id !== item.id,
-                                              )
-                                            : [
-                                                ...prev.secondaryUserIds,
-                                                item.id,
-                                              ],
-                                        }))
-                                      }
-                                    />
-                                    <span className="min-w-0">
-                                      <span className="font-medium">
-                                        {label}
-                                      </span>
-                                      {item.email && label !== item.email && (
-                                        <span className="block text-[11px] text-[var(--muted)]">
-                                          {item.email}
-                                        </span>
-                                      )}
-                                    </span>
-                                  </label>
-                                );
-                              })}
-                          </div>
-                        </div>
-                      )}
-                    </div>
-                  )}
-                </>
-              )}
-            {form.role === 'tenant' &&
-              !users
-                .flatMap((x) => x.employees || [])
-                .some((e) => e.id === editId) && (
-                <div className="sm:col-span-2 space-y-2">
-                  <label className="label">Логотип компании</label>
-                  <div className="flex flex-wrap items-center gap-3">
-                    {form.companyLogo ? (
-                      // eslint-disable-next-line @next/next/no-img-element
-                      <img
-                        src={form.companyLogo}
-                        alt="Логотип"
-                        className="w-16 h-16 object-contain"
-                      />
-                    ) : (
-                      <div className="w-16 h-16 rounded-lg border border-dashed border-[var(--border)] bg-[var(--surface-muted)] flex items-center justify-center text-[10px] text-[var(--muted)]">
-                        нет
-                      </div>
-                    )}
-                    <label className="btn btn-secondary text-xs cursor-pointer">
-                      Загрузить
-                      <input
-                        type="file"
-                        accept="image/*"
-                        className="sr-only"
-                        onChange={(e) => {
-                          const file = e.target.files?.[0];
-                          if (!file) return;
-                          if (!file.type.startsWith('image/')) {
-                            toast(
-                              'Загрузите изображение (PNG, JPG, SVG)',
-                              'error',
-                            );
-                            return;
-                          }
-                          if (file.size > MAX_COMPANY_LOGO_BYTES) {
-                            toast(
-                              'Файл слишком большой. Максимум 80 КБ',
-                              'error',
-                            );
-                            return;
-                          }
-                          const reader = new FileReader();
-                          reader.onload = () =>
-                            setForm((prev) => ({
-                              ...prev,
-                              companyLogo: String(reader.result || ''),
-                            }));
-                          reader.readAsDataURL(file);
-                          e.target.value = '';
-                        }}
-                      />
-                    </label>
-                    {form.companyLogo ? (
-                      <button
-                        type="button"
-                        className="btn btn-secondary text-xs"
-                        onClick={() =>
-                          setForm((prev) => ({ ...prev, companyLogo: '' }))
-                        }
-                      >
-                        Убрать
-                      </button>
-                    ) : null}
-                  </div>
-                  <p className="text-xs text-[var(--muted)]">
-                    Показывается на карточке и странице пропуска вместо иконки
-                    типа
-                  </p>
-                </div>
-              )}
-          </div>
-
-          {editId &&
-            users
-              .flatMap((x) => x.employees || [])
-              .some((e) => e.id === editId) && (
-              <div className="rounded-lg border border-[var(--border)] bg-[var(--surface-muted)] p-3 text-sm text-[var(--muted)]">
-                Сотрудник компании
-                {users.find((x) => x.employees?.some((e) => e.id === editId))
-                  ?.fullName
-                  ? ` «${users.find((x) => x.employees?.some((e) => e.id === editId))?.fullName}»`
-                  : ''}
-                . Офисы наследуются от владельца; приглашения отправляет
-                владелец из профиля.
-              </div>
-            )}
-
-          {form.role === 'tenant' &&
-            !users
-              .flatMap((x) => x.employees || [])
-              .some((e) => e.id === editId) && (
-              <div className="border border-[var(--border)] rounded-lg p-4 bg-[var(--surface-muted)] space-y-3">
-                <div className="flex items-center justify-between gap-2">
-                  <div className="flex items-center gap-2">
-                    <Link2 className="w-4 h-4 text-[var(--primary)]" />
-                    <span className="font-medium text-sm">
-                      Привязка к офисам
-                    </span>
-                  </div>
-                  {officeIds.length > 0 && (
-                    <button
-                      type="button"
-                      className="text-xs text-[var(--muted)] hover:text-[var(--primary)]"
-                      onClick={() => setOfficeIds([])}
-                    >
-                      Снять все
-                    </button>
-                  )}
-                </div>
-                <p className="text-xs text-[var(--muted)]">
-                  Выберите офисы компании. Если офис уже занят, арендатор
-                  добавится к существующим — предыдущих не снимаем.
-                </p>
-
-                {selectedOfficeChips.length > 0 && (
-                  <div className="flex flex-wrap gap-1.5">
-                    {selectedOfficeChips.map((o) => (
-                      <button
-                        key={o.id}
-                        type="button"
-                        className="inline-flex items-center gap-1 text-xs px-2 py-1 rounded-full bg-[var(--status-approved-soft)] text-[var(--status-approved)] border border-[var(--status-approved-border)]"
-                        onClick={() => toggleOffice(o.id)}
-                        title="Убрать"
-                      >
-                        {o.businessCenterName
-                          ? `${o.businessCenterName}: `
-                          : ''}
-                        оф. {o.number}
-                        <X className="w-3 h-3" />
-                      </button>
-                    ))}
-                  </div>
-                )}
-
-                {allOffices.length === 0 ? (
-                  <p className="text-sm text-amber-700 bg-amber-50 p-3 rounded-md">
-                    Сначала добавьте офисы в реестре или создайте тестовые
-                    данные.
-                  </p>
-                ) : (
-                  <>
-                    <div className="relative">
-                      <Search className="absolute left-3 top-1/2 -translate-y-1/2 w-4 h-4 text-[var(--muted)]" />
-                      <input
-                        className="input input--icon-left text-sm"
-                        value={officePickerSearch}
-                        onChange={(e) => setOfficePickerSearch(e.target.value)}
-                        placeholder="Поиск офиса, БЦ, компании..."
-                      />
-                    </div>
-                    <div className="border border-[var(--border)] rounded-lg divide-y divide-[var(--border)] max-h-64 overflow-y-auto bg-[var(--surface)]">
-                      {Object.keys(filteredOfficesByBc).length === 0 ? (
-                        <div className="p-4 text-sm text-[var(--muted)] text-center">
-                          Ничего не найдено
-                        </div>
-                      ) : (
-                        Object.entries(filteredOfficesByBc).map(
-                          ([bc, offices]) => (
-                            <div key={bc} className="p-3">
-                              <div className="text-xs font-semibold text-[var(--muted)] uppercase mb-2">
-                                {bc}
-                              </div>
-                              <div className="space-y-1.5">
-                                {offices.map((office) => {
-                                  const checked = officeIds.includes(office.id);
-                                  const occupants = officeTenantIds(office);
-                                  const occupiedByOther = occupants.some(
-                                    (id) => id !== editId,
-                                  );
-                                  const otherNames =
-                                    office.tenants
-                                      ?.filter((t) => t.id !== editId)
-                                      .map((t) => t.name)
-                                      .join(', ') ||
-                                    (office.tenantId !== editId
-                                      ? office.tenantName
-                                      : '');
-                                  return (
-                                    <label
-                                      key={office.id}
-                                      className={`flex items-start gap-2.5 text-sm cursor-pointer rounded-md px-2 py-1.5 -mx-1 ${
-                                        checked
-                                          ? 'bg-[var(--status-approved-soft)]'
-                                          : 'hover:bg-[var(--surface-muted)]'
-                                      }`}
-                                    >
-                                      <input
-                                        type="checkbox"
-                                        className="mt-0.5"
-                                        checked={checked}
-                                        onChange={() => toggleOffice(office.id)}
-                                      />
-                                      <span className="min-w-0">
-                                        <span className="font-medium">
-                                          оф. {office.number}
-                                        </span>
-                                        {office.floor ? (
-                                          <span className="text-[var(--muted)]">
-                                            {' '}
-                                            · {office.floor} эт.
-                                          </span>
-                                        ) : null}
-                                        {occupiedByOther ? (
-                                          <span className="block text-[11px] text-amber-700 mt-0.5">
-                                            Уже есть:{' '}
-                                            {otherNames || 'другой арендатор'}
-                                            {office.company
-                                              ? ` (${office.company})`
-                                              : ''}{' '}
-                                            — будет добавлен ещё один
-                                          </span>
-                                        ) : office.company ? (
-                                          <span className="block text-[11px] text-[var(--muted)]">
-                                            {office.company}
-                                          </span>
-                                        ) : null}
-                                      </span>
-                                    </label>
-                                  );
-                                })}
-                              </div>
-                            </div>
-                          ),
-                        )
-                      )}
-                    </div>
-                  </>
-                )}
-                <p className="text-xs text-[var(--muted)]">
-                  {officeIds.length > 0
-                    ? `Выбрано офисов: ${officeIds.length}`
-                    : 'Офисы не выбраны — заказ пропусков будет недоступен'}
-                </p>
-              </div>
-            )}
-
-          {(form.role === 'security' || form.role === 'bc_admin') && (
-            <div className="border border-[var(--border)] rounded-lg p-4 bg-[var(--surface-muted)]">
-              <div className="flex items-center gap-2 mb-3">
-                <Link2 className="w-4 h-4 text-[var(--primary)]" />
-                <span className="font-medium text-sm">
-                  {form.role === 'bc_admin'
-                    ? 'Бизнес-центры под управлением'
-                    : 'Привязка к бизнес-центрам'}
-                </span>
-              </div>
-              {businessCenters.length === 0 ? (
-                <p className="text-sm text-amber-700 bg-amber-50 p-3 rounded-md">
-                  Сначала создайте бизнес-центры.
-                </p>
-              ) : (
-                <div className="space-y-2 bg-[var(--surface)] border border-[var(--border)] rounded-lg p-3 max-h-48 overflow-y-auto">
-                  {businessCenters.map((bc) => (
-                    <label
-                      key={bc.id}
-                      className="flex items-center gap-2 text-sm cursor-pointer"
-                    >
-                      <input
-                        type="checkbox"
-                        checked={propertyIds.includes(bc.id)}
-                        onChange={() => toggleProperty(bc.id)}
-                      />
-                      <span>
-                        {bc.name}
-                        {bc.address && (
-                          <span className="text-[var(--muted)]">
-                            {' '}
-                            · {bc.address}
-                          </span>
-                        )}
-                      </span>
-                    </label>
-                  ))}
-                </div>
-              )}
-              <p className="text-xs text-[var(--muted)] mt-2">
-                {propertyIds.length > 0
-                  ? `Выбрано БЦ: ${propertyIds.length}`
-                  : 'Бизнес-центры не выбраны'}
-              </p>
-            </div>
-          )}
-
-          <div className="flex flex-col sm:flex-row flex-wrap gap-3">
-            <label className="flex items-center gap-2 text-sm">
-              <input
-                type="checkbox"
-                checked={form.emailVerified !== false}
-                onChange={(e) =>
-                  setForm({ ...form, emailVerified: e.target.checked })
-                }
-              />
-              Email подтверждён
-            </label>
-            <label className="flex items-center gap-2 text-sm">
-              <input
-                type="checkbox"
-                checked={!!form.privateDataComplete}
-                onChange={(e) =>
-                  setForm({ ...form, privateDataComplete: e.target.checked })
-                }
-              />
-              Анкета полная
-            </label>
-            {editId && (
-              <>
-                <label className="flex items-center gap-2 text-sm">
+            <form
+              id="admin-user-form"
+              onSubmit={handleSubmit}
+              className="admin-user-form space-y-3"
+              autoComplete="off"
+            >
+              <div className="admin-user-form__grid grid sm:grid-cols-2 lg:grid-cols-3 gap-3">
+                <div>
+                  <label className="label">Email *</label>
                   <input
-                    type="checkbox"
-                    checked={isActive}
-                    onChange={(e) => setIsActive(e.target.checked)}
+                    className="input"
+                    type="email"
+                    value={form.email}
+                    onChange={(e) =>
+                      setForm({ ...form, email: e.target.value })
+                    }
+                    required
+                    autoComplete="off"
                   />
-                  Активен
-                </label>
-                <label className="flex items-center gap-2 text-sm">
+                </div>
+                <div>
+                  <label className="label">
+                    {editId ? 'Новый пароль' : 'Пароль *'}
+                  </label>
                   <input
-                    type="checkbox"
-                    checked={isBlocked}
-                    onChange={(e) => setIsBlocked(e.target.checked)}
+                    className="input"
+                    type="password"
+                    value={form.password}
+                    onChange={(e) =>
+                      setForm({ ...form, password: e.target.value })
+                    }
+                    required={!editId}
+                    minLength={6}
+                    autoComplete="new-password"
                   />
-                  Заблокирован (отзыв сессий Pass, +authVersion)
-                </label>
+                </div>
+                <div>
+                  <label className="label">Логин (username)</label>
+                  <input
+                    className="input"
+                    value={form.username || ''}
+                    onChange={(e) =>
+                      setForm({ ...form, username: e.target.value })
+                    }
+                    placeholder="необязательно"
+                    autoComplete="off"
+                  />
+                </div>
+                <div>
+                  <label className="label">Отображаемое имя</label>
+                  <input
+                    className="input"
+                    value={form.displayName || ''}
+                    onChange={(e) =>
+                      setForm({ ...form, displayName: e.target.value })
+                    }
+                    placeholder="по умолчанию ФИО"
+                  />
+                </div>
+                <div className="sm:col-span-2">
+                  <PersonNameFields
+                    value={nameParts}
+                    labels={getUserNameLabels(
+                      form.role === 'tenant' || form.role === 'tenant_employee'
+                        ? 'tenant'
+                        : form.role,
+                    )}
+                    onChange={setNameParts}
+                  />
+                </div>
+                <div>
+                  <label className="label">Роль *</label>
+                  <div className="select-wrap">
+                    <select
+                      className="input"
+                      value={form.role}
+                      onChange={(e) =>
+                        setForm({ ...form, role: e.target.value as UserRole })
+                      }
+                      disabled={
+                        !!editId &&
+                        !!users
+                          .flatMap((x) => x.employees || [])
+                          .some((e) => e.id === editId)
+                      }
+                    >
+                      {form.role === 'tenant_employee' && (
+                        <option value="tenant_employee">
+                          {getRoleLabel('tenant_employee')}
+                        </option>
+                      )}
+                      {category === 'tenants' &&
+                      form.role !== 'tenant_employee' ? (
+                        <option value="tenant">{ROLE_LABELS.tenant}</option>
+                      ) : null}
+                      {category === 'staff' &&
+                        form.role !== 'tenant_employee' &&
+                        STAFF_ROLES.map((role) => (
+                          <option key={role} value={role}>
+                            {getRoleLabel(role)}
+                          </option>
+                        ))}
+                      {category === 'staff' &&
+                        form.role !== 'tenant_employee' && (
+                          <option value="tenant">{ROLE_LABELS.tenant}</option>
+                        )}
+                      {category === 'tenants' &&
+                        form.role !== 'tenant_employee' &&
+                        form.role !== 'tenant' && (
+                          <option value={form.role}>
+                            {getRoleLabel(form.role)}
+                          </option>
+                        )}
+                    </select>
+                  </div>
+                </div>
+                <div>
+                  <label className="label">Компания</label>
+                  <input
+                    className="input"
+                    value={form.company}
+                    onChange={(e) =>
+                      setForm({ ...form, company: e.target.value })
+                    }
+                  />
+                </div>
+                <div>
+                  <label className="label">Телефон</label>
+                  <input
+                    className="input"
+                    type="tel"
+                    value={form.phone}
+                    onChange={(e) =>
+                      setForm({ ...form, phone: e.target.value })
+                    }
+                    autoComplete="off"
+                  />
+                </div>
+                <div>
+                  <label className="label">Дата рождения</label>
+                  <input
+                    className="input"
+                    type="date"
+                    value={form.birthDate || ''}
+                    onChange={(e) =>
+                      setForm({ ...form, birthDate: e.target.value })
+                    }
+                  />
+                </div>
                 {form.role === 'tenant' &&
                   !users
                     .flatMap((x) => x.employees || [])
                     .some((e) => e.id === editId) && (
-                    <label className="flex items-center gap-2 text-sm">
-                      <span>Статус профиля (Mstyle)</span>
-                      <select
-                        className="input w-auto py-1"
-                        value={mstyleProfile.status ?? 'active'}
-                        disabled={
-                          mstyleProfileLoading ||
-                          mstyleProfile.status === 'closed' ||
-                          mstyleProfile.status === 'deleted'
-                        }
-                        title={
-                          mstyleProfile.exists
-                            ? 'Статус MstyleProfile'
-                            : 'Профиль Mstyle будет создан при сохранении'
-                        }
-                        onChange={(e) =>
-                          setMstyleProfile((prev) => ({
-                            ...prev,
-                            status: e.target
-                              .value as AdminMstyleProfileState['status'],
-                          }))
-                        }
-                      >
-                        {mstyleProfile.status === 'draft' && (
-                          <option value="draft" disabled>
-                            Черновик
-                          </option>
+                    <>
+                      <div>
+                        <label className="label">Тип профиля</label>
+                        <div className="select-wrap">
+                          <select
+                            className="input"
+                            value={form.profileType || 'individual'}
+                            onChange={(e) =>
+                              setForm({
+                                ...form,
+                                profileType: e.target.value as
+                                  'individual' | 'company',
+                                legalForm:
+                                  e.target.value === 'company'
+                                    ? form.legalForm || 'ooo'
+                                    : null,
+                              })
+                            }
+                          >
+                            <option value="individual">Физлицо</option>
+                            <option value="company">Компания</option>
+                          </select>
+                        </div>
+                      </div>
+                      {form.profileType === 'company' && (
+                        <div>
+                          <label className="label">Правовая форма</label>
+                          <div className="select-wrap">
+                            <select
+                              className="input"
+                              value={form.legalForm || 'ooo'}
+                              onChange={(e) =>
+                                setForm({
+                                  ...form,
+                                  legalForm: e.target.value as 'ip' | 'ooo',
+                                })
+                              }
+                            >
+                              <option value="ooo">ООО</option>
+                              <option value="ip">ИП</option>
+                            </select>
+                          </div>
+                        </div>
+                      )}
+                      <div>
+                        <label className="label">Краткое название</label>
+                        <input
+                          className="input"
+                          value={form.companyShortName || ''}
+                          onChange={(e) =>
+                            setForm({
+                              ...form,
+                              companyShortName: e.target.value,
+                            })
+                          }
+                          placeholder="для документов и снимков"
+                        />
+                      </div>
+                      <div>
+                        <label className="label">Лимит сотрудников</label>
+                        <input
+                          className="input"
+                          type="number"
+                          min={0}
+                          max={200}
+                          value={form.employeeLimit ?? ''}
+                          onChange={(e) =>
+                            setForm({
+                              ...form,
+                              employeeLimit:
+                                e.target.value === ''
+                                  ? null
+                                  : Number(e.target.value),
+                            })
+                          }
+                          placeholder="по умолчанию 3"
+                        />
+                      </div>
+                      {editId && (
+                        <div className="sm:col-span-2 border border-[var(--border)] rounded-lg bg-[var(--surface-muted)]">
+                          <button
+                            type="button"
+                            className="w-full flex items-center justify-between gap-3 p-4 text-left"
+                            onClick={() =>
+                              setResidentDataExpanded((value) => !value)
+                            }
+                          >
+                            <span className="font-medium text-sm">
+                              Дополнительные данные резидента
+                            </span>
+                            {residentDataExpanded ? (
+                              <ChevronDown className="w-4 h-4" />
+                            ) : (
+                              <ChevronRight className="w-4 h-4" />
+                            )}
+                          </button>
+                          {residentDataExpanded && (
+                            <div className="border-t border-[var(--border)] p-4 grid grid-cols-1 sm:grid-cols-2 gap-3">
+                              <label
+                                className="sm:col-span-2 flex items-center gap-2 text-sm"
+                                title="Как правило, реквизиты профиля зафиксированы потому что на них заключён договор аренды. Проверьте нужно ли разрешать этому профилю редактирование своих данных"
+                              >
+                                <input
+                                  type="checkbox"
+                                  checked={
+                                    mstyleProfile.editPolicy === 'self_service'
+                                  }
+                                  disabled={
+                                    mstyleProfileLoading ||
+                                    mstyleProfile.editPolicy === 'locked'
+                                  }
+                                  onChange={(e) => {
+                                    setMstyleEditPolicyDirty(true);
+                                    setMstyleProfile((prev) => ({
+                                      ...prev,
+                                      editPolicy: e.target.checked
+                                        ? 'self_service'
+                                        : 'request_only',
+                                    }));
+                                  }}
+                                />
+                                Разрешено редактировать свой профиль
+                              </label>
+                              {residentPrivateFields(
+                                form.profileType,
+                                form.legalForm,
+                              ).map((field) => (
+                                <div key={field.path}>
+                                  <label className="label">{field.label}</label>
+                                  <input
+                                    className="input"
+                                    type={field.type || 'text'}
+                                    value={privateString(
+                                      mstyleProfile.privateData,
+                                      field.path,
+                                    )}
+                                    onChange={(e) => {
+                                      setResidentPrivateDirty(true);
+                                      setMstyleProfile((prev) => ({
+                                        ...prev,
+                                        privateData: setPrivateString(
+                                          prev.privateData,
+                                          field.path,
+                                          e.target.value,
+                                        ),
+                                      }));
+                                    }}
+                                  />
+                                </div>
+                              ))}
+                            </div>
+                          )}
+                        </div>
+                      )}
+
+                      <div className="sm:col-span-2">
+                        {mstyleProfile.resourceRole === 'secondary' ? (
+                          <div className="rounded-lg border border-[var(--border)] bg-[var(--surface-muted)] p-3 text-sm">
+                            <div className="font-medium">
+                              Второстепенный профиль
+                            </div>
+                            <div className="text-xs text-[var(--muted)] mt-1">
+                              Основной профиль:{' '}
+                              {mstyleTenantOptions.find(
+                                (item) =>
+                                  item.id === mstyleProfile.resourceOwnerUserId,
+                              )?.companyShortName ||
+                                mstyleTenantOptions.find(
+                                  (item) =>
+                                    item.id ===
+                                    mstyleProfile.resourceOwnerUserId,
+                                )?.company ||
+                                mstyleTenantOptions.find(
+                                  (item) =>
+                                    item.id ===
+                                    mstyleProfile.resourceOwnerUserId,
+                                )?.fullName ||
+                                mstyleProfile.resourceOwnerProfileId ||
+                                'не найден'}
+                            </div>
+                            <div className="text-xs text-[var(--muted)] mt-1">
+                              Квота, дата сброса и Mstyle-офисы наследуются от
+                              основного профиля.
+                            </div>
+                          </div>
+                        ) : (
+                          <label className="flex items-center gap-2 text-sm">
+                            <input
+                              type="checkbox"
+                              checked={mstyleProfile.resourceRole === 'primary'}
+                              disabled={
+                                mstyleProfileLoading ||
+                                (mstyleProfile.resourceRole === 'primary' &&
+                                  mstyleProfile.secondaryUserIds.length > 0)
+                              }
+                              onChange={(e) =>
+                                setMstyleProfile((prev) => ({
+                                  ...prev,
+                                  resourceRole: e.target.checked
+                                    ? 'primary'
+                                    : 'standalone',
+                                  resourceOwnerProfileId: e.target.checked
+                                    ? prev.profileId
+                                    : null,
+                                }))
+                              }
+                            />
+                            Основной профиль
+                          </label>
                         )}
-                        <option value="active">Активен</option>
-                        <option value="suspended">Приостановлен</option>
-                        <option value="closed">Закрыт</option>
-                        {mstyleProfile.status === 'deleted' && (
-                          <option value="deleted" disabled>
-                            Удалён
-                          </option>
-                        )}
-                      </select>
-                    </label>
+                        {mstyleProfile.resourceRole === 'primary' &&
+                          mstyleProfile.secondaryUserIds.length > 0 && (
+                            <p className="text-xs text-[var(--muted)] mt-1">
+                              Чтобы отключить основной профиль, сначала отвяжите
+                              все второстепенные профили и сохраните изменения.
+                            </p>
+                          )}
+                      </div>
+
+                      <div>
+                        <label className="label">
+                          Квота резидентских часов, ч/мес. (Mstyle)
+                        </label>
+                        <input
+                          className="input"
+                          type="number"
+                          min={0}
+                          step={0.5}
+                          value={
+                            mstyleProfile.residentHoursMonthlyQuotaMin / 60
+                          }
+                          disabled={
+                            mstyleProfileLoading ||
+                            mstyleProfile.resourceRole === 'secondary'
+                          }
+                          onChange={(e) => {
+                            const hours =
+                              e.target.value === ''
+                                ? 0
+                                : Number(e.target.value);
+                            setMstyleProfile((prev) => ({
+                              ...prev,
+                              residentHoursMonthlyQuotaMin: Math.max(
+                                0,
+                                Math.round(hours * 60),
+                              ),
+                            }));
+                          }}
+                          placeholder="0"
+                        />
+                      </div>
+
+                      <div>
+                        <label className="label">
+                          Дата сброса квоты (Mstyle)
+                        </label>
+                        <input
+                          className="input"
+                          type="number"
+                          min={1}
+                          max={31}
+                          step={1}
+                          value={mstyleProfile.residentHoursMonthlyResetDay}
+                          disabled={
+                            mstyleProfileLoading ||
+                            mstyleProfile.resourceRole === 'secondary'
+                          }
+                          onChange={(e) => {
+                            const day =
+                              e.target.value === ''
+                                ? 1
+                                : Number(e.target.value);
+                            setMstyleProfile((prev) => ({
+                              ...prev,
+                              residentHoursMonthlyResetDay: Math.min(
+                                31,
+                                Math.max(1, Math.trunc(day)),
+                              ),
+                            }));
+                          }}
+                          placeholder="1"
+                        />
+                      </div>
+
+                      {mstyleProfile.resourceRole === 'primary' && (
+                        <div className="sm:col-span-2 border border-[var(--border)] rounded-lg bg-[var(--surface-muted)]">
+                          <button
+                            type="button"
+                            className="w-full flex items-center justify-between gap-3 p-4 text-left"
+                            onClick={() =>
+                              setSecondaryProfilesExpanded((value) => !value)
+                            }
+                          >
+                            <span className="flex items-center gap-2">
+                              <Link2 className="w-4 h-4 text-[var(--primary)]" />
+                              <span className="font-medium text-sm">
+                                Привязать второстепенные профили
+                              </span>
+                              {mstyleProfile.secondaryUserIds.length > 0 && (
+                                <span className="text-xs text-[var(--muted)]">
+                                  ({mstyleProfile.secondaryUserIds.length})
+                                </span>
+                              )}
+                            </span>
+                            {secondaryProfilesExpanded ? (
+                              <ChevronDown className="w-4 h-4" />
+                            ) : (
+                              <ChevronRight className="w-4 h-4" />
+                            )}
+                          </button>
+
+                          {secondaryProfilesExpanded && (
+                            <div className="border-t border-[var(--border)] p-4 space-y-3">
+                              <p className="text-xs text-[var(--muted)]">
+                                Второстепенные профили сохраняют собственные
+                                реквизиты и доступы Pass, но используют
+                                Mstyle-ресурсы основного профиля.
+                              </p>
+                              <div className="relative">
+                                <Search className="absolute left-3 top-1/2 -translate-y-1/2 w-4 h-4 text-[var(--muted)]" />
+                                <input
+                                  className="input input--icon-left text-sm"
+                                  value={secondaryProfileSearch}
+                                  onChange={(e) =>
+                                    setSecondaryProfileSearch(e.target.value)
+                                  }
+                                  placeholder="Поиск профиля..."
+                                />
+                              </div>
+                              <div className="border border-[var(--border)] rounded-lg divide-y divide-[var(--border)] max-h-64 overflow-y-auto bg-[var(--surface)]">
+                                {mstyleTenantOptions
+                                  .filter((item) => item.id !== editId)
+                                  .filter((item) => {
+                                    const needle = secondaryProfileSearch
+                                      .trim()
+                                      .toLowerCase();
+                                    if (!needle) return true;
+                                    return [
+                                      item.companyShortName,
+                                      item.company,
+                                      item.fullName,
+                                      item.email,
+                                      item.phone,
+                                    ]
+                                      .filter(Boolean)
+                                      .some((value) =>
+                                        String(value)
+                                          .toLowerCase()
+                                          .includes(needle),
+                                      );
+                                  })
+                                  .map((item) => {
+                                    const checked =
+                                      mstyleProfile.secondaryUserIds.includes(
+                                        item.id,
+                                      );
+                                    const label =
+                                      item.companyShortName ||
+                                      item.company ||
+                                      item.fullName ||
+                                      item.email;
+                                    return (
+                                      <label
+                                        key={item.id}
+                                        className={`flex items-start gap-2.5 text-sm cursor-pointer px-3 py-2 ${
+                                          checked
+                                            ? 'bg-[var(--status-approved-soft)]'
+                                            : 'hover:bg-[var(--surface-muted)]'
+                                        }`}
+                                      >
+                                        <input
+                                          type="checkbox"
+                                          className="mt-0.5"
+                                          checked={checked}
+                                          onChange={() =>
+                                            setMstyleProfile((prev) => ({
+                                              ...prev,
+                                              secondaryUserIds: checked
+                                                ? prev.secondaryUserIds.filter(
+                                                    (id) => id !== item.id,
+                                                  )
+                                                : [
+                                                    ...prev.secondaryUserIds,
+                                                    item.id,
+                                                  ],
+                                            }))
+                                          }
+                                        />
+                                        <span className="min-w-0">
+                                          <span className="font-medium">
+                                            {label}
+                                          </span>
+                                          {item.email &&
+                                            label !== item.email && (
+                                              <span className="block text-[11px] text-[var(--muted)]">
+                                                {item.email}
+                                              </span>
+                                            )}
+                                        </span>
+                                      </label>
+                                    );
+                                  })}
+                              </div>
+                            </div>
+                          )}
+                        </div>
+                      )}
+                    </>
                   )}
-              </>
-            )}
-          </div>
-          {editId &&
-            (() => {
-              const current =
-                users.find((x) => x.id === editId) ||
+                {form.role === 'tenant' &&
+                  !users
+                    .flatMap((x) => x.employees || [])
+                    .some((e) => e.id === editId) && (
+                    <div className="sm:col-span-2 space-y-2">
+                      <label className="label">Логотип компании</label>
+                      <div className="flex flex-wrap items-center gap-3">
+                        {form.companyLogo ? (
+                          // eslint-disable-next-line @next/next/no-img-element
+                          <img
+                            src={form.companyLogo}
+                            alt="Логотип"
+                            className="w-16 h-16 object-contain"
+                          />
+                        ) : (
+                          <div className="w-16 h-16 rounded-lg border border-dashed border-[var(--border)] bg-[var(--surface-muted)] flex items-center justify-center text-[10px] text-[var(--muted)]">
+                            нет
+                          </div>
+                        )}
+                        <label className="btn btn-secondary text-xs cursor-pointer">
+                          Загрузить
+                          <input
+                            type="file"
+                            accept="image/*"
+                            className="sr-only"
+                            onChange={(e) => {
+                              const file = e.target.files?.[0];
+                              if (!file) return;
+                              if (!file.type.startsWith('image/')) {
+                                toast(
+                                  'Загрузите изображение (PNG, JPG, SVG)',
+                                  'error',
+                                );
+                                return;
+                              }
+                              if (file.size > MAX_COMPANY_LOGO_BYTES) {
+                                toast(
+                                  'Файл слишком большой. Максимум 80 КБ',
+                                  'error',
+                                );
+                                return;
+                              }
+                              const reader = new FileReader();
+                              reader.onload = () =>
+                                setForm((prev) => ({
+                                  ...prev,
+                                  companyLogo: String(reader.result || ''),
+                                }));
+                              reader.readAsDataURL(file);
+                              e.target.value = '';
+                            }}
+                          />
+                        </label>
+                        {form.companyLogo ? (
+                          <button
+                            type="button"
+                            className="btn btn-secondary text-xs"
+                            onClick={() =>
+                              setForm((prev) => ({ ...prev, companyLogo: '' }))
+                            }
+                          >
+                            Убрать
+                          </button>
+                        ) : null}
+                      </div>
+                      <p className="text-xs text-[var(--muted)]">
+                        Показывается на карточке и странице пропуска вместо
+                        иконки типа
+                      </p>
+                    </div>
+                  )}
+              </div>
+
+              {editId &&
                 users
                   .flatMap((x) => x.employees || [])
-                  .find((e) => e.id === editId);
-              if (!current) return null;
-              if (
-                !current.lastLoginAt &&
-                !current.invitePending &&
-                !current.parentTenantName
-              ) {
-                return null;
-              }
-              return (
-                <div className="rounded-lg border border-[var(--border)] bg-[var(--surface-muted)] p-3 text-xs text-[var(--muted)] space-y-1">
-                  {current.lastLoginAt && (
-                    <div>
-                      Вход:{' '}
-                      {new Date(current.lastLoginAt).toLocaleString('ru-RU')}
+                  .some((e) => e.id === editId) && (
+                  <div className="rounded-lg border border-[var(--border)] bg-[var(--surface-muted)] p-3 text-sm text-[var(--muted)]">
+                    Сотрудник компании
+                    {users.find((x) =>
+                      x.employees?.some((e) => e.id === editId),
+                    )?.fullName
+                      ? ` «${users.find((x) => x.employees?.some((e) => e.id === editId))?.fullName}»`
+                      : ''}
+                    . Офисы наследуются от владельца; приглашения отправляет
+                    владелец из профиля.
+                  </div>
+                )}
+
+              {form.role === 'tenant' &&
+                !users
+                  .flatMap((x) => x.employees || [])
+                  .some((e) => e.id === editId) && (
+                  <div className="border border-[var(--border)] rounded-lg p-4 bg-[var(--surface-muted)] space-y-3">
+                    <div className="flex items-center justify-between gap-2">
+                      <div className="flex items-center gap-2">
+                        <Link2 className="w-4 h-4 text-[var(--primary)]" />
+                        <span className="font-medium text-sm">
+                          Привязка к офисам
+                        </span>
+                      </div>
+                      {officeIds.length > 0 && (
+                        <button
+                          type="button"
+                          className="text-xs text-[var(--muted)] hover:text-[var(--primary)]"
+                          onClick={() => setOfficeIds([])}
+                        >
+                          Снять все
+                        </button>
+                      )}
+                    </div>
+                    <p className="text-xs text-[var(--muted)]">
+                      Выберите офисы компании. Если офис уже занят, арендатор
+                      добавится к существующим — предыдущих не снимаем.
+                    </p>
+
+                    {selectedOfficeChips.length > 0 && (
+                      <div className="flex flex-wrap gap-1.5">
+                        {selectedOfficeChips.map((o) => (
+                          <button
+                            key={o.id}
+                            type="button"
+                            className="inline-flex items-center gap-1 text-xs px-2 py-1 rounded-full bg-[var(--status-approved-soft)] text-[var(--status-approved)] border border-[var(--status-approved-border)]"
+                            onClick={() => toggleOffice(o.id)}
+                            title="Убрать"
+                          >
+                            {o.businessCenterName
+                              ? `${o.businessCenterName}: `
+                              : ''}
+                            оф. {o.number}
+                            <X className="w-3 h-3" />
+                          </button>
+                        ))}
+                      </div>
+                    )}
+
+                    {allOffices.length === 0 ? (
+                      <p className="text-sm text-amber-700 bg-amber-50 p-3 rounded-md">
+                        Сначала добавьте офисы в реестре или создайте тестовые
+                        данные.
+                      </p>
+                    ) : (
+                      <>
+                        <div className="relative">
+                          <Search className="absolute left-3 top-1/2 -translate-y-1/2 w-4 h-4 text-[var(--muted)]" />
+                          <input
+                            className="input input--icon-left text-sm"
+                            value={officePickerSearch}
+                            onChange={(e) =>
+                              setOfficePickerSearch(e.target.value)
+                            }
+                            placeholder="Поиск офиса, БЦ, компании..."
+                          />
+                        </div>
+                        <div className="border border-[var(--border)] rounded-lg divide-y divide-[var(--border)] max-h-64 overflow-y-auto bg-[var(--surface)]">
+                          {Object.keys(filteredOfficesByBc).length === 0 ? (
+                            <div className="p-4 text-sm text-[var(--muted)] text-center">
+                              Ничего не найдено
+                            </div>
+                          ) : (
+                            Object.entries(filteredOfficesByBc).map(
+                              ([bc, offices]) => (
+                                <div key={bc} className="p-3">
+                                  <div className="text-xs font-semibold text-[var(--muted)] uppercase mb-2">
+                                    {bc}
+                                  </div>
+                                  <div className="space-y-1.5">
+                                    {offices.map((office) => {
+                                      const checked = officeIds.includes(
+                                        office.id,
+                                      );
+                                      const occupants = officeTenantIds(office);
+                                      const occupiedByOther = occupants.some(
+                                        (id) => id !== editId,
+                                      );
+                                      const otherNames =
+                                        office.tenants
+                                          ?.filter((t) => t.id !== editId)
+                                          .map((t) => t.name)
+                                          .join(', ') ||
+                                        (office.tenantId !== editId
+                                          ? office.tenantName
+                                          : '');
+                                      return (
+                                        <label
+                                          key={office.id}
+                                          className={`flex items-start gap-2.5 text-sm cursor-pointer rounded-md px-2 py-1.5 -mx-1 ${
+                                            checked
+                                              ? 'bg-[var(--status-approved-soft)]'
+                                              : 'hover:bg-[var(--surface-muted)]'
+                                          }`}
+                                        >
+                                          <input
+                                            type="checkbox"
+                                            className="mt-0.5"
+                                            checked={checked}
+                                            onChange={() =>
+                                              toggleOffice(office.id)
+                                            }
+                                          />
+                                          <span className="min-w-0">
+                                            <span className="font-medium">
+                                              оф. {office.number}
+                                            </span>
+                                            {office.floor ? (
+                                              <span className="text-[var(--muted)]">
+                                                {' '}
+                                                · {office.floor} эт.
+                                              </span>
+                                            ) : null}
+                                            {occupiedByOther ? (
+                                              <span className="block text-[11px] text-amber-700 mt-0.5">
+                                                Уже есть:{' '}
+                                                {otherNames ||
+                                                  'другой арендатор'}
+                                                {office.company
+                                                  ? ` (${office.company})`
+                                                  : ''}{' '}
+                                                — будет добавлен ещё один
+                                              </span>
+                                            ) : office.company ? (
+                                              <span className="block text-[11px] text-[var(--muted)]">
+                                                {office.company}
+                                              </span>
+                                            ) : null}
+                                          </span>
+                                        </label>
+                                      );
+                                    })}
+                                  </div>
+                                </div>
+                              ),
+                            )
+                          )}
+                        </div>
+                      </>
+                    )}
+                    <p className="text-xs text-[var(--muted)]">
+                      {officeIds.length > 0
+                        ? `Выбрано офисов: ${officeIds.length}`
+                        : 'Офисы не выбраны — заказ пропусков будет недоступен'}
+                    </p>
+                  </div>
+                )}
+
+              {(form.role === 'security' || form.role === 'bc_admin') && (
+                <div className="border border-[var(--border)] rounded-lg p-4 bg-[var(--surface-muted)]">
+                  <div className="flex items-center gap-2 mb-3">
+                    <Link2 className="w-4 h-4 text-[var(--primary)]" />
+                    <span className="font-medium text-sm">
+                      {form.role === 'bc_admin'
+                        ? 'Бизнес-центры под управлением'
+                        : 'Привязка к бизнес-центрам'}
+                    </span>
+                  </div>
+                  {businessCenters.length === 0 ? (
+                    <p className="text-sm text-amber-700 bg-amber-50 p-3 rounded-md">
+                      Сначала создайте бизнес-центры.
+                    </p>
+                  ) : (
+                    <div className="space-y-2 bg-[var(--surface)] border border-[var(--border)] rounded-lg p-3 max-h-48 overflow-y-auto">
+                      {businessCenters.map((bc) => (
+                        <label
+                          key={bc.id}
+                          className="flex items-center gap-2 text-sm cursor-pointer"
+                        >
+                          <input
+                            type="checkbox"
+                            checked={propertyIds.includes(bc.id)}
+                            onChange={() => toggleProperty(bc.id)}
+                          />
+                          <span>
+                            {bc.name}
+                            {bc.address && (
+                              <span className="text-[var(--muted)]">
+                                {' '}
+                                · {bc.address}
+                              </span>
+                            )}
+                          </span>
+                        </label>
+                      ))}
                     </div>
                   )}
-                  {current.invitePending && (
-                    <div>
-                      Приглашение не принято
-                      {current.inviteExpiresAt
-                        ? ` до ${new Date(current.inviteExpiresAt).toLocaleString('ru-RU')}`
-                        : ''}
-                    </div>
-                  )}
-                  {current.parentTenantName && (
-                    <div>Владелец: {current.parentTenantName}</div>
-                  )}
+                  <p className="text-xs text-[var(--muted)] mt-2">
+                    {propertyIds.length > 0
+                      ? `Выбрано БЦ: ${propertyIds.length}`
+                      : 'Бизнес-центры не выбраны'}
+                  </p>
                 </div>
-              );
-            })()}
-          {error && <div className="text-sm text-red-600">{error}</div>}
-          <div className="flex gap-2">
-            <button
-              type="submit"
-              className="btn btn-primary"
-              disabled={saving || mstyleProfileLoading}
-            >
-              {saving
-                ? 'Сохранение...'
-                : mstyleProfileLoading
-                  ? 'Загрузка Mstyle...'
-                  : 'Сохранить'}
-            </button>
-            <button
-              type="button"
-              className="btn btn-secondary"
-              onClick={() => setShowForm(false)}
-            >
-              Отмена
-            </button>
-          </div>
-        </form>
+              )}
+
+              <div className="flex flex-col sm:flex-row flex-wrap gap-3">
+                <label className="flex items-center gap-2 text-sm">
+                  <input
+                    type="checkbox"
+                    checked={form.emailVerified !== false}
+                    onChange={(e) =>
+                      setForm({ ...form, emailVerified: e.target.checked })
+                    }
+                  />
+                  Email подтверждён
+                </label>
+                <label className="flex items-center gap-2 text-sm">
+                  <input
+                    type="checkbox"
+                    checked={!!form.privateDataComplete}
+                    onChange={(e) =>
+                      setForm({
+                        ...form,
+                        privateDataComplete: e.target.checked,
+                      })
+                    }
+                  />
+                  Анкета полная
+                </label>
+                {editId && (
+                  <>
+                    <label className="flex items-center gap-2 text-sm">
+                      <input
+                        type="checkbox"
+                        checked={isActive}
+                        onChange={(e) => setIsActive(e.target.checked)}
+                      />
+                      Активен
+                    </label>
+                    <label className="flex items-center gap-2 text-sm">
+                      <input
+                        type="checkbox"
+                        checked={isBlocked}
+                        onChange={(e) => setIsBlocked(e.target.checked)}
+                      />
+                      Заблокирован (отзыв сессий Pass, +authVersion)
+                    </label>
+                    {form.role === 'tenant' &&
+                      !users
+                        .flatMap((x) => x.employees || [])
+                        .some((e) => e.id === editId) && (
+                        <label className="flex items-center gap-2 text-sm">
+                          <span>Статус профиля (Mstyle)</span>
+                          <select
+                            className="input w-auto py-1"
+                            value={mstyleProfile.status ?? 'active'}
+                            disabled={
+                              mstyleProfileLoading ||
+                              mstyleProfile.status === 'closed' ||
+                              mstyleProfile.status === 'deleted'
+                            }
+                            title={
+                              mstyleProfile.exists
+                                ? 'Статус MstyleProfile'
+                                : 'Профиль Mstyle будет создан при сохранении'
+                            }
+                            onChange={(e) =>
+                              setMstyleProfile((prev) => ({
+                                ...prev,
+                                status: e.target
+                                  .value as AdminMstyleProfileState['status'],
+                              }))
+                            }
+                          >
+                            {mstyleProfile.status === 'draft' && (
+                              <option value="draft" disabled>
+                                Черновик
+                              </option>
+                            )}
+                            <option value="active">Активен</option>
+                            <option value="suspended">Приостановлен</option>
+                            <option value="closed">Закрыт</option>
+                            {mstyleProfile.status === 'deleted' && (
+                              <option value="deleted" disabled>
+                                Удалён
+                              </option>
+                            )}
+                          </select>
+                        </label>
+                      )}
+                  </>
+                )}
+              </div>
+              {editId &&
+                (() => {
+                  const current =
+                    users.find((x) => x.id === editId) ||
+                    users
+                      .flatMap((x) => x.employees || [])
+                      .find((e) => e.id === editId);
+                  if (!current) return null;
+                  if (
+                    !current.lastLoginAt &&
+                    !current.invitePending &&
+                    !current.parentTenantName
+                  ) {
+                    return null;
+                  }
+                  return (
+                    <div className="rounded-lg border border-[var(--border)] bg-[var(--surface-muted)] p-3 text-xs text-[var(--muted)] space-y-1">
+                      {current.lastLoginAt && (
+                        <div>
+                          Вход:{' '}
+                          {new Date(current.lastLoginAt).toLocaleString(
+                            'ru-RU',
+                          )}
+                        </div>
+                      )}
+                      {current.invitePending && (
+                        <div>
+                          Приглашение не принято
+                          {current.inviteExpiresAt
+                            ? ` до ${new Date(current.inviteExpiresAt).toLocaleString('ru-RU')}`
+                            : ''}
+                        </div>
+                      )}
+                      {current.parentTenantName && (
+                        <div>Владелец: {current.parentTenantName}</div>
+                      )}
+                    </div>
+                  );
+                })()}
+              {error && <div className="text-sm text-red-600">{error}</div>}
+              <div className="flex gap-2">
+                <button
+                  type="submit"
+                  className="btn btn-primary"
+                  disabled={saving || mstyleProfileLoading}
+                >
+                  {saving
+                    ? 'Сохранение...'
+                    : mstyleProfileLoading
+                      ? 'Загрузка Mstyle...'
+                      : 'Сохранить'}
+                </button>
+                <button
+                  type="button"
+                  className="btn btn-secondary"
+                  onClick={() => setShowForm(false)}
+                >
+                  Отмена
+                </button>
+              </div>
+            </form>
           </div>
         </section>
       )}
 
-      {!showForm && <div className="card overflow-hidden">
-        <div className="overflow-x-auto">
-          <table className="admin-users-table w-full text-sm min-w-[760px]">
-            <thead className="surface-muted text-[var(--muted)]">
-              <tr>
-                <th className="text-left p-3 font-medium align-middle min-w-[12rem] w-[28%]">
-                  ФИО
-                </th>
-                <th className="text-left p-3 font-medium align-middle hidden lg:table-cell min-w-[10rem] w-[18%]">
-                  Email
-                </th>
-                {category === 'tenants' ? (
-                  <th className="text-left p-3 font-medium align-middle hidden md:table-cell min-w-[8rem] w-[16%]">
-                    Компания
+      {!showForm && (
+        <div className="card overflow-hidden">
+          <div className="overflow-x-auto">
+            <table className="admin-users-table w-full text-sm min-w-[760px]">
+              <thead className="surface-muted text-[var(--muted)]">
+                <tr>
+                  <th className="text-left p-3 font-medium align-middle min-w-[12rem] w-[28%]">
+                    ФИО
                   </th>
+                  <th className="text-left p-3 font-medium align-middle hidden lg:table-cell min-w-[10rem] w-[18%]">
+                    Email
+                  </th>
+                  {category === 'tenants' ? (
+                    <th className="text-left p-3 font-medium align-middle hidden md:table-cell min-w-[8rem] w-[16%]">
+                      Компания
+                    </th>
+                  ) : (
+                    <th className="text-left p-3 font-medium align-middle min-w-[7rem] w-[14%]">
+                      Роль
+                    </th>
+                  )}
+                  <th className="text-left p-3 font-medium align-middle hidden sm:table-cell min-w-[9rem] w-[20%]">
+                    {category === 'tenants' ? 'Офисы' : 'Бизнес-центры'}
+                  </th>
+                  <th className="text-left p-3 font-medium align-middle whitespace-nowrap min-w-[7.5rem] w-[12%]">
+                    Статус
+                  </th>
+                  <th className="p-3 text-right font-medium align-middle whitespace-nowrap w-[5.5rem]">
+                    Действия
+                  </th>
+                </tr>
+              </thead>
+              <tbody>
+                {loading ? (
+                  <tr>
+                    <td
+                      colSpan={6}
+                      className="p-8 text-center text-[var(--muted)]"
+                    >
+                      Загрузка...
+                    </td>
+                  </tr>
+                ) : users.length === 0 ? (
+                  <tr>
+                    <td
+                      colSpan={6}
+                      className="p-8 text-center text-[var(--muted)]"
+                    >
+                      {category === 'tenants'
+                        ? 'Арендаторы не найдены'
+                        : 'Сотрудники не найдены'}
+                    </td>
+                  </tr>
                 ) : (
-                  <th className="text-left p-3 font-medium align-middle min-w-[7rem] w-[14%]">
-                    Роль
-                  </th>
-                )}
-                <th className="text-left p-3 font-medium align-middle hidden sm:table-cell min-w-[9rem] w-[20%]">
-                  {category === 'tenants' ? 'Офисы' : 'Бизнес-центры'}
-                </th>
-                <th className="text-left p-3 font-medium align-middle whitespace-nowrap min-w-[7.5rem] w-[12%]">
-                  Статус
-                </th>
-                <th className="p-3 text-right font-medium align-middle whitespace-nowrap w-[5.5rem]">
-                  Действия
-                </th>
-              </tr>
-            </thead>
-            <tbody>
-              {loading ? (
-                <tr>
-                  <td
-                    colSpan={6}
-                    className="p-8 text-center text-[var(--muted)]"
-                  >
-                    Загрузка...
-                  </td>
-                </tr>
-              ) : users.length === 0 ? (
-                <tr>
-                  <td
-                    colSpan={6}
-                    className="p-8 text-center text-[var(--muted)]"
-                  >
-                    {category === 'tenants'
-                      ? 'Арендаторы не найдены'
-                      : 'Сотрудники не найдены'}
-                  </td>
-                </tr>
-              ) : (
-                users.map((u) => {
-                  const employees = u.employees || [];
-                  const empCount = u.employeesCount ?? employees.length;
-                  const expanded = !!expandedOwners[u.id];
-                  const canExpand = category === 'tenants' && empCount > 0;
-                  const bindings = formatBindings(u);
+                  users.map((u) => {
+                    const employees = u.employees || [];
+                    const empCount = u.employeesCount ?? employees.length;
+                    const expanded = !!expandedOwners[u.id];
+                    const canExpand = category === 'tenants' && empCount > 0;
+                    const bindings = formatBindings(u);
 
-                  return (
-                    <Fragment key={u.id}>
-                      <tr className="border-t border-[var(--border)] hover:bg-[var(--surface-muted)]">
-                        <td className="p-3 align-middle">
-                          <div className="flex items-center gap-2 min-w-0">
-                            {category === 'tenants' ? (
-                              <button
-                                type="button"
-                                className={`p-0.5 rounded shrink-0 w-5 h-5 inline-flex items-center justify-center ${
-                                  canExpand
-                                    ? 'hover:bg-[var(--surface)] text-[var(--text)]'
-                                    : 'invisible pointer-events-none'
-                                }`}
-                                onClick={() =>
-                                  canExpand && toggleOwnerExpanded(u.id)
-                                }
-                                aria-expanded={expanded}
-                                aria-label={
-                                  expanded
-                                    ? 'Свернуть сотрудников'
-                                    : 'Показать сотрудников'
-                                }
-                                disabled={!canExpand}
-                              >
-                                {expanded ? (
-                                  <ChevronDown className="w-4 h-4" />
-                                ) : (
-                                  <ChevronRight className="w-4 h-4" />
-                                )}
-                              </button>
-                            ) : (
-                              <span className="w-5 h-5 shrink-0" aria-hidden />
-                            )}
-                            <div className="min-w-0 flex-1">
-                              <div
-                                className="font-medium truncate leading-snug"
-                                title={u.fullName}
-                              >
-                                {u.fullName}
-                              </div>
-                              <div className="flex flex-wrap items-center gap-1 mt-0.5">
-                                {category === 'tenants' && (
-                                  <span className="text-[10px] px-1.5 py-0.5 rounded-full bg-[var(--surface-muted)] text-[var(--muted)] font-normal leading-none">
-                                    Владелец
-                                  </span>
-                                )}
-                                {category === 'tenants' && u.profileType && (
-                                  <span className="text-[10px] px-1.5 py-0.5 rounded-full bg-indigo-50 text-indigo-800 font-normal leading-none">
-                                    {profileTypeLabel(u.profileType)}
-                                    {u.profileType === 'company' && u.legalForm
-                                      ? ` · ${legalFormLabel(u.legalForm)}`
-                                      : ''}
-                                  </span>
-                                )}
-                                {u.profileChangeRequest && (
-                                  <span className="text-[10px] px-1.5 py-0.5 rounded-full bg-amber-100 text-amber-800 leading-none">
-                                    на модерации
-                                  </span>
-                                )}
-                                {canExpand && (
-                                  <button
-                                    type="button"
-                                    className="text-xs text-[var(--primary)] hover:underline inline-flex items-center gap-0.5 leading-none"
-                                    onClick={() => toggleOwnerExpanded(u.id)}
-                                  >
-                                    <Users className="w-3 h-3" />
-                                    {empCount}
-                                  </button>
-                                )}
-                              </div>
-                              <div
-                                className="text-xs text-[var(--muted)] lg:hidden truncate mt-0.5"
-                                title={u.email || undefined}
-                              >
-                                {u.email || '—'}
-                              </div>
-                              {category === 'tenants' && (
-                                <div
-                                  className="text-xs text-[var(--muted)] md:hidden truncate mt-0.5"
-                                  title={u.company || undefined}
+                    return (
+                      <Fragment key={u.id}>
+                        <tr className="border-t border-[var(--border)] hover:bg-[var(--surface-muted)]">
+                          <td className="p-3 align-middle">
+                            <div className="flex items-center gap-2 min-w-0">
+                              {category === 'tenants' ? (
+                                <button
+                                  type="button"
+                                  className={`p-0.5 rounded shrink-0 w-5 h-5 inline-flex items-center justify-center ${
+                                    canExpand
+                                      ? 'hover:bg-[var(--surface)] text-[var(--text)]'
+                                      : 'invisible pointer-events-none'
+                                  }`}
+                                  onClick={() =>
+                                    canExpand && toggleOwnerExpanded(u.id)
+                                  }
+                                  aria-expanded={expanded}
+                                  aria-label={
+                                    expanded
+                                      ? 'Свернуть сотрудников'
+                                      : 'Показать сотрудников'
+                                  }
+                                  disabled={!canExpand}
                                 >
-                                  {u.company || '—'}
+                                  {expanded ? (
+                                    <ChevronDown className="w-4 h-4" />
+                                  ) : (
+                                    <ChevronRight className="w-4 h-4" />
+                                  )}
+                                </button>
+                              ) : (
+                                <span
+                                  className="w-5 h-5 shrink-0"
+                                  aria-hidden
+                                />
+                              )}
+                              <div className="min-w-0 flex-1">
+                                <div
+                                  className="font-medium truncate leading-snug"
+                                  title={u.fullName}
+                                >
+                                  {u.fullName}
+                                </div>
+                                <div className="flex flex-wrap items-center gap-1 mt-0.5">
+                                  {category === 'tenants' && (
+                                    <span className="text-[10px] px-1.5 py-0.5 rounded-full bg-[var(--surface-muted)] text-[var(--muted)] font-normal leading-none">
+                                      Владелец
+                                    </span>
+                                  )}
+                                  {category === 'tenants' && u.profileType && (
+                                    <span className="text-[10px] px-1.5 py-0.5 rounded-full bg-indigo-50 text-indigo-800 font-normal leading-none">
+                                      {profileTypeLabel(u.profileType)}
+                                      {u.profileType === 'company' &&
+                                      u.legalForm
+                                        ? ` · ${legalFormLabel(u.legalForm)}`
+                                        : ''}
+                                    </span>
+                                  )}
+                                  {u.profileChangeRequest && (
+                                    <span className="text-[10px] px-1.5 py-0.5 rounded-full bg-amber-100 text-amber-800 leading-none">
+                                      на модерации
+                                    </span>
+                                  )}
+                                  {canExpand && (
+                                    <button
+                                      type="button"
+                                      className="text-xs text-[var(--primary)] hover:underline inline-flex items-center gap-0.5 leading-none"
+                                      onClick={() => toggleOwnerExpanded(u.id)}
+                                    >
+                                      <Users className="w-3 h-3" />
+                                      {empCount}
+                                    </button>
+                                  )}
+                                </div>
+                                <div
+                                  className="text-xs text-[var(--muted)] lg:hidden truncate mt-0.5"
+                                  title={u.email || undefined}
+                                >
+                                  {u.email || '—'}
+                                </div>
+                                {category === 'tenants' && (
+                                  <div
+                                    className="text-xs text-[var(--muted)] md:hidden truncate mt-0.5"
+                                    title={u.company || undefined}
+                                  >
+                                    {u.company || '—'}
+                                  </div>
+                                )}
+                                <div
+                                  className="text-xs text-[var(--muted)] sm:hidden mt-0.5 line-clamp-2"
+                                  title={bindings}
+                                >
+                                  {bindings}
+                                </div>
+                              </div>
+                            </div>
+                          </td>
+                          <td className="p-3 align-middle hidden lg:table-cell text-[var(--muted)]">
+                            <div
+                              className="truncate"
+                              title={u.email || undefined}
+                            >
+                              {u.email || '—'}
+                            </div>
+                            {u.email && (
+                              <div
+                                className={`text-[10px] mt-0.5 leading-none ${u.emailVerified ? 'text-emerald-700' : 'text-slate-500'}`}
+                              >
+                                {u.emailVerified
+                                  ? 'подтверждён'
+                                  : 'не подтверждён'}
+                              </div>
+                            )}
+                          </td>
+                          {category === 'tenants' ? (
+                            <td className="p-3 align-middle hidden md:table-cell text-[var(--muted)]">
+                              <div
+                                className="truncate"
+                                title={u.company || undefined}
+                              >
+                                {u.companyShortName || u.company || '—'}
+                              </div>
+                              {u.companyShortName && u.company && (
+                                <div className="text-[10px] truncate leading-none mt-0.5">
+                                  {u.company}
                                 </div>
                               )}
+                            </td>
+                          ) : (
+                            <td className="p-3 align-middle">
                               <div
-                                className="text-xs text-[var(--muted)] sm:hidden mt-0.5 line-clamp-2"
-                                title={bindings}
+                                className="truncate"
+                                title={getRoleLabel(u.role)}
                               >
-                                {bindings}
+                                {getRoleLabel(u.role)}
                               </div>
-                            </div>
-                          </div>
-                        </td>
-                        <td className="p-3 align-middle hidden lg:table-cell text-[var(--muted)]">
-                          <div
-                            className="truncate"
-                            title={u.email || undefined}
-                          >
-                            {u.email || '—'}
-                          </div>
-                          {u.email && (
-                            <div
-                              className={`text-[10px] mt-0.5 leading-none ${u.emailVerified ? 'text-emerald-700' : 'text-slate-500'}`}
-                            >
-                              {u.emailVerified
-                                ? 'подтверждён'
-                                : 'не подтверждён'}
-                            </div>
+                            </td>
                           )}
-                        </td>
-                        {category === 'tenants' ? (
-                          <td className="p-3 align-middle hidden md:table-cell text-[var(--muted)]">
+                          <td className="p-3 align-middle hidden sm:table-cell text-[var(--muted)] text-xs">
                             <div
-                              className="truncate"
-                              title={u.company || undefined}
+                              className="line-clamp-2 break-words leading-snug"
+                              title={bindings}
                             >
-                              {u.companyShortName || u.company || '—'}
+                              {bindings}
                             </div>
-                            {u.companyShortName && u.company && (
-                              <div className="text-[10px] truncate leading-none mt-0.5">
-                                {u.company}
-                              </div>
-                            )}
                           </td>
-                        ) : (
                           <td className="p-3 align-middle">
-                            <div
-                              className="truncate"
-                              title={getRoleLabel(u.role)}
-                            >
-                              {getRoleLabel(u.role)}
+                            <div className="inline-flex max-w-full">
+                              {statusBadge(u)}
                             </div>
                           </td>
-                        )}
-                        <td className="p-3 align-middle hidden sm:table-cell text-[var(--muted)] text-xs">
-                          <div
-                            className="line-clamp-2 break-words leading-snug"
-                            title={bindings}
-                          >
-                            {bindings}
-                          </div>
-                        </td>
-                        <td className="p-3 align-middle">
-                          <div className="inline-flex max-w-full">
-                            {statusBadge(u)}
-                          </div>
-                        </td>
-                        <td className="p-3 align-middle">
-                          <div className="flex items-center justify-end gap-1 min-w-[4.5rem]">
-                            <button
-                              type="button"
-                              className="p-1.5 rounded-md border border-[var(--border)] hover:bg-[var(--surface-muted)] shrink-0"
-                              onClick={() => openEdit(u)}
-                              title="Редактировать"
-                            >
-                              <Pencil className="w-4 h-4" />
-                            </button>
-                            <button
-                              type="button"
-                              className="p-1.5 rounded-md border border-red-200 hover:bg-red-50 text-red-600 shrink-0"
-                              onClick={() => handleDeleteUser(u)}
-                              disabled={deletingUserId === u.id}
-                              title="Удалить"
-                            >
-                              <Trash2 className="w-4 h-4" />
-                            </button>
-                          </div>
-                        </td>
-                      </tr>
+                          <td className="p-3 align-middle">
+                            <div className="flex items-center justify-end gap-1 min-w-[4.5rem]">
+                              <button
+                                type="button"
+                                className="p-1.5 rounded-md border border-[var(--border)] hover:bg-[var(--surface-muted)] shrink-0"
+                                onClick={() => openEdit(u)}
+                                title="Редактировать"
+                              >
+                                <Pencil className="w-4 h-4" />
+                              </button>
+                              <button
+                                type="button"
+                                className="p-1.5 rounded-md border border-red-200 hover:bg-red-50 text-red-600 shrink-0"
+                                onClick={() => handleDeleteUser(u)}
+                                disabled={deletingUserId === u.id}
+                                title="Удалить"
+                              >
+                                <Trash2 className="w-4 h-4" />
+                              </button>
+                            </div>
+                          </td>
+                        </tr>
 
-                      {expanded &&
-                        employees.map((emp) => {
-                          const empBindings = `Как у владельца · ${getRoleLabel(emp.role)}`;
-                          return (
-                            <tr
-                              key={emp.id}
-                              className="border-t border-[var(--border)] bg-[var(--surface-muted)]/60"
-                            >
-                              <td className="p-3 align-middle">
-                                <div className="flex items-center gap-2 min-w-0">
-                                  <span
-                                    className="w-5 h-5 shrink-0 inline-flex items-center justify-center"
-                                    aria-hidden
-                                  >
-                                    <User className="w-4 h-4 text-[var(--muted)]" />
-                                  </span>
-                                  <div className="min-w-0 flex-1">
-                                    <div
-                                      className="font-medium truncate leading-snug"
-                                      title={emp.fullName}
+                        {expanded &&
+                          employees.map((emp) => {
+                            const empBindings = `Как у владельца · ${getRoleLabel(emp.role)}`;
+                            return (
+                              <tr
+                                key={emp.id}
+                                className="border-t border-[var(--border)] bg-[var(--surface-muted)]/60"
+                              >
+                                <td className="p-3 align-middle">
+                                  <div className="flex items-center gap-2 min-w-0">
+                                    <span
+                                      className="w-5 h-5 shrink-0 inline-flex items-center justify-center"
+                                      aria-hidden
                                     >
-                                      {emp.fullName}
-                                    </div>
-                                    <div className="mt-0.5">
-                                      <span className="text-[10px] px-1.5 py-0.5 rounded-full bg-violet-50 text-violet-800 font-normal leading-none">
-                                        Сотрудник
-                                      </span>
-                                    </div>
-                                    <div
-                                      className="text-xs text-[var(--muted)] lg:hidden truncate mt-0.5"
-                                      title={emp.email || undefined}
-                                    >
-                                      {emp.email || '—'}
-                                    </div>
-                                    <div className="text-xs text-[var(--muted)] md:hidden truncate mt-0.5">
-                                      {emp.company || u.company || '—'}
-                                    </div>
-                                    <div className="text-xs text-[var(--muted)] sm:hidden mt-0.5 line-clamp-2">
-                                      {empBindings}
+                                      <User className="w-4 h-4 text-[var(--muted)]" />
+                                    </span>
+                                    <div className="min-w-0 flex-1">
+                                      <div
+                                        className="font-medium truncate leading-snug"
+                                        title={emp.fullName}
+                                      >
+                                        {emp.fullName}
+                                      </div>
+                                      <div className="mt-0.5">
+                                        <span className="text-[10px] px-1.5 py-0.5 rounded-full bg-violet-50 text-violet-800 font-normal leading-none">
+                                          Сотрудник
+                                        </span>
+                                      </div>
+                                      <div
+                                        className="text-xs text-[var(--muted)] lg:hidden truncate mt-0.5"
+                                        title={emp.email || undefined}
+                                      >
+                                        {emp.email || '—'}
+                                      </div>
+                                      <div className="text-xs text-[var(--muted)] md:hidden truncate mt-0.5">
+                                        {emp.company || u.company || '—'}
+                                      </div>
+                                      <div className="text-xs text-[var(--muted)] sm:hidden mt-0.5 line-clamp-2">
+                                        {empBindings}
+                                      </div>
                                     </div>
                                   </div>
-                                </div>
-                              </td>
-                              <td className="p-3 align-middle hidden lg:table-cell text-[var(--muted)]">
-                                <div
-                                  className="truncate"
-                                  title={emp.email || undefined}
-                                >
-                                  {emp.email || '—'}
-                                </div>
-                              </td>
-                              <td className="p-3 align-middle hidden md:table-cell text-[var(--muted)] text-xs">
-                                <div
-                                  className="truncate"
-                                  title={emp.company || u.company || undefined}
-                                >
-                                  {emp.company || u.company || '—'}
-                                </div>
-                              </td>
-                              <td className="p-3 align-middle hidden sm:table-cell text-[var(--muted)] text-xs">
-                                <div
-                                  className="line-clamp-2 leading-snug"
-                                  title={empBindings}
-                                >
-                                  {empBindings}
-                                </div>
-                              </td>
-                              <td className="p-3 align-middle">
-                                <div className="inline-flex max-w-full">
-                                  {statusBadge(emp)}
-                                </div>
-                              </td>
-                              <td className="p-3 align-middle">
-                                <div className="flex items-center justify-end gap-1 min-w-[4.5rem]">
-                                  <button
-                                    type="button"
-                                    className="p-1.5 rounded-md border border-[var(--border)] hover:bg-[var(--surface-muted)] shrink-0"
-                                    onClick={() => openEdit(emp)}
-                                    title="Редактировать сотрудника"
+                                </td>
+                                <td className="p-3 align-middle hidden lg:table-cell text-[var(--muted)]">
+                                  <div
+                                    className="truncate"
+                                    title={emp.email || undefined}
                                   >
-                                    <Pencil className="w-4 h-4" />
-                                  </button>
-                                  <button
-                                    type="button"
-                                    className="p-1.5 rounded-md border border-red-200 hover:bg-red-50 text-red-600 shrink-0"
-                                    onClick={() => handleDeleteUser(emp)}
-                                    disabled={deletingUserId === emp.id}
-                                    title="Удалить сотрудника"
+                                    {emp.email || '—'}
+                                  </div>
+                                </td>
+                                <td className="p-3 align-middle hidden md:table-cell text-[var(--muted)] text-xs">
+                                  <div
+                                    className="truncate"
+                                    title={
+                                      emp.company || u.company || undefined
+                                    }
                                   >
-                                    <Trash2 className="w-4 h-4" />
-                                  </button>
-                                </div>
-                              </td>
-                            </tr>
-                          );
-                        })}
-                    </Fragment>
-                  );
-                })
-              )}
-            </tbody>
-          </table>
+                                    {emp.company || u.company || '—'}
+                                  </div>
+                                </td>
+                                <td className="p-3 align-middle hidden sm:table-cell text-[var(--muted)] text-xs">
+                                  <div
+                                    className="line-clamp-2 leading-snug"
+                                    title={empBindings}
+                                  >
+                                    {empBindings}
+                                  </div>
+                                </td>
+                                <td className="p-3 align-middle">
+                                  <div className="inline-flex max-w-full">
+                                    {statusBadge(emp)}
+                                  </div>
+                                </td>
+                                <td className="p-3 align-middle">
+                                  <div className="flex items-center justify-end gap-1 min-w-[4.5rem]">
+                                    <button
+                                      type="button"
+                                      className="p-1.5 rounded-md border border-[var(--border)] hover:bg-[var(--surface-muted)] shrink-0"
+                                      onClick={() => openEdit(emp)}
+                                      title="Редактировать сотрудника"
+                                    >
+                                      <Pencil className="w-4 h-4" />
+                                    </button>
+                                    <button
+                                      type="button"
+                                      className="p-1.5 rounded-md border border-red-200 hover:bg-red-50 text-red-600 shrink-0"
+                                      onClick={() => handleDeleteUser(emp)}
+                                      disabled={deletingUserId === emp.id}
+                                      title="Удалить сотрудника"
+                                    >
+                                      <Trash2 className="w-4 h-4" />
+                                    </button>
+                                  </div>
+                                </td>
+                              </tr>
+                            );
+                          })}
+                      </Fragment>
+                    );
+                  })
+                )}
+              </tbody>
+            </table>
+          </div>
         </div>
-      </div>}
+      )}
     </AdminLayout>
   );
 }

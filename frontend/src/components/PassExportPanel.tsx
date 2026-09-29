@@ -66,7 +66,7 @@ export function PassExportPanel({
       .then(setOptions)
       .catch(() => setOptions(null))
       .finally(() => setLoadingOptions(false));
-  }, [open]);
+  }, [open, initialFilters]);
 
   const officesInBc = useMemo(() => {
     if (!options) return [];

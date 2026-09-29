@@ -239,7 +239,12 @@ export default function MysqlAdminPage() {
               </div>
             </div>
             <div className="flex flex-wrap gap-2">
-              <button className="btn btn-secondary" disabled={testing} type="button" onClick={() => void test()}>
+              <button
+                className="btn btn-secondary"
+                disabled={testing}
+                type="button"
+                onClick={() => void test()}
+              >
                 {testing ? 'Проверка…' : 'Проверить связь'}
               </button>
             </div>
@@ -291,7 +296,10 @@ export default function MysqlAdminPage() {
                 type="checkbox"
                 checked={!!form.writeEnabled}
                 onChange={(e) =>
-                  setForm((prev) => ({ ...prev, writeEnabled: e.target.checked }))
+                  setForm((prev) => ({
+                    ...prev,
+                    writeEnabled: e.target.checked,
+                  }))
                 }
               />
               Разрешить запись в MySQL (офисы и ответы на заявки)
@@ -346,13 +354,19 @@ export default function MysqlAdminPage() {
       )}
 
       <div className="grid sm:grid-cols-2 gap-4">
-        <a href="/admin/mysql/links" className="card p-5 hover:bg-[var(--surface-muted)]">
+        <a
+          href="/admin/mysql/links"
+          className="card p-5 hover:bg-[var(--surface-muted)]"
+        >
           <div className="font-semibold">Связи</div>
           <p className="text-sm text-[var(--muted)] mt-1">
             Подтвердить пары, обновить связанные, записать в MySQL.
           </p>
         </a>
-        <a href="/admin/mysql/tickets" className="card p-5 hover:bg-[var(--surface-muted)]">
+        <a
+          href="/admin/mysql/tickets"
+          className="card p-5 hover:bg-[var(--surface-muted)]"
+        >
           <div className="font-semibold">Заявки</div>
           <p className="text-sm text-[var(--muted)] mt-1">
             Сервисные сообщения сайта. Pass их не копирует.
@@ -384,5 +398,3 @@ function TextField({
     </div>
   );
 }
-
-

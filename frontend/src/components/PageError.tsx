@@ -30,7 +30,12 @@ export function PageError({
 
   return (
     <div
-      className={`card border-red-200 bg-red-50 text-red-900 ${compact ? 'p-3' : 'p-4'} ${className}`}
+      className={`card ${compact ? 'p-3' : 'p-4'} ${className}`}
+      style={{
+        borderColor: 'var(--form-error-border)',
+        background: 'var(--form-error-bg)',
+        color: 'var(--form-error-text)',
+      }}
       role="alert"
     >
       <div
@@ -38,21 +43,24 @@ export function PageError({
       >
         <div className="flex gap-3 min-w-0">
           <Icon
-            className={`shrink-0 text-red-600 ${compact ? 'w-4 h-4 mt-0.5' : 'w-5 h-5 mt-0.5'}`}
+            className={`shrink-0 ${compact ? 'w-4 h-4 mt-0.5' : 'w-5 h-5 mt-0.5'}`}
+            style={{ color: 'var(--input-error-text)' }}
           />
           <div className="min-w-0">
             <p
-              className={`font-medium text-red-900 ${compact ? 'text-sm' : ''}`}
+              className={`font-medium ${compact ? 'text-sm' : ''}`}
+              style={{ color: 'var(--form-error-text)' }}
             >
               {heading}
             </p>
             <p
-              className={`text-red-800 ${compact ? 'text-sm mt-0.5' : 'text-sm mt-1'}`}
+              className={`${compact ? 'text-sm mt-0.5' : 'text-sm mt-1'}`}
+              style={{ color: 'var(--form-error-text)' }}
             >
               {message}
             </p>
             {status != null && status !== 500 && status < 500 && (
-              <p className="text-xs text-red-700/80 mt-1">
+              <p className="text-xs mt-1" style={{ color: 'var(--muted)' }}>
                 Если ошибка повторяется — обновите страницу или обратитесь к
                 администратору.
               </p>

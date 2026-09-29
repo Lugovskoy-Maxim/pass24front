@@ -18,8 +18,12 @@ type OfficeFlags = {
 };
 
 export function OfficeStatusFlags({ office }: { office: OfficeFlags }) {
-  const chips: Array<{ key: string; text: string; title?: string; warn?: boolean }> =
-    [];
+  const chips: Array<{
+    key: string;
+    text: string;
+    title?: string;
+    warn?: boolean;
+  }> = [];
   const pay = officePaymentLabel(office.paymentStatus);
   if (pay) {
     chips.push({

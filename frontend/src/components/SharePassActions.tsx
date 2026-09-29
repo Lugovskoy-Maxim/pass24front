@@ -4,6 +4,7 @@ import {
   FormEvent,
   useCallback,
   useEffect,
+  useId,
   useLayoutEffect,
   useRef,
   useState,
@@ -72,6 +73,8 @@ export function SharePassActions({
   const rootRef = useRef<HTMLDivElement>(null);
   const triggerRef = useRef<HTMLButtonElement>(null);
   const dropdownRef = useRef<HTMLDivElement>(null);
+  const modalRef = useRef<HTMLDivElement>(null);
+  const emailTitleId = useId();
   const [menuOpen, setMenuOpen] = useState(false);
   const [dropdownStyle, setDropdownStyle] =
     useState<React.CSSProperties | null>(null);
@@ -175,9 +178,32 @@ export function SharePassActions({
 
   useEffect(() => {
     if (!emailModal.open) return;
+    const previousTrigger = triggerRef.current;
+    const modal = modalRef.current;
+    const focusable = () =>
+      Array.from(
+        modal?.querySelectorAll<HTMLElement>(
+          'a[href], button:not([disabled]), input:not([disabled]), textarea:not([disabled]), [tabindex]:not([tabindex="-1"])',
+        ) || [],
+      );
+    requestAnimationFrame(() => focusable()[0]?.focus());
     const onKeyDown = (e: KeyboardEvent) => {
       if (e.key === 'Escape' && !isSending) {
         closeEmailModal();
+        return;
+      }
+      if (e.key === 'Tab') {
+        const items = focusable();
+        if (!items.length) return;
+        const first = items[0];
+        const last = items[items.length - 1];
+        if (e.shiftKey && document.activeElement === first) {
+          e.preventDefault();
+          last.focus();
+        } else if (!e.shiftKey && document.activeElement === last) {
+          e.preventDefault();
+          first.focus();
+        }
       }
     };
     document.addEventListener('keydown', onKeyDown);
@@ -185,6 +211,7 @@ export function SharePassActions({
     return () => {
       document.removeEventListener('keydown', onKeyDown);
       document.body.style.overflow = '';
+      previousTrigger?.focus();
     };
   }, [emailModal.open, isSending]);
 
@@ -376,17 +403,18 @@ export function SharePassActions({
           className="share-modal"
           role="dialog"
           aria-modal="true"
-          aria-labelledby="share-email-title"
+          aria-labelledby={emailTitleId}
           onClick={() => {
             if (!isSending) closeEmailModal();
           }}
         >
           <div
+            ref={modalRef}
             className="share-modal__panel"
             onClick={(e) => e.stopPropagation()}
           >
             <div className="share-modal__header">
-              <h2 id="share-email-title" className="share-modal__title">
+              <h2 id={emailTitleId} className="share-modal__title">
                 {labels.buttons.sendEmailTitle}
               </h2>
               <button

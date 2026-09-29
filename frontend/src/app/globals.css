@@ -190,6 +190,11 @@
   box-sizing: border-box;
 }
 
+:where(button, a, input, select, textarea, summary):focus-visible {
+  outline: 3px solid var(--focus-border);
+  outline-offset: 2px;
+}
+
 body {
   background: var(--bg);
   color: var(--foreground);
@@ -3060,4 +3065,27 @@ a.pass-detail__chip:hover,
   font-size: 0.75rem;
   line-height: 1.4;
   color: var(--muted);
+}
+
+@media (prefers-reduced-motion: reduce) {
+  *,
+  *::before,
+  *::after {
+    animation-duration: 0.01ms !important;
+    animation-iteration-count: 1 !important;
+    scroll-behavior: auto !important;
+    transition-duration: 0.01ms !important;
+  }
+}
+
+@media (max-width: 639px) {
+  .pwa-install__close,
+  .share-modal__close,
+  .help-faq__icon-btn,
+  .help-faq__trigger,
+  .theme-toggle,
+  .mobile-nav__item {
+    min-width: 44px;
+    min-height: 44px;
+  }
 }

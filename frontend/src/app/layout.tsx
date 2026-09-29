@@ -3,7 +3,6 @@
  * Inline script до paint читает pass24-theme из localStorage (без мигания).
  */
 import type { Metadata, Viewport } from 'next';
-import { Manrope } from 'next/font/google';
 import { AuthProvider } from '@/lib/auth';
 import { ThemeProvider } from '@/components/ThemeProvider';
 import { ThemeColorsApplier } from '@/components/ThemeColorsApplier';
@@ -14,12 +13,6 @@ import { PushNotificationPrompt } from '@/components/PushNotificationPrompt';
 import { HelpFaq } from '@/components/HelpFaq';
 import { SiteFooter } from '@/components/SiteFooter';
 import './globals.css';
-
-const manrope = Manrope({
-  subsets: ['latin', 'cyrillic'],
-  variable: '--font-manrope',
-  display: 'swap',
-});
 
 export const metadata: Metadata = {
   title: 'M-STYLE — Пропуска для бизнес-центра',
@@ -64,12 +57,7 @@ export default function RootLayout({
   children: React.ReactNode;
 }) {
   return (
-    <html
-      lang="ru"
-      className={manrope.variable}
-      data-theme="dark"
-      suppressHydrationWarning
-    >
+    <html lang="ru" className="" data-theme="dark" suppressHydrationWarning>
       <head>
         <script
           dangerouslySetInnerHTML={{

@@ -52,7 +52,8 @@ export default function MysqlLinksPage() {
   const suggested = useMemo(() => {
     if (!data) return { properties: 0, offices: 0 };
     return {
-      properties: data.properties.filter((row) => row.status === 'suggested').length,
+      properties: data.properties.filter((row) => row.status === 'suggested')
+        .length,
       offices: data.offices.filter((row) => row.status === 'suggested').length,
     };
   }, [data]);
@@ -441,7 +442,11 @@ function StatusChip({
   status: SiteLinkRow['status'] | SiteOfficeLinkRow['status'];
 }) {
   const label =
-    status === 'linked' ? 'связан' : status === 'suggested' ? 'авто' : 'нет пары';
+    status === 'linked'
+      ? 'связан'
+      : status === 'suggested'
+        ? 'авто'
+        : 'нет пары';
   const cls =
     status === 'linked'
       ? 'bg-emerald-50 text-emerald-800'

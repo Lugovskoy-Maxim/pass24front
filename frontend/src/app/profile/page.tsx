@@ -165,12 +165,10 @@ export default function ProfilePage() {
     );
     setProfileType(
       ((pending?.profile_type || user.profile_type) as
-        | 'individual'
-        | 'company') || (user.company ? 'company' : 'individual'),
+        'individual' | 'company') || (user.company ? 'company' : 'individual'),
     );
     setLegalForm(
-      ((pending?.legal_form ?? user.legal_form) as 'ip' | 'ooo' | null) ??
-        null,
+      ((pending?.legal_form ?? user.legal_form) as 'ip' | 'ooo' | null) ?? null,
     );
     setEmployeeLimit(
       pending?.employee_limit !== undefined
@@ -790,7 +788,9 @@ export default function ProfilePage() {
                   onChange={(e) => {
                     const next = e.target.value as 'individual' | 'company';
                     setProfileType(next);
-                    setLegalForm(next === 'company' ? legalForm || 'ooo' : null);
+                    setLegalForm(
+                      next === 'company' ? legalForm || 'ooo' : null,
+                    );
                   }}
                 >
                   <option value="individual">Физлицо</option>
@@ -983,8 +983,8 @@ export default function ProfilePage() {
 
             {employees.length >= employeeCap ? (
               <div className="border-t border-[var(--border)] pt-5 text-sm text-[var(--muted)]">
-                Достигнут лимит: не более {employeeCap} сотрудников в
-                компании. Чтобы добавить нового, удалите одного из текущих.
+                Достигнут лимит: не более {employeeCap} сотрудников в компании.
+                Чтобы добавить нового, удалите одного из текущих.
               </div>
             ) : (
               <form

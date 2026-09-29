@@ -1,9 +1,5 @@
 export type IdentityStatus =
-  | 'invited'
-  | 'active'
-  | 'blocked'
-  | 'disabled'
-  | 'deleted';
+  'invited' | 'active' | 'blocked' | 'disabled' | 'deleted';
 
 export type ProfileType = 'individual' | 'company';
 export type LegalForm = 'ip' | 'ooo';

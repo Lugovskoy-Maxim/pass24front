@@ -26,7 +26,10 @@ function getStore(key: string) {
 function refresh(key: string, afterAction = false) {
   const store = getStore(key);
   if (!key) return;
-  if (store.inflight) { if (afterAction) store.queued = true; return store.inflight; }
+  if (store.inflight) {
+    if (afterAction) store.queued = true;
+    return store.inflight;
+  }
   store.inflight = operations
     .counts()
     .then((counts) => {
@@ -38,7 +41,10 @@ function refresh(key: string, afterAction = false) {
     .finally(() => {
       store.inflight = undefined;
       store.listeners.forEach((notify) => notify());
-      if (store.queued) { store.queued = false; void refresh(key); }
+      if (store.queued) {
+        store.queued = false;
+        void refresh(key);
+      }
     });
   return store.inflight;
 }

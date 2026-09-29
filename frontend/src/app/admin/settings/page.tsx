@@ -13,7 +13,10 @@ export default function AdminSettingsPage() {
         Сайт, подключение к WordPress и связи с уже существующими БЦ и офисами.
       </p>
       <div className="grid sm:grid-cols-2 gap-4">
-        <Link href="/admin/site" className="card p-5 hover:bg-[var(--surface-muted)]">
+        <Link
+          href="/admin/site"
+          className="card p-5 hover:bg-[var(--surface-muted)]"
+        >
           <Globe className="w-5 h-5 text-[var(--primary)] mb-2" />
           <div className="font-semibold">Сайт</div>
           <p className="text-sm text-[var(--muted)] mt-1">

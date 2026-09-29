@@ -1,5 +1,5 @@
 const CACHE = 'pass24-pwa-v2';
-const PRECACHE = ['/', '/login'];
+const PRECACHE = ['/', '/login', '/offline.html'];
 const PUSH_DB = 'pass24-push';
 const PUSH_STORE = 'config';
 
@@ -82,7 +82,13 @@ self.addEventListener('fetch', (event) => {
         }
         return response;
       })
-      .catch(() => caches.match(request).then((cached) => cached || caches.match('/'))),
+      .catch(() =>
+        caches.match(request).then((cached) => {
+          if (cached) return cached;
+          if (request.mode === 'navigate') return caches.match('/offline.html');
+          return caches.match('/');
+        }),
+      ),
   );
 });
 

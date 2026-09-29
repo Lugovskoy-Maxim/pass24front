@@ -1,6 +1,6 @@
 'use client';
 
-import { useEffect, useState } from 'react';
+import { useCallback, useEffect, useState } from 'react';
 import {
   Bookmark,
   Car,
@@ -43,7 +43,7 @@ export function PassTemplatesPicker({
   const [syncing, setSyncing] = useState(false);
   const [deletingId, setDeletingId] = useState<string | null>(null);
 
-  const load = () => {
+  const load = useCallback(() => {
     setLoading(true);
     return api
       .getPassTemplates()
@@ -52,11 +52,11 @@ export function PassTemplatesPicker({
         toast(getErrorMessage(err, 'Не удалось загрузить шаблоны'), 'error'),
       )
       .finally(() => setLoading(false));
-  };
+  }, [toast]);
 
   useEffect(() => {
     load();
-  }, []);
+  }, [load]);
 
   const handleSync = async () => {
     setSyncing(true);

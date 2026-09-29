@@ -13,6 +13,7 @@ function buildAppVersion(): string {
 
 const nextConfig: NextConfig = {
   reactStrictMode: true,
+  outputFileTracingRoot: __dirname,
   env: {
     NEXT_PUBLIC_APP_VERSION: buildAppVersion(),
   },

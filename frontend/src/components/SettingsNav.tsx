@@ -2,10 +2,23 @@
 
 import Link from 'next/link';
 import { usePathname } from 'next/navigation';
-import { Database, Globe, Link2, MessageSquare, SlidersHorizontal, Terminal, Webhook } from 'lucide-react';
+import {
+  Database,
+  Globe,
+  Link2,
+  MessageSquare,
+  SlidersHorizontal,
+  Terminal,
+  Webhook,
+} from 'lucide-react';
 
 const ITEMS = [
-  { href: '/admin/settings', label: 'Обзор', exact: true, icon: SlidersHorizontal },
+  {
+    href: '/admin/settings',
+    label: 'Обзор',
+    exact: true,
+    icon: SlidersHorizontal,
+  },
   { href: '/admin/site', label: 'Сайт', icon: Globe },
   { href: '/admin/mysql', label: 'Подключение', exact: true, icon: Database },
   { href: '/admin/mysql/links', label: 'Связи', icon: Link2 },

@@ -2,6 +2,7 @@
 
 import {
   useEffect,
+  useCallback,
   useMemo,
   useRef,
   useState,
@@ -140,7 +141,7 @@ export default function AdminOfficesPage() {
     }
   };
 
-  const load = () => {
+  const load = useCallback(() => {
     setLoading(true);
     setLoadError('');
     setLoadErrorCause(null);
@@ -160,11 +161,11 @@ export default function AdminOfficesPage() {
         setLoadError(getErrorMessage(err, 'Ошибка загрузки'));
       })
       .finally(() => setLoading(false));
-  };
+  }, [propertyId]);
 
   useEffect(() => {
     load();
-  }, []);
+  }, [load]);
 
   const resetForm = () => {
     setNumber('');
@@ -694,8 +695,8 @@ export default function AdminOfficesPage() {
       </div>
       {tenantIds.length > 1 && (
         <p className="text-[11px] text-amber-800 flex items-start gap-1">
-          <AlertTriangle className="w-3.5 h-3.5 shrink-0 mt-0.5" />
-          В офисе несколько арендаторов. Оба смогут заказывать пропуска.
+          <AlertTriangle className="w-3.5 h-3.5 shrink-0 mt-0.5" />В офисе
+          несколько арендаторов. Оба смогут заказывать пропуска.
         </p>
       )}
       {tenantIds.length > 0 && (
@@ -718,817 +719,822 @@ export default function AdminOfficesPage() {
   return (
     <AdminLayout title={officeFormOpen ? officeFormTitle : 'Реестр офисов'}>
       <div className={officeFormOpen ? 'hidden' : undefined}>
-      <p className="text-[var(--muted)] -mt-4 mb-6">
-        Бизнес-центры, офисы и параметры пропускного режима для каждого БЦ.
-        Привязка арендатора к офису — только администратором.
-      </p>
+        <p className="text-[var(--muted)] -mt-4 mb-6">
+          Бизнес-центры, офисы и параметры пропускного режима для каждого БЦ.
+          Привязка арендатора к офису — только администратором.
+        </p>
 
-      {loadError && (
-        <PageError
-          className="mb-6"
-          message={loadError}
-          error={loadErrorCause}
-          onRetry={load}
-          retryLabel="Повторить"
-        />
-      )}
+        {loadError && (
+          <PageError
+            className="mb-6"
+            message={loadError}
+            error={loadErrorCause}
+            onRetry={load}
+            retryLabel="Повторить"
+          />
+        )}
 
-      <div className="card p-5 mb-6">
-        <div className="flex items-center justify-between gap-3 mb-4">
-          <h2 className="font-semibold">Бизнес-центры</h2>
-          {!showBcForm && !editingBcId && (
-            <button
-              type="button"
-              className="btn btn-primary text-sm"
-              onClick={startBcCreate}
+        <div className="card p-5 mb-6">
+          <div className="flex items-center justify-between gap-3 mb-4">
+            <h2 className="font-semibold">Бизнес-центры</h2>
+            {!showBcForm && !editingBcId && (
+              <button
+                type="button"
+                className="btn btn-primary text-sm"
+                onClick={startBcCreate}
+              >
+                <Plus className="w-4 h-4" />
+                Добавить БЦ
+              </button>
+            )}
+          </div>
+
+          {businessCenters.length === 0 && !showBcForm && (
+            <p className="text-sm text-[var(--muted)] mb-4">
+              Бизнес-центров пока нет. Создайте первый БЦ, затем добавьте офисы.
+            </p>
+          )}
+
+          {showBcForm && (
+            <form
+              onSubmit={handleCreateBc}
+              className="border border-[var(--border)] rounded-lg p-4 mb-4 space-y-3 max-w-lg"
             >
-              <Plus className="w-4 h-4" />
-              Добавить БЦ
-            </button>
+              <h3 className="font-medium text-sm">Новый бизнес-центр</h3>
+              <div>
+                <label className="label">Название БЦ *</label>
+                <input
+                  className="input"
+                  value={bcName}
+                  onChange={(e) => setBcName(e.target.value)}
+                  required
+                  placeholder={ph.businessCenterName}
+                />
+              </div>
+              <div>
+                <label className="label">Адрес *</label>
+                <input
+                  className="input"
+                  value={bcAddress}
+                  onChange={(e) => setBcAddress(e.target.value)}
+                  required
+                  placeholder={ph.businessCenterAddress}
+                />
+              </div>
+              <div>
+                <label className="label">Код сайта</label>
+                <input
+                  className="input"
+                  value={bcCode}
+                  onChange={(e) => setBcCode(e.target.value)}
+                  placeholder="tf-business-center:12"
+                />
+                <p className="text-xs text-[var(--muted)] mt-1">
+                  Ключ таксономии WordPress. Если задан, синк MySQL не создаст
+                  второй БЦ.
+                </p>
+              </div>
+              <div className="flex gap-2">
+                <button
+                  type="submit"
+                  className="btn btn-primary text-sm"
+                  disabled={saving}
+                >
+                  {saving ? 'Создание...' : 'Создать БЦ'}
+                </button>
+                <button
+                  type="button"
+                  className="btn btn-secondary text-sm"
+                  onClick={resetBcForm}
+                >
+                  Отмена
+                </button>
+              </div>
+            </form>
+          )}
+
+          {businessCenters.length > 0 && (
+            <div className="space-y-3">
+              {businessCenters.map((bc) => (
+                <div
+                  key={bc.id}
+                  className="border border-[var(--border)] rounded-lg p-4"
+                >
+                  {editingBcId === bc.id ? (
+                    <div className="space-y-4">
+                      <div>
+                        <label className="label">Название БЦ *</label>
+                        <input
+                          className="input"
+                          value={bcName}
+                          onChange={(e) => setBcName(e.target.value)}
+                          required
+                        />
+                      </div>
+                      <div>
+                        <label className="label">Адрес</label>
+                        <input
+                          className="input"
+                          value={bcAddress}
+                          onChange={(e) => setBcAddress(e.target.value)}
+                        />
+                        <p className="text-xs text-[var(--muted)] mt-1">
+                          Показывается на странице пропуска и используется для
+                          кнопки «Построить маршрут»
+                        </p>
+                      </div>
+                      <div>
+                        <label className="label">Код сайта</label>
+                        <input
+                          className="input"
+                          value={bcCode}
+                          onChange={(e) => setBcCode(e.target.value)}
+                          placeholder="tf-business-center:12"
+                        />
+                        <p className="text-xs text-[var(--muted)] mt-1">
+                          Тот же ключ, что у таксономии БЦ на сайте. Пусто —
+                          снять привязку.
+                        </p>
+                      </div>
+
+                      <div className="border-t border-[var(--border)] pt-4 space-y-3">
+                        <h4 className="text-sm font-medium">
+                          Параметры пропускного режима
+                        </h4>
+                        <div>
+                          <label className="label">Карты для маршрута</label>
+                          <select
+                            className="input"
+                            value={
+                              bcPassSettings.route_maps_provider || 'yandex'
+                            }
+                            onChange={(e) =>
+                              setBcPassSettings({
+                                ...bcPassSettings,
+                                route_maps_provider: e.target.value,
+                              })
+                            }
+                          >
+                            <option value="yandex">Яндекс.Карты</option>
+                            <option value="google">Google Maps</option>
+                          </select>
+                          <p className="text-xs text-[var(--muted)] mt-1">
+                            Адрес для маршрута берётся из поля «Адрес» карточки
+                            БЦ
+                          </p>
+                        </div>
+                        <div>
+                          <label className="label">Этаж ресепшн</label>
+                          <input
+                            className="input"
+                            value={bcPassSettings.reception_floor}
+                            onChange={(e) =>
+                              setBcPassSettings({
+                                ...bcPassSettings,
+                                reception_floor: e.target.value,
+                              })
+                            }
+                            placeholder="1"
+                          />
+                        </div>
+                        <label className="flex items-center gap-2 text-sm">
+                          <input
+                            type="checkbox"
+                            checked={bcPassSettings.require_checkout === 'true'}
+                            onChange={(e) =>
+                              setBcPassSettings({
+                                ...bcPassSettings,
+                                require_checkout: e.target.checked
+                                  ? 'true'
+                                  : 'false',
+                              })
+                            }
+                          />
+                          Требовать подтверждение выхода гостя
+                        </label>
+                        <p className="text-xs text-[var(--muted)] -mt-1">
+                          Если выключено — ресепшн только фиксирует приход по
+                          пропуску, без этапа «выход»
+                        </p>
+                        <label className="flex items-center gap-2 text-sm">
+                          <input
+                            type="checkbox"
+                            checked={
+                              bcPassSettings.auto_approve_delivery === 'true'
+                            }
+                            onChange={(e) =>
+                              setBcPassSettings({
+                                ...bcPassSettings,
+                                auto_approve_delivery: e.target.checked
+                                  ? 'true'
+                                  : 'false',
+                              })
+                            }
+                          />
+                          Автоодобрение пропусков на доставку
+                        </label>
+                        <div>
+                          <label className="label">Выходные дни</label>
+                          <p className="text-xs text-[var(--muted)] mb-2">
+                            Не учитываются при выборе даты заказа пропуска. По
+                            умолчанию выходных нет.
+                          </p>
+                          <div className="flex flex-wrap gap-2">
+                            {WEEKDAY_OPTIONS.map((day) => {
+                              const active = parseClosedWeekdays(
+                                bcPassSettings.closed_weekdays,
+                              ).includes(day.value);
+                              return (
+                                <button
+                                  key={day.value}
+                                  type="button"
+                                  className={`px-3 py-1.5 text-sm rounded-lg border transition-colors ${
+                                    active
+                                      ? 'border-[var(--status-rejected-border)] bg-[var(--status-rejected-soft)] text-[var(--status-rejected)]'
+                                      : 'border-[var(--border)] hover:bg-[var(--surface-muted)]'
+                                  }`}
+                                  onClick={() =>
+                                    toggleBcClosedWeekday(day.value)
+                                  }
+                                >
+                                  {day.label}
+                                </button>
+                              );
+                            })}
+                          </div>
+                        </div>
+                        <div className="grid sm:grid-cols-2 gap-3">
+                          <div>
+                            <label className="label">Рабочие часы с</label>
+                            <input
+                              className="input"
+                              type="time"
+                              value={bcPassSettings.working_hours_from}
+                              onChange={(e) =>
+                                setBcPassSettings({
+                                  ...bcPassSettings,
+                                  working_hours_from: e.target.value,
+                                })
+                              }
+                            />
+                          </div>
+                          <div>
+                            <label className="label">Рабочие часы до</label>
+                            <input
+                              className="input"
+                              type="time"
+                              value={bcPassSettings.working_hours_to}
+                              onChange={(e) =>
+                                setBcPassSettings({
+                                  ...bcPassSettings,
+                                  working_hours_to: e.target.value,
+                                })
+                              }
+                            />
+                          </div>
+                        </div>
+                        <div className="grid sm:grid-cols-2 gap-3">
+                          <div>
+                            <label className="label">Телефон ресепшн</label>
+                            <input
+                              className="input"
+                              value={bcPassSettings.contact_phone}
+                              onChange={(e) =>
+                                setBcPassSettings({
+                                  ...bcPassSettings,
+                                  contact_phone: e.target.value,
+                                })
+                              }
+                            />
+                          </div>
+                          <div>
+                            <label className="label">
+                              Email управляющей компании
+                            </label>
+                            <input
+                              className="input"
+                              type="email"
+                              value={bcPassSettings.contact_email}
+                              onChange={(e) =>
+                                setBcPassSettings({
+                                  ...bcPassSettings,
+                                  contact_email: e.target.value,
+                                })
+                              }
+                            />
+                          </div>
+                        </div>
+                      </div>
+
+                      <div className="flex gap-2">
+                        <button
+                          type="button"
+                          className="btn btn-primary text-sm"
+                          disabled={saving}
+                          onClick={saveBcEdit}
+                        >
+                          {saving ? 'Сохранение...' : 'Сохранить'}
+                        </button>
+                        <button
+                          type="button"
+                          className="btn btn-secondary text-sm"
+                          onClick={resetBcForm}
+                        >
+                          Отмена
+                        </button>
+                      </div>
+                    </div>
+                  ) : (
+                    <div className="flex items-start justify-between gap-3">
+                      <div>
+                        <div className="flex flex-wrap items-center gap-2">
+                          <div className="font-medium">{bc.name}</div>
+                          {bc.code && (
+                            <span className="text-[10px] uppercase tracking-wide px-1.5 py-0.5 rounded bg-emerald-50 text-emerald-800">
+                              связан
+                            </span>
+                          )}
+                        </div>
+                        <div className="text-sm text-[var(--muted)]">
+                          {bc.address}
+                        </div>
+                        {bc.code && (
+                          <div className="text-xs font-mono text-[var(--muted)] mt-0.5">
+                            {bc.code}
+                          </div>
+                        )}
+                        <div className="text-xs text-[var(--muted)] mt-1">
+                          {bc.officesCount} офисов
+                          {bc.passSettings && (
+                            <>
+                              {' '}
+                              · ресепшн {bc.passSettings.reception_floor} эт. ·{' '}
+                              {bc.passSettings.working_hours_from}–
+                              {bc.passSettings.working_hours_to}
+                            </>
+                          )}
+                        </div>
+                      </div>
+                      <div className="flex items-center gap-2 shrink-0">
+                        <button
+                          type="button"
+                          className="btn btn-secondary text-sm"
+                          onClick={() => startBcEdit(bc)}
+                        >
+                          <Pencil className="w-4 h-4" />
+                          Изменить
+                        </button>
+                        <button
+                          type="button"
+                          className="btn btn-danger text-sm"
+                          disabled={
+                            deletingBcId === bc.id || bc.officesCount > 0
+                          }
+                          title={
+                            bc.officesCount > 0
+                              ? `Сначала удалите ${bc.officesCount} офис(ов)`
+                              : 'Удалить БЦ'
+                          }
+                          onClick={() => handleDeleteBc(bc)}
+                        >
+                          <Trash2 className="w-4 h-4" />
+                          {deletingBcId === bc.id ? '...' : 'Удалить'}
+                        </button>
+                      </div>
+                    </div>
+                  )}
+                </div>
+              ))}
+            </div>
           )}
         </div>
 
-        {businessCenters.length === 0 && !showBcForm && (
-          <p className="text-sm text-[var(--muted)] mb-4">
-            Бизнес-центров пока нет. Создайте первый БЦ, затем добавьте офисы.
-          </p>
-        )}
-
-        {showBcForm && (
-          <form
-            onSubmit={handleCreateBc}
-            className="border border-[var(--border)] rounded-lg p-4 mb-4 space-y-3 max-w-lg"
-          >
-            <h3 className="font-medium text-sm">Новый бизнес-центр</h3>
+        <div className="card p-5 mb-6 space-y-4">
+          <div className="flex flex-col lg:flex-row lg:items-center justify-between gap-3">
             <div>
-              <label className="label">Название БЦ *</label>
-              <input
-                className="input"
-                value={bcName}
-                onChange={(e) => setBcName(e.target.value)}
-                required
-                placeholder={ph.businessCenterName}
-              />
-            </div>
-            <div>
-              <label className="label">Адрес *</label>
-              <input
-                className="input"
-                value={bcAddress}
-                onChange={(e) => setBcAddress(e.target.value)}
-                required
-                placeholder={ph.businessCenterAddress}
-              />
-            </div>
-            <div>
-              <label className="label">Код сайта</label>
-              <input
-                className="input"
-                value={bcCode}
-                onChange={(e) => setBcCode(e.target.value)}
-                placeholder="tf-business-center:12"
-              />
-              <p className="text-xs text-[var(--muted)] mt-1">
-                Ключ таксономии WordPress. Если задан, синк MySQL не создаст
-                второй БЦ.
+              <h2 className="font-semibold flex items-center gap-2">
+                <Building2 className="w-4 h-4 text-[var(--primary)]" />
+                Реестр офисов
+              </h2>
+              <p className="text-sm text-[var(--muted)] mt-1">
+                {officeStats.shown} из {officeStats.total} · активных{' '}
+                {officeStats.active} · с арендатором {officeStats.assigned}
               </p>
             </div>
-            <div className="flex gap-2">
+            <div className="flex flex-wrap items-center gap-2">
+              <div className="inline-flex rounded-lg border border-[var(--border)] p-0.5 bg-[var(--surface-muted)]">
+                <button
+                  type="button"
+                  className={`inline-flex items-center gap-1.5 px-2.5 py-1.5 text-xs rounded-md transition-colors ${
+                    officeView === 'table'
+                      ? 'bg-[var(--surface)] shadow-sm font-medium'
+                      : 'text-[var(--muted)] hover:text-[var(--text)]'
+                  }`}
+                  onClick={() => setOfficeViewMode('table')}
+                  title="Таблица"
+                >
+                  <Table2 className="w-3.5 h-3.5" />
+                  Таблица
+                </button>
+                <button
+                  type="button"
+                  className={`inline-flex items-center gap-1.5 px-2.5 py-1.5 text-xs rounded-md transition-colors ${
+                    officeView === 'cards'
+                      ? 'bg-[var(--surface)] shadow-sm font-medium'
+                      : 'text-[var(--muted)] hover:text-[var(--text)]'
+                  }`}
+                  onClick={() => setOfficeViewMode('cards')}
+                  title="Карточки"
+                >
+                  <LayoutGrid className="w-3.5 h-3.5" />
+                  Карточки
+                </button>
+              </div>
               <button
-                type="submit"
-                className="btn btn-primary text-sm"
-                disabled={saving}
+                type="button"
+                className="btn btn-secondary text-sm"
+                disabled={exporting || offices.length === 0}
+                onClick={() => void handleExportOffices()}
               >
-                {saving ? 'Создание...' : 'Создать БЦ'}
+                <Download className="w-4 h-4" />
+                {exporting ? 'Выгрузка...' : 'Экспорт CSV'}
               </button>
               <button
                 type="button"
                 className="btn btn-secondary text-sm"
-                onClick={resetBcForm}
+                disabled={importing || businessCenters.length === 0}
+                onClick={() => importInputRef.current?.click()}
+              >
+                <Upload className="w-4 h-4" />
+                {importing ? 'Импорт...' : 'Импорт CSV'}
+              </button>
+              <input
+                ref={importInputRef}
+                type="file"
+                accept=".csv,text/csv"
+                className="hidden"
+                onChange={(e) => void handleImportFile(e)}
+              />
+              {businessCenters.length > 0 && (
+                <button
+                  className="btn btn-primary text-sm"
+                  onClick={() => {
+                    resetForm();
+                    setShowForm(true);
+                  }}
+                >
+                  <Plus className="w-4 h-4" />
+                  Добавить офис
+                </button>
+              )}
+            </div>
+          </div>
+
+          {importResult && (
+            <div className="rounded-lg border border-[var(--border)] bg-[var(--surface-muted)] px-4 py-3 text-sm space-y-2">
+              <div>
+                Импорт завершён:{' '}
+                <span className="font-medium text-emerald-700">
+                  добавлено {importResult.created}
+                </span>
+                {importResult.skipped > 0 && (
+                  <>
+                    , пропущено (уже есть){' '}
+                    <span className="font-medium">{importResult.skipped}</span>
+                  </>
+                )}
+              </div>
+              {importResult.errors.length > 0 && (
+                <div>
+                  <div className="text-[var(--muted)] mb-1">
+                    Ошибки ({importResult.errors.length}):
+                  </div>
+                  <ul className="list-disc pl-5 space-y-0.5 text-red-600 max-h-32 overflow-y-auto">
+                    {importResult.errors.map((err) => (
+                      <li key={err}>{err}</li>
+                    ))}
+                  </ul>
+                </div>
+              )}
+              <p className="text-xs text-[var(--muted)]">
+                Формат: БЦ;Номер офиса;Этаж;Площадь;Компания;Email
+                арендатора;Активен (да/нет). БЦ должен существовать в системе.
+              </p>
+            </div>
+          )}
+
+          <div className="grid grid-cols-2 lg:grid-cols-4 gap-3">
+            <div className="card px-3 py-2">
+              <div className="text-xs text-[var(--muted)]">Всего</div>
+              <div className="text-lg font-semibold">{officeStats.total}</div>
+            </div>
+            <div className="card px-3 py-2 office-stat--active">
+              <div className="text-xs text-[var(--muted)]">Активные</div>
+              <div className="text-lg font-semibold office-stat__value">
+                {officeStats.active}
+              </div>
+            </div>
+            <div className="card px-3 py-2 office-stat--assigned">
+              <div className="text-xs text-[var(--muted)]">С арендатором</div>
+              <div className="text-lg font-semibold office-stat__value">
+                {officeStats.assigned}
+              </div>
+            </div>
+            <div className="card px-3 py-2 office-stat--free">
+              <div className="text-xs text-[var(--muted)]">Свободные</div>
+              <div className="text-lg font-semibold office-stat__value">
+                {officeStats.total - officeStats.assigned}
+              </div>
+            </div>
+          </div>
+
+          <div className="grid lg:grid-cols-[minmax(0,1fr)_auto_auto_auto_auto] gap-2 items-end">
+            <div className="relative">
+              <Search className="absolute left-3 top-1/2 -translate-y-1/2 w-4 h-4 text-[var(--muted)]" />
+              <input
+                className="input input--icon-left"
+                placeholder={ph.officeSearch}
+                value={officeFilters.search}
+                onChange={(e) => {
+                  const next = { ...officeFilters, search: e.target.value };
+                  setOfficeFilters(next);
+                  setAppliedOfficeFilters((prev) => ({
+                    ...prev,
+                    search: e.target.value,
+                  }));
+                }}
+              />
+            </div>
+            <div className="select-wrap">
+              <select
+                className="input"
+                value={officeFilters.propertyId}
+                onChange={(e) =>
+                  setOfficeFilters({
+                    ...officeFilters,
+                    propertyId: e.target.value,
+                  })
+                }
+              >
+                <option value="">Все БЦ</option>
+                {businessCenters.map((bc) => (
+                  <option key={bc.id} value={bc.id}>
+                    {bc.name}
+                  </option>
+                ))}
+              </select>
+            </div>
+            <div className="select-wrap">
+              <select
+                className="input"
+                value={officeFilters.floor}
+                onChange={(e) =>
+                  setOfficeFilters({ ...officeFilters, floor: e.target.value })
+                }
+              >
+                <option value="">Все этажи</option>
+                {floors.map((floor) => (
+                  <option key={floor} value={floor}>
+                    {floor} эт.
+                  </option>
+                ))}
+              </select>
+            </div>
+            <div className="select-wrap">
+              <select
+                className="input"
+                value={officeFilters.binding}
+                onChange={(e) =>
+                  setOfficeFilters({
+                    ...officeFilters,
+                    binding: e.target.value as OfficeFilters['binding'],
+                  })
+                }
+              >
+                <option value="">Все офисы</option>
+                <option value="assigned">С арендатором</option>
+                <option value="free">Свободные</option>
+              </select>
+            </div>
+            <div className="select-wrap">
+              <select
+                className="input"
+                value={officeFilters.status}
+                onChange={(e) =>
+                  setOfficeFilters({
+                    ...officeFilters,
+                    status: e.target.value as OfficeFilters['status'],
+                  })
+                }
+              >
+                <option value="">Любой статус</option>
+                <option value="active">Активные</option>
+                <option value="inactive">Неактивные</option>
+              </select>
+            </div>
+          </div>
+
+          <div className="flex flex-wrap items-center gap-2">
+            <button
+              type="button"
+              className="btn btn-primary text-sm"
+              onClick={applyOfficeFilters}
+            >
+              <Filter className="w-4 h-4" />
+              Применить
+            </button>
+            {hasOfficeFilters && (
+              <button
+                type="button"
+                className="btn btn-secondary text-sm"
+                onClick={resetOfficeFilters}
+              >
+                <X className="w-4 h-4" />
+                Сбросить
+              </button>
+            )}
+          </div>
+        </div>
+
+        {bindingOffice && (
+          <div
+            id="office-binding-panel"
+            className="card p-5 mb-6 border-2 border-[var(--primary)]/30 shadow-sm max-w-2xl"
+          >
+            <div className="flex flex-col sm:flex-row sm:items-start justify-between gap-3 mb-4">
+              <div>
+                <div className="flex items-center gap-2 text-[var(--primary)] mb-1">
+                  <Link2 className="w-5 h-5" />
+                  <h3 className="font-semibold text-[var(--text)]">
+                    Привязка арендатора
+                  </h3>
+                </div>
+                <p className="text-sm text-[var(--muted)]">
+                  Офис{' '}
+                  <span className="font-mono font-semibold text-[var(--text)]">
+                    {bindingOffice.number}
+                  </span>
+                  {bindingOffice.businessCenterName
+                    ? ` · ${bindingOffice.businessCenterName}`
+                    : ''}
+                  {bindingOffice.floor ? ` · ${bindingOffice.floor} эт.` : ''}
+                </p>
+              </div>
+              <button
+                type="button"
+                className="btn btn-secondary text-sm shrink-0"
+                onClick={resetForm}
+              >
+                <X className="w-4 h-4" />
+                Закрыть
+              </button>
+            </div>
+
+            {officeTenantIds(bindingOffice).length > 0 && (
+              <div className="rounded-lg border border-[var(--border)] bg-[var(--surface-muted)] p-3 mb-4 flex flex-col sm:flex-row sm:items-start justify-between gap-2">
+                <div className="text-sm">
+                  <div className="text-xs text-[var(--muted)] mb-0.5">
+                    Сейчас привязаны
+                  </div>
+                  <div className="font-medium">
+                    {formatOfficeTenants(bindingOffice) || 'Арендатор'}
+                  </div>
+                  {bindingOffice.company && (
+                    <div className="text-xs text-[var(--muted)]">
+                      {bindingOffice.company}
+                    </div>
+                  )}
+                </div>
+                <button
+                  type="button"
+                  className="btn btn-secondary text-xs"
+                  disabled={saving}
+                  onClick={() => {
+                    clearBinding();
+                  }}
+                >
+                  Снять всех
+                </button>
+              </div>
+            )}
+
+            {tenantIds.length > 1 && (
+              <div className="rounded-lg border border-amber-200 bg-amber-50 text-amber-900 p-3 mb-4 text-sm flex items-start gap-2">
+                <AlertTriangle className="w-4 h-4 shrink-0 mt-0.5" />
+                <div>
+                  В этом офисе уже есть арендатор. Можно добавить ещё одного —
+                  оба смогут заказывать пропуска в это помещение.
+                </div>
+              </div>
+            )}
+
+            <div className="space-y-3">
+              <div>
+                <label className="label">Арендаторы (можно несколько)</label>
+                <div className="relative mb-2">
+                  <Search className="absolute left-3 top-1/2 -translate-y-1/2 w-4 h-4 text-[var(--muted)]" />
+                  <input
+                    className="input input--icon-left text-sm"
+                    value={tenantSearch}
+                    onChange={(e) => setTenantSearch(e.target.value)}
+                    placeholder="Поиск: ФИО, компания, email..."
+                  />
+                </div>
+                <div className="border border-[var(--border)] rounded-lg max-h-56 overflow-y-auto divide-y divide-[var(--border)] bg-[var(--surface)]">
+                  {filteredTenantsForBinding.length === 0 ? (
+                    <div className="p-4 text-sm text-[var(--muted)] text-center">
+                      {tenants.length === 0
+                        ? 'Нет активных арендаторов'
+                        : 'Никого не найдено'}
+                    </div>
+                  ) : (
+                    filteredTenantsForBinding.map((t) => {
+                      const officesCount = t.offices?.length || 0;
+                      const checked = tenantIds.includes(t.id);
+                      const others = tenantIds.filter((id) => id !== t.id);
+                      return (
+                        <label
+                          key={t.id}
+                          className={`flex items-start gap-3 p-3 cursor-pointer hover:bg-[var(--surface-muted)] ${
+                            checked ? 'bg-[var(--status-approved-soft)]' : ''
+                          }`}
+                        >
+                          <input
+                            type="checkbox"
+                            className="mt-1"
+                            checked={checked}
+                            onChange={() => handleTenantSelect(t.id)}
+                          />
+                          <span className="text-sm min-w-0">
+                            <span className="font-medium">{t.fullName}</span>
+                            {t.company && (
+                              <span className="block text-xs text-[var(--muted)] truncate">
+                                {t.company}
+                              </span>
+                            )}
+                            <span className="block text-xs text-[var(--muted)] truncate">
+                              {t.email}
+                              {officesCount > 0
+                                ? ` · уже ${officesCount} оф.`
+                                : ''}
+                            </span>
+                            {!checked && others.length > 0 ? (
+                              <span className="block text-[11px] text-amber-700 mt-0.5">
+                                Уже есть{' '}
+                                {others
+                                  .map(
+                                    (id) =>
+                                      tenants.find((x) => x.id === id)
+                                        ?.fullName || 'арендатор',
+                                  )
+                                  .join(', ')}{' '}
+                                — будет добавлен ещё один
+                              </span>
+                            ) : null}
+                          </span>
+                        </label>
+                      );
+                    })
+                  )}
+                </div>
+              </div>
+
+              {tenantIds.length > 0 && (
+                <div>
+                  <label className="label">Компания на табличке офиса</label>
+                  <input
+                    className="input"
+                    value={company}
+                    onChange={(e) => setCompany(e.target.value)}
+                    placeholder={selectedTenant?.company || ph.company}
+                  />
+                  <p className="text-xs text-[var(--muted)] mt-1">
+                    Подставляется из профиля арендатора; можно изменить только
+                    для этого офиса.
+                  </p>
+                </div>
+              )}
+            </div>
+
+            <div className="flex flex-wrap gap-2 mt-5 pt-4 border-t border-[var(--border)]">
+              <button
+                type="button"
+                className="btn btn-primary"
+                disabled={saving}
+                onClick={() => saveBinding(bindingOffice.id)}
+              >
+                {saving ? 'Сохранение...' : 'Сохранить привязку'}
+              </button>
+              <button
+                type="button"
+                className="btn btn-secondary"
+                onClick={resetForm}
               >
                 Отмена
               </button>
             </div>
-          </form>
-        )}
-
-        {businessCenters.length > 0 && (
-          <div className="space-y-3">
-            {businessCenters.map((bc) => (
-              <div
-                key={bc.id}
-                className="border border-[var(--border)] rounded-lg p-4"
-              >
-                {editingBcId === bc.id ? (
-                  <div className="space-y-4">
-                    <div>
-                      <label className="label">Название БЦ *</label>
-                      <input
-                        className="input"
-                        value={bcName}
-                        onChange={(e) => setBcName(e.target.value)}
-                        required
-                      />
-                    </div>
-                    <div>
-                      <label className="label">Адрес</label>
-                      <input
-                        className="input"
-                        value={bcAddress}
-                        onChange={(e) => setBcAddress(e.target.value)}
-                      />
-                      <p className="text-xs text-[var(--muted)] mt-1">
-                        Показывается на странице пропуска и используется для
-                        кнопки «Построить маршрут»
-                      </p>
-                    </div>
-                    <div>
-                      <label className="label">Код сайта</label>
-                      <input
-                        className="input"
-                        value={bcCode}
-                        onChange={(e) => setBcCode(e.target.value)}
-                        placeholder="tf-business-center:12"
-                      />
-                      <p className="text-xs text-[var(--muted)] mt-1">
-                        Тот же ключ, что у таксономии БЦ на сайте. Пусто —
-                        снять привязку.
-                      </p>
-                    </div>
-
-                    <div className="border-t border-[var(--border)] pt-4 space-y-3">
-                      <h4 className="text-sm font-medium">
-                        Параметры пропускного режима
-                      </h4>
-                      <div>
-                        <label className="label">Карты для маршрута</label>
-                        <select
-                          className="input"
-                          value={bcPassSettings.route_maps_provider || 'yandex'}
-                          onChange={(e) =>
-                            setBcPassSettings({
-                              ...bcPassSettings,
-                              route_maps_provider: e.target.value,
-                            })
-                          }
-                        >
-                          <option value="yandex">Яндекс.Карты</option>
-                          <option value="google">Google Maps</option>
-                        </select>
-                        <p className="text-xs text-[var(--muted)] mt-1">
-                          Адрес для маршрута берётся из поля «Адрес» карточки БЦ
-                        </p>
-                      </div>
-                      <div>
-                        <label className="label">Этаж ресепшн</label>
-                        <input
-                          className="input"
-                          value={bcPassSettings.reception_floor}
-                          onChange={(e) =>
-                            setBcPassSettings({
-                              ...bcPassSettings,
-                              reception_floor: e.target.value,
-                            })
-                          }
-                          placeholder="1"
-                        />
-                      </div>
-                      <label className="flex items-center gap-2 text-sm">
-                        <input
-                          type="checkbox"
-                          checked={bcPassSettings.require_checkout === 'true'}
-                          onChange={(e) =>
-                            setBcPassSettings({
-                              ...bcPassSettings,
-                              require_checkout: e.target.checked
-                                ? 'true'
-                                : 'false',
-                            })
-                          }
-                        />
-                        Требовать подтверждение выхода гостя
-                      </label>
-                      <p className="text-xs text-[var(--muted)] -mt-1">
-                        Если выключено — ресепшн только фиксирует приход по
-                        пропуску, без этапа «выход»
-                      </p>
-                      <label className="flex items-center gap-2 text-sm">
-                        <input
-                          type="checkbox"
-                          checked={
-                            bcPassSettings.auto_approve_delivery === 'true'
-                          }
-                          onChange={(e) =>
-                            setBcPassSettings({
-                              ...bcPassSettings,
-                              auto_approve_delivery: e.target.checked
-                                ? 'true'
-                                : 'false',
-                            })
-                          }
-                        />
-                        Автоодобрение пропусков на доставку
-                      </label>
-                      <div>
-                        <label className="label">Выходные дни</label>
-                        <p className="text-xs text-[var(--muted)] mb-2">
-                          Не учитываются при выборе даты заказа пропуска. По
-                          умолчанию выходных нет.
-                        </p>
-                        <div className="flex flex-wrap gap-2">
-                          {WEEKDAY_OPTIONS.map((day) => {
-                            const active = parseClosedWeekdays(
-                              bcPassSettings.closed_weekdays,
-                            ).includes(day.value);
-                            return (
-                              <button
-                                key={day.value}
-                                type="button"
-                                className={`px-3 py-1.5 text-sm rounded-lg border transition-colors ${
-                                  active
-                                    ? 'border-[var(--status-rejected-border)] bg-[var(--status-rejected-soft)] text-[var(--status-rejected)]'
-                                    : 'border-[var(--border)] hover:bg-[var(--surface-muted)]'
-                                }`}
-                                onClick={() => toggleBcClosedWeekday(day.value)}
-                              >
-                                {day.label}
-                              </button>
-                            );
-                          })}
-                        </div>
-                      </div>
-                      <div className="grid sm:grid-cols-2 gap-3">
-                        <div>
-                          <label className="label">Рабочие часы с</label>
-                          <input
-                            className="input"
-                            type="time"
-                            value={bcPassSettings.working_hours_from}
-                            onChange={(e) =>
-                              setBcPassSettings({
-                                ...bcPassSettings,
-                                working_hours_from: e.target.value,
-                              })
-                            }
-                          />
-                        </div>
-                        <div>
-                          <label className="label">Рабочие часы до</label>
-                          <input
-                            className="input"
-                            type="time"
-                            value={bcPassSettings.working_hours_to}
-                            onChange={(e) =>
-                              setBcPassSettings({
-                                ...bcPassSettings,
-                                working_hours_to: e.target.value,
-                              })
-                            }
-                          />
-                        </div>
-                      </div>
-                      <div className="grid sm:grid-cols-2 gap-3">
-                        <div>
-                          <label className="label">Телефон ресепшн</label>
-                          <input
-                            className="input"
-                            value={bcPassSettings.contact_phone}
-                            onChange={(e) =>
-                              setBcPassSettings({
-                                ...bcPassSettings,
-                                contact_phone: e.target.value,
-                              })
-                            }
-                          />
-                        </div>
-                        <div>
-                          <label className="label">
-                            Email управляющей компании
-                          </label>
-                          <input
-                            className="input"
-                            type="email"
-                            value={bcPassSettings.contact_email}
-                            onChange={(e) =>
-                              setBcPassSettings({
-                                ...bcPassSettings,
-                                contact_email: e.target.value,
-                              })
-                            }
-                          />
-                        </div>
-                      </div>
-                    </div>
-
-                    <div className="flex gap-2">
-                      <button
-                        type="button"
-                        className="btn btn-primary text-sm"
-                        disabled={saving}
-                        onClick={saveBcEdit}
-                      >
-                        {saving ? 'Сохранение...' : 'Сохранить'}
-                      </button>
-                      <button
-                        type="button"
-                        className="btn btn-secondary text-sm"
-                        onClick={resetBcForm}
-                      >
-                        Отмена
-                      </button>
-                    </div>
-                  </div>
-                ) : (
-                  <div className="flex items-start justify-between gap-3">
-                    <div>
-                      <div className="flex flex-wrap items-center gap-2">
-                        <div className="font-medium">{bc.name}</div>
-                        {bc.code && (
-                          <span className="text-[10px] uppercase tracking-wide px-1.5 py-0.5 rounded bg-emerald-50 text-emerald-800">
-                            связан
-                          </span>
-                        )}
-                      </div>
-                      <div className="text-sm text-[var(--muted)]">
-                        {bc.address}
-                      </div>
-                      {bc.code && (
-                        <div className="text-xs font-mono text-[var(--muted)] mt-0.5">
-                          {bc.code}
-                        </div>
-                      )}
-                      <div className="text-xs text-[var(--muted)] mt-1">
-                        {bc.officesCount} офисов
-                        {bc.passSettings && (
-                          <>
-                            {' '}
-                            · ресепшн {bc.passSettings.reception_floor} эт. ·{' '}
-                            {bc.passSettings.working_hours_from}–
-                            {bc.passSettings.working_hours_to}
-                          </>
-                        )}
-                      </div>
-                    </div>
-                    <div className="flex items-center gap-2 shrink-0">
-                      <button
-                        type="button"
-                        className="btn btn-secondary text-sm"
-                        onClick={() => startBcEdit(bc)}
-                      >
-                        <Pencil className="w-4 h-4" />
-                        Изменить
-                      </button>
-                      <button
-                        type="button"
-                        className="btn btn-danger text-sm"
-                        disabled={deletingBcId === bc.id || bc.officesCount > 0}
-                        title={
-                          bc.officesCount > 0
-                            ? `Сначала удалите ${bc.officesCount} офис(ов)`
-                            : 'Удалить БЦ'
-                        }
-                        onClick={() => handleDeleteBc(bc)}
-                      >
-                        <Trash2 className="w-4 h-4" />
-                        {deletingBcId === bc.id ? '...' : 'Удалить'}
-                      </button>
-                    </div>
-                  </div>
-                )}
-              </div>
-            ))}
           </div>
         )}
-      </div>
-
-      <div className="card p-5 mb-6 space-y-4">
-        <div className="flex flex-col lg:flex-row lg:items-center justify-between gap-3">
-          <div>
-            <h2 className="font-semibold flex items-center gap-2">
-              <Building2 className="w-4 h-4 text-[var(--primary)]" />
-              Реестр офисов
-            </h2>
-            <p className="text-sm text-[var(--muted)] mt-1">
-              {officeStats.shown} из {officeStats.total} · активных{' '}
-              {officeStats.active} · с арендатором {officeStats.assigned}
-            </p>
-          </div>
-          <div className="flex flex-wrap items-center gap-2">
-            <div className="inline-flex rounded-lg border border-[var(--border)] p-0.5 bg-[var(--surface-muted)]">
-              <button
-                type="button"
-                className={`inline-flex items-center gap-1.5 px-2.5 py-1.5 text-xs rounded-md transition-colors ${
-                  officeView === 'table'
-                    ? 'bg-[var(--surface)] shadow-sm font-medium'
-                    : 'text-[var(--muted)] hover:text-[var(--text)]'
-                }`}
-                onClick={() => setOfficeViewMode('table')}
-                title="Таблица"
-              >
-                <Table2 className="w-3.5 h-3.5" />
-                Таблица
-              </button>
-              <button
-                type="button"
-                className={`inline-flex items-center gap-1.5 px-2.5 py-1.5 text-xs rounded-md transition-colors ${
-                  officeView === 'cards'
-                    ? 'bg-[var(--surface)] shadow-sm font-medium'
-                    : 'text-[var(--muted)] hover:text-[var(--text)]'
-                }`}
-                onClick={() => setOfficeViewMode('cards')}
-                title="Карточки"
-              >
-                <LayoutGrid className="w-3.5 h-3.5" />
-                Карточки
-              </button>
-            </div>
-            <button
-              type="button"
-              className="btn btn-secondary text-sm"
-              disabled={exporting || offices.length === 0}
-              onClick={() => void handleExportOffices()}
-            >
-              <Download className="w-4 h-4" />
-              {exporting ? 'Выгрузка...' : 'Экспорт CSV'}
-            </button>
-            <button
-              type="button"
-              className="btn btn-secondary text-sm"
-              disabled={importing || businessCenters.length === 0}
-              onClick={() => importInputRef.current?.click()}
-            >
-              <Upload className="w-4 h-4" />
-              {importing ? 'Импорт...' : 'Импорт CSV'}
-            </button>
-            <input
-              ref={importInputRef}
-              type="file"
-              accept=".csv,text/csv"
-              className="hidden"
-              onChange={(e) => void handleImportFile(e)}
-            />
-            {businessCenters.length > 0 && (
-              <button
-                className="btn btn-primary text-sm"
-                onClick={() => {
-                  resetForm();
-                  setShowForm(true);
-                }}
-              >
-                <Plus className="w-4 h-4" />
-                Добавить офис
-              </button>
-            )}
-          </div>
-        </div>
-
-        {importResult && (
-          <div className="rounded-lg border border-[var(--border)] bg-[var(--surface-muted)] px-4 py-3 text-sm space-y-2">
-            <div>
-              Импорт завершён:{' '}
-              <span className="font-medium text-emerald-700">
-                добавлено {importResult.created}
-              </span>
-              {importResult.skipped > 0 && (
-                <>
-                  , пропущено (уже есть){' '}
-                  <span className="font-medium">{importResult.skipped}</span>
-                </>
-              )}
-            </div>
-            {importResult.errors.length > 0 && (
-              <div>
-                <div className="text-[var(--muted)] mb-1">
-                  Ошибки ({importResult.errors.length}):
-                </div>
-                <ul className="list-disc pl-5 space-y-0.5 text-red-600 max-h-32 overflow-y-auto">
-                  {importResult.errors.map((err) => (
-                    <li key={err}>{err}</li>
-                  ))}
-                </ul>
-              </div>
-            )}
-            <p className="text-xs text-[var(--muted)]">
-              Формат: БЦ;Номер офиса;Этаж;Площадь;Компания;Email
-              арендатора;Активен (да/нет). БЦ должен существовать в системе.
-            </p>
-          </div>
-        )}
-
-        <div className="grid grid-cols-2 lg:grid-cols-4 gap-3">
-          <div className="card px-3 py-2">
-            <div className="text-xs text-[var(--muted)]">Всего</div>
-            <div className="text-lg font-semibold">{officeStats.total}</div>
-          </div>
-          <div className="card px-3 py-2 office-stat--active">
-            <div className="text-xs text-[var(--muted)]">Активные</div>
-            <div className="text-lg font-semibold office-stat__value">
-              {officeStats.active}
-            </div>
-          </div>
-          <div className="card px-3 py-2 office-stat--assigned">
-            <div className="text-xs text-[var(--muted)]">С арендатором</div>
-            <div className="text-lg font-semibold office-stat__value">
-              {officeStats.assigned}
-            </div>
-          </div>
-          <div className="card px-3 py-2 office-stat--free">
-            <div className="text-xs text-[var(--muted)]">Свободные</div>
-            <div className="text-lg font-semibold office-stat__value">
-              {officeStats.total - officeStats.assigned}
-            </div>
-          </div>
-        </div>
-
-        <div className="grid lg:grid-cols-[minmax(0,1fr)_auto_auto_auto_auto] gap-2 items-end">
-          <div className="relative">
-            <Search className="absolute left-3 top-1/2 -translate-y-1/2 w-4 h-4 text-[var(--muted)]" />
-            <input
-              className="input input--icon-left"
-              placeholder={ph.officeSearch}
-              value={officeFilters.search}
-              onChange={(e) => {
-                const next = { ...officeFilters, search: e.target.value };
-                setOfficeFilters(next);
-                setAppliedOfficeFilters((prev) => ({
-                  ...prev,
-                  search: e.target.value,
-                }));
-              }}
-            />
-          </div>
-          <div className="select-wrap">
-            <select
-              className="input"
-              value={officeFilters.propertyId}
-              onChange={(e) =>
-                setOfficeFilters({
-                  ...officeFilters,
-                  propertyId: e.target.value,
-                })
-              }
-            >
-              <option value="">Все БЦ</option>
-              {businessCenters.map((bc) => (
-                <option key={bc.id} value={bc.id}>
-                  {bc.name}
-                </option>
-              ))}
-            </select>
-          </div>
-          <div className="select-wrap">
-            <select
-              className="input"
-              value={officeFilters.floor}
-              onChange={(e) =>
-                setOfficeFilters({ ...officeFilters, floor: e.target.value })
-              }
-            >
-              <option value="">Все этажи</option>
-              {floors.map((floor) => (
-                <option key={floor} value={floor}>
-                  {floor} эт.
-                </option>
-              ))}
-            </select>
-          </div>
-          <div className="select-wrap">
-            <select
-              className="input"
-              value={officeFilters.binding}
-              onChange={(e) =>
-                setOfficeFilters({
-                  ...officeFilters,
-                  binding: e.target.value as OfficeFilters['binding'],
-                })
-              }
-            >
-              <option value="">Все офисы</option>
-              <option value="assigned">С арендатором</option>
-              <option value="free">Свободные</option>
-            </select>
-          </div>
-          <div className="select-wrap">
-            <select
-              className="input"
-              value={officeFilters.status}
-              onChange={(e) =>
-                setOfficeFilters({
-                  ...officeFilters,
-                  status: e.target.value as OfficeFilters['status'],
-                })
-              }
-            >
-              <option value="">Любой статус</option>
-              <option value="active">Активные</option>
-              <option value="inactive">Неактивные</option>
-            </select>
-          </div>
-        </div>
-
-        <div className="flex flex-wrap items-center gap-2">
-          <button
-            type="button"
-            className="btn btn-primary text-sm"
-            onClick={applyOfficeFilters}
-          >
-            <Filter className="w-4 h-4" />
-            Применить
-          </button>
-          {hasOfficeFilters && (
-            <button
-              type="button"
-              className="btn btn-secondary text-sm"
-              onClick={resetOfficeFilters}
-            >
-              <X className="w-4 h-4" />
-              Сбросить
-            </button>
-          )}
-        </div>
-      </div>
-
-      {bindingOffice && (
-        <div
-          id="office-binding-panel"
-          className="card p-5 mb-6 border-2 border-[var(--primary)]/30 shadow-sm max-w-2xl"
-        >
-          <div className="flex flex-col sm:flex-row sm:items-start justify-between gap-3 mb-4">
-            <div>
-              <div className="flex items-center gap-2 text-[var(--primary)] mb-1">
-                <Link2 className="w-5 h-5" />
-                <h3 className="font-semibold text-[var(--text)]">
-                  Привязка арендатора
-                </h3>
-              </div>
-              <p className="text-sm text-[var(--muted)]">
-                Офис{' '}
-                <span className="font-mono font-semibold text-[var(--text)]">
-                  {bindingOffice.number}
-                </span>
-                {bindingOffice.businessCenterName
-                  ? ` · ${bindingOffice.businessCenterName}`
-                  : ''}
-                {bindingOffice.floor ? ` · ${bindingOffice.floor} эт.` : ''}
-              </p>
-            </div>
-            <button
-              type="button"
-              className="btn btn-secondary text-sm shrink-0"
-              onClick={resetForm}
-            >
-              <X className="w-4 h-4" />
-              Закрыть
-            </button>
-          </div>
-
-          {officeTenantIds(bindingOffice).length > 0 && (
-            <div className="rounded-lg border border-[var(--border)] bg-[var(--surface-muted)] p-3 mb-4 flex flex-col sm:flex-row sm:items-start justify-between gap-2">
-              <div className="text-sm">
-                <div className="text-xs text-[var(--muted)] mb-0.5">
-                  Сейчас привязаны
-                </div>
-                <div className="font-medium">
-                  {formatOfficeTenants(bindingOffice) || 'Арендатор'}
-                </div>
-                {bindingOffice.company && (
-                  <div className="text-xs text-[var(--muted)]">
-                    {bindingOffice.company}
-                  </div>
-                )}
-              </div>
-              <button
-                type="button"
-                className="btn btn-secondary text-xs"
-                disabled={saving}
-                onClick={() => {
-                  clearBinding();
-                }}
-              >
-                Снять всех
-              </button>
-            </div>
-          )}
-
-          {tenantIds.length > 1 && (
-            <div className="rounded-lg border border-amber-200 bg-amber-50 text-amber-900 p-3 mb-4 text-sm flex items-start gap-2">
-              <AlertTriangle className="w-4 h-4 shrink-0 mt-0.5" />
-              <div>
-                В этом офисе уже есть арендатор. Можно добавить ещё одного —
-                оба смогут заказывать пропуска в это помещение.
-              </div>
-            </div>
-          )}
-
-          <div className="space-y-3">
-            <div>
-              <label className="label">
-                Арендаторы (можно несколько)
-              </label>
-              <div className="relative mb-2">
-                <Search className="absolute left-3 top-1/2 -translate-y-1/2 w-4 h-4 text-[var(--muted)]" />
-                <input
-                  className="input input--icon-left text-sm"
-                  value={tenantSearch}
-                  onChange={(e) => setTenantSearch(e.target.value)}
-                  placeholder="Поиск: ФИО, компания, email..."
-                />
-              </div>
-              <div className="border border-[var(--border)] rounded-lg max-h-56 overflow-y-auto divide-y divide-[var(--border)] bg-[var(--surface)]">
-                {filteredTenantsForBinding.length === 0 ? (
-                  <div className="p-4 text-sm text-[var(--muted)] text-center">
-                    {tenants.length === 0
-                      ? 'Нет активных арендаторов'
-                      : 'Никого не найдено'}
-                  </div>
-                ) : (
-                  filteredTenantsForBinding.map((t) => {
-                    const officesCount = t.offices?.length || 0;
-                    const checked = tenantIds.includes(t.id);
-                    const others = tenantIds.filter((id) => id !== t.id);
-                    return (
-                      <label
-                        key={t.id}
-                        className={`flex items-start gap-3 p-3 cursor-pointer hover:bg-[var(--surface-muted)] ${
-                          checked ? 'bg-[var(--status-approved-soft)]' : ''
-                        }`}
-                      >
-                        <input
-                          type="checkbox"
-                          className="mt-1"
-                          checked={checked}
-                          onChange={() => handleTenantSelect(t.id)}
-                        />
-                        <span className="text-sm min-w-0">
-                          <span className="font-medium">{t.fullName}</span>
-                          {t.company && (
-                            <span className="block text-xs text-[var(--muted)] truncate">
-                              {t.company}
-                            </span>
-                          )}
-                          <span className="block text-xs text-[var(--muted)] truncate">
-                            {t.email}
-                            {officesCount > 0
-                              ? ` · уже ${officesCount} оф.`
-                              : ''}
-                          </span>
-                          {!checked && others.length > 0 ? (
-                            <span className="block text-[11px] text-amber-700 mt-0.5">
-                              Уже есть{' '}
-                              {others
-                                .map(
-                                  (id) =>
-                                    tenants.find((x) => x.id === id)
-                                      ?.fullName || 'арендатор',
-                                )
-                                .join(', ')}{' '}
-                              — будет добавлен ещё один
-                            </span>
-                          ) : null}
-                        </span>
-                      </label>
-                    );
-                  })
-                )}
-              </div>
-            </div>
-
-            {tenantIds.length > 0 && (
-              <div>
-                <label className="label">Компания на табличке офиса</label>
-                <input
-                  className="input"
-                  value={company}
-                  onChange={(e) => setCompany(e.target.value)}
-                  placeholder={selectedTenant?.company || ph.company}
-                />
-                <p className="text-xs text-[var(--muted)] mt-1">
-                  Подставляется из профиля арендатора; можно изменить только для
-                  этого офиса.
-                </p>
-              </div>
-            )}
-          </div>
-
-          <div className="flex flex-wrap gap-2 mt-5 pt-4 border-t border-[var(--border)]">
-            <button
-              type="button"
-              className="btn btn-primary"
-              disabled={saving}
-              onClick={() => saveBinding(bindingOffice.id)}
-            >
-              {saving ? 'Сохранение...' : 'Сохранить привязку'}
-            </button>
-            <button
-              type="button"
-              className="btn btn-secondary"
-              onClick={resetForm}
-            >
-              Отмена
-            </button>
-          </div>
-        </div>
-      )}
       </div>
 
       {officeFormOpen && (
@@ -1542,442 +1548,289 @@ export default function AdminOfficesPage() {
             Назад к офисам
           </button>
           <div className="card p-4 sm:p-5">
-        <form
-          onSubmit={
-            editingId
-              ? (e) => {
-                  e.preventDefault();
-                  handleUpdate(editingId);
-                }
-              : handleCreate
-          }
-          className="space-y-4"
-        >
-          <div>
-            <label className="label">Бизнес-центр *</label>
-            <div className="select-wrap">
-              <select
-                className="input"
-                value={propertyId}
-                onChange={(e) => setPropertyId(e.target.value)}
-                required
-              >
-                <option value="">Выберите БЦ</option>
-                {businessCenters.map((bc) => (
-                  <option key={bc.id} value={bc.id}>
-                    {bc.name}
-                  </option>
-                ))}
-              </select>
-            </div>
-          </div>
-          <div className="grid grid-cols-2 gap-3">
-            <div>
-              <label className="label">Номер офиса *</label>
-              <input
-                className="input"
-                value={number}
-                onChange={(e) => setNumber(e.target.value)}
-                required
-                placeholder={ph.officeNumberShort}
-              />
-            </div>
-            <div>
-              <label className="label">Этаж</label>
-              <input
-                className="input"
-                value={floor}
-                onChange={(e) => setFloor(e.target.value)}
-                placeholder={ph.officeFloor}
-              />
-            </div>
-          </div>
-          <div className="grid grid-cols-2 gap-3">
-            <div>
-              <label className="label">Площадь, м²</label>
-              <input
-                className="input"
-                type="number"
-                min={0}
-                value={areaSqm}
-                onChange={(e) => setAreaSqm(e.target.value)}
-              />
-            </div>
-            <div>
-              <label className="label">externalId</label>
-              <input
-                className="input"
-                value={externalId}
-                onChange={(e) => setExternalId(e.target.value)}
-                placeholder="tf-room:107"
-              />
-            </div>
-          </div>
-          <label className="flex items-center gap-2 text-sm">
-            <input
-              type="checkbox"
-              checked={officeActive}
-              onChange={(e) => setOfficeActive(e.target.checked)}
-            />
-            Активен
-          </label>
-
-          <div className="border border-[var(--border)] rounded-lg p-4 bg-[var(--surface-muted)]">
-            <div className="flex items-center gap-2 mb-3">
-              <Link2 className="w-4 h-4 text-[var(--primary)]" />
-              <span className="font-medium text-sm">Привязка арендатора</span>
-            </div>
-            <BindingSelectCompact />
-          </div>
-
-          <div className="flex gap-2">
-            <button type="submit" className="btn btn-primary" disabled={saving}>
-              {saving ? 'Сохранение...' : editingId ? 'Сохранить' : 'Добавить'}
-            </button>
-            <button
-              type="button"
-              className="btn btn-secondary"
-              onClick={resetForm}
+            <form
+              onSubmit={
+                editingId
+                  ? (e) => {
+                      e.preventDefault();
+                      handleUpdate(editingId);
+                    }
+                  : handleCreate
+              }
+              className="space-y-4"
             >
-              Отмена
-            </button>
-          </div>
-        </form>
+              <div>
+                <label className="label">Бизнес-центр *</label>
+                <div className="select-wrap">
+                  <select
+                    className="input"
+                    value={propertyId}
+                    onChange={(e) => setPropertyId(e.target.value)}
+                    required
+                  >
+                    <option value="">Выберите БЦ</option>
+                    {businessCenters.map((bc) => (
+                      <option key={bc.id} value={bc.id}>
+                        {bc.name}
+                      </option>
+                    ))}
+                  </select>
+                </div>
+              </div>
+              <div className="grid grid-cols-2 gap-3">
+                <div>
+                  <label className="label">Номер офиса *</label>
+                  <input
+                    className="input"
+                    value={number}
+                    onChange={(e) => setNumber(e.target.value)}
+                    required
+                    placeholder={ph.officeNumberShort}
+                  />
+                </div>
+                <div>
+                  <label className="label">Этаж</label>
+                  <input
+                    className="input"
+                    value={floor}
+                    onChange={(e) => setFloor(e.target.value)}
+                    placeholder={ph.officeFloor}
+                  />
+                </div>
+              </div>
+              <div className="grid grid-cols-2 gap-3">
+                <div>
+                  <label className="label">Площадь, м²</label>
+                  <input
+                    className="input"
+                    type="number"
+                    min={0}
+                    value={areaSqm}
+                    onChange={(e) => setAreaSqm(e.target.value)}
+                  />
+                </div>
+                <div>
+                  <label className="label">externalId</label>
+                  <input
+                    className="input"
+                    value={externalId}
+                    onChange={(e) => setExternalId(e.target.value)}
+                    placeholder="tf-room:107"
+                  />
+                </div>
+              </div>
+              <label className="flex items-center gap-2 text-sm">
+                <input
+                  type="checkbox"
+                  checked={officeActive}
+                  onChange={(e) => setOfficeActive(e.target.checked)}
+                />
+                Активен
+              </label>
+
+              <div className="border border-[var(--border)] rounded-lg p-4 bg-[var(--surface-muted)]">
+                <div className="flex items-center gap-2 mb-3">
+                  <Link2 className="w-4 h-4 text-[var(--primary)]" />
+                  <span className="font-medium text-sm">
+                    Привязка арендатора
+                  </span>
+                </div>
+                <BindingSelectCompact />
+              </div>
+
+              <div className="flex gap-2">
+                <button
+                  type="submit"
+                  className="btn btn-primary"
+                  disabled={saving}
+                >
+                  {saving
+                    ? 'Сохранение...'
+                    : editingId
+                      ? 'Сохранить'
+                      : 'Добавить'}
+                </button>
+                <button
+                  type="button"
+                  className="btn btn-secondary"
+                  onClick={resetForm}
+                >
+                  Отмена
+                </button>
+              </div>
+            </form>
           </div>
         </section>
       )}
 
       <div className={officeFormOpen ? 'hidden' : undefined}>
-      {loading ? (
-        <div className="animate-pulse text-[var(--muted)]">Загрузка...</div>
-      ) : offices.length === 0 ? (
-        <div className="card p-8 text-center text-[var(--muted)]">
-          Офисов пока нет
-        </div>
-      ) : filteredOffices.length === 0 ? (
-        <div className="card p-8 text-center text-[var(--muted)]">
-          По выбранным фильтрам офисов не найдено
-          {hasOfficeFilters && (
-            <div className="mt-3">
-              <button
-                type="button"
-                className="btn btn-secondary text-sm"
-                onClick={resetOfficeFilters}
-              >
-                Сбросить фильтры
-              </button>
-            </div>
-          )}
-        </div>
-      ) : officeView === 'table' ? (
-        <div className="card overflow-x-auto">
-          <table className="w-full text-sm min-w-[920px]">
-            <thead className="surface-muted text-[var(--muted)]">
-              <tr>
-                {showBcColumn && (
-                  <th className="text-left p-3 font-medium">Бизнес-центр</th>
-                )}
-                <th className="text-left p-3 font-medium">Офис</th>
-                <th className="text-left p-3 font-medium hidden sm:table-cell">
-                  Этаж
-                </th>
-                <th className="text-left p-3 font-medium hidden md:table-cell">
-                  Тип
-                </th>
-                <th className="text-left p-3 font-medium hidden lg:table-cell">
-                  Площадь
-                </th>
-                <th className="text-left p-3 font-medium">Арендатор</th>
-                <th className="text-left p-3 font-medium">Статус</th>
-                <th className="p-3 w-28 text-right font-medium">Действия</th>
-              </tr>
-            </thead>
-            <tbody>
-              {sortedOffices.map((office) => (
-                <tr
-                  key={office.id}
-                  className={`border-t border-[var(--border)] hover:bg-[var(--surface-muted)] ${
-                    !office.isActive ? 'opacity-70' : ''
-                  }`}
+        {loading ? (
+          <div className="animate-pulse text-[var(--muted)]">Загрузка...</div>
+        ) : offices.length === 0 ? (
+          <div className="card p-8 text-center text-[var(--muted)]">
+            Офисов пока нет
+          </div>
+        ) : filteredOffices.length === 0 ? (
+          <div className="card p-8 text-center text-[var(--muted)]">
+            По выбранным фильтрам офисов не найдено
+            {hasOfficeFilters && (
+              <div className="mt-3">
+                <button
+                  type="button"
+                  className="btn btn-secondary text-sm"
+                  onClick={resetOfficeFilters}
                 >
+                  Сбросить фильтры
+                </button>
+              </div>
+            )}
+          </div>
+        ) : officeView === 'table' ? (
+          <div className="card overflow-x-auto">
+            <table className="w-full text-sm min-w-[920px]">
+              <thead className="surface-muted text-[var(--muted)]">
+                <tr>
                   {showBcColumn && (
-                    <td className="p-3 text-[var(--muted)] max-w-[10rem]">
+                    <th className="text-left p-3 font-medium">Бизнес-центр</th>
+                  )}
+                  <th className="text-left p-3 font-medium">Офис</th>
+                  <th className="text-left p-3 font-medium hidden sm:table-cell">
+                    Этаж
+                  </th>
+                  <th className="text-left p-3 font-medium hidden md:table-cell">
+                    Тип
+                  </th>
+                  <th className="text-left p-3 font-medium hidden lg:table-cell">
+                    Площадь
+                  </th>
+                  <th className="text-left p-3 font-medium">Арендатор</th>
+                  <th className="text-left p-3 font-medium">Статус</th>
+                  <th className="p-3 w-28 text-right font-medium">Действия</th>
+                </tr>
+              </thead>
+              <tbody>
+                {sortedOffices.map((office) => (
+                  <tr
+                    key={office.id}
+                    className={`border-t border-[var(--border)] hover:bg-[var(--surface-muted)] ${
+                      !office.isActive ? 'opacity-70' : ''
+                    }`}
+                  >
+                    {showBcColumn && (
+                      <td className="p-3 text-[var(--muted)] max-w-[10rem]">
+                        <span className="line-clamp-2">
+                          {office.businessCenterName || '—'}
+                        </span>
+                      </td>
+                    )}
+                    <td className="p-3">
+                      <div className="font-semibold">
+                        {officeDisplayName(office)}
+                      </div>
+                      {office.title && office.title !== office.number && (
+                        <div className="font-mono text-xs text-[var(--muted)]">
+                          {office.number}
+                        </div>
+                      )}
+                      <OfficeStatusFlags office={office} />
+                      <div className="text-xs text-[var(--muted)] sm:hidden">
+                        {office.floor ? `${office.floor} эт.` : '—'}
+                        {office.company ? ` · ${office.company}` : ''}
+                      </div>
+                    </td>
+                    <td className="p-3 hidden sm:table-cell text-[var(--muted)]">
+                      {office.floor ? `${office.floor} эт.` : '—'}
+                    </td>
+                    <td className="p-3 hidden md:table-cell max-w-[12rem]">
                       <span className="line-clamp-2">
-                        {office.businessCenterName || '—'}
+                        {office.company || '—'}
                       </span>
                     </td>
-                  )}
-                  <td className="p-3">
-                    <div className="font-semibold">
-                      {officeDisplayName(office)}
-                    </div>
-                    {office.title && office.title !== office.number && (
-                      <div className="font-mono text-xs text-[var(--muted)]">
-                        {office.number}
-                      </div>
-                    )}
-                    <OfficeStatusFlags office={office} />
-                    <div className="text-xs text-[var(--muted)] sm:hidden">
-                      {office.floor ? `${office.floor} эт.` : '—'}
-                      {office.company ? ` · ${office.company}` : ''}
-                    </div>
-                  </td>
-                  <td className="p-3 hidden sm:table-cell text-[var(--muted)]">
-                    {office.floor ? `${office.floor} эт.` : '—'}
-                  </td>
-                  <td className="p-3 hidden md:table-cell max-w-[12rem]">
-                    <span className="line-clamp-2">
-                      {office.company || '—'}
-                    </span>
-                  </td>
-                  <td className="p-3 hidden lg:table-cell text-[var(--muted)] whitespace-nowrap">
-                    {office.areaSqm ? `${office.areaSqm} м²` : '—'}
-                  </td>
-                  <td className="p-3 min-w-[10rem]">
-                    <div>
-                      {bindingOfficeId === office.id ? (
-                        <span className="text-xs font-medium text-[var(--primary)]">
-                          Редактируется выше ↑
-                        </span>
-                      ) : (
-                        <>
-                          <div
-                            className={
-                              formatOfficeTenants(office)
-                                ? 'font-medium'
-                                : 'text-[var(--muted)]'
-                            }
-                          >
-                            {formatOfficeTenants(office) || 'Не назначен'}
-                          </div>
-                          {officeTenantIds(office).length > 1 && (
-                            <div className="text-[11px] text-amber-700">
-                              {officeTenantIds(office).length} арендатора
-                            </div>
-                          )}
-                          {office.company && formatOfficeTenants(office) && (
-                            <div className="text-[11px] text-[var(--muted)] line-clamp-1">
-                              {office.company}
-                            </div>
-                          )}
-                          <button
-                            type="button"
-                            className="text-xs text-[var(--primary)] hover:underline mt-0.5 inline-flex items-center gap-1"
-                            onClick={() => startBinding(office)}
-                          >
-                            <Link2 className="w-3 h-3" />
-                            {officeTenantIds(office).length
-                              ? 'Изменить'
-                              : 'Назначить'}
-                          </button>
-                        </>
-                      )}
-                    </div>
-                  </td>
-                  <td className="p-3 whitespace-nowrap">
-                    <span
-                      className={`text-xs px-2 py-0.5 rounded-full ${
-                        office.externalId
-                          ? 'bg-emerald-50 text-emerald-800'
-                          : 'bg-[var(--surface-muted)] text-[var(--muted)]'
-                      }`}
-                    >
-                      {office.externalId ? 'Связан' : 'Не связан'}
-                    </span>
-                    {!office.isActive && (
-                      <div className="text-[11px] text-[var(--muted)] mt-0.5">
-                        неактивен
-                      </div>
-                    )}
-                  </td>
-                  <td className="p-3">
-                    <div className="flex items-center justify-end gap-1">
-                      <button
-                        type="button"
-                        className="p-1.5 rounded-md border border-[var(--border)] hover:bg-[var(--surface-muted)] text-[var(--primary)]"
-                        title={
-                          officeTenantIds(office).length
-                            ? 'Изменить арендаторов'
-                            : 'Назначить арендатора'
-                        }
-                        onClick={() => startBinding(office)}
-                      >
-                        <Link2 className="w-4 h-4" />
-                      </button>
-                      <button
-                        type="button"
-                        className="p-1.5 rounded-md border border-[var(--border)] hover:bg-[var(--surface-muted)]"
-                        title="Изменить офис"
-                        onClick={() => startEdit(office)}
-                      >
-                        <Pencil className="w-4 h-4" />
-                      </button>
-                      <button
-                        type="button"
-                        className="p-1.5 rounded-md border border-[var(--border)] hover:bg-[var(--surface-muted)]"
-                        title={
-                          office.isActive ? 'Деактивировать' : 'Активировать'
-                        }
-                        onClick={() => toggleActive(office)}
-                      >
-                        {office.isActive ? (
-                          <X className="w-4 h-4 text-red-500" />
+                    <td className="p-3 hidden lg:table-cell text-[var(--muted)] whitespace-nowrap">
+                      {office.areaSqm ? `${office.areaSqm} м²` : '—'}
+                    </td>
+                    <td className="p-3 min-w-[10rem]">
+                      <div>
+                        {bindingOfficeId === office.id ? (
+                          <span className="text-xs font-medium text-[var(--primary)]">
+                            Редактируется выше ↑
+                          </span>
                         ) : (
-                          <Check className="w-4 h-4 text-emerald-600" />
-                        )}
-                      </button>
-                      <button
-                        type="button"
-                        className="p-1.5 rounded-md border border-red-200 hover:bg-red-50 text-red-600"
-                        title="Удалить офис"
-                        disabled={deletingOfficeId === office.id}
-                        onClick={() => handleDeleteOffice(office)}
-                      >
-                        <Trash2 className="w-4 h-4" />
-                      </button>
-                    </div>
-                  </td>
-                </tr>
-              ))}
-            </tbody>
-          </table>
-          <div className="px-3 pb-3">
-            <OfficeSiteStatusNote />
-          </div>
-        </div>
-      ) : (
-        <div className="space-y-5">
-          {officesByBc.map(({ bc, items }) => (
-            <section key={bc?.id || items[0]?.propertyId} className="card p-5">
-              <div className="flex items-start justify-between gap-3 mb-4 pb-3 border-b border-[var(--border)]">
-                <div>
-                  <h3 className="font-semibold">
-                    {bc?.name || items[0]?.businessCenterName || 'Без БЦ'}
-                  </h3>
-                  {bc?.address && (
-                    <p className="text-sm text-[var(--muted)]">{bc.address}</p>
-                  )}
-                </div>
-                <span className="text-xs px-2.5 py-1 rounded-full surface-muted text-[var(--muted)]">
-                  {items.length} оф.
-                </span>
-              </div>
-
-              <div className="grid sm:grid-cols-2 xl:grid-cols-3 gap-3">
-                {items
-                  .sort((a, b) =>
-                    a.number.localeCompare(b.number, 'ru', { numeric: true }),
-                  )
-                  .map((office) => (
-                    <article
-                      key={office.id}
-                      className={`rounded-xl border p-4 transition-shadow hover:shadow-sm ${
-                        office.isActive
-                          ? 'border-[var(--border)] bg-[var(--surface)]'
-                          : 'border-[var(--border)] bg-[var(--surface-muted)] opacity-70'
-                      }`}
-                    >
-                      <div className="flex items-start justify-between gap-2 mb-3">
-                        <div className="min-w-0 flex-1">
-                          <div
-                            className={
-                              office.number.trim().length > 6 ||
-                              /\s/.test(office.number)
-                                ? 'text-base sm:text-lg font-bold leading-snug break-words'
-                                : 'text-2xl font-bold font-mono leading-none'
-                            }
-                            title={office.number}
-                          >
-                            {office.number}
-                          </div>
-                          {office.floor && (
-                            <div className="text-sm text-[var(--muted)] mt-1">
-                              {office.floor} этаж
+                          <>
+                            <div
+                              className={
+                                formatOfficeTenants(office)
+                                  ? 'font-medium'
+                                  : 'text-[var(--muted)]'
+                              }
+                            >
+                              {formatOfficeTenants(office) || 'Не назначен'}
                             </div>
-                          )}
-                          <OfficeStatusFlags office={office} />
-                        </div>
-                        <span
-                          className={`text-[11px] px-2 py-0.5 rounded-full shrink-0 ${
-                            office.externalId
-                              ? 'bg-emerald-50 text-emerald-800'
-                              : 'bg-[var(--surface-muted)] text-[var(--muted)]'
-                          }`}
-                        >
-                          {office.externalId ? 'Связан' : 'Не связан'}
-                        </span>
-                      </div>
-
-                      <div className="space-y-1.5 text-sm mb-4">
-                        <div className="flex justify-between gap-2">
-                          <span className="text-[var(--muted)]">Тип</span>
-                          <span className="text-right font-medium">
-                            {office.company || '—'}
-                          </span>
-                        </div>
-                        {office.areaSqm ? (
-                          <div className="flex justify-between gap-2">
-                            <span className="text-[var(--muted)]">Площадь</span>
-                            <span>{office.areaSqm} м²</span>
-                          </div>
-                        ) : null}
-                        <div className="flex justify-between gap-2 items-start">
-                          <span className="text-[var(--muted)] shrink-0 flex items-center gap-1">
-                            <Users className="w-3.5 h-3.5" />
-                            Арендатор
-                          </span>
-                          {bindingOfficeId === office.id ? (
-                            <span className="text-xs font-medium text-[var(--primary)] text-right">
-                              Редактируется выше ↑
-                            </span>
-                          ) : (
-                            <div className="text-right">
-                              <div
-                                className={
-                                  formatOfficeTenants(office)
-                                    ? 'font-medium'
-                                    : 'text-[var(--muted)]'
-                                }
-                              >
-                                {formatOfficeTenants(office) || 'Не назначен'}
+                            {officeTenantIds(office).length > 1 && (
+                              <div className="text-[11px] text-amber-700">
+                                {officeTenantIds(office).length} арендатора
                               </div>
-                              {officeTenantIds(office).length > 1 && (
-                                <div className="text-[11px] text-amber-700">
-                                  Несколько арендаторов
-                                </div>
-                              )}
-                              {office.company && formatOfficeTenants(office) && (
-                                <div className="text-[11px] text-[var(--muted)]">
-                                  {office.company}
-                                </div>
-                              )}
-                            </div>
-                          )}
-                        </div>
+                            )}
+                            {office.company && formatOfficeTenants(office) && (
+                              <div className="text-[11px] text-[var(--muted)] line-clamp-1">
+                                {office.company}
+                              </div>
+                            )}
+                            <button
+                              type="button"
+                              className="text-xs text-[var(--primary)] hover:underline mt-0.5 inline-flex items-center gap-1"
+                              onClick={() => startBinding(office)}
+                            >
+                              <Link2 className="w-3 h-3" />
+                              {officeTenantIds(office).length
+                                ? 'Изменить'
+                                : 'Назначить'}
+                            </button>
+                          </>
+                        )}
                       </div>
-
-                      <div className="flex flex-wrap gap-1 pt-3 border-t border-[var(--border)]">
+                    </td>
+                    <td className="p-3 whitespace-nowrap">
+                      <span
+                        className={`text-xs px-2 py-0.5 rounded-full ${
+                          office.externalId
+                            ? 'bg-emerald-50 text-emerald-800'
+                            : 'bg-[var(--surface-muted)] text-[var(--muted)]'
+                        }`}
+                      >
+                        {office.externalId ? 'Связан' : 'Не связан'}
+                      </span>
+                      {!office.isActive && (
+                        <div className="text-[11px] text-[var(--muted)] mt-0.5">
+                          неактивен
+                        </div>
+                      )}
+                    </td>
+                    <td className="p-3">
+                      <div className="flex items-center justify-end gap-1">
                         <button
                           type="button"
-                          className="btn btn-primary text-xs flex-1 min-w-[7rem]"
+                          className="p-1.5 rounded-md border border-[var(--border)] hover:bg-[var(--surface-muted)] text-[var(--primary)]"
+                          title={
+                            officeTenantIds(office).length
+                              ? 'Изменить арендаторов'
+                              : 'Назначить арендатора'
+                          }
                           onClick={() => startBinding(office)}
                         >
-                          <Link2 className="w-3.5 h-3.5" />
-                          {officeTenantIds(office).length
-                            ? 'Арендаторы'
-                            : 'Назначить'}
+                          <Link2 className="w-4 h-4" />
                         </button>
                         <button
                           type="button"
-                          className="btn btn-secondary text-xs"
+                          className="p-1.5 rounded-md border border-[var(--border)] hover:bg-[var(--surface-muted)]"
+                          title="Изменить офис"
                           onClick={() => startEdit(office)}
-                          title="Редактировать офис"
                         >
-                          <Pencil className="w-3.5 h-3.5" />
+                          <Pencil className="w-4 h-4" />
                         </button>
                         <button
                           type="button"
-                          className="p-2 rounded-md border border-[var(--border)] hover:bg-[var(--surface-muted)]"
+                          className="p-1.5 rounded-md border border-[var(--border)] hover:bg-[var(--surface-muted)]"
                           title={
                             office.isActive ? 'Деактивировать' : 'Активировать'
                           }
@@ -1991,7 +1844,7 @@ export default function AdminOfficesPage() {
                         </button>
                         <button
                           type="button"
-                          className="p-2 rounded-md border border-red-200 hover:bg-red-50 text-red-600"
+                          className="p-1.5 rounded-md border border-red-200 hover:bg-red-50 text-red-600"
                           title="Удалить офис"
                           disabled={deletingOfficeId === office.id}
                           onClick={() => handleDeleteOffice(office)}
@@ -1999,14 +1852,187 @@ export default function AdminOfficesPage() {
                           <Trash2 className="w-4 h-4" />
                         </button>
                       </div>
-                    </article>
-                  ))}
-              </div>
-            </section>
-          ))}
-          <OfficeSiteStatusNote />
-        </div>
-      )}
+                    </td>
+                  </tr>
+                ))}
+              </tbody>
+            </table>
+            <div className="px-3 pb-3">
+              <OfficeSiteStatusNote />
+            </div>
+          </div>
+        ) : (
+          <div className="space-y-5">
+            {officesByBc.map(({ bc, items }) => (
+              <section
+                key={bc?.id || items[0]?.propertyId}
+                className="card p-5"
+              >
+                <div className="flex items-start justify-between gap-3 mb-4 pb-3 border-b border-[var(--border)]">
+                  <div>
+                    <h3 className="font-semibold">
+                      {bc?.name || items[0]?.businessCenterName || 'Без БЦ'}
+                    </h3>
+                    {bc?.address && (
+                      <p className="text-sm text-[var(--muted)]">
+                        {bc.address}
+                      </p>
+                    )}
+                  </div>
+                  <span className="text-xs px-2.5 py-1 rounded-full surface-muted text-[var(--muted)]">
+                    {items.length} оф.
+                  </span>
+                </div>
+
+                <div className="grid sm:grid-cols-2 xl:grid-cols-3 gap-3">
+                  {items
+                    .sort((a, b) =>
+                      a.number.localeCompare(b.number, 'ru', { numeric: true }),
+                    )
+                    .map((office) => (
+                      <article
+                        key={office.id}
+                        className={`rounded-xl border p-4 transition-shadow hover:shadow-sm ${
+                          office.isActive
+                            ? 'border-[var(--border)] bg-[var(--surface)]'
+                            : 'border-[var(--border)] bg-[var(--surface-muted)] opacity-70'
+                        }`}
+                      >
+                        <div className="flex items-start justify-between gap-2 mb-3">
+                          <div className="min-w-0 flex-1">
+                            <div
+                              className={
+                                office.number.trim().length > 6 ||
+                                /\s/.test(office.number)
+                                  ? 'text-base sm:text-lg font-bold leading-snug break-words'
+                                  : 'text-2xl font-bold font-mono leading-none'
+                              }
+                              title={office.number}
+                            >
+                              {office.number}
+                            </div>
+                            {office.floor && (
+                              <div className="text-sm text-[var(--muted)] mt-1">
+                                {office.floor} этаж
+                              </div>
+                            )}
+                            <OfficeStatusFlags office={office} />
+                          </div>
+                          <span
+                            className={`text-[11px] px-2 py-0.5 rounded-full shrink-0 ${
+                              office.externalId
+                                ? 'bg-emerald-50 text-emerald-800'
+                                : 'bg-[var(--surface-muted)] text-[var(--muted)]'
+                            }`}
+                          >
+                            {office.externalId ? 'Связан' : 'Не связан'}
+                          </span>
+                        </div>
+
+                        <div className="space-y-1.5 text-sm mb-4">
+                          <div className="flex justify-between gap-2">
+                            <span className="text-[var(--muted)]">Тип</span>
+                            <span className="text-right font-medium">
+                              {office.company || '—'}
+                            </span>
+                          </div>
+                          {office.areaSqm ? (
+                            <div className="flex justify-between gap-2">
+                              <span className="text-[var(--muted)]">
+                                Площадь
+                              </span>
+                              <span>{office.areaSqm} м²</span>
+                            </div>
+                          ) : null}
+                          <div className="flex justify-between gap-2 items-start">
+                            <span className="text-[var(--muted)] shrink-0 flex items-center gap-1">
+                              <Users className="w-3.5 h-3.5" />
+                              Арендатор
+                            </span>
+                            {bindingOfficeId === office.id ? (
+                              <span className="text-xs font-medium text-[var(--primary)] text-right">
+                                Редактируется выше ↑
+                              </span>
+                            ) : (
+                              <div className="text-right">
+                                <div
+                                  className={
+                                    formatOfficeTenants(office)
+                                      ? 'font-medium'
+                                      : 'text-[var(--muted)]'
+                                  }
+                                >
+                                  {formatOfficeTenants(office) || 'Не назначен'}
+                                </div>
+                                {officeTenantIds(office).length > 1 && (
+                                  <div className="text-[11px] text-amber-700">
+                                    Несколько арендаторов
+                                  </div>
+                                )}
+                                {office.company &&
+                                  formatOfficeTenants(office) && (
+                                    <div className="text-[11px] text-[var(--muted)]">
+                                      {office.company}
+                                    </div>
+                                  )}
+                              </div>
+                            )}
+                          </div>
+                        </div>
+
+                        <div className="flex flex-wrap gap-1 pt-3 border-t border-[var(--border)]">
+                          <button
+                            type="button"
+                            className="btn btn-primary text-xs flex-1 min-w-[7rem]"
+                            onClick={() => startBinding(office)}
+                          >
+                            <Link2 className="w-3.5 h-3.5" />
+                            {officeTenantIds(office).length
+                              ? 'Арендаторы'
+                              : 'Назначить'}
+                          </button>
+                          <button
+                            type="button"
+                            className="btn btn-secondary text-xs"
+                            onClick={() => startEdit(office)}
+                            title="Редактировать офис"
+                          >
+                            <Pencil className="w-3.5 h-3.5" />
+                          </button>
+                          <button
+                            type="button"
+                            className="p-2 rounded-md border border-[var(--border)] hover:bg-[var(--surface-muted)]"
+                            title={
+                              office.isActive
+                                ? 'Деактивировать'
+                                : 'Активировать'
+                            }
+                            onClick={() => toggleActive(office)}
+                          >
+                            {office.isActive ? (
+                              <X className="w-4 h-4 text-red-500" />
+                            ) : (
+                              <Check className="w-4 h-4 text-emerald-600" />
+                            )}
+                          </button>
+                          <button
+                            type="button"
+                            className="p-2 rounded-md border border-red-200 hover:bg-red-50 text-red-600"
+                            title="Удалить офис"
+                            disabled={deletingOfficeId === office.id}
+                            onClick={() => handleDeleteOffice(office)}
+                          >
+                            <Trash2 className="w-4 h-4" />
+                          </button>
+                        </div>
+                      </article>
+                    ))}
+                </div>
+              </section>
+            ))}
+            <OfficeSiteStatusNote />
+          </div>
+        )}
       </div>
     </AdminLayout>
   );

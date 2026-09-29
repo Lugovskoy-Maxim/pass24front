@@ -8,6 +8,9 @@ import { useEffect, useState } from 'react';
 import { api, BcConfig } from '@/lib/api';
 
 let cached: BcConfig | null = null;
+let cachedAt = 0;
+let pending: Promise<BcConfig> | null = null;
+const CONFIG_TTL_MS = 5 * 60 * 1000;
 const listeners = new Set<() => void>();
 
 function notifyConfigListeners() {
@@ -17,7 +20,23 @@ function notifyConfigListeners() {
 /** Сброс кэша после PATCH site-settings. */
 export function invalidateConfigCache() {
   cached = null;
+  cachedAt = 0;
   notifyConfigListeners();
+}
+
+function loadConfig(): Promise<BcConfig> {
+  if (pending) return pending;
+  pending = api
+    .getConfig()
+    .then((config) => {
+      cached = config;
+      cachedAt = Date.now();
+      return config;
+    })
+    .finally(() => {
+      pending = null;
+    });
+  return pending;
 }
 
 export function useConfig() {
@@ -25,13 +44,12 @@ export function useConfig() {
 
   useEffect(() => {
     const load = () => {
-      api.getConfig().then((c) => {
-        cached = c;
-        setConfig(c);
-      });
+      loadConfig()
+        .then(setConfig)
+        .catch(() => undefined);
     };
 
-    if (cached) setConfig(cached);
+    if (cached && Date.now() - cachedAt < CONFIG_TTL_MS) setConfig(cached);
     else load();
 
     listeners.add(load);

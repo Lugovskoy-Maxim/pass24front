@@ -21,6 +21,7 @@ export {
 } from './api-errors';
 
 const API_URL = process.env.NEXT_PUBLIC_API_URL || 'http://127.0.0.1:4000/api';
+const REQUEST_TIMEOUT_MS = 30_000;
 
 /** Системные роли; сотрудники компании часто имеют custom key (tenant_employee). */
 export type SystemUserRole = 'tenant' | 'security' | 'bc_admin' | 'admin';
@@ -312,17 +313,40 @@ export async function request<T>(
   };
   if (token) headers.Authorization = `Bearer ${token}`;
 
+  const controller = new AbortController();
+  const timeout = setTimeout(
+    () => controller.abort(new Error('request_timeout')),
+    REQUEST_TIMEOUT_MS,
+  );
+  const callerSignal = options.signal;
+  const abortFromCaller = () => controller.abort(callerSignal?.reason);
+  if (callerSignal) {
+    if (callerSignal.aborted) abortFromCaller();
+    else
+      callerSignal.addEventListener('abort', abortFromCaller, { once: true });
+  }
+
   let res: Response;
   try {
-    res = await fetch(`${API_URL}${path}`, { ...options, headers });
+    res = await fetch(`${API_URL}${path}`, {
+      ...options,
+      headers,
+      signal: controller.signal,
+    });
   } catch (error) {
+    if (callerSignal?.aborted) throw error;
     throw new ApiError(
       getErrorMessage(
         error,
-        'Нет связи с сервером. Проверьте интернет и попробуйте снова.',
+        controller.signal.aborted
+          ? 'Сервер отвечает слишком долго. Попробуйте ещё раз.'
+          : 'Нет связи с сервером. Проверьте интернет и попробуйте снова.',
       ),
       { isNetworkError: true },
     );
+  } finally {
+    clearTimeout(timeout);
+    callerSignal?.removeEventListener('abort', abortFromCaller);
   }
 
   const contentType = res.headers.get('content-type') || '';

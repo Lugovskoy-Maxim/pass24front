@@ -1,6 +1,13 @@
 'use client';
 
-import { useState, useEffect, useMemo, FormEvent, Suspense } from 'react';
+import {
+  useState,
+  useEffect,
+  useMemo,
+  useCallback,
+  FormEvent,
+  Suspense,
+} from 'react';
 import { useRouter, useSearchParams } from 'next/navigation';
 import { ProtectedLayout } from '@/components/ProtectedLayout';
 import { PassTemplatesPicker } from '@/components/PassTemplatesPicker';
@@ -56,9 +63,14 @@ function NewPassForm() {
   const [visitorName, setVisitorName] = useState('');
   const [visitorPhone, setVisitorPhone] = useState('');
   const [propertyId, setPropertyId] = useState('');
-  const enabledTypes = (Object.keys(TYPE_LABELS) as PassType[]).filter(
-    (key) =>
-      !user?.enabledPassTypes?.length || user.enabledPassTypes.includes(key),
+  const enabledTypes = useMemo(
+    () =>
+      (Object.keys(TYPE_LABELS) as PassType[]).filter(
+        (key) =>
+          !user?.enabledPassTypes?.length ||
+          user.enabledPassTypes.includes(key),
+      ),
+    [user?.enabledPassTypes],
   );
   const [passType, setPassType] = useState<PassType>(
     enabledTypes[0] || 'visitor',
@@ -77,7 +89,7 @@ function NewPassForm() {
     null,
   );
 
-  const tenantOffices = user?.offices || [];
+  const tenantOffices = useMemo(() => user?.offices || [], [user?.offices]);
   const tenantCompanyUser = isTenantCompanyUser(user);
   const canUseTemplates = hasPermission(user, 'passes.templates');
 
@@ -176,41 +188,47 @@ function NewPassForm() {
     }
   }, [bookableDates, visitDate]);
 
-  const handleOfficeSelect = (id: string) => {
-    setOfficeId(id);
-    const selected = tenantOffices.find((o) => o.id === id);
-    if (selected) {
-      setPropertyId(selected.propertyId);
-      setOffice(selected.number);
-      setFloor(selected.floor);
-    } else {
-      setPropertyId('');
-      setOffice('');
-      setFloor('');
-    }
-  };
+  const handleOfficeSelect = useCallback(
+    (id: string) => {
+      setOfficeId(id);
+      const selected = tenantOffices.find((o) => o.id === id);
+      if (selected) {
+        setPropertyId(selected.propertyId);
+        setOffice(selected.number);
+        setFloor(selected.floor);
+      } else {
+        setPropertyId('');
+        setOffice('');
+        setFloor('');
+      }
+    },
+    [tenantOffices],
+  );
 
-  const applyTemplate = (template: PassTemplate) => {
-    setSelectedTemplateId(template.id);
-    setVisitorName(template.visitorName);
-    setVisitorPhone(template.visitorPhone || '');
-    if (enabledTypes.includes(template.passType))
-      setPassType(template.passType);
-    setVehiclePlate(template.vehiclePlate || '');
-    setVehicleModel(template.vehicleModel || '');
-    setComment(template.comment || '');
-    if (template.officeId) {
-      handleOfficeSelect(template.officeId);
-      if (!tenantOffices.some((o) => o.id === template.officeId)) {
-        setOfficeId(template.officeId);
-        setOffice(template.office || '');
+  const applyTemplate = useCallback(
+    (template: PassTemplate) => {
+      setSelectedTemplateId(template.id);
+      setVisitorName(template.visitorName);
+      setVisitorPhone(template.visitorPhone || '');
+      if (enabledTypes.includes(template.passType))
+        setPassType(template.passType);
+      setVehiclePlate(template.vehiclePlate || '');
+      setVehicleModel(template.vehicleModel || '');
+      setComment(template.comment || '');
+      if (template.officeId) {
+        handleOfficeSelect(template.officeId);
+        if (!tenantOffices.some((o) => o.id === template.officeId)) {
+          setOfficeId(template.officeId);
+          setOffice(template.office || '');
+          setFloor(template.floor || '');
+        }
+      } else if (template.office) {
+        setOffice(template.office);
         setFloor(template.floor || '');
       }
-    } else if (template.office) {
-      setOffice(template.office);
-      setFloor(template.floor || '');
-    }
-  };
+    },
+    [enabledTypes, handleOfficeSelect, tenantOffices],
+  );
 
   useEffect(() => {
     if (!templateId) return;
@@ -218,7 +236,7 @@ function NewPassForm() {
       .getPassTemplate(templateId)
       .then(({ template }) => applyTemplate(template))
       .catch((err) => toast(getErrorMessage(err, 'Шаблон не найден'), 'error'));
-  }, [templateId, tenantOffices, enabledTypes]);
+  }, [templateId, applyTemplate, toast]);
 
   const clearFieldError = (field: string) => {
     setFieldErrors((prev) => {
