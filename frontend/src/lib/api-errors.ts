@@ -190,6 +190,15 @@ export function extractApiMessage(data?: {
     return [...new Set(fromMessage)].join('. ');
   }
 
+  // Backend domain errors use the Nest shape `{ error: { code, message } }`.
+  // Read the nested message before falling back to a generic HTTP status text.
+  const fromError = collectMessageParts(data.error)
+    .map(humanizePart)
+    .filter(Boolean);
+  if (fromError.length) {
+    return [...new Set(fromError)].join('. ');
+  }
+
   if (typeof data.error === 'string' && data.error.trim()) {
     return humanizePart(data.error);
   }
