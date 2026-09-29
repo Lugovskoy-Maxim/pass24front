@@ -17,6 +17,26 @@ import {
   Attachment,
 } from '@/lib/operations';
 
+function statusBadgeClass(status: string) {
+  if (status === 'new')
+    return 'bg-[var(--toast-warning-bg)] text-[var(--warning)] border-[var(--warning)]/30';
+  if (status === 'in_progress')
+    return 'bg-[var(--toast-info-bg)] text-[var(--primary)] border-[var(--primary)]/30';
+  if (status === 'completed')
+    return 'bg-[var(--toast-success-bg)] text-[var(--success)] border-[var(--success)]/30';
+  return 'bg-[var(--surface-muted)] text-[var(--muted)] border-[var(--border)]';
+}
+
+function StatusBadge({ status, label }: { status: string; label: string }) {
+  return (
+    <span
+      className={`inline-flex items-center rounded-full border px-2 py-0.5 text-[11px] font-medium leading-4 whitespace-nowrap ${statusBadgeClass(status)}`}
+    >
+      {label}
+    </span>
+  );
+}
+
 export default function ServiceRequestsPage() {
   const { toast } = useToast();
   const { counts } = useWorkQueue();
@@ -234,9 +254,15 @@ export default function ServiceRequestsPage() {
                   Офис: {ticket.office_label || 'Не указан'} · Тип:{' '}
                   {ticket.topic_label}
                 </p>
-                <p className="text-xs text-[var(--muted)]">
-                  {ticket.status_label} · {ticket.last_message_at}
-                </p>
+                <div className="flex items-center gap-2 mt-1">
+                  <StatusBadge
+                    status={ticket.status}
+                    label={ticket.status_label}
+                  />
+                  <span className="text-xs text-[var(--muted)]">
+                    {ticket.last_message_at}
+                  </span>
+                </div>
                 <p className="text-sm text-[var(--muted)] truncate mt-2">
                   {ticket.last_message_preview}
                 </p>
@@ -283,19 +309,25 @@ export default function ServiceRequestsPage() {
                     обращения: {detail.ticket.topic_label}
                   </p>
                 </div>
-                <select
-                  aria-label="Изменить статус обращения"
-                  className="input w-auto"
-                  disabled={busy || counts?.mode !== 'pass'}
-                  value={detail.ticket.status}
-                  onChange={(e) => void status(e.target.value)}
-                >
-                  {Object.entries(list?.statuses || {}).map(([v, label]) => (
-                    <option key={v} value={v}>
-                      {label}
-                    </option>
-                  ))}
-                </select>
+                <div className="flex items-center gap-2">
+                  <StatusBadge
+                    status={detail.ticket.status}
+                    label={detail.ticket.status_label}
+                  />
+                  <select
+                    aria-label="Изменить статус обращения"
+                    className="input w-auto text-sm py-2"
+                    disabled={busy || counts?.mode !== 'pass'}
+                    value={detail.ticket.status}
+                    onChange={(e) => void status(e.target.value)}
+                  >
+                    {Object.entries(list?.statuses || {}).map(([v, label]) => (
+                      <option key={v} value={v}>
+                        {label}
+                      </option>
+                    ))}
+                  </select>
+                </div>
                 {detail.can_reply && (
                   <button
                     type="button"
