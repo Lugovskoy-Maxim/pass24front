@@ -43,7 +43,11 @@ function maskUri(uri: string): string {
 }
 
 function backupDir(): string {
-  const stamp = new Date().toISOString().replace(/[-:]/g, '').replace('T', '_').slice(0, 15);
+  const stamp = new Date()
+    .toISOString()
+    .replace(/[-:]/g, '')
+    .replace('T', '_')
+    .slice(0, 15);
   const dir = resolve(__dirname, `../backups/adapt-users/${stamp}`);
   mkdirSync(dir, { recursive: true, mode: 0o700 });
   return dir;
@@ -77,7 +81,13 @@ async function backupBeforeWrite(authUri: string): Promise<string> {
   const users = await writeJsonDump(usersCol, join(dir, 'users.json'));
   const dumps: string[] = [`users.json (${users})`];
 
-  if (tryMongoDump(authUri, dbNameFromUri(authUri, 'pass24_auth'), join(dir, 'pass24_auth.gz'))) {
+  if (
+    tryMongoDump(
+      authUri,
+      dbNameFromUri(authUri, 'pass24_auth'),
+      join(dir, 'pass24_auth.gz'),
+    )
+  ) {
     dumps.push('pass24_auth.gz');
   }
 
@@ -89,13 +99,22 @@ async function backupBeforeWrite(authUri: string): Promise<string> {
         .map((c) => c.name)
         .filter((name) => name.startsWith('mstyle_v2_'));
       for (const name of names) {
-        const n = await writeJsonDump(main.collection(name), join(dir, `${name}.json`));
+        const n = await writeJsonDump(
+          main.collection(name),
+          join(dir, `${name}.json`),
+        );
         dumps.push(`${name}.json (${n})`);
       }
     } finally {
       await main.close();
     }
-    if (tryMongoDump(mainUri, dbNameFromUri(mainUri, 'pass24'), join(dir, 'pass24.gz'))) {
+    if (
+      tryMongoDump(
+        mainUri,
+        dbNameFromUri(mainUri, 'pass24'),
+        join(dir, 'pass24.gz'),
+      )
+    ) {
       dumps.push('pass24.gz');
     }
   }

@@ -42,15 +42,13 @@ async function main() {
     );
     const state = await store.ownership();
     if (command === 'pause') {
-      await store
-        .collection('settings')
-        .updateOne(
-          { key: 'ownership' },
-          {
-            $set: { mode: 'paused' },
-            $inc: { generation: 1, write_serial: 1 },
-          },
-        );
+      await store.collection('settings').updateOne(
+        { key: 'ownership' },
+        {
+          $set: { mode: 'paused' },
+          $inc: { generation: 1, write_serial: 1 },
+        },
+      );
       console.log(
         'Запись Pass приостановлена. Отдельно приостановите запись Mstyle.',
       );
@@ -85,7 +83,8 @@ async function main() {
     else result = await migration.verify(bundle);
     if (command === 'open') {
       const topology = await connection.db.admin().command({ hello: 1 });
-      if (!topology.setName) throw Error('Для транзакций необходим MongoDB replica set.');
+      if (!topology.setName)
+        throw Error('Для транзакций необходим MongoDB replica set.');
       if (bundle.owner_mode !== 'paused' || !result.ok)
         throw Error(
           'Нужен финальный экспорт при остановленной записи Mstyle и сверка без расхождений.',
@@ -101,25 +100,23 @@ async function main() {
         .collection('outbox')
         .countDocuments({ state: 'running' });
       if (runningJobs) throw Error('Дождитесь завершения фоновых операций.');
-      const opened = await store
-        .collection('settings')
-        .findOneAndUpdate(
-          {
-            key: 'ownership',
-            mode: 'paused',
-            migration_lock: { $exists: false },
+      const opened = await store.collection('settings').findOneAndUpdate(
+        {
+          key: 'ownership',
+          mode: 'paused',
+          migration_lock: { $exists: false },
+        },
+        {
+          $set: {
+            mode: 'pass',
+            ever_opened: true,
+            opened_at: new Date().toISOString(),
+            migration_digest: bundle.digest,
           },
-          {
-            $set: {
-              mode: 'pass',
-              ever_opened: true,
-              opened_at: new Date().toISOString(),
-              migration_digest: bundle.digest,
-            },
-            $inc: { generation: 1, write_serial: 1 },
-          },
-          { returnDocument: 'after' },
-        );
+          $inc: { generation: 1, write_serial: 1 },
+        },
+        { returnDocument: 'after' },
+      );
       if (!opened) throw Error('Pass не находится в режиме паузы.');
       result.opened = true;
     }
