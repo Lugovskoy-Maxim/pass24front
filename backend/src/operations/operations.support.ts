@@ -165,21 +165,20 @@ export class OperationsSupport {
       ),
     );
     const office =
-      safe.office ||
-      (officeIds.length
-        ? {
-            id: officeIds[0],
-            externalId: officeIds[0],
-            number: officeNumberFromExternalId(officeIds[0]),
-          }
-        : null);
+      safe.office || (await this.officeDirectory(officeIds))[0] || null;
+    const offices = safe.office
+      ? [safe.office]
+      : await this.officeDirectory(officeIds);
+    const officeLabels = offices
+      .map((item) => item.label || item.number)
+      .filter(Boolean);
     return {
       ...safe,
       office_ids: officeIds,
       office_id: safe.office_id || office?.id || null,
       office,
-      office_label:
-        safe.office_label || office?.label || office?.number || null,
+      office_label: safe.office_label || officeLabels.join(', ') || null,
+      office_labels: officeLabels,
       needs_action: supportNeedsAction(row),
       status_label: SUPPORT_STATUSES[row.status],
       unread_for_customer:
@@ -187,6 +186,36 @@ export class OperationsSupport {
       unread_for_support:
         (row.last_customer_seq || 0) > (row.support_read_seq || 0),
     };
+  }
+
+  private async officeDirectory(officeIds: string[]) {
+    if (!officeIds.length) return [];
+    const offices = await this.store.connection
+      .db!.collection<any>('offices')
+      .find(
+        { externalId: { $in: officeIds } },
+        { projection: { _id: 1, externalId: 1, number: 1, property: 1 } },
+      )
+      .toArray();
+    const propertyIds = offices
+      .map((office) => office.property)
+      .filter(Boolean);
+    const properties = propertyIds.length
+      ? await this.store.connection
+          .db!.collection<any>('properties')
+          .find({ _id: { $in: propertyIds } }, { projection: { name: 1 } })
+          .toArray()
+      : [];
+    const propertyNames = new Map(
+      properties.map((property) => [String(property._id), property.name]),
+    );
+    return offices.map((office) => ({
+      id: String(office._id),
+      externalId: office.externalId,
+      number: office.number,
+      businessCenterName: propertyNames.get(String(office.property)),
+      label: `${office.number}${propertyNames.get(String(office.property)) ? ` · ${propertyNames.get(String(office.property))}` : ''}`,
+    }));
   }
   async detail(actor: OperationsActor, id: number, session?: ClientSession) {
     const row = await this.store
@@ -545,9 +574,4 @@ export class OperationsSupport {
       bytes: Buffer.concat(chunks),
     };
   }
-}
-
-function officeNumberFromExternalId(value: string) {
-  const match = String(value).match(/(\d+)(?:$|[^\d]*)/);
-  return match?.[1] || value;
 }
