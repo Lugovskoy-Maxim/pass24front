@@ -16,6 +16,12 @@ export type Ticket = {
   subject: string;
   topic_key: string;
   topic_label: string;
+  office_label?: string | null;
+  office?: {
+    id?: string | number;
+    number?: string | number;
+    label?: string;
+  } | null;
   status: string;
   status_label: string;
   owner_subject: string;

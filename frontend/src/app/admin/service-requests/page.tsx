@@ -229,6 +229,10 @@ export default function ServiceRequestsPage() {
                   )}
                 </div>
                 <p className="text-sm mt-1">{ticket.requester_name}</p>
+                <p className="text-xs text-[var(--muted)] mt-1">
+                  Офис: {ticket.office_label || 'Не указан'} · Тип:{' '}
+                  {ticket.topic_label}
+                </p>
                 <p className="text-xs text-[var(--muted)]">
                   {ticket.status_label} · {ticket.last_message_at}
                 </p>
@@ -272,6 +276,10 @@ export default function ServiceRequestsPage() {
                   </h2>
                   <p className="text-sm text-[var(--muted)]">
                     {detail.ticket.requester_name} · {detail.ticket.created_at}
+                  </p>
+                  <p className="text-sm text-[var(--muted)] mt-1">
+                    Офис: {detail.ticket.office_label || 'Не указан'} · Тип
+                    обращения: {detail.ticket.topic_label}
                   </p>
                 </div>
                 <select
