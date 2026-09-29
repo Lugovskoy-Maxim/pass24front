@@ -391,6 +391,10 @@ export default function BookingRequestsPage() {
                 <td className="p-4">
                   <div>{item.room.title}</div>
                   <div className="text-xs text-[var(--muted)]">
+                    Офис: {roomOfficeNumber(item.room)} ·{' '}
+                    {bookingModeLabel(item.booking_mode)}
+                  </div>
+                  <div className="text-xs text-[var(--muted)]">
                     {item.room.business_center?.name}
                   </div>
                   {item.segments.map((s, i) => (
