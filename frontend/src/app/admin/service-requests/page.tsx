@@ -32,6 +32,7 @@ export default function ServiceRequestsPage() {
   });
   const [error, setError] = useState('');
   const [message, setMessage] = useState('');
+  const replyRef = useRef<HTMLTextAreaElement>(null);
   const [file, setFile] = useState<File | null>(null);
   const uploaded = useRef<Attachment | null>(null);
   const selection = useRef(0);
@@ -295,6 +296,16 @@ export default function ServiceRequestsPage() {
                     </option>
                   ))}
                 </select>
+                {detail.can_reply && (
+                  <button
+                    type="button"
+                    className="btn btn-primary"
+                    onClick={() => replyRef.current?.focus()}
+                  >
+                    <Send className="w-4 h-4" />
+                    Ответить
+                  </button>
+                )}
               </div>
               {detail.ticket.booking_id && (
                 <Link
@@ -336,6 +347,7 @@ export default function ServiceRequestsPage() {
               {detail.can_reply ? (
                 <form onSubmit={send} className="space-y-3">
                   <textarea
+                    ref={replyRef}
                     aria-label="Ответ клиенту"
                     className="input min-h-28"
                     placeholder="Напишите ответ…"
