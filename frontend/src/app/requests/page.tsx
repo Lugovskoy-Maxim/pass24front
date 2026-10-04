@@ -1,33 +1,45 @@
 'use client';
 import { FormEvent, useCallback, useEffect, useRef, useState } from 'react';
 import { ProtectedLayout } from '@/components/ProtectedLayout';
-import { OfficeCategoryBadge } from '@/components/OfficeCategoryBadge';
-import { OperationsStatusBadge } from '@/components/OperationsStatusBadge';
+import {
+  ArrowLeft,
+  LockKeyhole,
+  MessageSquare,
+  Plus,
+  Send,
+} from 'lucide-react';
+import {
+  RequestChatPlaceholder,
+  RequestDetailHeader,
+  RequestListItem,
+  RequestMessages,
+  RequestServiceOrder,
+} from '@/components/ServiceRequestChat';
 import { useAuth } from '@/lib/auth';
 import { getErrorMessage, request } from '@/lib/api';
 import {
   Attachment,
   command,
-  operationDate,
+  Ticket,
+  TicketOffice,
   operations,
 } from '@/lib/operations';
-import {
-  OfficeCategory,
-  OfficeService,
-  officeMoney,
-} from '@/lib/office-services';
+import { OfficeCategory, OfficeService } from '@/lib/office-services';
 import { useAutoRefresh } from '@/hooks/useAutoRefresh';
 type TenantTicket = {
   id: string;
   title: string;
   status: string;
   office_label?: string;
+  created_at?: string;
+  office?: TicketOffice | null;
+  offices?: TicketOffice[];
   office_category?: OfficeCategory;
   service_order?: OfficeService & {
     quantity: number;
     totalAmountMinor: number | null;
   };
-  raw?: { last_message_preview?: string };
+  raw?: Partial<Ticket>;
 };
 type Detail = {
   ticket: TenantTicket;
@@ -46,6 +58,14 @@ const statuses: Record<string, string> = {
   completed: 'Завершена',
   cancelled: 'Отменена',
 };
+function ticketOffice(ticket: TenantTicket) {
+  return {
+    office: ticket.office || ticket.raw?.office,
+    offices: ticket.offices || ticket.raw?.offices,
+    officeLabel: ticket.office_label,
+    category: ticket.office_category,
+  };
+}
 export default function RequestsPage() {
   const { user } = useAuth();
   const [tickets, setTickets] = useState<TenantTicket[]>([]);
@@ -192,11 +212,17 @@ export default function RequestsPage() {
     >
       <div className="space-y-4">
         <div className="flex flex-wrap justify-between items-center gap-3">
-          <h1 className="text-2xl font-semibold">Мои обращения</h1>
+          <div>
+            <h1 className="text-2xl font-semibold">Мои обращения</h1>
+            <p className="mt-1 text-xs text-[var(--muted)]">
+              Переписка с сервисной службой по вашим офисам
+            </p>
+          </div>
           <button
             className="btn btn-primary"
             onClick={() => setCreator(!creator)}
           >
+            <Plus size={16} />
             Новое обращение
           </button>
         </div>
@@ -248,51 +274,56 @@ export default function RequestsPage() {
             </button>
           </form>
         )}
-        <div className="grid lg:grid-cols-[minmax(240px,340px)_1fr] gap-4">
+        <div className="request-workspace request-workspace--tenant">
           <section
-            className={`card overflow-hidden lg:max-h-[75vh] overflow-y-auto ${mobileDetail ? 'hidden lg:block' : ''}`}
+            className={'request-list ' + (mobileDetail ? 'hidden lg:flex' : '')}
+            aria-label="Список обращений"
           >
-            {loading && (
-              <p className="p-5 text-[var(--muted)]" role="status">
-                Загрузка обращений…
-              </p>
-            )}
-            {!loading && !error && tickets.length === 0 && (
-              <p className="p-5 text-[var(--muted)]">Обращений пока нет.</p>
-            )}
-            {tickets.map((ticket) => (
-              <button
-                key={ticket.id}
-                onClick={() => void open(ticket.id)}
-                className={`w-full text-left p-4 border-b border-[var(--border)] ${detail?.ticket.id === ticket.id ? 'bg-[var(--surface-muted)]' : ''}`}
-              >
-                <p className="font-medium">
-                  №{ticket.id} · {ticket.title}
+            <div className="request-list__header">
+              <MessageSquare size={16} className="text-[var(--muted)]" />
+              Обращения
+              <span className="request-list__count">{tickets.length}</span>
+            </div>
+            <div className="request-list__items">
+              {loading && (
+                <p className="p-5 text-sm text-[var(--muted)]" role="status">
+                  Загрузка обращений…
                 </p>
-                <OfficeCategoryBadge category={ticket.office_category} />
-                <div className="flex flex-wrap items-center gap-2 mt-2">
-                  <span className="text-xs text-[var(--muted)]">
-                    Офис {ticket.office_label || 'не указан'}
-                  </span>
-                  <OperationsStatusBadge
-                    status={ticket.status}
-                    label={statuses[ticket.status] || ticket.status}
-                  />
-                </div>
-                <p className="text-sm truncate mt-1">
-                  {ticket.raw?.last_message_preview}
+              )}
+              {!loading && !error && tickets.length === 0 && (
+                <p className="p-5 text-sm text-[var(--muted)]">
+                  Обращений пока нет.
                 </p>
-              </button>
-            ))}
+              )}
+              {tickets.map((ticket) => (
+                <RequestListItem
+                  key={ticket.id}
+                  id={ticket.id}
+                  title={ticket.title}
+                  preview={ticket.raw?.last_message_preview}
+                  updatedAt={ticket.raw?.last_message_at || ticket.created_at}
+                  status={ticket.status}
+                  statusLabel={statuses[ticket.status] || ticket.status}
+                  office={ticketOffice(ticket)}
+                  attention={
+                    ticket.raw?.unread_for_customer ? 'Новый ответ' : undefined
+                  }
+                  selected={detail?.ticket.id === ticket.id}
+                  onClick={() => void open(ticket.id)}
+                />
+              ))}
+            </div>
           </section>
           <section
             ref={detailPanel}
             tabIndex={-1}
-            className={`card p-5 min-w-0 outline-none scroll-mt-24 ${mobileDetail ? '' : 'hidden lg:block'}`}
+            className={
+              'request-detail ' + (mobileDetail ? '' : 'hidden lg:flex')
+            }
           >
             <button
               type="button"
-              className="btn btn-secondary mb-4 lg:hidden"
+              className="request-back lg:hidden"
               onClick={() => {
                 selection.current = '';
                 ++selectionVersion.current;
@@ -302,95 +333,68 @@ export default function RequestsPage() {
                 setDetailLoading(false);
               }}
             >
+              <ArrowLeft size={15} />
               Назад к обращениям
             </button>
             {detailLoading ? (
-              <p className="py-8 text-center text-[var(--muted)]" role="status">
-                Загрузка переписки…
-              </p>
+              <RequestChatPlaceholder loading />
             ) : detail ? (
               <>
-                <h2 className="font-semibold break-words">
-                  №{detail.ticket.id} · {detail.ticket.title}
-                </h2>
-                <OfficeCategoryBadge category={detail.ticket.office_category} />
-                <div className="mt-2">
-                  <OperationsStatusBadge
-                    status={detail.ticket.status}
-                    label={
-                      statuses[detail.ticket.status] || detail.ticket.status
-                    }
-                  />
-                </div>
+                <RequestDetailHeader
+                  id={detail.ticket.id}
+                  title={detail.ticket.title}
+                  createdAt={detail.ticket.created_at}
+                  topic={detail.ticket.raw?.topic_label}
+                  status={detail.ticket.status}
+                  statusLabel={
+                    statuses[detail.ticket.status] || detail.ticket.status
+                  }
+                  office={ticketOffice(detail.ticket)}
+                />
                 {detail.ticket.service_order && (
-                  <div className="bg-[var(--surface-muted)] p-3 rounded-lg my-3 text-sm">
-                    <p>
-                      {detail.ticket.service_order.name} ·{' '}
-                      {detail.ticket.service_order.quantity}
-                    </p>
-                    <p>
-                      {detail.ticket.service_order.totalAmountMinor == null
-                        ? 'Стоимость уточняется'
-                        : officeMoney(
-                            detail.ticket.service_order.totalAmountMinor,
-                          )}
-                    </p>
-                    <p>{detail.ticket.service_order.conditions}</p>
-                  </div>
+                  <RequestServiceOrder order={detail.ticket.service_order} />
                 )}
-                <div className="space-y-3 my-5 max-h-[55vh] overflow-auto">
-                  {detail.messages.map((m) => (
-                    <article
-                      key={m.id}
-                      className={`p-3 rounded-lg bg-[var(--surface-muted)] ${m.author_type === 'support' ? 'mr-5' : 'ml-5'}`}
-                    >
-                      <p className="text-xs text-[var(--muted)] mb-2">
-                        {m.author_label} · {operationDate(m.created_at)}
-                      </p>
-                      <p className="whitespace-pre-wrap break-words text-sm">
-                        {m.body}
-                      </p>
-                      {m.attachments?.map((attachment) => (
-                        <button
-                          key={attachment.attachment_id}
-                          type="button"
-                          className="block mt-3 text-sm text-[var(--primary)] underline break-all"
-                          onClick={() => void download(attachment)}
-                        >
-                          {attachment.original_name}
-                        </button>
-                      ))}
-                    </article>
-                  ))}
-                </div>
+                <RequestMessages
+                  conversationId={detail.ticket.id}
+                  messages={detail.messages}
+                  perspective="client"
+                  onDownload={(attachment) => void download(attachment)}
+                />
                 {!['completed', 'cancelled'].includes(detail.ticket.status) ? (
-                  <form onSubmit={send} className="space-y-3">
+                  <form onSubmit={send} className="request-composer">
                     <textarea
                       aria-label="Сообщение"
                       className="input"
+                      rows={2}
+                      placeholder="Напишите сервисной службе…"
                       required
                       maxLength={4000}
                       value={reply}
                       onChange={(e) => setReply(e.target.value)}
                       disabled={busy}
                     />
-                    <button
-                      className="btn btn-primary"
-                      disabled={busy || !reply.trim()}
-                    >
-                      Отправить сообщение
-                    </button>
+                    <div className="request-composer__actions">
+                      <span className="request-composer__hint">
+                        Ответ сохранится в обращении
+                      </span>
+                      <button
+                        className="btn btn-primary"
+                        disabled={busy || !reply.trim()}
+                      >
+                        <Send size={14} />
+                        {busy ? 'Отправка…' : 'Отправить'}
+                      </button>
+                    </div>
                   </form>
                 ) : (
-                  <p className="text-sm text-[var(--muted)]">
+                  <p className="request-closed">
+                    <LockKeyhole size={15} />
                     Обращение закрыто.
                   </p>
                 )}
               </>
             ) : (
-              <p className="py-12 text-center text-[var(--muted)]">
-                Выберите обращение
-              </p>
+              <RequestChatPlaceholder />
             )}
           </section>
         </div>

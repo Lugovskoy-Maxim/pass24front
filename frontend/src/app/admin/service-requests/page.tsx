@@ -1,17 +1,27 @@
 'use client';
 import { FormEvent, useCallback, useEffect, useRef, useState } from 'react';
 import Link from 'next/link';
-import { MessageSquare, Paperclip, Send, X } from 'lucide-react';
+import {
+  ArrowLeft,
+  ExternalLink,
+  LockKeyhole,
+  MessageSquare,
+  Paperclip,
+  Search,
+  Send,
+  X,
+} from 'lucide-react';
 import { AdminLayout } from '@/components/AdminLayout';
 import { useToast } from '@/components/Toast';
 import { PageError } from '@/components/PageError';
-import { OfficeCategoryBadge } from '@/components/OfficeCategoryBadge';
-import { OperationsStatusBadge as StatusBadge } from '@/components/OperationsStatusBadge';
 import {
-  OfficeCategory,
-  officeServices,
-  officeMoney,
-} from '@/lib/office-services';
+  RequestChatPlaceholder,
+  RequestDetailHeader,
+  RequestListItem,
+  RequestMessages,
+  RequestServiceOrder,
+} from '@/components/ServiceRequestChat';
+import { OfficeCategory, officeServices } from '@/lib/office-services';
 import { useAutoRefresh } from '@/hooks/useAutoRefresh';
 import { useWorkQueue } from '@/hooks/useWorkQueue';
 import { getErrorMessage, getErrorStatus } from '@/lib/api';
@@ -22,7 +32,6 @@ import {
   Ticket,
   TicketDetail,
   Attachment,
-  operationDate,
 } from '@/lib/operations';
 
 export default function ServiceRequestsPage() {
@@ -226,9 +235,21 @@ export default function ServiceRequestsPage() {
             : 'Раздел готовится к подключению. Обращения пока обрабатываются на сайте.'}
         </p>
       )}
-      <div className="grid sm:grid-cols-2 xl:grid-cols-[200px_minmax(180px,1fr)_160px_180px_auto] gap-3 mb-5 items-center">
+      <div className="request-filter-bar">
+        <div className="request-filter-search">
+          <Search size={15} aria-hidden="true" />
+          <input
+            aria-label="Поиск обращений"
+            className="input"
+            placeholder="Номер, тема или автор"
+            value={filters.search}
+            onChange={(e) =>
+              setFilters((f) => ({ ...f, search: e.target.value, page: 1 }))
+            }
+          />
+        </div>
         <select
-          className="input w-auto"
+          className="input"
           aria-label="Категория офиса"
           value={filters.category}
           onChange={(e) =>
@@ -242,18 +263,9 @@ export default function ServiceRequestsPage() {
             </option>
           ))}
         </select>
-        <input
-          aria-label="Поиск обращений"
-          className="input flex-1 min-w-44"
-          placeholder="Номер, тема или автор"
-          value={filters.search}
-          onChange={(e) =>
-            setFilters((f) => ({ ...f, search: e.target.value, page: 1 }))
-          }
-        />
         <select
           aria-label="Статус"
-          className="input w-auto"
+          className="input"
           value={filters.status}
           onChange={(e) =>
             setFilters((f) => ({ ...f, status: e.target.value, page: 1 }))
@@ -268,7 +280,7 @@ export default function ServiceRequestsPage() {
         </select>
         <select
           aria-label="Тема"
-          className="input w-auto"
+          className="input"
           value={filters.topic}
           onChange={(e) =>
             setFilters((f) => ({ ...f, topic: e.target.value, page: 1 }))
@@ -281,7 +293,7 @@ export default function ServiceRequestsPage() {
             </option>
           ))}
         </select>
-        <label className="flex gap-2 items-center text-sm">
+        <label className="flex gap-2 items-center text-xs py-2">
           <input
             type="checkbox"
             checked={filters.needs_action === '1'}
@@ -297,74 +309,64 @@ export default function ServiceRequestsPage() {
         </label>
       </div>
       {error && <PageError message={error} onRetry={load} />}
-      <div className="grid xl:grid-cols-[minmax(260px,1fr)_minmax(0,2fr)] gap-5 items-start">
+      <div className="request-workspace request-workspace--admin">
         <section
-          className={`card overflow-hidden ${mobileDetail ? 'hidden xl:block' : ''}`}
+          className={'request-list ' + (mobileDetail ? 'hidden xl:flex' : '')}
+          aria-label="Список обращений"
         >
-          <div className="p-4 border-b border-[var(--border)] flex gap-2 items-center font-semibold">
-            <MessageSquare className="w-5 h-5" />
-            Обращения{' '}
-            <span className="text-[var(--muted)]">{list?.total ?? '…'}</span>
+          <div className="request-list__header">
+            <MessageSquare size={16} className="text-[var(--muted)]" />
+            Обращения
+            <span className="request-list__count">{list?.total ?? '…'}</span>
           </div>
-          {!list ? (
-            <p className="p-5 text-[var(--muted)]">Загрузка…</p>
-          ) : !list.items.length ? (
-            <p className="p-5 text-[var(--muted)]">
-              Обращений по выбранным условиям нет.
-            </p>
-          ) : (
-            <div className="xl:max-h-[70vh] overflow-y-auto">
-              {list.items.map((ticket) => (
-                <button
+          <div className="request-list__items">
+            {!list ? (
+              <p className="p-5 text-sm text-[var(--muted)]" role="status">
+                Загрузка…
+              </p>
+            ) : !list.items.length ? (
+              <p className="p-5 text-sm text-[var(--muted)]">
+                Обращений по выбранным условиям нет.
+              </p>
+            ) : (
+              list.items.map((ticket) => (
+                <RequestListItem
                   key={ticket.id}
+                  id={ticket.id}
+                  title={ticket.subject}
+                  preview={ticket.last_message_preview}
+                  requester={ticket.requester_name}
+                  updatedAt={ticket.last_message_at}
+                  status={ticket.status}
+                  statusLabel={ticket.status_label}
+                  office={{
+                    office: ticket.office,
+                    offices: ticket.offices,
+                    officeLabel: ticket.office_label,
+                    category: ticket.office_category,
+                  }}
+                  attention={ticket.needs_action ? 'Ждёт ответа' : undefined}
+                  selected={detail?.ticket.id === ticket.id}
                   onClick={() => void open(ticket.id)}
-                  className={`w-full text-left p-4 border-b border-[var(--border)] hover:bg-[var(--surface-muted)] ${detail?.ticket.id === ticket.id ? 'bg-[var(--surface-muted)]' : ''}`}
-                >
-                  <div className="flex justify-between gap-2">
-                    <span className="font-medium">
-                      №{ticket.id} · {ticket.subject}
-                    </span>
-                    {ticket.needs_action && (
-                      <span
-                        className="w-2 h-2 mt-2 rounded-full bg-[var(--danger)] shrink-0"
-                        aria-label="Требует ответа"
-                      />
-                    )}
-                  </div>
-                  <p className="text-sm mt-1">{ticket.requester_name}</p>
-                  <OfficeCategoryBadge category={ticket.office_category} />
-                  <p className="text-xs text-[var(--muted)] mt-1">
-                    Офис: {ticket.office_label || 'Не указан'} · Тип:{' '}
-                    {ticket.topic_label}
-                  </p>
-                  <div className="flex items-center gap-2 mt-1">
-                    <StatusBadge
-                      status={ticket.status}
-                      label={ticket.status_label}
-                    />
-                    <span className="text-xs text-[var(--muted)]">
-                      {operationDate(ticket.last_message_at)}
-                    </span>
-                  </div>
-                  <p className="text-sm text-[var(--muted)] truncate mt-2">
-                    {ticket.last_message_preview}
-                  </p>
-                </button>
-              ))}
-            </div>
-          )}
+                />
+              ))
+            )}
+          </div>
           {list && (list.total > list.per_page || filters.page > 1) && (
-            <div className="flex justify-between p-3">
+            <div className="request-pagination">
               <button
-                className="btn btn-secondary"
+                className="btn btn-secondary btn-sm"
                 disabled={filters.page <= 1}
                 onClick={() => setFilters((f) => ({ ...f, page: f.page - 1 }))}
               >
                 Назад
               </button>
-              <span>{filters.page}</span>
+              <span>
+                {filters.page} /{' '}
+                {Math.max(1, Math.ceil(list.total / list.per_page))}
+              </span>
               <button
-                className="btn btn-secondary"
+                className="btn btn-secondary btn-sm"
                 disabled={filters.page * list.per_page >= list.total}
                 onClick={() => setFilters((f) => ({ ...f, page: f.page + 1 }))}
               >
@@ -376,11 +378,11 @@ export default function ServiceRequestsPage() {
         <section
           ref={detailPanel}
           tabIndex={-1}
-          className={`card p-5 min-w-0 outline-none scroll-mt-24 ${mobileDetail ? '' : 'hidden xl:block'}`}
+          className={'request-detail ' + (mobileDetail ? '' : 'hidden xl:flex')}
         >
           <button
             type="button"
-            className="btn btn-secondary mb-4 xl:hidden"
+            className="request-back xl:hidden"
             onClick={() => {
               selection.current = 0;
               ++selectionVersion.current;
@@ -390,138 +392,108 @@ export default function ServiceRequestsPage() {
               setDetailLoading(false);
             }}
           >
+            <ArrowLeft size={15} />
             Назад к обращениям
           </button>
           {detailLoading ? (
-            <p className="py-8 text-center text-[var(--muted)]" role="status">
-              Загрузка переписки…
-            </p>
+            <RequestChatPlaceholder loading />
           ) : !detail ? (
-            <p className="text-[var(--muted)] py-12 text-center">
-              Выберите обращение, чтобы прочитать переписку.
-            </p>
+            <RequestChatPlaceholder />
           ) : (
             <>
-              <div className="flex flex-wrap items-start justify-between gap-3 mb-4">
-                <div>
-                  <h2 className="font-semibold text-lg">
-                    №{detail.ticket.id} · {detail.ticket.subject}
-                  </h2>
-                  <OfficeCategoryBadge
-                    category={detail.ticket.office_category}
-                  />
-                  <p className="text-sm text-[var(--muted)]">
-                    {detail.ticket.requester_name} ·{' '}
-                    {operationDate(detail.ticket.created_at)}
-                  </p>
-                  <p className="text-sm text-[var(--muted)] mt-1">
-                    Офис: {detail.ticket.office_label || 'Не указан'} · Тип
-                    обращения: {detail.ticket.topic_label}
-                  </p>
-                </div>
-                <div className="flex items-center gap-2">
-                  <StatusBadge
-                    status={detail.ticket.status}
-                    label={detail.ticket.status_label}
-                  />
-                  <select
-                    aria-label="Изменить статус обращения"
-                    className="input w-auto text-sm py-2"
-                    disabled={busy || counts?.mode !== 'pass'}
-                    value={detail.ticket.status}
-                    onChange={(e) => void status(e.target.value)}
-                  >
-                    {Object.entries(list?.statuses || {}).map(([v, label]) => (
-                      <option key={v} value={v}>
-                        {label}
-                      </option>
-                    ))}
-                  </select>
-                </div>
+              <RequestDetailHeader
+                id={detail.ticket.id}
+                title={detail.ticket.subject}
+                requester={detail.ticket.requester_name}
+                createdAt={detail.ticket.created_at}
+                topic={detail.ticket.topic_label}
+                status={detail.ticket.status}
+                statusLabel={detail.ticket.status_label}
+                office={{
+                  office: detail.ticket.office,
+                  offices: detail.ticket.offices,
+                  officeLabel: detail.ticket.office_label,
+                  category: detail.ticket.office_category,
+                }}
+              >
+                <span className="text-xs text-[var(--muted)]">Статус</span>
+                <select
+                  aria-label="Изменить статус обращения"
+                  className="input"
+                  disabled={busy || counts?.mode !== 'pass'}
+                  value={detail.ticket.status}
+                  onChange={(e) => void status(e.target.value)}
+                >
+                  {Object.entries(list?.statuses || {}).map(([v, label]) => (
+                    <option key={v} value={v}>
+                      {label}
+                    </option>
+                  ))}
+                </select>
                 {detail.can_reply && (
                   <button
                     type="button"
-                    className="btn btn-primary"
+                    className="btn btn-secondary btn-sm ml-auto"
                     onClick={() => replyRef.current?.focus()}
                   >
-                    <Send className="w-4 h-4" />
+                    <Send size={13} />
                     Ответить
                   </button>
                 )}
-              </div>
+              </RequestDetailHeader>
               {detail.ticket.booking_id && (
                 <Link
-                  href={`/admin/booking-requests?id=${detail.ticket.booking_id}`}
-                  className="text-sm text-[var(--primary)] hover:underline"
+                  href={
+                    '/admin/booking-requests?id=' + detail.ticket.booking_id
+                  }
+                  className="request-related"
                 >
-                  Открыть связанную заявку №{detail.ticket.booking_id}
+                  Связанная бронь №{detail.ticket.booking_id}
+                  <ExternalLink size={13} />
                 </Link>
               )}
               {detail.ticket.service_order && (
-                <div className="rounded-lg bg-[var(--surface-muted)] p-3 text-sm space-y-1">
-                  <p className="font-medium">
-                    {detail.ticket.service_order.name} ·{' '}
-                    {detail.ticket.service_order.quantity}{' '}
-                    {detail.ticket.service_order.unit === 'item' ? 'шт.' : ''}
-                  </p>
-                  <p>
-                    {detail.ticket.service_order.totalAmountMinor == null
-                      ? 'Стоимость уточняется администратором'
-                      : officeMoney(
-                          detail.ticket.service_order.totalAmountMinor,
-                        )}
-                  </p>
-                  <p>{detail.ticket.service_order.conditions}</p>
-                  <p className="text-xs text-[var(--muted)]">
-                    Условия на момент создания заявки
-                  </p>
-                </div>
+                <RequestServiceOrder order={detail.ticket.service_order} />
               )}
-              <div
-                className="space-y-4 my-5 max-h-[55vh] overflow-auto pr-1"
-                aria-label="Переписка"
-              >
-                {detail.messages.map((item) => (
-                  <article
-                    key={item.id}
-                    className={`p-4 rounded border border-[var(--border)] ${item.author_type === 'support' ? 'bg-[var(--surface-muted)] ml-4' : 'mr-4'}`}
-                  >
-                    <div className="flex flex-wrap justify-between gap-2 mb-2 text-xs text-[var(--muted)]">
-                      <span className="font-medium">{item.author_label}</span>
-                      <time>{operationDate(item.created_at)}</time>
-                    </div>
-                    <p className="text-sm whitespace-pre-wrap break-words">
-                      {item.message_text}
-                    </p>
-                    {item.attachments?.map((a) => (
-                      <button
-                        key={a.attachment_id}
-                        onClick={() => void download(a)}
-                        className="flex items-center gap-2 text-sm text-[var(--primary)] mt-3 hover:underline"
-                      >
-                        <Paperclip className="w-4 h-4" />
-                        {a.original_name}
-                      </button>
-                    ))}
-                  </article>
-                ))}
-              </div>
+              <RequestMessages
+                conversationId={detail.ticket.id}
+                messages={detail.messages}
+                perspective="support"
+                onDownload={(attachment) => void download(attachment)}
+              />
               {detail.can_reply ? (
-                <form onSubmit={send} className="space-y-3">
+                <form onSubmit={send} className="request-composer">
                   <textarea
                     ref={replyRef}
                     aria-label="Ответ клиенту"
-                    className="input min-h-28"
-                    placeholder="Напишите ответ…"
+                    className="input"
+                    rows={2}
+                    placeholder="Напишите ответ арендатору…"
                     maxLength={20000}
                     required
                     value={message}
                     onChange={(e) => setMessage(e.target.value)}
                     disabled={busy}
                   />
-                  <div className="flex flex-wrap justify-between items-center gap-3">
-                    <label className="btn btn-secondary cursor-pointer text-sm">
-                      <Paperclip className="w-4 h-4" />
+                  {file && (
+                    <div className="request-composer__file">
+                      <Paperclip size={13} />
+                      <span>{file.name}</span>
+                      <button
+                        type="button"
+                        aria-label="Удалить вложение"
+                        onClick={() => {
+                          setFile(null);
+                          uploaded.current = null;
+                        }}
+                      >
+                        <X size={14} />
+                      </button>
+                    </div>
+                  )}
+                  <div className="request-composer__actions">
+                    <label className="request-composer__attach">
+                      <Paperclip size={16} />
                       Прикрепить файл
                       <input
                         type="file"
@@ -541,28 +513,14 @@ export default function ServiceRequestsPage() {
                         busy || !message.trim() || counts?.mode !== 'pass'
                       }
                     >
-                      <Send className="w-4 h-4" />
-                      {busy ? 'Отправка…' : 'Отправить ответ'}
+                      <Send size={14} />
+                      {busy ? 'Отправка…' : 'Отправить'}
                     </button>
                   </div>
-                  {file && (
-                    <div className="flex items-center gap-2 text-sm text-[var(--muted)]">
-                      {file.name}
-                      <button
-                        type="button"
-                        aria-label="Удалить вложение"
-                        onClick={() => {
-                          setFile(null);
-                          uploaded.current = null;
-                        }}
-                      >
-                        <X className="w-4 h-4" />
-                      </button>
-                    </div>
-                  )}
                 </form>
               ) : (
-                <p className="text-sm text-[var(--muted)]">
+                <p className="request-closed">
+                  <LockKeyhole size={15} />
                   Обращение закрыто. Для продолжения переписки переведите его в
                   работу.
                 </p>

@@ -12,6 +12,13 @@ export type Attachment = {
   size: number;
   mime_type: string;
 };
+export type TicketOffice = {
+  id?: string | number;
+  number?: string | number;
+  label?: string;
+  businessCenterName?: string;
+  category?: OfficeCategory | null;
+};
 export type Ticket = {
   id: number;
   subject: string;
@@ -24,11 +31,8 @@ export type Ticket = {
     quantity: number;
     totalAmountMinor: number | null;
   };
-  office?: {
-    id?: string | number;
-    number?: string | number;
-    label?: string;
-  } | null;
+  office?: TicketOffice | null;
+  offices?: TicketOffice[];
   status: string;
   status_label: string;
   owner_subject: string;
@@ -40,6 +44,8 @@ export type Ticket = {
   created_at: string;
   last_message_preview: string;
   needs_action: boolean;
+  unread_for_customer?: boolean;
+  unread_for_support?: boolean;
 };
 export type TicketDetail = {
   ticket: Ticket;
