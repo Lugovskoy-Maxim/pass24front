@@ -1,0 +1,40 @@
+diff --git a/inc/pass/auth.php b/inc/pass/auth.php
+index dee97f5..02772a2 100644
+--- a/inc/pass/auth.php
++++ b/inc/pass/auth.php
+@@ -668,11 +668,6 @@ function tf_mstyle_pass_auth_verify(string $publicToken, string $code, array $fl
+         );
+     }
+ 
+-    $bookingContext = tf_mstyle_pass_build_booking_context($principal, $context);
+-    if (isset($bookingContext['ok']) && empty($bookingContext['ok'])) {
+-        return tf_mstyle_pass_auth_error_response($bookingContext, 'Не удалось прочитать локальные правила профиля.', $mode);
+-    }
+-
+     // Сначала окончательно закрываем одноразовый процесс. Если локальная сессия
+     // затем не создастся, пользователь запросит новый код; повторно применять
+     // уже подтверждённый challenge небезопасно.
+@@ -698,6 +693,23 @@ function tf_mstyle_pass_auth_verify(string $publicToken, string $code, array $fl
+             $mode
+         );
+     }
++    // Profile rules and hours are protected Pass operations. They must use
++    // the session created from this verified code, including on a first login.
++    try {
++        $bookingContext = tf_mstyle_pass_build_booking_context($principal, $context);
++    } catch (Throwable $exception) {
++        tf_mstyle_booking_session_logout_current();
++        $httpStatus = (int) $exception->getCode();
++        return tf_mstyle_pass_auth_error_response([
++            'code' => 'pass_context_unavailable',
++            'http_status' => $httpStatus >= 400 && $httpStatus <= 599 ? $httpStatus : 503,
++        ], 'Не удалось подготовить личный кабинет. Запросите новый код.', $mode);
++    }
++    if (isset($bookingContext['ok']) && empty($bookingContext['ok'])) {
++        tf_mstyle_booking_session_logout_current();
++        return tf_mstyle_pass_auth_error_response($bookingContext, 'Не удалось прочитать локальные правила профиля.', $mode);
++    }
++
+     return tf_mstyle_auth_response([
+         'ok' => true,
+         'session' => [
