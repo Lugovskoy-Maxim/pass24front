@@ -7,6 +7,9 @@
 | [API.md](./API.md) | Backend / интеграция | Основные HTTP-эндпоинты |
 | [CONTRIBUTING.md](./CONTRIBUTING.md) | Команда | Процесс изменений, PR, деплой |
 | [BACKUP.md](./BACKUP.md) | DevOps / владелец | Бэкапы MongoDB (Windows + сервер) |
+| [OFFICE_SERVICES_PLAN.md](./OFFICE_SERVICES_PLAN.md) | Владелец / разработчики | План категорий офисов, цветовых меток чатов, информации об интернете, услуг и прайса сайта и Android |
+| [OFFICE_SERVICES_USAGE.md](./OFFICE_SERVICES_USAGE.md) | Администратор | Настройка категорий, ручного прайса, видимости сведений, заказов и лимитов переговорных |
+| [BITRIX24_CHAT_PLAN.md](./BITRIX24_CHAT_PLAN.md) | Владелец / разработчики | План двусторонних чатов заявок с Битрикс24 через приложение открытых линий, связь с CRM и обновления |
 | [Инструкция_пользователя.docx](./Инструкция_пользователя.docx) | Конечные пользователи | Руководство UI (генерация: `scripts/generate_user_guide.py`) |
 | [../deploy/UPDATE.md](../deploy/UPDATE.md) | DevOps | Обновление продакшена |
 
