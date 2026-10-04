@@ -1,0 +1,53 @@
+name: Diagnose Mstyle authentication
+
+on:
+  workflow_dispatch:
+
+permissions:
+  contents: read
+
+jobs:
+  diagnose:
+    name: Read-only authentication checks
+    runs-on: ubuntu-latest
+    environment: production
+    timeout-minutes: 5
+    steps:
+      - name: Check OAuth session health without changing data
+        uses: appleboy/ssh-action@v1.2.2
+        with:
+          host: ${{ secrets.PROD_SSH_HOST || '188.64.164.202' }}
+          username: ${{ secrets.PROD_SSH_USER }}
+          key: ${{ secrets.PROD_SSH_KEY }}
+          port: ${{ secrets.PROD_SSH_PORT || 22 }}
+          command_timeout: 3m
+          script: |
+            set -euo pipefail
+            docker exec -i pass24-backend node <<'NODE'
+            const { MongoClient } = require('mongodb');
+            (async () => {
+              const client = new MongoClient(process.env.MONGODB_URI, { serverSelectionTimeoutMS: 5000 });
+              try {
+                await client.connect();
+                const db = client.db();
+                const settings = await db.collection('app_settings').findOne({ key: 'global' }, { projection: { mstyleMockResponsesEnabled: 1 } });
+                const enabled = value => /^(true|1|yes)$/i.test(value || '');
+                const mockDefault = process.env.MSTYLE_MOCK_RESPONSES ? enabled(process.env.MSTYLE_MOCK_RESPONSES) : process.env.NODE_ENV !== 'production';
+                const mockResponsesEnabled = typeof settings?.mstyleMockResponsesEnabled === 'boolean' ? settings.mstyleMockResponsesEnabled : mockDefault;
+                console.log(JSON.stringify({ kind: 'auth-mode', production: process.env.NODE_ENV === 'production', privateApiEnabled: enabled(process.env.MSTYLE_PRIVATE_API_ENABLED), mockResponsesEnabled, dispatchEnabled: enabled(process.env.MSTYLE_DISPATCH_ENABLED), smsEnabled: enabled(process.env.MSTYLE_SMS_ENABLED) }));
+                const recent = { createdAt: { $gte: new Date(Date.now() - 3600000) } };
+                const sessions = await db.collection('mstyle_v2_authentications').find(recent, { projection: { subject: 1, authVersion: 1, expiresAt: 1 } }).sort({ createdAt: -1 }).limit(8).toArray();
+                const health = { total: sessions.length, expired: 0, missingIdentity: 0, inactiveIdentity: 0, versionMismatch: 0 };
+                for (const session of sessions) {
+                  const identity = await db.collection('mstyle_v2_identities').findOne({ subject: session.subject }, { projection: { authVersion: 1, identityStatus: 1 } });
+                  if (new Date(session.expiresAt) <= new Date()) health.expired++;
+                  if (!identity) health.missingIdentity++;
+                  else if (identity.identityStatus !== 'active') health.inactiveIdentity++;
+                  if (identity && identity.authVersion !== session.authVersion) health.versionMismatch++;
+                }
+                console.log(JSON.stringify({ kind: 'recent-session-health', ...health }));
+                const challenges = db.collection('mstyle_v2_challenges');
+                console.log(JSON.stringify({ kind: 'recent-challenges', pending: await challenges.countDocuments({ ...recent, status: 'awaiting_code', isDummy: false }), attempted: await challenges.countDocuments({ ...recent, verifyAttempts: { $gt: 0 }, isDummy: false }), consumed: await challenges.countDocuments({ ...recent, status: 'consumed', isDummy: false }) }));
+              } finally { await client.close(); }
+            })().catch(error => { console.error(error.name); process.exitCode = 1; });
+            NODE
