@@ -10,6 +10,7 @@ import {
   ClipboardList,
   Settings,
   User,
+  MessageSquare,
 } from 'lucide-react';
 import { useAuth } from '@/lib/auth';
 import { useConfig } from '@/hooks/useConfig';
@@ -82,6 +83,16 @@ export function Header() {
       show: canUseReception(user),
     },
     { href: '/profile', label: L.nav.profile, icon: User, show: true },
+    {
+      href: '/requests',
+      label: 'Обращения',
+      icon: MessageSquare,
+      show:
+        !hasPermission(user, 'admin.panel') &&
+        (hasPermission(user, 'requests.view_own') ||
+          hasPermission(user, 'requests.create') ||
+          hasPermission(user, 'passes.view_own')),
+    },
     {
       href: '/admin',
       label: L.nav.admin,

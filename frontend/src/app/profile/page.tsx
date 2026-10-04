@@ -55,6 +55,7 @@ import {
 } from '@/lib/person-name';
 import { useAutoRefresh } from '@/hooks/useAutoRefresh';
 import { useConfig } from '@/hooks/useConfig';
+import { TenantOfficeCard } from '@/components/TenantOfficeCard';
 import { getUiLabels } from '@/lib/ui-labels';
 
 function ProfileInfoRow({
@@ -630,12 +631,7 @@ export default function ProfilePage() {
                 value={formatTenantOffices(user.offices)}
               />
               {user.offices.map((office) => (
-                <div
-                  key={office.id}
-                  className="text-sm px-3 py-2 rounded bg-[var(--surface-muted)]"
-                >
-                  {officeDisplayName(office)}
-                </div>
+                <TenantOfficeCard key={office.id} office={office} />
               ))}
             </div>
           ) : user.office ? (

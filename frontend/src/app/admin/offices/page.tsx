@@ -1,4 +1,6 @@
 'use client';
+import Link from 'next/link';
+import { OfficeServiceEditor } from '@/components/OfficeServiceEditor';
 
 import {
   useEffect,
@@ -1539,6 +1541,12 @@ export default function AdminOfficesPage() {
 
       {officeFormOpen && (
         <section className="space-y-4">
+          <Link
+            href="/admin/office-services"
+            className="btn btn-secondary text-sm"
+          >
+            Прайс и категории офисов
+          </Link>
           <button
             type="button"
             className="btn btn-secondary text-sm"
@@ -1660,6 +1668,9 @@ export default function AdminOfficesPage() {
               </div>
             </form>
           </div>
+          {editingId && (
+            <OfficeServiceEditor key={editingId} officeId={editingId} />
+          )}
         </section>
       )}
 

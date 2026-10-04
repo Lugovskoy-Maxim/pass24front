@@ -1,4 +1,5 @@
 import { request, downloadFileResponse, getToken } from './api';
+import type { OfficeCategory, OfficeService } from './office-services';
 
 export type Segment = {
   date: string;
@@ -17,6 +18,12 @@ export type Ticket = {
   topic_key: string;
   topic_label: string;
   office_label?: string | null;
+  office_id?: string;
+  office_category?: OfficeCategory | null;
+  service_order?: OfficeService & {
+    quantity: number;
+    totalAmountMinor: number | null;
+  };
   office?: {
     id?: string | number;
     number?: string | number;
@@ -233,6 +240,25 @@ export const money = (n: number) =>
     currency: 'RUB',
     maximumFractionDigits: 2,
   }).format(n / 100);
+export function operationDate(value: string) {
+  const normalized = /^\d{4}-\d{2}-\d{2}( \d{2}:\d{2}:\d{2})?$/.test(value)
+    ? value.replace(' ', 'T') +
+      (value.length === 10 ? 'T00:00:00' : '') +
+      '+03:00'
+    : value;
+  const date = new Date(normalized);
+  return Number.isNaN(date.getTime())
+    ? value
+    : new Intl.DateTimeFormat('ru-RU', {
+        timeZone: 'Europe/Moscow',
+        day: '2-digit',
+        month: 'short',
+        year: 'numeric',
+        ...(value.length > 10
+          ? ({ hour: '2-digit', minute: '2-digit' } as const)
+          : {}),
+      }).format(date);
+}
 export const clock = (n: number) =>
   String(Math.floor(n / 60)).padStart(2, '0') +
   ':' +

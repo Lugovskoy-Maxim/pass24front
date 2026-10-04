@@ -550,7 +550,13 @@ export class OperationsPayments implements OnModuleInit, OnModuleDestroy {
     );
   }
   async invoice(actor: OperationsActor, id: number, input: any, key: string) {
-    if (actor.kind !== 'system') requirePermission(actor, 'bookings.finance');
+    if (actor.kind !== 'system') {
+      requirePermission(actor, 'bookings.finance');
+      await this.bookings.identities.assertBooking(
+        actor,
+        await this.store.collection('bookings').findOne({ id }),
+      );
+    }
     let invoiceParty:
       | ReturnType<OperationsBookings['identities']['party']>
       | undefined;
@@ -753,6 +759,10 @@ export class OperationsPayments implements OnModuleInit, OnModuleDestroy {
     key: string,
   ) {
     requirePermission(actor, 'bookings.finance');
+    await this.bookings.identities.assertBooking(
+      actor,
+      await this.store.collection('bookings').findOne({ id }),
+    );
     return this.store.command(
       actor,
       key,

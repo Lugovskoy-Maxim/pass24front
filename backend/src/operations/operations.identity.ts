@@ -1,5 +1,5 @@
 import { Injectable } from '@nestjs/common';
-import { ClientSession } from 'mongodb';
+import { ClientSession, ObjectId } from 'mongodb';
 import { OperationsStore } from './operations.store';
 import {
   fail,
@@ -41,7 +41,89 @@ export class OperationsIdentity {
       name: user.fullName || user.full_name || 'Администратор',
       subject: identity?.subject,
       permissions: user.permissions || [],
+      role: user.role,
+      propertyIds: user.propertyIds || [],
     };
+  }
+  async bookingScope(actor: OperationsActor, session?: ClientSession) {
+    if (actor.kind !== 'admin' || !actor.role || actor.role === 'admin')
+      return null;
+    const propertyIds = (actor.propertyIds || [])
+      .filter((id) => /^[a-f\d]{24}$/i.test(id))
+      .map((id) => new ObjectId(id));
+    const offices = await this.store.connection
+      .db!.collection('offices')
+      .find({ property: { $in: propertyIds } }, { session })
+      .toArray();
+    const properties = await this.store.connection
+      .db!.collection('properties')
+      .find({ _id: { $in: propertyIds } }, { session })
+      .toArray();
+    return {
+      roomIds: offices
+        .map((office) =>
+          Number(String(office.externalId || '').match(/:(\d+)$/)?.[1]),
+        )
+        .filter((id) => Number.isSafeInteger(id) && id > 0),
+      businessCenterIds: properties
+        .map((property) =>
+          Number(String(property.code || '').match(/:(\d+)$/)?.[1]),
+        )
+        .filter((id) => Number.isSafeInteger(id) && id > 0),
+    };
+  }
+  async bookingFilter(actor: OperationsActor, session?: ClientSession) {
+    const scope = await this.bookingScope(actor, session);
+    return scope
+      ? {
+          $or: [
+            { room_id: { $in: scope.roomIds } },
+            { 'room.business_center.id': { $in: scope.businessCenterIds } },
+          ],
+        }
+      : {};
+  }
+  async canAccessProfile(
+    actor: OperationsActor,
+    profile: any,
+    session?: ClientSession,
+  ) {
+    if (actor.kind !== 'admin' || !actor.role || actor.role === 'admin')
+      return true;
+    const resource =
+      profile.resourceOwnerProfileId &&
+      profile.resourceOwnerProfileId !== profile.profileId
+        ? await this.store
+            .canonical('profiles')
+            .findOne({ profileId: profile.resourceOwnerProfileId }, { session })
+        : null;
+    const ids = [
+      ...(profile.officeIds || []),
+      ...(resource?.officeIds || []),
+    ].map(String);
+    const office = await this.store.connection
+      .db!.collection('offices')
+      .findOne(
+        {
+          property: {
+            $in: (actor.propertyIds || [])
+              .filter((id) => /^[a-f\d]{24}$/i.test(id))
+              .map((id) => new ObjectId(id)),
+          },
+          $or: [
+            { externalId: { $in: ids } },
+            {
+              _id: {
+                $in: ids
+                  .filter((id: string) => /^[a-f\d]{24}$/i.test(id))
+                  .map((id: string) => new ObjectId(id)),
+              },
+            },
+          ],
+        },
+        { session },
+      );
+    return !!office;
   }
   async profile(
     actor: OperationsActor,
@@ -74,6 +156,19 @@ export class OperationsIdentity {
         resource.resourceOwnerProfileId !== resource.profileId)
     )
       fail('profile_unavailable', 'Недоступен профиль-владелец ресурсов.');
+    if (
+      !(await this.canAccessProfile(
+        actor,
+        {
+          officeIds: [
+            ...(profile.officeIds || []),
+            ...(resource.officeIds || []),
+          ],
+        },
+        session,
+      ))
+    )
+      fail('forbidden', 'Нет доступа к профилю другого БЦ.', 403);
     return { profile, resource };
   }
   async assertCanSpendHours(
@@ -104,6 +199,8 @@ export class OperationsIdentity {
           'Не найден владелец исторического баланса.',
           404,
         );
+      if (!(await this.canAccessProfile(actor, resource)))
+        fail('forbidden', 'Нет доступа к балансу другого БЦ.', 403);
       return resource;
     }
     const ids = await this.profileIds(actor);
@@ -143,6 +240,14 @@ export class OperationsIdentity {
     if (!booking) fail('booking_not_found', 'Бронирование не найдено.', 404);
     if (actor.kind === 'admin') {
       requirePermission(actor, 'bookings.manage');
+      const filter = await this.bookingFilter(actor, session);
+      if (
+        filter.$or &&
+        !(await this.store
+          .collection('bookings')
+          .findOne({ id: booking.id, ...filter }, { session }))
+      )
+        fail('booking_not_found', 'Бронирование не найдено.', 404);
       return;
     }
     if (actor.kind === 'system') return;

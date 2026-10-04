@@ -54,6 +54,9 @@ import { MstyleManualTestingService } from './mstyle-v2.manual-testing.service';
     SmsModule,
   ],
   exports: [
+    OperationsBookings,
+    OperationsHours,
+    OperationsPayments,
     OperationsStore,
     OperationsIdentity,
     OperationsSupport,

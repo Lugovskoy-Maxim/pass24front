@@ -12,6 +12,7 @@ import {
 import { Property, PropertySchema } from '../schemas/property.schema';
 import { SiteSourceService } from './site-source.service';
 import { ServiceRequestsController } from './service-requests.controller';
+import { ResidentBookingsController } from './resident-bookings.controller';
 
 @Module({
   imports: [
@@ -26,7 +27,7 @@ import { ServiceRequestsController } from './service-requests.controller';
     ]),
   ],
   providers: [SiteSourceService],
-  controllers: [ServiceRequestsController],
+  controllers: [ServiceRequestsController, ResidentBookingsController],
   exports: [SiteSourceService],
 })
 export class SiteSourceModule {}

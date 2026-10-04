@@ -16,6 +16,14 @@ import {
   supportNeedsAction,
 } from './operations.rules';
 import { encryptJson } from '../integrations/mstyle-v2/mstyle-v2.crypto';
+import { OfficeServicesService } from '../office-services/office-services.service';
+import { Office, OfficeSchema, User, UserSchema } from '../schemas';
+import { Types } from 'mongoose';
+import {
+  OperationsAdminController,
+  OperationsPrivateController,
+} from './operations.controller';
+import { ServiceRequestsController } from '../site-source/service-requests.controller';
 
 jest.setTimeout(900000);
 const secret = 'local-operations-test-secret-32-characters';
@@ -71,6 +79,7 @@ describe('Operations with real replica-set transactions', () => {
   let bookings: OperationsBookings;
   let support: OperationsSupport;
   let payments: OperationsPayments;
+  let officeServices: OfficeServicesService;
   beforeAll(async () => {
     mongo = await MongoMemoryReplSet.create({
       binary: {
@@ -83,11 +92,25 @@ describe('Operations with real replica-set transactions', () => {
     await store.onModuleInit();
     const cfg: any = { piiSecret: () => secret, environment: () => 'local' };
     identity = new OperationsIdentity(store, {} as any, {} as any, cfg);
-    hours = new OperationsHours(store, identity);
+    officeServices = new OfficeServicesService(
+      connection,
+      connection.model(Office.name, OfficeSchema),
+      connection.model(User.name, UserSchema),
+      { log: jest.fn() } as any,
+    );
+    await officeServices.onModuleInit();
+    hours = new OperationsHours(store, identity, officeServices);
     const catalog = new OperationsCatalog(new ConfigService());
     jest.spyOn(catalog, 'get').mockResolvedValue(catalogData);
-    bookings = new OperationsBookings(store, identity, hours, catalog, cfg);
-    support = new OperationsSupport(store, identity);
+    bookings = new OperationsBookings(
+      store,
+      identity,
+      hours,
+      catalog,
+      cfg,
+      officeServices,
+    );
+    support = new OperationsSupport(store, identity, officeServices);
     payments = new OperationsPayments(store, bookings, catalog, cfg, {} as any);
   });
   afterAll(async () => {
@@ -95,6 +118,8 @@ describe('Operations with real replica-set transactions', () => {
     await mongo?.stop();
   });
   beforeEach(async () => {
+    await connection.db!.collection('offices').deleteMany({});
+    await connection.db!.collection('office_service_prices').deleteMany({});
     for (const col of await connection.db!.collections())
       if (col.collectionName.startsWith('mstyle_')) await col.deleteMany({});
     await store
@@ -127,6 +152,634 @@ describe('Operations with real replica-set transactions', () => {
         contacts: { displayName: 'Резидент' },
       }),
     });
+  });
+  async function manualOffice(category = 'standard') {
+    const _id = new Types.ObjectId(),
+      property = new Types.ObjectId();
+    await connection.db!.collection('offices').insertOne({
+      _id,
+      property,
+      number: '401',
+      externalId: 'tf-room:401',
+      officeFormat: category,
+      isActive: true,
+      serviceRevision: 0,
+      serviceDetails: {
+        values: { packageName: 'Текущий сервис', publicIp: '1.2.3.4' },
+        visibleFields: ['packageName', 'services'],
+        serviceOverrides: [],
+      },
+    });
+    await store
+      .canonical('profiles')
+      .updateOne(
+        { profileId: 'prf_test' },
+        { $set: { officeIds: ['tf-room:401'] } },
+      );
+    return {
+      id: String(_id),
+      property: String(property),
+      user: { role: 'admin' },
+    };
+  }
+  const manualPrice = (rules: any[], bookingRoomIds: number[] = []) => ({
+    name: 'Услуга',
+    description: '',
+    propertyId: null,
+    active: true,
+    order: 0,
+    rules,
+    bookingRoomIds,
+  });
+  const standardRule = {
+    categoryCode: 'standard',
+    show: true,
+    orderable: true,
+    mode: 'paid',
+    priceMinor: 180000,
+    unit: 'hour',
+    freeMinutes: 0,
+    conditions: 'По записи',
+  };
+  it('restricts booking lists, actions, destination rooms and counts to the administrator business center', async () => {
+    const fixture = await manualOffice();
+    await connection.db!.collection('properties').insertOne({
+      _id: new Types.ObjectId(fixture.property),
+      code: 'tf_business_center:11',
+    });
+    const catalog = {
+      ...catalogData,
+      rooms: [
+        {
+          ...catalogData.rooms[0],
+          business_center: { id: 11, name: 'Свой БЦ' },
+        },
+        {
+          ...catalogData.rooms[0],
+          id: 2,
+          business_center: { id: 22, name: 'Другой БЦ' },
+        },
+      ],
+    };
+    jest.spyOn(bookings.catalog, 'get').mockResolvedValue(catalog);
+    try {
+      const scoped: OperationsActor = {
+        ...admin,
+        role: 'bc_admin',
+        propertyIds: [fixture.property],
+      };
+      const guestInput = {
+        ...input,
+        profile_id: undefined,
+        writeoff_min: 0,
+        guest: { name: 'Гость', phone: '+79990000000' },
+      };
+      const own = await bookings.create(scoped, guestInput, 'own-center');
+      const foreign = await bookings.create(
+        admin,
+        { ...guestInput, room_id: 2 },
+        'other-center',
+      );
+      expect((await bookings.list(scoped)).items.map((b: any) => b.id)).toEqual(
+        [own.booking.id],
+      );
+      expect((await bookings.list(admin)).total).toBe(2);
+      expect(
+        (await bookings.adminCatalog(scoped)).rooms.map((r: any) => r.id),
+      ).toEqual([1]);
+      await expect(
+        bookings.detail(scoped, own.booking.id),
+      ).resolves.toMatchObject({ booking: { id: own.booking.id } });
+      await expect(
+        bookings.detail(scoped, foreign.booking.id),
+      ).rejects.toMatchObject({ status: 404 });
+      await expect(
+        bookings.action(
+          scoped,
+          foreign.booking.id,
+          'cancel',
+          { revision: 1, reason: 'Отмена' },
+          'forbidden-cancel',
+        ),
+      ).rejects.toMatchObject({ status: 404 });
+      await expect(
+        bookings.change(
+          scoped,
+          own.booking.id,
+          'edit',
+          { room_id: 2, revision: 1 },
+          'forbidden-transfer',
+        ),
+      ).rejects.toMatchObject({
+        response: { error: { code: 'room_not_found' } },
+      });
+      await expect(
+        bookings.block(
+          scoped,
+          { ...guestInput, room_id: 2, reason: 'Блокировка' },
+          'forbidden-block',
+        ),
+      ).rejects.toMatchObject({
+        response: { error: { code: 'room_not_found' } },
+      });
+      const controller = new OperationsAdminController(
+        store,
+        identity,
+        support,
+        bookings,
+        payments,
+        hours,
+      );
+      const req = {
+        user: {
+          userId: 'local-admin',
+          role: 'bc_admin',
+          propertyIds: [fixture.property],
+          permissions: admin.permissions,
+        },
+      };
+      expect((await controller.counts(req)).bookings).toBe(1);
+      await expect(
+        controller.availability(req, { room_id: 2, date: '2099-10-20' }),
+      ).rejects.toMatchObject({ status: 404 });
+      const unassigned = { ...scoped, propertyIds: [] };
+      expect((await bookings.list(unassigned)).total).toBe(0);
+      expect((await bookings.adminCatalog(unassigned)).rooms).toEqual([]);
+      const comment = { revision: 1, comment_admin: 'Уточнение' };
+      await bookings.action(
+        scoped,
+        own.booking.id,
+        'comment',
+        comment,
+        'own-center-comment',
+      );
+      await store.collection('settings').insertOne({
+        key: 'invoices',
+        issuers: [{ id: 1, name: 'Получатель' }],
+      });
+      const invoice = {
+        revision: 2,
+        invoice_party: {
+          profile_type: 'individual',
+          values: { individual: { birthDate: '1990-01-01' } },
+          email: 'test@example.test',
+        },
+      };
+      await payments.invoice(scoped, own.booking.id, invoice, 'own-invoice');
+      await bookings.action(
+        scoped,
+        own.booking.id,
+        'mark-paid',
+        { revision: 3 },
+        'own-center-payment',
+      );
+      const edit = { revision: 4, comment_client: 'Обновлённая заявка' };
+      await bookings.change(
+        scoped,
+        own.booking.id,
+        'edit',
+        edit,
+        'own-center-edit',
+      );
+      await payments.sendInvoice(
+        scoped,
+        own.booking.id,
+        { revision: 5 },
+        'own-invoice-send',
+      );
+      await expect(
+        bookings.create(scoped, guestInput, 'own-center'),
+      ).resolves.toMatchObject({ booking: { id: own.booking.id } });
+      await expect(
+        bookings.create(unassigned, guestInput, 'own-center'),
+      ).rejects.toMatchObject({ status: 404 });
+      await expect(
+        bookings.action(
+          unassigned,
+          own.booking.id,
+          'comment',
+          comment,
+          'own-center-comment',
+        ),
+      ).rejects.toMatchObject({ status: 404 });
+      await expect(
+        bookings.change(
+          unassigned,
+          own.booking.id,
+          'edit',
+          edit,
+          'own-center-edit',
+        ),
+      ).rejects.toMatchObject({ status: 404 });
+      await expect(
+        payments.invoice(unassigned, own.booking.id, invoice, 'own-invoice'),
+      ).rejects.toMatchObject({ status: 404 });
+      await expect(
+        payments.sendInvoice(
+          unassigned,
+          own.booking.id,
+          { revision: 5 },
+          'own-invoice-send',
+        ),
+      ).rejects.toMatchObject({ status: 404 });
+    } finally {
+      jest.spyOn(bookings.catalog, 'get').mockResolvedValue(catalogData);
+    }
+  });
+  it.each(['balance', 'cash'])(
+    'rejects employee hour spending through the shared %s creation operation',
+    async (method) => {
+      await store
+        .canonical('memberships')
+        .updateOne(
+          { subject: resident.subject },
+          { $set: { role: 'employee' } },
+        );
+      const controller = Object.create(OperationsPrivateController.prototype);
+      controller.bookings = bookings;
+      controller.payments = payments;
+      await expect(
+        controller.dispatch(
+          resident,
+          {
+            action: 'booking.create',
+            input: { ...input, payment_method: method },
+          },
+          'employee-debit-' + method,
+        ),
+      ).rejects.toMatchObject({
+        status: 403,
+        response: { error: { code: 'balance_not_available_for_employee' } },
+      });
+      expect(await store.collection('bookings').countDocuments()).toBe(0);
+      expect(
+        await store
+          .collection('hours_ledger')
+          .countDocuments({ type: 'debit' }),
+      ).toBe(0);
+      const cash = await bookings.create(
+        resident,
+        { ...input, writeoff_min: 0 },
+        'employee-without-hours',
+      );
+      expect(cash.booking.writeoff_min).toBe(0);
+    },
+  );
+  it('rejects cross-center access and adjustment of resident hours', async () => {
+    const fixture = await manualOffice();
+    const scoped: OperationsActor = {
+      ...admin,
+      role: 'bc_admin',
+      propertyIds: [String(new Types.ObjectId())],
+    };
+    await expect(hours.read(scoped, 'prf_test')).rejects.toMatchObject({
+      status: 403,
+    });
+    await expect(
+      hours.adjust(
+        scoped,
+        'prf_test',
+        { amount_min: 30, type: 'debit', reason: 'Корректировка', revision: 1 },
+        'foreign-hours',
+      ),
+    ).rejects.toMatchObject({ status: 403 });
+    expect(await store.collection('hours_ledger').countDocuments()).toBe(0);
+    const allowed = { ...scoped, propertyIds: [fixture.property] };
+    const current = await hours.read(allowed, 'prf_test');
+    expect(current).toHaveProperty('account');
+    await expect(
+      hours.adjust(
+        { ...allowed, permissions: ['admin.panel', 'resident_hours.adjust'] },
+        'prf_test',
+        {
+          amount_min: 30,
+          type: 'credit',
+          reason: 'Корректировка своего БЦ',
+          revision: current.account!.revision,
+        },
+        'own-hours-only-permission',
+      ),
+    ).resolves.toHaveProperty('balance_after_min');
+  });
+  it('lets the ticket owner download an admin attachment through the resident route and rejects other residents', async () => {
+    await store
+      .canonical('identities')
+      .updateOne(
+        { subject: resident.subject },
+        { $set: { userId: 'owner-user' } },
+      );
+    await store.canonical('identities').insertOne({
+      userId: 'other-user',
+      subject: 'usr_other',
+      identityStatus: 'active',
+      displayName: 'Другой клиент',
+    });
+    const created = await support.create(
+      resident,
+      {
+        topic_key: 'services',
+        subject: 'Обслуживание',
+        message_text: 'Нужна инструкция',
+      },
+      'ticket-file',
+    );
+    const file = await support.upload(
+      admin,
+      {
+        name: 'instruction.txt',
+        base64: Buffer.from('Инструкция').toString('base64'),
+      },
+      'admin-file',
+    );
+    await support.reply(
+      admin,
+      created.ticket.id,
+      {
+        message_text: 'Инструкция во вложении',
+        attachment_ids: [file.attachment_id],
+        revision: created.ticket.revision,
+      },
+      'admin-file-reply',
+    );
+    const controller = new ServiceRequestsController(identity, support);
+    const response = { set: jest.fn().mockReturnThis(), send: jest.fn() };
+    const user = (userId: string) => ({
+      user: { userId, permissions: ['requests.view_own'] },
+    });
+    await controller.download(
+      user('owner-user'),
+      String(file.attachment_id),
+      response as any,
+    );
+    expect(response.send).toHaveBeenCalledWith(Buffer.from('Инструкция'));
+    await expect(
+      controller.download(
+        user('other-user'),
+        String(file.attachment_id),
+        response as any,
+      ),
+    ).rejects.toMatchObject({ status: 404 });
+  });
+  it('enforces office visibility, business-center scope and optimistic revisions', async () => {
+    const fixture = await manualOffice('standard_plus');
+    const office = await connection
+      .db!.collection('offices')
+      .findOne({ _id: new Types.ObjectId(fixture.id) });
+    const features = await officeServices.features(office);
+    expect(features.details).toEqual({ packageName: 'Текущий сервис' });
+    expect(features.category).toBeNull();
+    const owner = new Types.ObjectId(),
+      employee = new Types.ObjectId();
+    await connection
+      .db!.collection('users')
+      .insertMany([{ _id: owner }, { _id: employee, parentTenantId: owner }]);
+    await connection
+      .db!.collection('offices')
+      .updateOne(
+        { _id: new Types.ObjectId(fixture.id) },
+        { $set: { tenantId: owner, tenantIds: [owner] } },
+      );
+    expect(
+      (
+        await officeServices.tenantOffice(fixture.id, {
+          userId: String(employee),
+        })
+      ).office.details,
+    ).toEqual({ packageName: 'Текущий сервис' });
+    await expect(
+      officeServices.tenantOffice(fixture.id, {
+        userId: String(new Types.ObjectId()),
+      }),
+    ).rejects.toThrow('Офис не найден');
+    await expect(
+      officeServices.adminOffice(fixture.id, {
+        role: 'bc_admin',
+        propertyIds: [],
+      }),
+    ).rejects.toThrow('Нет доступа');
+    await expect(
+      officeServices.adminOffice(fixture.id, {
+        role: 'bc_admin',
+        propertyIds: [fixture.property],
+      }),
+    ).resolves.toBeDefined();
+    const value = {
+      details: {
+        ...office!.serviceDetails,
+        visibleFields: ['category', 'publicIp'],
+      },
+      revision: 0,
+    };
+    const race = await Promise.allSettled([
+      officeServices.saveOffice(fixture.id, value, fixture.user),
+      officeServices.saveOffice(fixture.id, value, fixture.user),
+    ]);
+    expect(race.filter((r) => r.status === 'fulfilled')).toHaveLength(1);
+    expect(race.filter((r) => r.status === 'rejected')).toHaveLength(1);
+    await expect(
+      officeServices.saveOffice(
+        fixture.id,
+        { ...value, revision: 1, officeFormat: 'vip' },
+        fixture.user,
+      ),
+    ).rejects.toThrow('сайте-источнике');
+  });
+  it('creates an office-specific order once and preserves its manual price', async () => {
+    const fixture = await manualOffice();
+    const { service } = await officeServices.savePrice(
+      null,
+      manualPrice([standardRule]),
+      fixture.user,
+    );
+    const order = {
+      topic_key: 'services',
+      subject: 'Заказать услугу',
+      message_text: 'Нужна услуга для офиса',
+      office_id: fixture.id,
+      service_id: service.id,
+      quantity: 2,
+    };
+    const first = await support.create(resident, order, 'manual-service-order');
+    expect(first.ticket.service_order.totalAmountMinor).toBe(360000);
+    expect(first.ticket.office_id).toBe(fixture.id);
+    await officeServices.savePrice(
+      service.id,
+      {
+        ...manualPrice([{ ...standardRule, priceMinor: 200000 }]),
+        revision: 1,
+      },
+      fixture.user,
+    );
+    const retry = await support.create(resident, order, 'manual-service-order');
+    expect(retry.ticket.id).toBe(first.ticket.id);
+    expect(retry.ticket.service_order.totalAmountMinor).toBe(360000);
+    expect(
+      (await support.detail(admin, first.ticket.id)).ticket.office_category
+        .code,
+    ).toBe('standard');
+    expect(
+      (await support.detail(resident, first.ticket.id)).ticket.office_category,
+    ).toBeNull();
+    await expect(
+      support.detail(
+        { ...admin, role: 'bc_admin', propertyIds: [] },
+        first.ticket.id,
+      ),
+    ).rejects.toMatchObject({ status: 403 });
+    await expect(
+      support.create(
+        resident,
+        { ...order, office_id: String(new Types.ObjectId()) },
+        'other-office',
+      ),
+    ).rejects.toThrow('Офис');
+    await connection
+      .db!.collection('offices')
+      .updateOne(
+        { _id: new Types.ObjectId(fixture.id) },
+        { $set: { officeFormat: 'standard_plus' } },
+      );
+    await expect(
+      support.create(resident, order, 'unfilled-category'),
+    ).rejects.toThrow('недоступна');
+  });
+  it('calculates manual VIP minutes and blocks a stale price before booking', async () => {
+    const fixture = await manualOffice('vip');
+    const { service } = await officeServices.savePrice(
+      null,
+      manualPrice(
+        [
+          {
+            ...standardRule,
+            categoryCode: 'vip',
+            mode: 'quota',
+            freeMinutes: 120,
+          },
+        ],
+        [1],
+      ),
+      fixture.user,
+    );
+    const draft = {
+      ...input,
+      office_id: fixture.id,
+      writeoff_min: 120,
+      segments: [{ date: '2099-10-20', start_minute: 600, end_minute: 780 }],
+    };
+    const quote = await bookings.quote(resident, draft);
+    expect(quote.total_amount_minor).toBe(180000);
+    expect(
+      await officeServices.monthlyHours({ officeIds: ['tf-room:401'] }),
+    ).toBe(120);
+    await officeServices.savePrice(
+      service.id,
+      {
+        ...manualPrice(
+          [
+            {
+              ...standardRule,
+              categoryCode: 'vip',
+              mode: 'quota',
+              freeMinutes: 120,
+              priceMinor: 200000,
+            },
+          ],
+          [1],
+        ),
+        revision: 1,
+      },
+      fixture.user,
+    );
+    await expect(
+      bookings.create(
+        resident,
+        { ...draft, pricing_fingerprint: quote.pricing_fingerprint },
+        'stale-manual-price',
+      ),
+    ).rejects.toThrow();
+    const currentQuote = await bookings.quote(resident, draft);
+    const result = await bookings.create(
+      resident,
+      { ...draft, pricing_fingerprint: currentQuote.pricing_fingerprint },
+      'vip-manual-booking',
+    );
+    expect(result.booking.total_amount_minor).toBe(200000);
+    expect(result.booking.office_id).toBe(fixture.id);
+    expect(
+      (await hours.read(resident, 'prf_test')).account!.available_balance_min,
+    ).toBe(0);
+    await bookings.customerCancel(
+      resident,
+      result.booking.id,
+      {},
+      'vip-manual-cancel',
+    );
+    expect(
+      (await hours.read(resident, 'prf_test')).account!.available_balance_min,
+    ).toBe(120);
+  });
+  it('does not grant another category the VIP quota or expose unpublished room prices', async () => {
+    const fixture = await manualOffice('standard_plus');
+    const { service } = await officeServices.savePrice(
+      null,
+      manualPrice(
+        [
+          {
+            ...standardRule,
+            categoryCode: 'vip',
+            mode: 'quota',
+            freeMinutes: 120,
+          },
+        ],
+        [1],
+      ),
+      fixture.user,
+    );
+    expect(
+      await officeServices.monthlyHours({ officeIds: ['tf-room:401'] }),
+    ).toBe(0);
+    expect(
+      (
+        await bookings.pricedCatalog(resident, {
+          ...input,
+          office_id: fixture.id,
+        })
+      ).rooms,
+    ).toHaveLength(0);
+    await officeServices.savePrice(
+      service.id,
+      { ...manualPrice([standardRule], [1]), revision: 1 },
+      fixture.user,
+    );
+    await connection
+      .db!.collection('offices')
+      .updateOne(
+        { _id: new Types.ObjectId(fixture.id) },
+        { $set: { officeFormat: 'standard' } },
+      );
+    await expect(
+      bookings.quote(resident, {
+        ...input,
+        office_id: fixture.id,
+        writeoff_min: 30,
+      }),
+    ).rejects.toMatchObject({
+      response: { error: { code: 'hours_not_available' } },
+    });
+    await connection
+      .db!.collection('offices')
+      .updateOne(
+        { _id: new Types.ObjectId(fixture.id) },
+        { $set: { 'serviceDetails.visibleFields': [] } },
+      );
+    expect(
+      (
+        await bookings.pricedCatalog(resident, {
+          ...input,
+          office_id: fixture.id,
+        })
+      ).rooms,
+    ).toHaveLength(0);
   });
   it('keeps original prices and services when extending after a catalogue price change', async () => {
     const a = await bookings.create(

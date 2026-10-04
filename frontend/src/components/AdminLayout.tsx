@@ -58,6 +58,12 @@ const NAV = [
     permission: 'admin.offices',
   },
   {
+    href: '/admin/office-services',
+    label: 'Прайс и категории',
+    icon: DoorOpen,
+    permission: 'admin.offices',
+  },
+  {
     href: '/admin/permissions',
     label: 'Права и пропуска',
     icon: KeyRound,

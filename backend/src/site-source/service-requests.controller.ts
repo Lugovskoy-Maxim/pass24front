@@ -3,15 +3,18 @@ import {
   Controller,
   Get,
   Headers,
+  Header,
   Param,
   Patch,
   Post,
   Req,
+  Res,
   UseFilters,
   UseGuards,
 } from '@nestjs/common';
 import { AuthGuard } from '@nestjs/passport';
 import { randomUUID } from 'crypto';
+import type { Response } from 'express';
 import { OperationsIdentity } from '../operations/operations.identity';
 import { OperationsSupport } from '../operations/operations.support';
 import { OperationsExceptionFilter } from '../operations/operations.controller';
@@ -73,6 +76,8 @@ export class ServiceRequestsController {
       office_id: row.office_id || null,
       office_ids: row.office_ids || [],
       office_label: row.office_label || null,
+      office_category: row.office_category || null,
+      service_order: row.service_order || null,
       raw: { ...row },
     };
   }
@@ -87,6 +92,25 @@ export class ServiceRequestsController {
       items: result.items.map((row) => this.ticket(row)),
       total: result.total,
     };
+  }
+  @Get('attachments/:id')
+  @Header('Cache-Control', 'no-store')
+  async download(
+    @Req() req: any,
+    @Param('id') id: string,
+    @Res() response: Response,
+  ) {
+    const file = await this.support.download(
+      await this.actor(req.user),
+      integer(id, 'id', 1),
+    );
+    response
+      .set({
+        'Content-Type': file.mime,
+        'X-Content-Type-Options': 'nosniff',
+        'Content-Disposition': `attachment; filename*=UTF-8''${encodeURIComponent(file.name)}`,
+      })
+      .send(file.bytes);
   }
   @Get(':id')
   async get(@Param('id') id: string, @Req() req: any) {
@@ -132,7 +156,14 @@ export class ServiceRequestsController {
       )[dto.topic] || dto.topic;
     const result = await this.support.create(
       actor,
-      { topic_key: topic, subject: dto.subject, message_text: dto.body },
+      {
+        topic_key: topic,
+        subject: dto.subject,
+        message_text: dto.body,
+        office_id: dto.officeId,
+        service_id: dto.serviceId,
+        quantity: dto.quantity,
+      },
       key || randomUUID(),
     );
     return {

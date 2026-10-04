@@ -1,4 +1,5 @@
-import { Injectable } from '@nestjs/common';
+import { ForbiddenException, Injectable, Optional } from '@nestjs/common';
+import { OfficeServicesService } from '../office-services/office-services.service';
 import { GridFSBucket, ObjectId, ClientSession } from 'mongodb';
 import { OperationsStore } from './operations.store';
 import { OperationsIdentity } from './operations.identity';
@@ -78,6 +79,7 @@ export class OperationsSupport {
   constructor(
     readonly store: OperationsStore,
     private readonly identities: OperationsIdentity,
+    @Optional() private readonly officeServices?: OfficeServicesService,
   ) {}
   private bucket() {
     return new GridFSBucket(this.store.connection.db!, {
@@ -88,6 +90,16 @@ export class OperationsSupport {
     if (!row) fail('not_found', 'Обращение не найдено.', 404);
     if (actor.kind === 'admin') {
       requirePermission(actor, 'support.manage');
+      if (actor.role && actor.role !== 'admin') {
+        const offices = await this.officeDirectory(
+          row.office_id ? [row.office_id] : row.office_ids || [],
+        );
+        if (
+          !offices.length ||
+          !offices.some((o) => actor.propertyIds?.includes(o.propertyId))
+        )
+          fail('forbidden', 'Нет доступа к офису обращения.', 403);
+      }
       return;
     }
     if (
@@ -125,16 +137,35 @@ export class OperationsSupport {
           .includes(term),
       );
     }
-    const total = items.length;
+    let presented = await Promise.all(
+      items.map((row) => this.present(row, actor)),
+    );
+    if (actor.kind === 'admin' && actor.role && actor.role !== 'admin')
+      presented = presented.filter((row) =>
+        row.offices?.some((o: any) =>
+          actor.propertyIds?.includes(o.propertyId),
+        ),
+      );
+    if (query.office_id)
+      presented = presented.filter(
+        (row) =>
+          row.office_id === query.office_id ||
+          row.offices?.some((o: any) => o.id === query.office_id),
+      );
+    if (query.category)
+      presented = presented.filter((row) =>
+        row.offices?.some((o: any) => o.category?.code === query.category),
+      );
+    if (query.property_id)
+      presented = presented.filter((row) =>
+        row.offices?.some((o: any) => o.propertyId === query.property_id),
+      );
+    const total = presented.length;
     const unread = items.filter(
       (row) => (row.last_support_seq || 0) > (row.customer_read_seq || 0),
     ).length;
     return {
-      items: await Promise.all(
-        items
-          .slice((page - 1) * perPage, page * perPage)
-          .map((row) => this.present(row)),
-      ),
+      items: presented.slice((page - 1) * perPage, page * perPage),
       total,
       page,
       per_page: perPage,
@@ -143,7 +174,7 @@ export class OperationsSupport {
       statuses: SUPPORT_STATUSES,
     };
   }
-  async present(row: any) {
+  async present(row: any, actor?: OperationsActor) {
     const safe = { ...row };
     delete safe._id;
     const profile = safe.profile_id
@@ -164,11 +195,11 @@ export class OperationsSupport {
           .filter(Boolean),
       ),
     );
-    const office =
-      safe.office || (await this.officeDirectory(officeIds))[0] || null;
-    const offices = safe.office
-      ? [safe.office]
-      : await this.officeDirectory(officeIds);
+    const offices = await this.officeDirectory(
+      safe.office_id ? [String(safe.office_id)] : officeIds,
+      actor?.kind === 'admin',
+    );
+    const office = offices.length === 1 ? offices[0] : safe.office || null;
     const officeLabels = offices
       .map((item) => item.label || item.number)
       .filter(Boolean);
@@ -177,6 +208,8 @@ export class OperationsSupport {
       office_ids: officeIds,
       office_id: safe.office_id || office?.id || null,
       office,
+      offices,
+      office_category: office?.category || null,
       office_label: safe.office_label || officeLabels.join(', ') || null,
       office_labels: officeLabels,
       needs_action: supportNeedsAction(row),
@@ -188,13 +221,33 @@ export class OperationsSupport {
     };
   }
 
-  private async officeDirectory(officeIds: string[]) {
+  private async officeDirectory(officeIds: string[], admin = true) {
     if (!officeIds.length) return [];
     const offices = await this.store.connection
       .db!.collection<any>('offices')
       .find(
-        { externalId: { $in: officeIds } },
-        { projection: { _id: 1, externalId: 1, number: 1, property: 1 } },
+        {
+          $or: [
+            { externalId: { $in: officeIds } },
+            {
+              _id: {
+                $in: officeIds
+                  .filter((id) => /^[a-f\d]{24}$/i.test(id))
+                  .map((id) => new ObjectId(id)),
+              },
+            },
+          ],
+        },
+        {
+          projection: {
+            _id: 1,
+            externalId: 1,
+            number: 1,
+            property: 1,
+            officeFormat: 1,
+            'serviceDetails.visibleFields': 1,
+          },
+        },
       )
       .toArray();
     const propertyIds = offices
@@ -209,13 +262,21 @@ export class OperationsSupport {
     const propertyNames = new Map(
       properties.map((property) => [String(property._id), property.name]),
     );
-    return offices.map((office) => ({
-      id: String(office._id),
-      externalId: office.externalId,
-      number: office.number,
-      businessCenterName: propertyNames.get(String(office.property)),
-      label: `${office.number}${propertyNames.get(String(office.property)) ? ` · ${propertyNames.get(String(office.property))}` : ''}`,
-    }));
+    return Promise.all(
+      offices.map(async (office) => ({
+        id: String(office._id),
+        externalId: office.externalId,
+        number: office.number,
+        propertyId: String(office.property),
+        category:
+          this.officeServices &&
+          (admin || office.serviceDetails?.visibleFields?.includes('category'))
+            ? await this.officeServices.category(office.officeFormat)
+            : null,
+        businessCenterName: propertyNames.get(String(office.property)),
+        label: `${office.number}${propertyNames.get(String(office.property)) ? ` · ${propertyNames.get(String(office.property))}` : ''}`,
+      })),
+    );
   }
   async detail(actor: OperationsActor, id: number, session?: ClientSession) {
     const row = await this.store
@@ -234,7 +295,7 @@ export class OperationsSupport {
       author: message.author_label,
     }));
     return {
-      ticket: await this.present(row),
+      ticket: await this.present(row, actor),
       messages: compatibleMessages,
       can_reply: !['completed', 'cancelled'].includes(row.status),
     };
@@ -356,11 +417,70 @@ export class OperationsSupport {
       'support.create',
       input,
       async (session) => {
-        const profileId =
+        let profileId =
           input.profile_id ||
           (await this.identities.profileIds(actor, session))[0] ||
           null;
-        if (profileId) await this.identities.profile(actor, profileId, session);
+        if (input.office_id && !input.profile_id && this.officeServices) {
+          for (const id of await this.identities.profileIds(actor, session)) {
+            const candidate = await this.identities.profile(actor, id, session);
+            try {
+              if (
+                await this.officeServices.officeForProfile(
+                  {
+                    ...candidate.profile,
+                    officeIds: [
+                      ...new Set([
+                        ...(candidate.profile.officeIds || []),
+                        ...(candidate.resource.officeIds || []),
+                      ]),
+                    ],
+                  },
+                  input.office_id,
+                  session,
+                )
+              ) {
+                profileId = id;
+                break;
+              }
+            } catch (error) {
+              if (!(error instanceof ForbiddenException)) throw error;
+            }
+          }
+        }
+        const context = profileId
+          ? await this.identities.profile(actor, profileId, session)
+          : null;
+        const profile = context
+          ? {
+              ...context.profile,
+              officeIds: [
+                ...new Set([
+                  ...(context.profile.officeIds || []),
+                  ...(context.resource.officeIds || []),
+                ]),
+              ],
+            }
+          : null;
+        const office =
+          profile && this.officeServices
+            ? await this.officeServices.officeForProfile(
+                profile,
+                input.office_id,
+                session,
+              )
+            : null;
+        if (input.office_id && !office)
+          fail('forbidden', 'Офис недоступен.', 403);
+        const serviceOrder =
+          input.service_id && this.officeServices
+            ? await this.officeServices.serviceOrder(
+                office,
+                input.service_id,
+                input.quantity || 1,
+                session,
+              )
+            : null;
         const bookingId = input.booking_id
           ? integer(input.booking_id, 'booking_id', 1)
           : null;
@@ -382,6 +502,11 @@ export class OperationsSupport {
             id,
             owner_subject: actor.subject,
             profile_id: profileId,
+            office_id: office ? String(office._id) : null,
+            office_ids: office
+              ? [office.externalId || String(office._id)]
+              : profile?.officeIds || [],
+            service_order: serviceOrder,
             requester_name: identity?.displayName || 'Резидент',
             booking_id: bookingId,
             topic_key: topic,

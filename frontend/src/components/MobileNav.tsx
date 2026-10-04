@@ -6,7 +6,14 @@
  */
 import Link from 'next/link';
 import { usePathname } from 'next/navigation';
-import { List, Plus, ClipboardList, User, Settings } from 'lucide-react';
+import {
+  List,
+  Plus,
+  ClipboardList,
+  User,
+  Settings,
+  MessageSquare,
+} from 'lucide-react';
 import { useAuth } from '@/lib/auth';
 import { useConfig } from '@/hooks/useConfig';
 import {
@@ -49,6 +56,16 @@ export function MobileNav() {
       show: canUseReception(user),
     },
     { href: '/profile', label: L.nav.profile, icon: User, show: true },
+    {
+      href: '/requests',
+      label: 'Обращения',
+      icon: MessageSquare,
+      show:
+        !hasPermission(user, 'admin.panel') &&
+        (hasPermission(user, 'requests.view_own') ||
+          hasPermission(user, 'requests.create') ||
+          hasPermission(user, 'passes.view_own')),
+    },
     {
       href: '/admin',
       label: L.nav.admin,

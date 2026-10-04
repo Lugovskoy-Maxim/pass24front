@@ -257,13 +257,13 @@ export function BookingEditor({
           {segments.map((segment, i) => (
             <div
               key={i}
-              className="grid grid-cols-[minmax(0,1fr)_minmax(0,1fr)_minmax(0,1fr)_auto] gap-2"
+              className="grid grid-cols-[minmax(0,1fr)_minmax(0,1fr)_auto] sm:grid-cols-[minmax(0,1fr)_minmax(0,1fr)_minmax(0,1fr)_auto] gap-2"
             >
               <input
                 aria-label="Дата"
                 type="date"
                 required
-                className="input min-w-0"
+                className="input min-w-0 col-span-3 sm:col-span-1"
                 value={segment.date}
                 onChange={(e) =>
                   setSegments((s) =>

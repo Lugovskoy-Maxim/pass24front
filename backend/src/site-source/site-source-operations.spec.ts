@@ -2,6 +2,51 @@ import { SiteSourceService } from './site-source.service';
 import { AdminController } from '../admin/admin.controller';
 
 describe('legacy manual testing after operations cutover', () => {
+  it('keeps manual service settings through repeated MySQL category synchronization', async () => {
+    const source = Object.create(SiteSourceService.prototype);
+    const manual = {
+      values: { publicIp: '1.2.3.4' },
+      visibleFields: ['packageName'],
+      serviceOverrides: [],
+    };
+    const office = {
+      number: '401',
+      officeFormat: 'standard',
+      serviceDetails: manual,
+      serviceRevision: 7,
+      save: jest.fn(),
+    };
+    await source.applySourceToOffice(office, {
+      officeFormat: 'standard+',
+      isActive: true,
+    });
+    await source.applySourceToOffice(office, {
+      officeFormat: 'standard_plus',
+      isActive: true,
+    });
+    expect(office.officeFormat).toBe('standard_plus');
+    expect(office.serviceDetails).toBe(manual);
+    expect(office.serviceRevision).toBe(7);
+  });
+  it('preserves authored settings on merge and refuses conflicting settings', async () => {
+    const source = Object.create(SiteSourceService.prototype);
+    const manual = {
+      values: { packageName: 'VIP' },
+      visibleFields: ['packageName'],
+      serviceOverrides: [],
+    };
+    const keep = { serviceRevision: 0, save: jest.fn() };
+    const drop = { serviceRevision: 3, serviceDetails: manual };
+    await source.mergeOfficeDocs(keep, drop);
+    expect((keep as any).serviceDetails).toBe(manual);
+    expect(keep.serviceRevision).toBe(3);
+    await expect(
+      source.mergeOfficeDocs(keep, {
+        serviceRevision: 4,
+        serviceDetails: { ...manual, visibleFields: [] },
+      }),
+    ).rejects.toThrow('различаются');
+  });
   const service = (state: any) => {
     const value = Object.create(SiteSourceService.prototype);
     value.settings = {

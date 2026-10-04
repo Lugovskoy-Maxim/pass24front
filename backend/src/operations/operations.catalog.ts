@@ -81,7 +81,7 @@ export class OperationsCatalog {
       fail('catalog_unavailable', 'Некорректный ответ каталога.', 503);
     return data;
   }
-  quote(catalog: any, input: any) {
+  quote(catalog: any, input: any, previousWriteoffMin = 0) {
     const roomId = integer(input.room_id, 'room_id', 1);
     const room = catalog.rooms.find(
       (r: any) => r.id === roomId && r.active !== false,
@@ -114,6 +114,16 @@ export class OperationsCatalog {
       input.payment_method === 'balance'
         ? duration
         : integer(input.writeoff_min || 0, 'writeoff_min');
+    if (
+      requestedHours > previousWriteoffMin &&
+      room.office_service &&
+      room.office_service.mode !== 'quota'
+    )
+      fail(
+        'hours_not_available',
+        'Для категории этого офиса бесплатные минуты не предусмотрены.',
+        400,
+      );
     if (requestedHours > duration || requestedHours % (cfg.slot_step_min || 30))
       fail(
         'validation_error',

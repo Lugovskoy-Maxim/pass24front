@@ -1,4 +1,5 @@
-import { Injectable } from '@nestjs/common';
+import { Injectable, Optional } from '@nestjs/common';
+import { OfficeServicesService } from '../office-services/office-services.service';
 import { ClientSession } from 'mongodb';
 import { randomUUID } from 'crypto';
 import { OperationsStore } from './operations.store';
@@ -40,6 +41,7 @@ export class OperationsBookings {
     readonly hours: OperationsHours,
     readonly catalog: OperationsCatalog,
     private readonly config: MstyleV2Config,
+    @Optional() private readonly officeServices?: OfficeServicesService,
   ) {}
 
   private async attendees(
@@ -85,8 +87,10 @@ export class OperationsBookings {
   }
   async list(actor: OperationsActor, query: any = {}) {
     const filter: any = {};
-    if (actor.kind === 'admin') requirePermission(actor, 'bookings.manage');
-    else if (actor.kind === 'resident')
+    if (actor.kind === 'admin') {
+      requirePermission(actor, 'bookings.manage');
+      Object.assign(filter, await this.identities.bookingFilter(actor));
+    } else if (actor.kind === 'resident')
       filter.$or = [
         { owner_subject: actor.subject },
         { profile_id: { $in: await this.identities.profileIds(actor) } },
@@ -303,8 +307,50 @@ export class OperationsBookings {
       catalog_version: catalog.version,
     };
   }
+  async adminCatalog(actor: OperationsActor) {
+    requirePermission(actor, 'bookings.manage');
+    const catalog = await this.catalog.get();
+    const scope = await this.identities.bookingScope(actor);
+    return scope
+      ? {
+          ...catalog,
+          rooms: catalog.rooms.filter(
+            (room: any) =>
+              scope.roomIds.includes(room.id) ||
+              scope.businessCenterIds.includes(room.business_center?.id),
+          ),
+        }
+      : catalog;
+  }
+  async pricedCatalog(actor: OperationsActor, input: any) {
+    const catalog =
+      actor.kind === 'admin'
+        ? await this.adminCatalog(actor)
+        : await this.catalog.get();
+    if (!input.profile_id || !this.officeServices) return catalog;
+    const { profile, resource } = await this.identities.profile(
+      actor,
+      input.profile_id,
+    );
+    return this.officeServices.bookingCatalog(
+      catalog,
+      {
+        ...profile,
+        officeIds: [
+          ...new Set([
+            ...(profile.officeIds || []),
+            ...(resource.officeIds || []),
+          ]),
+        ],
+      },
+      input.office_id,
+    );
+  }
   async quote(actor: OperationsActor, input: any) {
-    const quote = this.catalog.quote(await this.catalog.get(), input);
+    const quote = this.catalog.quote(
+      await this.pricedCatalog(actor, input),
+      input,
+    );
     if (input.profile_id) {
       const { resource } = await this.identities.profile(
         actor,
@@ -359,7 +405,15 @@ export class OperationsBookings {
       'booking.create',
       input,
     );
-    if (receipt) return receipt.result;
+    if (receipt) {
+      await this.identities.assertBooking(
+        actor,
+        await this.store.collection('bookings').findOne({
+          id: receipt.result.booking.id,
+        }),
+      );
+      return receipt.result;
+    }
     if (
       ['postpay', 'cash', 'invoice'].includes(input.payment_method) &&
       input.profile_id
@@ -372,8 +426,11 @@ export class OperationsBookings {
     }
     if (!METHODS.includes(input.payment_method))
       fail('validation_error', 'Выберите способ оплаты.', 400);
-    const catalog = await this.catalog.get();
-    const quote = this.catalog.quote(catalog, input);
+    const catalog = await this.pricedCatalog(actor, input);
+    const quote = {
+      ...this.catalog.quote(catalog, input),
+      office_id: input.office_id || catalog.office_id || null,
+    };
     if (
       quote.segments.some(
         (s) =>
@@ -414,6 +471,12 @@ export class OperationsBookings {
             'insufficient_balance',
             'Резидентские часы доступны только резидентам.',
             400,
+          );
+        if (quote.writeoff_min)
+          await this.identities.assertCanSpendHours(
+            actor,
+            party.profile_id!,
+            session,
           );
         const id = await this.store.nextId('bookings', session);
         const payment = this.initialPayment(
@@ -599,6 +662,10 @@ export class OperationsBookings {
     requirePermission(
       actor,
       action === 'mark-paid' ? 'bookings.finance' : 'bookings.manage',
+    );
+    await this.identities.assertBooking(
+      actor,
+      await this.store.collection('bookings').findOne({ id }),
     );
     return this.store.command(
       actor,
@@ -806,6 +873,10 @@ export class OperationsBookings {
     input: any,
     key: string,
   ) {
+    await this.identities.assertBooking(
+      actor,
+      await this.store.collection('bookings').findOne({ id }),
+    );
     return this.store.command(
       actor,
       key,
@@ -859,6 +930,8 @@ export class OperationsBookings {
     key: string,
   ) {
     if (actor.kind === 'admin') requirePermission(actor, 'bookings.manage');
+    const original = await this.store.collection('bookings').findOne({ id });
+    await this.identities.assertBooking(actor, original);
     const receipt = await this.store.receipt(
       actor,
       key,
@@ -866,8 +939,6 @@ export class OperationsBookings {
       input,
     );
     if (receipt) return receipt.result;
-    const original = await this.store.collection('bookings').findOne({ id });
-    await this.identities.assertBooking(actor, original);
     const data = {
       ...original,
       ...input,
@@ -904,10 +975,11 @@ export class OperationsBookings {
       // Avoid the catalog's full-balance shortcut when only an extension is paid in hours.
       if (data.payment_method === 'balance') data.payment_method = 'cash';
     }
-    const catalog = await this.catalog.get();
+    const catalog = await this.pricedCatalog(actor, data);
     const quote = this.catalog.quote(
       catalog,
       kind === 'extend' ? { ...data, services: [] } : data,
+      original.hours_debited_min || 0,
     );
     if (kind === 'extend' || kind === 'transfer') {
       // Charge only the positive adjustment, retaining all previously applied prices.
@@ -1153,6 +1225,7 @@ export class OperationsBookings {
         room_id: original.room_id,
         services: original.services,
         profile_id: original.profile_id,
+        office_id: original.office_id,
         payment_method: original.payment_method,
         comment_client: original.comment_client,
         ...input,
@@ -1163,7 +1236,7 @@ export class OperationsBookings {
   }
   async block(actor: OperationsActor, input: any, key: string) {
     requirePermission(actor, 'bookings.manage');
-    const quote = this.catalog.quote(await this.catalog.get(), {
+    const quote = this.catalog.quote(await this.adminCatalog(actor), {
       ...input,
       payment_method: 'cash',
       services: [],

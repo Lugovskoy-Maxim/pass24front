@@ -1,3 +1,6 @@
+'use client';
+import { OfficeCategoryBadge } from './OfficeCategoryBadge';
+import { useOfficeCategories } from '@/hooks/useOfficeCategories';
 import {
   formatOfficeDate,
   officeAvailabilityLabel,
@@ -18,6 +21,15 @@ type OfficeFlags = {
 };
 
 export function OfficeStatusFlags({ office }: { office: OfficeFlags }) {
+  const categories = useOfficeCategories();
+  const code = [
+    'standard+',
+    'standard +',
+    'standard-plus',
+    'standart_plus',
+  ].includes(office.officeFormat || '')
+    ? 'standard_plus'
+    : office.officeFormat;
   const chips: Array<{
     key: string;
     text: string;
@@ -48,7 +60,6 @@ export function OfficeStatusFlags({ office }: { office: OfficeFlags }) {
   const room = officeRoomStatusLabel(office.roomStatus);
   if (room) chips.push({ key: 'room', text: room });
   const format = officeFormatLabel(office.officeFormat);
-  if (format) chips.push({ key: 'fmt', text: format });
   const tenantCount = office.tenantIds?.length
     ? office.tenantIds.length
     : office.tenantId
@@ -64,9 +75,17 @@ export function OfficeStatusFlags({ office }: { office: OfficeFlags }) {
     chips.push({ key: 'tenant', text: 'Есть арендатор в Pass' });
   }
 
-  if (!chips.length) return null;
+  if (!chips.length && !format) return null;
   return (
     <div className="flex flex-wrap gap-1 mt-1">
+      <OfficeCategoryBadge
+        category={
+          categories.find((c) => c.code === code) ||
+          (format
+            ? { code: code || '', name: format, color: '#64748b', order: 1000 }
+            : null)
+        }
+      />
       {chips.map((chip) => (
         <span
           key={chip.key}

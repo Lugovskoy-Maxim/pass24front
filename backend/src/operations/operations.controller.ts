@@ -46,7 +46,6 @@ import {
   integer,
   normalizeSegments,
   OperationsActor,
-  supportNeedsAction,
 } from './operations.rules';
 
 @Catch()
@@ -102,41 +101,25 @@ export class OperationsAdminController {
   @Header('Cache-Control', 'no-store')
   async counts(@Req() req: any) {
     const permissions: string[] = req.user.permissions || [];
+    const actor = await this.identity.nativeActor(req.user);
     const bookings = permissions.includes('bookings.manage')
       ? (
           await this.store
             .collection('bookings')
-            .find(
-              {},
-              {
-                projection: {
-                  status: 1,
-                  payment_status: 1,
-                  payment_method: 1,
-                  expires_at: 1,
-                  requires_attention: 1,
-                },
+            .find(await this.identity.bookingFilter(actor), {
+              projection: {
+                status: 1,
+                payment_status: 1,
+                payment_method: 1,
+                expires_at: 1,
+                requires_attention: 1,
               },
-            )
+            })
             .toArray()
         ).filter(bookingNeedsAction).length
       : 0;
     const support = permissions.includes('support.manage')
-      ? (
-          await this.store
-            .collection('tickets')
-            .find(
-              {},
-              {
-                projection: {
-                  status: 1,
-                  last_customer_seq: 1,
-                  last_support_seq: 1,
-                },
-              },
-            )
-            .toArray()
-        ).filter(supportNeedsAction).length
+      ? (await this.support.list(actor, { needs_action: '1' })).total
       : 0;
     return {
       bookings,
@@ -148,13 +131,16 @@ export class OperationsAdminController {
   @Get('booking-requests/catalog')
   @Header('Cache-Control', 'no-store')
   @RequireAllPermissions('bookings.manage')
-  catalog() {
-    return this.bookings.catalog.get();
+  async catalog(@Req() req: any) {
+    return this.bookings.adminCatalog(
+      await this.identity.nativeActor(req.user),
+    );
   }
   @Get('booking-requests/profiles')
   @Header('Cache-Control', 'no-store')
   @RequireAllPermissions('bookings.manage')
-  async profiles(@Query('q') query = '') {
+  async profiles(@Req() req: any, @Query('q') query = '') {
+    const actor = await this.identity.nativeActor(req.user);
     const term = query.trim().slice(0, 100).toLowerCase();
     const profiles = await this.store
       .canonical('profiles')
@@ -162,6 +148,7 @@ export class OperationsAdminController {
       .toArray();
     const items: any[] = [];
     for (const profile of profiles) {
+      if (!(await this.identity.canAccessProfile(actor, profile))) continue;
       const members = await this.store
         .canonical('memberships')
         .find({ profileId: profile.profileId, status: 'active' })
@@ -189,11 +176,14 @@ export class OperationsAdminController {
   @Get('booking-requests/availability')
   @Header('Cache-Control', 'no-store')
   @RequireAllPermissions('bookings.manage')
-  availability(@Query() q: any) {
-    return this.bookings.availability(
-      integer(q.room_id, 'room_id', 1),
-      String(q.date || ''),
+  async availability(@Req() req: any, @Query() q: any) {
+    const roomId = integer(q.room_id, 'room_id', 1);
+    const catalog = await this.bookings.adminCatalog(
+      await this.identity.nativeActor(req.user),
     );
+    if (!catalog.rooms.some((room: any) => room.id === roomId))
+      fail('room_not_found', 'Помещение недоступно.', 404);
+    return this.bookings.availability(roomId, String(q.date || ''));
   }
   @Get('booking-requests')
   @Header('Cache-Control', 'no-store')

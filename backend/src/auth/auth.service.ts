@@ -68,6 +68,7 @@ import {
   DEV_TEST_ACCOUNT_EMAILS,
 } from '../database/dev-test-accounts';
 import { SiteSettingsService } from '../site-settings/site-settings.service';
+import { OfficeServicesService } from '../office-services/office-services.service';
 
 /** Антиспам: SMS OTP регистрации — не чаще 1 раза за интервал. */
 const SMS_RESEND_INTERVAL_MS = 2 * 60 * 1000;
@@ -108,6 +109,7 @@ export class AuthService {
     private mailService: MailService,
     private smsService: SmsService,
     private siteSettingsService: SiteSettingsService,
+    private officeServices: OfficeServicesService,
   ) {}
 
   /**
@@ -1614,28 +1616,33 @@ export class AuthService {
       .lean();
     const propertyMap = new Map(properties.map((p) => [p._id.toString(), p]));
 
-    return offices.map((o) => {
-      const property = propertyMap.get(o.property.toString());
-      const ps = property?.settings || {};
-      return {
-        id: o._id.toString(),
-        propertyId: o.property.toString(),
-        businessCenterName: property?.name,
-        number: o.number,
-        title: o.title || undefined,
-        floor: o.floor,
-        company: o.company,
-        availability: o.availability || undefined,
-        officeFormat: o.officeFormat || undefined,
-        busyUntil: o.busyUntil || undefined,
-        roomStatus: o.roomStatus || undefined,
-        paymentStatus: o.paymentStatus || undefined,
-        paidUntil: o.paidUntil || undefined,
-        workingHoursFrom: ps.working_hours_from || '08:00',
-        workingHoursTo: ps.working_hours_to || '20:00',
-        closedWeekdays: parseClosedWeekdays(ps.closed_weekdays),
-      };
-    });
+    return Promise.all(
+      offices.map(async (o) => {
+        const property = propertyMap.get(o.property.toString());
+        const ps = property?.settings || {};
+        return {
+          id: o._id.toString(),
+          propertyId: o.property.toString(),
+          businessCenterName: property?.name,
+          number: o.number,
+          title: o.title || undefined,
+          floor: o.floor,
+          company: o.company,
+          availability: o.availability || undefined,
+          officeFormat: o.serviceDetails?.visibleFields?.includes('category')
+            ? o.officeFormat
+            : undefined,
+          ...(await this.officeServices.features(o)),
+          busyUntil: o.busyUntil || undefined,
+          roomStatus: o.roomStatus || undefined,
+          paymentStatus: o.paymentStatus || undefined,
+          paidUntil: o.paidUntil || undefined,
+          workingHoursFrom: ps.working_hours_from || '08:00',
+          workingHoursTo: ps.working_hours_to || '20:00',
+          closedWeekdays: parseClosedWeekdays(ps.closed_weekdays),
+        };
+      }),
+    );
   }
 
   async getServiceRequestIdentity(userId: string) {

@@ -18,6 +18,10 @@ export function AdminModal({
 }) {
   const panelRef = useRef<HTMLDivElement>(null);
   const triggerRef = useRef<HTMLElement | null>(null);
+  const closeRef = useRef(onClose);
+  useEffect(() => {
+    closeRef.current = onClose;
+  }, [onClose]);
   const titleId = useId();
   useEffect(() => {
     if (!open) return;
@@ -30,10 +34,10 @@ export function AdminModal({
           'a[href], button:not([disabled]), input:not([disabled]), select:not([disabled]), textarea:not([disabled]), [tabindex]:not([tabindex="-1"])',
         ) || [],
       );
-    requestAnimationFrame(() => getFocusable()[0]?.focus());
+    const focusFrame = requestAnimationFrame(() => getFocusable()[0]?.focus());
 
     const onKeyDown = (event: KeyboardEvent) => {
-      if (event.key === 'Escape') onClose();
+      if (event.key === 'Escape') closeRef.current();
       if (event.key !== 'Tab') return;
       const items = getFocusable();
       if (!items.length) return;
@@ -53,11 +57,12 @@ export function AdminModal({
     window.addEventListener('keydown', onKeyDown);
 
     return () => {
+      cancelAnimationFrame(focusFrame);
       document.body.style.overflow = prevOverflow;
       window.removeEventListener('keydown', onKeyDown);
-      triggerRef.current?.focus();
+      if (triggerRef.current?.isConnected) triggerRef.current.focus();
     };
-  }, [open, onClose]);
+  }, [open]);
 
   if (!open) return null;
 

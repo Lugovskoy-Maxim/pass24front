@@ -235,6 +235,19 @@ export const SERVICE_REQUEST_STATUSES = [
 ] as const;
 
 export class CreateServiceRequestDto {
+  @IsOptional()
+  @IsString()
+  officeId?: string;
+
+  @IsOptional()
+  @IsString()
+  serviceId?: string;
+
+  @IsOptional()
+  @IsInt()
+  @Min(1)
+  quantity?: number;
+
   @IsString()
   @IsIn(SERVICE_REQUEST_TOPICS)
   topic: string;

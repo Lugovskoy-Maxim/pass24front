@@ -1,5 +1,5 @@
 'use client';
-import { useCallback, useEffect, useState } from 'react';
+import { useCallback, useEffect, useRef, useState } from 'react';
 import Link from 'next/link';
 import {
   CalendarDays,
@@ -20,6 +20,7 @@ import {
 } from '@/components/GuestInvoiceFields';
 import { BookingEditor } from '@/components/BookingEditor';
 import { PageError } from '@/components/PageError';
+import { OperationsStatusBadge } from '@/components/OperationsStatusBadge';
 import { useToast } from '@/components/Toast';
 import { useAutoRefresh } from '@/hooks/useAutoRefresh';
 import { useWorkQueue } from '@/hooks/useWorkQueue';
@@ -36,6 +37,7 @@ import {
   Page,
   params,
   paymentLabels,
+  operationDate,
 } from '@/lib/operations';
 import { canBookingAction } from '@/lib/booking-status';
 
@@ -78,17 +80,32 @@ export default function BookingRequestsPage() {
   > | null>(null);
   const [busy, setBusy] = useState(false);
   const [error, setError] = useState('');
+  const [calendarLoading, setCalendarLoading] = useState(false);
+  const listRequest = useRef(0);
+  const filtersRef = useRef(filters);
+  filtersRef.current = filters;
+  const selection = useRef(0);
   const load = useCallback(async () => {
+    const sequence = ++listRequest.current;
+    const query = filtersRef.current;
     try {
-      setList(await operations.bookings(filters));
+      const next = await operations.bookings(query);
+      if (sequence !== listRequest.current || query !== filtersRef.current)
+        return;
+      const lastPage = Math.max(1, Math.ceil(next.total / next.per_page));
+      if (query.page > lastPage) {
+        setFilters((current) => ({ ...current, page: lastPage }));
+        return;
+      }
+      setList(next);
       setError('');
     } catch (e) {
-      setError(getErrorMessage(e));
+      if (sequence === listRequest.current) setError(getErrorMessage(e));
     }
-  }, [filters]);
+  }, []);
   useEffect(() => {
     void load();
-  }, [load]);
+  }, [load, filters]);
   useAutoRefresh(load);
   useEffect(() => {
     void operations
@@ -106,7 +123,10 @@ export default function BookingRequestsPage() {
         .catch((e) => setError(getErrorMessage(e)));
   }, []);
   useEffect(() => {
-    if (view === 'calendar' && filters.room_id && filters.date)
+    let active = true;
+    setCalendar(null);
+    if (view === 'calendar' && filters.room_id && filters.date) {
+      setCalendarLoading(true);
       void request<{
         slots: Array<{
           start_minute: number;
@@ -117,13 +137,26 @@ export default function BookingRequestsPage() {
         '/admin/booking-requests/availability' +
           params({ room_id: filters.room_id, date: filters.date }),
       )
-        .then(setCalendar)
-        .catch((e) => setError(getErrorMessage(e)));
-    else setCalendar(null);
+        .then((next) => {
+          if (active) setCalendar(next);
+        })
+        .catch((e) => {
+          if (active) setError(getErrorMessage(e));
+        })
+        .finally(() => {
+          if (active) setCalendarLoading(false);
+        });
+    } else setCalendarLoading(false);
+    return () => {
+      active = false;
+    };
   }, [view, filters.room_id, filters.date, list]);
   const open = async (id: number) => {
+    selection.current = id;
     try {
-      setDetail(await operations.booking(id));
+      const next = await operations.booking(id);
+      if (selection.current !== id) return;
+      setDetail(next);
       setHoursHistory(null);
       setInvoiceParty({
         profile_type: 'individual',
@@ -320,8 +353,16 @@ export default function BookingRequestsPage() {
       {error && <PageError message={error} onRetry={load} />}
       {view === 'calendar' && (
         <section className="card p-4 mb-5">
-          {!calendar ? (
-            <p className="text-[var(--muted)]">Выберите помещение и дату.</p>
+          {calendarLoading ? (
+            <p className="text-[var(--muted)]" role="status">
+              Загрузка занятости…
+            </p>
+          ) : !calendar ? (
+            <p className="text-[var(--muted)]">
+              {filters.room_id && filters.date
+                ? 'Не удалось загрузить занятость. Повторите загрузку.'
+                : 'Выберите помещение и дату.'}
+            </p>
           ) : (
             <>
               <p className="text-sm text-[var(--muted)] mb-3">
@@ -379,7 +420,7 @@ export default function BookingRequestsPage() {
                     {item.number}
                   </button>
                   <p className="text-xs text-[var(--muted)] mt-1">
-                    {item.created_at}
+                    {operationDate(item.created_at)}
                   </p>
                 </td>
                 <td className="p-4">
@@ -421,7 +462,10 @@ export default function BookingRequestsPage() {
                       item.requires_attention ? 'text-[var(--danger)]' : ''
                     }
                   >
-                    {item.status_label}
+                    <OperationsStatusBadge
+                      status={item.status}
+                      label={item.status_label}
+                    />
                   </span>
                 </td>
               </tr>
@@ -462,6 +506,7 @@ export default function BookingRequestsPage() {
       <AdminModal
         open={!!detail && !editor}
         onClose={() => {
+          selection.current = 0;
           setDetail(null);
           setAction('');
         }}
@@ -494,7 +539,10 @@ export default function BookingRequestsPage() {
                     {s.date} · {clock(s.start_minute)}–{clock(s.end_minute)}
                   </p>
                 ))}
-                <p>{b.status_label}</p>
+                <OperationsStatusBadge
+                  status={b.status}
+                  label={b.status_label}
+                />
               </div>
             </div>
             {b.requires_attention && (
@@ -510,7 +558,9 @@ export default function BookingRequestsPage() {
               <p className="text-sm">
                 {b.payment_status === 'paid'
                   ? 'Оплачено'
-                  : 'Оплата не получена'}
+                  : b.payment_method === 'postpay'
+                    ? 'Постоплата'
+                    : 'Оплата не получена'}
               </p>
               {b.writeoff_min > 0 && (
                 <p className="text-sm mt-1">
@@ -569,31 +619,32 @@ export default function BookingRequestsPage() {
                     <Check className="w-4 h-4" />
                     Подтвердить
                   </button>
-                  {finance &&
-                    b.payment_status !== 'paid' &&
-                    ['cash', 'invoice', 'postpay'].includes(
-                      b.payment_method,
-                    ) && (
-                      <button
-                        className="btn btn-secondary"
-                        disabled={!writable}
-                        onClick={() => setAction('mark-paid')}
-                      >
-                        <Wallet className="w-4 h-4" />
-                        {b.payment_method === 'cash'
-                          ? 'Наличные получены'
-                          : 'Отметить оплату'}
-                      </button>
-                    )}
+                </>
+              )}
+              {canBookingAction(b.status, 'mark-paid') &&
+                finance &&
+                b.payment_status !== 'paid' &&
+                ['cash', 'invoice', 'postpay'].includes(b.payment_method) && (
                   <button
                     className="btn btn-secondary"
                     disabled={!writable}
-                    onClick={() => setEditor('edit')}
+                    onClick={() => setAction('mark-paid')}
                   >
-                    <Pencil className="w-4 h-4" />
-                    Изменить
+                    <Wallet className="w-4 h-4" />
+                    {b.payment_method === 'cash'
+                      ? 'Наличные получены'
+                      : 'Отметить оплату'}
                   </button>
-                </>
+                )}
+              {canBookingAction(b.status, 'edit') && (
+                <button
+                  className="btn btn-secondary"
+                  disabled={!writable}
+                  onClick={() => setEditor('edit')}
+                >
+                  <Pencil className="w-4 h-4" />
+                  Изменить
+                </button>
               )}
               {canBookingAction(b.status, 'cancel') && (
                 <button
@@ -710,7 +761,8 @@ export default function BookingRequestsPage() {
                         key={h.id}
                         className="text-sm border-b border-[var(--border)] pb-2"
                       >
-                        {h.created_at} · {h.type === 'debit' ? '−' : '+'}
+                        {operationDate(h.created_at)} ·{' '}
+                        {h.type === 'debit' ? '−' : '+'}
                         {h.amount_min} мин · Остаток {h.balance_after_min}
                         <p className="text-[var(--muted)]">{h.comment}</p>
                       </li>
@@ -826,7 +878,7 @@ export default function BookingRequestsPage() {
                     key={h.id}
                     className="border-b border-[var(--border)] pb-2"
                   >
-                    {h.created_at} · {h.actor_label}
+                    {operationDate(h.created_at)} · {h.actor_label}
                     <p className="text-[var(--muted)]">
                       {(
                         {

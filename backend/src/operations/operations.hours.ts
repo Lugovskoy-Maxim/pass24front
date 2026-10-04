@@ -1,4 +1,5 @@
-import { Injectable } from '@nestjs/common';
+import { Injectable, Optional } from '@nestjs/common';
+import { OfficeServicesService } from '../office-services/office-services.service';
 import { ClientSession } from 'mongodb';
 import { OperationsStore } from './operations.store';
 import { OperationsIdentity } from './operations.identity';
@@ -18,6 +19,7 @@ export class OperationsHours {
   constructor(
     readonly store: OperationsStore,
     private readonly identities: OperationsIdentity,
+    @Optional() private readonly officeServices?: OfficeServicesService,
   ) {}
   async ensure(resourceId: string, session: ClientSession, now = new Date()) {
     const today = sqlNow(now).slice(0, 10);
@@ -29,8 +31,16 @@ export class OperationsHours {
     const ownsResources =
       !profile.resourceOwnerProfileId ||
       profile.resourceOwnerProfileId === resourceId;
+    const manualQuota = this.officeServices
+      ? await this.officeServices.monthlyHours(profile, session)
+      : null;
     const quota = ownsResources
-      ? Math.max(0, profile.memberPolicy?.residentHoursMonthlyQuotaMin || 0)
+      ? Math.max(
+          0,
+          manualQuota ??
+            profile.memberPolicy?.residentHoursMonthlyQuotaMin ??
+            0,
+        )
       : 0;
     const resetDay = Math.min(
       31,
@@ -288,6 +298,13 @@ export class OperationsHours {
     key: string,
   ) {
     requirePermission(actor, 'resident_hours.adjust');
+    const resource = await this.store
+      .canonical('profiles')
+      .findOne({ profileId: resourceId });
+    if (!resource)
+      fail('profile_unavailable', 'Не найден владелец баланса.', 404);
+    if (!(await this.identities.canAccessProfile(actor, resource)))
+      fail('forbidden', 'Нет доступа к балансу другого БЦ.', 403);
     const amount = integer(input.amount_min, 'amount_min', 1);
     if (!['debit', 'credit'].includes(input.type))
       fail('validation_error', 'Выберите списание или возврат.', 400);
@@ -313,6 +330,7 @@ export class OperationsHours {
               'Бронирование не относится к этому балансу.',
               400,
             );
+          await this.identities.assertBooking(actor, booking, session);
           if (
             input.type === 'credit' &&
             (await this.refundable(booking, session)) < amount

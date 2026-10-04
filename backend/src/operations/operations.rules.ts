@@ -40,6 +40,8 @@ export type OperationsActor = {
   guestPartyId?: string;
   name?: string;
   permissions?: string[];
+  role?: string;
+  propertyIds?: string[];
 };
 export type Segment = {
   date: string;

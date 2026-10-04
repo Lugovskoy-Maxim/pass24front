@@ -11,6 +11,7 @@ import { ConfigService } from '@nestjs/config';
 import { InjectModel } from '@nestjs/mongoose';
 import { Model } from 'mongoose';
 import * as mysql from 'mysql2/promise';
+import { normalizeOfficeCategory } from '../office-services/office-services.rules';
 import {
   decryptJson,
   encryptJson,
@@ -1340,7 +1341,7 @@ export class SiteSourceService implements OnModuleInit, OnModuleDestroy {
         isActive: item.isActive !== false,
         externalId: item.externalId,
         availability: item.availability,
-        officeFormat: item.officeFormat,
+        officeFormat: normalizeOfficeCategory(item.officeFormat),
         busyUntil: item.busyUntil,
         roomStatus: item.roomStatus,
         paymentStatus: item.paymentStatus,
@@ -1408,7 +1409,7 @@ export class SiteSourceService implements OnModuleInit, OnModuleDestroy {
     if (item.availability !== undefined)
       office.availability = item.availability;
     if (item.officeFormat !== undefined)
-      office.officeFormat = item.officeFormat;
+      office.officeFormat = normalizeOfficeCategory(item.officeFormat);
     if (item.busyUntil !== undefined) office.busyUntil = item.busyUntil;
     if (item.roomStatus !== undefined) office.roomStatus = item.roomStatus;
     if (item.paymentStatus !== undefined)
@@ -1555,7 +1556,7 @@ export class SiteSourceService implements OnModuleInit, OnModuleDestroy {
           isActive: item.isActive !== false,
           externalId: item.externalId,
           availability: item.availability,
-          officeFormat: item.officeFormat,
+          officeFormat: normalizeOfficeCategory(item.officeFormat),
           busyUntil: item.busyUntil,
           roomStatus: item.roomStatus,
           paymentStatus: item.paymentStatus,
@@ -1650,6 +1651,21 @@ export class SiteSourceService implements OnModuleInit, OnModuleDestroy {
   }
 
   private async mergeOfficeDocs(keep: OfficeDocument, drop: OfficeDocument) {
+    const hasKeep = (keep.serviceRevision || 0) > 0;
+    const hasDrop = (drop.serviceRevision || 0) > 0;
+    if (
+      hasKeep &&
+      hasDrop &&
+      JSON.stringify(keep.serviceDetails) !==
+        JSON.stringify(drop.serviceDetails)
+    )
+      throw new BadRequestException(
+        'У дубликатов офиса различаются ручные настройки обслуживания. Сверьте карточки перед объединением',
+      );
+    if (!hasKeep && hasDrop) {
+      keep.serviceDetails = drop.serviceDetails;
+      keep.serviceRevision = drop.serviceRevision;
+    }
     if (!keep.externalId && drop.externalId) keep.externalId = drop.externalId;
     if (!keep.floor && drop.floor) keep.floor = drop.floor;
     if (keep.areaSqm == null && drop.areaSqm != null)
@@ -1674,6 +1690,47 @@ export class SiteSourceService implements OnModuleInit, OnModuleDestroy {
       { officeId: drop._id },
       { officeId: keep._id },
     );
+    const db = this.offices.db.db!;
+    const oldId = String(drop._id),
+      newId = String(keep._id);
+    await db
+      .collection('mstyle_ops_tickets')
+      .updateMany({ office_id: oldId }, { $set: { office_id: newId } });
+    await db
+      .collection('mstyle_ops_bookings')
+      .updateMany({ office_id: oldId }, { $set: { office_id: newId } });
+    const oldLinks = [oldId, drop.externalId].filter(Boolean);
+    const newLink = keep.externalId || newId;
+    for (const collection of ['mstyle_ops_tickets', 'mstyle_v2_profiles']) {
+      const field =
+        collection === 'mstyle_v2_profiles' ? 'officeIds' : 'office_ids';
+      await db
+        .collection(collection)
+        .updateMany({ [field]: { $in: oldLinks } }, [
+          {
+            $set: {
+              [field]: {
+                $setUnion: [
+                  {
+                    $map: {
+                      input: `$${field}`,
+                      as: 'link',
+                      in: {
+                        $cond: [
+                          { $in: ['$$link', oldLinks] },
+                          newLink,
+                          '$$link',
+                        ],
+                      },
+                    },
+                  },
+                  [],
+                ],
+              },
+            },
+          },
+        ]);
+    }
     await this.offices.deleteOne({ _id: drop._id });
   }
 

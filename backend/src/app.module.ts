@@ -25,6 +25,7 @@ import { SiteSettingsModule } from './site-settings/site-settings.module';
 import { NotificationsModule } from './notifications/notifications.module';
 import { TelegramModule } from './telegram/telegram.module';
 import { MstyleV2Module } from './integrations/mstyle-v2/mstyle-v2.module';
+import { OfficeServicesModule } from './office-services/office-services.module';
 
 @Module({
   imports: [
@@ -53,6 +54,7 @@ import { MstyleV2Module } from './integrations/mstyle-v2/mstyle-v2.module';
     TelegramModule, // @Global — OTP через telegram-gateway (WireGuard)
     SiteSettingsModule, // бренд, FAQ, инструкции, SMS-флаги
     NotificationsModule,
+    OfficeServicesModule,
     AuthModule,
     PassesModule,
     AppConfigModule, // публичный GET /config

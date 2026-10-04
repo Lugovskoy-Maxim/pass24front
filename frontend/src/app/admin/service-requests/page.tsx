@@ -5,6 +5,13 @@ import { MessageSquare, Paperclip, Send, X } from 'lucide-react';
 import { AdminLayout } from '@/components/AdminLayout';
 import { useToast } from '@/components/Toast';
 import { PageError } from '@/components/PageError';
+import { OfficeCategoryBadge } from '@/components/OfficeCategoryBadge';
+import { OperationsStatusBadge as StatusBadge } from '@/components/OperationsStatusBadge';
+import {
+  OfficeCategory,
+  officeServices,
+  officeMoney,
+} from '@/lib/office-services';
 import { useAutoRefresh } from '@/hooks/useAutoRefresh';
 import { useWorkQueue } from '@/hooks/useWorkQueue';
 import { getErrorMessage, getErrorStatus } from '@/lib/api';
@@ -15,39 +22,22 @@ import {
   Ticket,
   TicketDetail,
   Attachment,
+  operationDate,
 } from '@/lib/operations';
-
-function statusBadgeClass(status: string) {
-  if (status === 'new')
-    return 'bg-[var(--toast-warning-bg)] text-[var(--warning)] border-[var(--warning)]/30';
-  if (status === 'in_progress')
-    return 'bg-[var(--toast-info-bg)] text-[var(--primary)] border-[var(--primary)]/30';
-  if (status === 'completed')
-    return 'bg-[var(--toast-success-bg)] text-[var(--success)] border-[var(--success)]/30';
-  return 'bg-[var(--surface-muted)] text-[var(--muted)] border-[var(--border)]';
-}
-
-function StatusBadge({ status, label }: { status: string; label: string }) {
-  return (
-    <span
-      className={`inline-flex items-center rounded-full border px-2 py-0.5 text-[11px] font-medium leading-4 whitespace-nowrap ${statusBadgeClass(status)}`}
-    >
-      {label}
-    </span>
-  );
-}
 
 export default function ServiceRequestsPage() {
   const { toast } = useToast();
   const { counts } = useWorkQueue();
   const [list, setList] = useState<Page<Ticket> | null>(null);
   const [detail, setDetail] = useState<TicketDetail | null>(null);
+  const [categories, setCategories] = useState<OfficeCategory[]>([]);
   const [filters, setFilters] = useState({
     status: '',
     topic: '',
     search: '',
     needs_action: '',
     booking_id: '',
+    category: '',
     page: 1,
   });
   const [error, setError] = useState('');
@@ -56,18 +46,64 @@ export default function ServiceRequestsPage() {
   const [file, setFile] = useState<File | null>(null);
   const uploaded = useRef<Attachment | null>(null);
   const selection = useRef(0);
+  const selectionVersion = useRef(0);
   const [busy, setBusy] = useState(false);
+  const busyRef = useRef(false);
+  const filtersRef = useRef(filters);
+  filtersRef.current = filters;
+  const listRequest = useRef(0);
+  const detailRequest = useRef(0);
+  const [detailLoading, setDetailLoading] = useState(false);
+  const [mobileDetail, setMobileDetail] = useState(false);
+  const detailPanel = useRef<HTMLElement>(null);
+  const refreshDetail = useCallback(async (id: number) => {
+    if (!id) return;
+    const sequence = ++detailRequest.current;
+    const next = await operations.ticket(id);
+    if (selection.current === id && sequence === detailRequest.current) {
+      setDetail(next);
+      setDetailLoading(false);
+    }
+  }, []);
   const load = useCallback(async () => {
+    const sequence = ++listRequest.current;
+    const query = filtersRef.current;
     try {
-      setList(await operations.tickets(filters));
+      const next = await operations.tickets(query);
+      if (sequence !== listRequest.current || query !== filtersRef.current)
+        return;
+      const lastPage = Math.max(1, Math.ceil(next.total / next.per_page));
+      if (query.page > lastPage) {
+        setFilters((current) => ({ ...current, page: lastPage }));
+        return;
+      }
+      setList(next);
+      if (selection.current && !busyRef.current)
+        await refreshDetail(selection.current);
       setError('');
     } catch (e) {
-      setError(getErrorMessage(e));
+      if (sequence === listRequest.current) setError(getErrorMessage(e));
     }
-  }, [filters]);
+  }, [refreshDetail]);
+  useEffect(() => {
+    if (
+      mobileDetail &&
+      !detailLoading &&
+      window.matchMedia('(max-width: 1279px)').matches
+    ) {
+      detailPanel.current?.focus();
+      detailPanel.current?.scrollIntoView({ block: 'start' });
+    }
+  }, [mobileDetail, detailLoading]);
   useEffect(() => {
     void load();
-  }, [load]);
+  }, [load, filters]);
+  useEffect(() => {
+    void officeServices
+      .categories()
+      .then((r) => setCategories(r.categories))
+      .catch((e) => setError(getErrorMessage(e)));
+  }, []);
   useEffect(() => {
     const q = new URLSearchParams(window.location.search);
     setFilters((f) => ({
@@ -79,67 +115,95 @@ export default function ServiceRequestsPage() {
   useAutoRefresh(load);
   const open = async (id: number) => {
     selection.current = id;
+    ++selectionVersion.current;
+    setDetail(null);
+    setDetailLoading(true);
+    setMobileDetail(true);
+    setMessage('');
+    setFile(null);
+    uploaded.current = null;
     try {
-      const next = await operations.ticket(id);
-      if (selection.current === id) {
-        setDetail(next);
-        setMessage('');
-        setFile(null);
-        uploaded.current = null;
-      }
+      await refreshDetail(id);
     } catch (e) {
       toast(getErrorMessage(e), 'error');
+      if (selection.current === id) setDetailLoading(false);
     }
   };
   const send = async (e: FormEvent) => {
     e.preventDefault();
     if (!detail || !message.trim() || busy) return;
+    const id = detail.ticket.id;
+    const version = selectionVersion.current;
+    const draft = message.trim();
+    const attachment = file;
+    let upload = uploaded.current;
+    busyRef.current = true;
+    ++detailRequest.current;
     setBusy(true);
     try {
-      if (file && !uploaded.current)
-        uploaded.current = await operations.upload(file);
+      if (attachment && !upload) {
+        upload = await operations.upload(attachment);
+        if (selection.current === id && selectionVersion.current === version)
+          uploaded.current = upload;
+      }
       const next = await command<TicketDetail>(
-        `/admin/service-requests/${detail.ticket.id}/messages`,
+        `/admin/service-requests/${id}/messages`,
         {
-          message_text: message.trim(),
+          message_text: draft,
           revision: detail.ticket.revision,
-          attachment_ids: uploaded.current
-            ? [uploaded.current.attachment_id]
-            : [],
+          attachment_ids: upload ? [upload.attachment_id] : [],
         },
       );
-      setDetail(next);
-      setMessage('');
-      setFile(null);
-      uploaded.current = null;
+      if (selection.current === id && selectionVersion.current === version) {
+        ++detailRequest.current;
+        setDetail(next);
+        setMessage('');
+        setFile(null);
+        uploaded.current = null;
+      }
       await load();
       toast('Ответ отправлен', 'success');
     } catch (e) {
       toast(getErrorMessage(e), 'error');
-      if (detail && getErrorStatus(e) === 409)
-        void operations
-          .ticket(detail.ticket.id)
-          .then(setDetail)
-          .catch(() => undefined);
+      if (
+        selection.current === id &&
+        selectionVersion.current === version &&
+        getErrorStatus(e) === 409
+      )
+        await refreshDetail(id).catch(() => undefined);
     } finally {
+      busyRef.current = false;
       setBusy(false);
     }
   };
   const status = async (value: string) => {
     if (!detail || busy) return;
+    const id = detail.ticket.id;
+    const version = selectionVersion.current;
+    busyRef.current = true;
+    ++detailRequest.current;
     setBusy(true);
     try {
-      setDetail(
-        await command<TicketDetail>(
-          `/admin/service-requests/${detail.ticket.id}/status`,
-          { status: value, revision: detail.ticket.revision },
-          'PATCH',
-        ),
+      const next = await command<TicketDetail>(
+        `/admin/service-requests/${id}/status`,
+        { status: value, revision: detail.ticket.revision },
+        'PATCH',
       );
+      if (selection.current === id && selectionVersion.current === version) {
+        ++detailRequest.current;
+        setDetail(next);
+      }
       await load();
     } catch (e) {
       toast(getErrorMessage(e), 'error');
+      if (
+        selection.current === id &&
+        selectionVersion.current === version &&
+        getErrorStatus(e) === 409
+      )
+        await refreshDetail(id).catch(() => undefined);
     } finally {
+      busyRef.current = false;
       setBusy(false);
     }
   };
@@ -162,7 +226,22 @@ export default function ServiceRequestsPage() {
             : 'Раздел готовится к подключению. Обращения пока обрабатываются на сайте.'}
         </p>
       )}
-      <div className="flex flex-wrap gap-3 mb-5">
+      <div className="grid sm:grid-cols-2 xl:grid-cols-[200px_minmax(180px,1fr)_160px_180px_auto] gap-3 mb-5 items-center">
+        <select
+          className="input w-auto"
+          aria-label="Категория офиса"
+          value={filters.category}
+          onChange={(e) =>
+            setFilters((f) => ({ ...f, category: e.target.value, page: 1 }))
+          }
+        >
+          <option value="">Все категории офисов</option>
+          {categories.map((c) => (
+            <option key={c.code} value={c.code}>
+              {c.name}
+            </option>
+          ))}
+        </select>
         <input
           aria-label="Поиск обращений"
           className="input flex-1 min-w-44"
@@ -219,7 +298,9 @@ export default function ServiceRequestsPage() {
       </div>
       {error && <PageError message={error} onRetry={load} />}
       <div className="grid xl:grid-cols-[minmax(260px,1fr)_minmax(0,2fr)] gap-5 items-start">
-        <section className="card overflow-hidden">
+        <section
+          className={`card overflow-hidden ${mobileDetail ? 'hidden xl:block' : ''}`}
+        >
           <div className="p-4 border-b border-[var(--border)] flex gap-2 items-center font-semibold">
             <MessageSquare className="w-5 h-5" />
             Обращения{' '}
@@ -232,44 +313,47 @@ export default function ServiceRequestsPage() {
               Обращений по выбранным условиям нет.
             </p>
           ) : (
-            list.items.map((ticket) => (
-              <button
-                key={ticket.id}
-                onClick={() => void open(ticket.id)}
-                className={`w-full text-left p-4 border-b border-[var(--border)] hover:bg-[var(--surface-muted)] ${detail?.ticket.id === ticket.id ? 'bg-[var(--surface-muted)]' : ''}`}
-              >
-                <div className="flex justify-between gap-2">
-                  <span className="font-medium">
-                    №{ticket.id} · {ticket.subject}
-                  </span>
-                  {ticket.needs_action && (
-                    <span
-                      className="w-2 h-2 mt-2 rounded-full bg-[var(--danger)] shrink-0"
-                      aria-label="Требует ответа"
+            <div className="xl:max-h-[70vh] overflow-y-auto">
+              {list.items.map((ticket) => (
+                <button
+                  key={ticket.id}
+                  onClick={() => void open(ticket.id)}
+                  className={`w-full text-left p-4 border-b border-[var(--border)] hover:bg-[var(--surface-muted)] ${detail?.ticket.id === ticket.id ? 'bg-[var(--surface-muted)]' : ''}`}
+                >
+                  <div className="flex justify-between gap-2">
+                    <span className="font-medium">
+                      №{ticket.id} · {ticket.subject}
+                    </span>
+                    {ticket.needs_action && (
+                      <span
+                        className="w-2 h-2 mt-2 rounded-full bg-[var(--danger)] shrink-0"
+                        aria-label="Требует ответа"
+                      />
+                    )}
+                  </div>
+                  <p className="text-sm mt-1">{ticket.requester_name}</p>
+                  <OfficeCategoryBadge category={ticket.office_category} />
+                  <p className="text-xs text-[var(--muted)] mt-1">
+                    Офис: {ticket.office_label || 'Не указан'} · Тип:{' '}
+                    {ticket.topic_label}
+                  </p>
+                  <div className="flex items-center gap-2 mt-1">
+                    <StatusBadge
+                      status={ticket.status}
+                      label={ticket.status_label}
                     />
-                  )}
-                </div>
-                <p className="text-sm mt-1">{ticket.requester_name}</p>
-                <p className="text-xs text-[var(--muted)] mt-1">
-                  Офис: {ticket.office_label || 'Не указан'} · Тип:{' '}
-                  {ticket.topic_label}
-                </p>
-                <div className="flex items-center gap-2 mt-1">
-                  <StatusBadge
-                    status={ticket.status}
-                    label={ticket.status_label}
-                  />
-                  <span className="text-xs text-[var(--muted)]">
-                    {ticket.last_message_at}
-                  </span>
-                </div>
-                <p className="text-sm text-[var(--muted)] truncate mt-2">
-                  {ticket.last_message_preview}
-                </p>
-              </button>
-            ))
+                    <span className="text-xs text-[var(--muted)]">
+                      {operationDate(ticket.last_message_at)}
+                    </span>
+                  </div>
+                  <p className="text-sm text-[var(--muted)] truncate mt-2">
+                    {ticket.last_message_preview}
+                  </p>
+                </button>
+              ))}
+            </div>
           )}
-          {list && list.total > list.per_page && (
+          {list && (list.total > list.per_page || filters.page > 1) && (
             <div className="flex justify-between p-3">
               <button
                 className="btn btn-secondary"
@@ -289,20 +373,46 @@ export default function ServiceRequestsPage() {
             </div>
           )}
         </section>
-        <section className="card p-5 min-w-0">
-          {!detail ? (
+        <section
+          ref={detailPanel}
+          tabIndex={-1}
+          className={`card p-5 min-w-0 outline-none scroll-mt-24 ${mobileDetail ? '' : 'hidden xl:block'}`}
+        >
+          <button
+            type="button"
+            className="btn btn-secondary mb-4 xl:hidden"
+            onClick={() => {
+              selection.current = 0;
+              ++selectionVersion.current;
+              ++detailRequest.current;
+              setMobileDetail(false);
+              setDetail(null);
+              setDetailLoading(false);
+            }}
+          >
+            Назад к обращениям
+          </button>
+          {detailLoading ? (
+            <p className="py-8 text-center text-[var(--muted)]" role="status">
+              Загрузка переписки…
+            </p>
+          ) : !detail ? (
             <p className="text-[var(--muted)] py-12 text-center">
               Выберите обращение, чтобы прочитать переписку.
             </p>
           ) : (
             <>
-              <div className="flex flex-wrap justify-between gap-3 mb-4">
+              <div className="flex flex-wrap items-start justify-between gap-3 mb-4">
                 <div>
                   <h2 className="font-semibold text-lg">
                     №{detail.ticket.id} · {detail.ticket.subject}
                   </h2>
+                  <OfficeCategoryBadge
+                    category={detail.ticket.office_category}
+                  />
                   <p className="text-sm text-[var(--muted)]">
-                    {detail.ticket.requester_name} · {detail.ticket.created_at}
+                    {detail.ticket.requester_name} ·{' '}
+                    {operationDate(detail.ticket.created_at)}
                   </p>
                   <p className="text-sm text-[var(--muted)] mt-1">
                     Офис: {detail.ticket.office_label || 'Не указан'} · Тип
@@ -347,6 +457,26 @@ export default function ServiceRequestsPage() {
                   Открыть связанную заявку №{detail.ticket.booking_id}
                 </Link>
               )}
+              {detail.ticket.service_order && (
+                <div className="rounded-lg bg-[var(--surface-muted)] p-3 text-sm space-y-1">
+                  <p className="font-medium">
+                    {detail.ticket.service_order.name} ·{' '}
+                    {detail.ticket.service_order.quantity}{' '}
+                    {detail.ticket.service_order.unit === 'item' ? 'шт.' : ''}
+                  </p>
+                  <p>
+                    {detail.ticket.service_order.totalAmountMinor == null
+                      ? 'Стоимость уточняется администратором'
+                      : officeMoney(
+                          detail.ticket.service_order.totalAmountMinor,
+                        )}
+                  </p>
+                  <p>{detail.ticket.service_order.conditions}</p>
+                  <p className="text-xs text-[var(--muted)]">
+                    Условия на момент создания заявки
+                  </p>
+                </div>
+              )}
               <div
                 className="space-y-4 my-5 max-h-[55vh] overflow-auto pr-1"
                 aria-label="Переписка"
@@ -358,7 +488,7 @@ export default function ServiceRequestsPage() {
                   >
                     <div className="flex flex-wrap justify-between gap-2 mb-2 text-xs text-[var(--muted)]">
                       <span className="font-medium">{item.author_label}</span>
-                      <time>{item.created_at}</time>
+                      <time>{operationDate(item.created_at)}</time>
                     </div>
                     <p className="text-sm whitespace-pre-wrap break-words">
                       {item.message_text}

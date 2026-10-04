@@ -12,6 +12,7 @@ import {
   parseErrorBody,
   throwForResponse,
 } from './api-errors';
+import type { OfficeFeatures, OfficeCategory } from './office-services';
 
 export {
   ApiError,
@@ -37,7 +38,7 @@ export function getPushRenewalUrl() {
   return `${API_URL}/notifications/push/subscriptions/renew`;
 }
 
-export interface TenantOffice {
+export interface TenantOffice extends OfficeFeatures {
   id: string;
   propertyId: string;
   businessCenterName?: string;
@@ -1659,6 +1660,7 @@ export interface PassStats {
 }
 
 export interface Office {
+  category?: OfficeCategory | null;
   id: string;
   propertyId: string;
   businessCenterName?: string;
@@ -1876,6 +1878,16 @@ export function officeRoomStatusLabel(status?: string | null): string {
 }
 
 export function officeFormatLabel(format?: string | null): string {
+  if (
+    [
+      'standard_plus',
+      'standard+',
+      'standard +',
+      'standard-plus',
+      'standart_plus',
+    ].includes(format || '')
+  )
+    return 'Стандарт+';
   if (format === 'vip') return 'VIP';
   if (format === 'design') return 'Дизайн';
   if (format === 'standard') return 'Стандарт';

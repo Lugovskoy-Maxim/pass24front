@@ -3,6 +3,7 @@
 // номер уникален внутри БЦ
 import { Prop, Schema, SchemaFactory } from '@nestjs/mongoose';
 import { Document, Types } from 'mongoose';
+import type { OfficeDetails } from '../office-services/office-services.rules';
 
 export type OfficeDocument = Office & Document;
 
@@ -54,6 +55,16 @@ export class Office {
   /** standard | vip | design */
   @Prop({ trim: true })
   officeFormat?: string;
+
+  /** Ручные настройки обслуживания; синхронизация обновляет только поля источника. */
+  @Prop({
+    type: Object,
+    default: () => ({ values: {}, visibleFields: [], serviceOverrides: [] }),
+  })
+  serviceDetails?: OfficeDetails;
+
+  @Prop({ default: 0 })
+  serviceRevision?: number;
 
   /** Дата «занят до» с сайта, YYYY-MM-DD */
   @Prop({ trim: true })
