@@ -16,10 +16,10 @@ export function OperationsStatusBadge({
           ? 'success'
           : bookingStatusTone(status);
   const colors = {
-    warning: 'text-[var(--warning)] bg-[var(--toast-warning-bg)]',
-    info: 'text-[var(--primary)] bg-[var(--toast-info-bg)]',
-    success: 'text-[var(--success)] bg-[var(--toast-success-bg)]',
-    danger: 'text-[var(--danger)] bg-[var(--toast-error-bg)]',
+    warning: 'text-[var(--status-pending)] bg-[var(--status-pending-soft)]',
+    info: 'text-[var(--status-approved)] bg-[var(--status-approved-soft)]',
+    success: 'text-[var(--status-active)] bg-[var(--status-active-soft)]',
+    danger: 'text-[var(--status-rejected)] bg-[var(--status-rejected-soft)]',
     muted: 'text-[var(--muted)] bg-[var(--surface-muted)]',
   };
   return (

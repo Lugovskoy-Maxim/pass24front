@@ -10,6 +10,8 @@ import {
   Pencil,
   Ban,
   Wallet,
+  Search,
+  RotateCcw,
 } from 'lucide-react';
 import { AdminLayout } from '@/components/AdminLayout';
 import { AdminModal } from '@/components/AdminModal';
@@ -20,7 +22,15 @@ import {
 } from '@/components/GuestInvoiceFields';
 import { BookingEditor } from '@/components/BookingEditor';
 import { PageError } from '@/components/PageError';
-import { OperationsStatusBadge } from '@/components/OperationsStatusBadge';
+import {
+  BookingRequestsList,
+  BookingOverview,
+} from '@/components/BookingRequestsList';
+import {
+  OperationsFilters,
+  OperationsFilter,
+  OperationsQueueTabs,
+} from '@/components/OperationsWorkspace';
 import { useToast } from '@/components/Toast';
 import { useAutoRefresh } from '@/hooks/useAutoRefresh';
 import { useWorkQueue } from '@/hooks/useWorkQueue';
@@ -80,6 +90,7 @@ export default function BookingRequestsPage() {
   > | null>(null);
   const [busy, setBusy] = useState(false);
   const [error, setError] = useState('');
+  const [listLoading, setListLoading] = useState(true);
   const [calendarLoading, setCalendarLoading] = useState(false);
   const listRequest = useRef(0);
   const filtersRef = useRef(filters);
@@ -87,6 +98,7 @@ export default function BookingRequestsPage() {
   const selection = useRef(0);
   const load = useCallback(async () => {
     const sequence = ++listRequest.current;
+    setListLoading(true);
     const query = filtersRef.current;
     try {
       const next = await operations.bookings(query);
@@ -101,6 +113,8 @@ export default function BookingRequestsPage() {
       setError('');
     } catch (e) {
       if (sequence === listRequest.current) setError(getErrorMessage(e));
+    } finally {
+      if (sequence === listRequest.current) setListLoading(false);
     }
   }, []);
   useEffect(() => {
@@ -216,43 +230,35 @@ export default function BookingRequestsPage() {
     }
   };
   const b = detail?.booking;
-  const bookingModeLabel = (mode?: string) =>
-    mode === 'day_office' ? 'Офис на день' : 'Почасовая бронь';
-  const roomOfficeNumber = (room: Booking['room']) =>
-    room.office_number ?? room.number ?? room.title;
+  const hasFilters = !!(
+    filters.search ||
+    filters.status ||
+    filters.payment_method ||
+    filters.room_id ||
+    filters.date
+  );
+  const resetFilters = () =>
+    setFilters((current) => ({
+      ...current,
+      search: '',
+      status: '',
+      payment_method: '',
+      room_id: '',
+      date: '',
+      page: 1,
+    }));
   return (
-    <AdminLayout title="Заявки">
-      {counts && !writable && (
-        <p className="card p-3 mb-4 text-sm text-[var(--muted)]">
-          {counts.mode === 'paused'
-            ? 'Приём изменений временно приостановлен.'
-            : 'Раздел готовится к подключению. Заявки пока обрабатываются на сайте.'}
-        </p>
-      )}
-      <div className="flex flex-wrap justify-between gap-3 mb-4">
-        <div className="flex gap-2">
-          <button
-            className={`btn ${view === 'list' ? 'btn-primary' : 'btn-secondary'}`}
-            onClick={() => setView('list')}
-          >
-            <List className="w-4 h-4" />
-            Список
-          </button>
-          <button
-            className={`btn ${view === 'calendar' ? 'btn-primary' : 'btn-secondary'}`}
-            onClick={() => setView('calendar')}
-          >
-            <CalendarDays className="w-4 h-4" />
-            Занятость
-          </button>
-        </div>
-        <div className="flex gap-2">
+    <AdminLayout
+      title="Бронирования"
+      description="Переговорные и офисы на день — заявки, оплата и занятость."
+      actions={
+        <>
           <button
             className="btn btn-secondary"
             disabled={!writable}
             onClick={() => setEditor('block')}
           >
-            <Ban className="w-4 h-4" />
+            <Ban size={16} />
             Блокировка
           </button>
           <button
@@ -260,248 +266,234 @@ export default function BookingRequestsPage() {
             disabled={!writable}
             onClick={() => setEditor('new')}
           >
-            <Plus className="w-4 h-4" />
+            <Plus size={17} />
             Новая заявка
           </button>
-        </div>
-      </div>
-      <div className="flex gap-2 mb-4 flex-wrap">
-        {[
-          ['pending', 'Требуют действий'],
-          ['conflicts', 'Конфликты'],
-          ['history', 'История'],
-          ['', 'Все'],
-        ].map(([v, label]) => (
-          <button
-            key={v}
-            className={`btn text-sm ${filters.tab === v ? 'btn-primary' : 'btn-secondary'}`}
-            onClick={() => setFilters((f) => ({ ...f, tab: v, page: 1 }))}
+        </>
+      }
+    >
+      <div className="operations-page">
+        {counts && !writable && (
+          <p className="operations-notice" role="status">
+            {counts.mode === 'paused'
+              ? 'Приём изменений временно приостановлен.'
+              : 'Раздел готовится к подключению. Заявки пока обрабатываются на сайте.'}
+          </p>
+        )}
+        <section
+          className="operations-controls"
+          aria-label="Очереди и фильтры бронирований"
+        >
+          <div className="operations-controls__top">
+            <OperationsQueueTabs
+              label="Очереди бронирований"
+              active={filters.tab}
+              items={[
+                {
+                  value: 'pending',
+                  label: 'Требуют действий',
+                  count: counts?.bookings,
+                },
+                { value: 'conflicts', label: 'Конфликты' },
+                { value: 'history', label: 'История' },
+                { value: '', label: 'Все' },
+              ]}
+              onChange={(tab) =>
+                setFilters((current) => ({ ...current, tab, page: 1 }))
+              }
+            />
+            <div
+              className="operations-view"
+              role="group"
+              aria-label="Вид бронирований"
+            >
+              <button
+                type="button"
+                aria-pressed={view === 'list'}
+                onClick={() => setView('list')}
+              >
+                <List size={15} />
+                Список
+              </button>
+              <button
+                type="button"
+                aria-pressed={view === 'calendar'}
+                onClick={() => setView('calendar')}
+              >
+                <CalendarDays size={15} />
+                Занятость
+              </button>
+            </div>
+          </div>
+          <OperationsFilters
+            kind="bookings"
+            activeCount={
+              [
+                filters.room_id,
+                filters.date,
+                filters.status,
+                filters.payment_method,
+              ].filter(Boolean).length
+            }
+            search={
+              <OperationsFilter label="Поиск">
+                <span className="operations-search">
+                  <Search size={16} aria-hidden="true" />
+                  <input
+                    aria-label="Поиск заявок"
+                    className="input"
+                    placeholder="Номер, имя или телефон"
+                    value={filters.search}
+                    onChange={(e) =>
+                      setFilters((f) => ({
+                        ...f,
+                        search: e.target.value,
+                        page: 1,
+                      }))
+                    }
+                  />
+                </span>
+              </OperationsFilter>
+            }
           >
-            {label}
-          </button>
-        ))}
-      </div>
-      <div className="grid sm:grid-cols-2 xl:grid-cols-5 gap-3 mb-5">
-        <input
-          aria-label="Поиск заявок"
-          className="input"
-          placeholder="Номер, имя или телефон"
-          value={filters.search}
-          onChange={(e) =>
-            setFilters((f) => ({ ...f, search: e.target.value, page: 1 }))
-          }
-        />
-        <select
-          aria-label="Помещение"
-          className="input"
-          value={filters.room_id}
-          onChange={(e) =>
-            setFilters((f) => ({ ...f, room_id: e.target.value, page: 1 }))
-          }
-        >
-          <option value="">Все помещения</option>
-          {catalog?.rooms.map((r) => (
-            <option key={r.id} value={r.id}>
-              {r.title} · {r.business_center?.name}
-            </option>
-          ))}
-        </select>
-        <input
-          aria-label="Дата бронирования"
-          className="input"
-          type="date"
-          value={filters.date}
-          onChange={(e) =>
-            setFilters((f) => ({ ...f, date: e.target.value, page: 1 }))
-          }
-        />
-        <select
-          aria-label="Статус бронирования"
-          className="input"
-          value={filters.status}
-          onChange={(e) =>
-            setFilters((f) => ({ ...f, status: e.target.value, page: 1 }))
-          }
-        >
-          <option value="">Все статусы</option>
-          {Object.entries(list?.statuses || {}).map(([v, label]) => (
-            <option key={v} value={v}>
-              {label}
-            </option>
-          ))}
-        </select>
-        <select
-          aria-label="Способ оплаты"
-          className="input"
-          value={filters.payment_method}
-          onChange={(e) =>
-            setFilters((f) => ({
-              ...f,
-              payment_method: e.target.value,
-              page: 1,
-            }))
-          }
-        >
-          <option value="">Все способы оплаты</option>
-          {Object.entries(paymentLabels).map(([v, label]) => (
-            <option key={v} value={v}>
-              {label}
-            </option>
-          ))}
-        </select>
-      </div>
-      {error && <PageError message={error} onRetry={load} />}
-      {view === 'calendar' && (
-        <section className="card p-4 mb-5">
-          {calendarLoading ? (
-            <p className="text-[var(--muted)]" role="status">
-              Загрузка занятости…
-            </p>
-          ) : !calendar ? (
-            <p className="text-[var(--muted)]">
-              {filters.room_id && filters.date
-                ? 'Не удалось загрузить занятость. Повторите загрузку.'
-                : 'Выберите помещение и дату.'}
-            </p>
-          ) : (
-            <>
-              <p className="text-sm text-[var(--muted)] mb-3">
-                Время московское
-              </p>
-              <div className="grid grid-cols-3 sm:grid-cols-6 gap-2">
-                {calendar.slots.map((s) => (
-                  <div
-                    key={s.start_minute}
-                    className={`rounded p-2 border text-sm ${s.state === 'free' ? 'border-emerald-500/40 bg-emerald-500/10' : 'border-[var(--border)] bg-[var(--surface-muted)]'}`}
-                  >
-                    <strong>
-                      {clock(s.start_minute)}–{clock(s.end_minute)}
-                    </strong>
-                    <p className="text-xs text-[var(--muted)]">
-                      {(
-                        {
-                          free: 'Свободно',
-                          hold: 'Ожидает оплаты',
-                          paid: 'Оплачено',
-                          reserved: 'Занято',
-                          blocked: 'Блокировка',
-                        } as Record<string, string>
-                      )[s.state] || s.state}
-                    </p>
-                  </div>
+            <OperationsFilter label="Помещение">
+              <select
+                aria-label="Помещение"
+                className="input"
+                value={filters.room_id}
+                onChange={(e) =>
+                  setFilters((f) => ({
+                    ...f,
+                    room_id: e.target.value,
+                    page: 1,
+                  }))
+                }
+              >
+                <option value="">Все помещения</option>
+                {catalog?.rooms.map((r) => (
+                  <option key={r.id} value={r.id}>
+                    {r.title} · {r.business_center?.name}
+                  </option>
                 ))}
-              </div>
-            </>
+              </select>
+            </OperationsFilter>
+            <OperationsFilter label="Дата">
+              <input
+                aria-label="Дата бронирования"
+                className="input"
+                type="date"
+                value={filters.date}
+                onChange={(e) =>
+                  setFilters((f) => ({ ...f, date: e.target.value, page: 1 }))
+                }
+              />
+            </OperationsFilter>
+            <OperationsFilter label="Статус">
+              <select
+                aria-label="Статус бронирования"
+                className="input"
+                value={filters.status}
+                onChange={(e) =>
+                  setFilters((f) => ({ ...f, status: e.target.value, page: 1 }))
+                }
+              >
+                <option value="">Все статусы</option>
+                {Object.entries(list?.statuses || {}).map(([v, label]) => (
+                  <option key={v} value={v}>
+                    {label}
+                  </option>
+                ))}
+              </select>
+            </OperationsFilter>
+            <OperationsFilter label="Способ оплаты">
+              <select
+                aria-label="Способ оплаты"
+                className="input"
+                value={filters.payment_method}
+                onChange={(e) =>
+                  setFilters((f) => ({
+                    ...f,
+                    payment_method: e.target.value,
+                    page: 1,
+                  }))
+                }
+              >
+                <option value="">Все способы оплаты</option>
+                {Object.entries(paymentLabels).map(([v, label]) => (
+                  <option key={v} value={v}>
+                    {label}
+                  </option>
+                ))}
+              </select>
+            </OperationsFilter>
+          </OperationsFilters>
+          {hasFilters && (
+            <div className="operations-filter-summary">
+              <span>Применены фильтры</span>
+              <button
+                type="button"
+                className="operations-reset"
+                onClick={resetFilters}
+              >
+                <RotateCcw size={13} />
+                Сбросить фильтры
+              </button>
+            </div>
           )}
         </section>
-      )}
-      <div className="card overflow-x-auto">
-        <table className="w-full text-sm">
-          <thead>
-            <tr className="border-b border-[var(--border)] text-left text-[var(--muted)]">
-              <th className="p-4">Заявка</th>
-              <th className="p-4">Заказчик</th>
-              <th className="p-4">Помещение и время</th>
-              <th className="p-4">Оплата</th>
-              <th className="p-4">Статус</th>
-            </tr>
-          </thead>
-          <tbody>
-            {list?.items.map((item) => (
-              <tr
-                key={item.id}
-                className="border-b border-[var(--border)] hover:bg-[var(--surface-muted)]"
-              >
-                <td className="p-4">
-                  <button
-                    onClick={() => void open(item.id)}
-                    className="font-semibold text-[var(--primary)] hover:underline"
-                  >
-                    {item.number}
-                  </button>
-                  <p className="text-xs text-[var(--muted)] mt-1">
-                    {operationDate(item.created_at)}
-                  </p>
-                </td>
-                <td className="p-4">
-                  <div>{item.requester.name || 'Заказчик'}</div>
-                  <div className="text-xs text-[var(--muted)]">
-                    {item.guest ? 'Гость' : 'Резидент'} · {item.requester.phone}
-                  </div>
-                </td>
-                <td className="p-4">
-                  <div>{item.room.title}</div>
-                  <div className="text-xs text-[var(--muted)]">
-                    Офис: {roomOfficeNumber(item.room)} ·{' '}
-                    {bookingModeLabel(item.booking_mode)}
-                  </div>
-                  <div className="text-xs text-[var(--muted)]">
-                    {item.room.business_center?.name}
-                  </div>
-                  {item.segments.map((s, i) => (
-                    <div key={i} className="whitespace-nowrap">
-                      {s.date} · {clock(s.start_minute)}–{clock(s.end_minute)}
+        {error && <PageError message={error} onRetry={load} />}
+        {view === 'calendar' && (
+          <section className="card p-4 mb-5">
+            {calendarLoading ? (
+              <p className="text-[var(--muted)]" role="status">
+                Загрузка занятости…
+              </p>
+            ) : !calendar ? (
+              <p className="text-[var(--muted)]">
+                {filters.room_id && filters.date
+                  ? 'Не удалось загрузить занятость. Повторите загрузку.'
+                  : 'Выберите помещение и дату.'}
+              </p>
+            ) : (
+              <>
+                <p className="text-sm text-[var(--muted)] mb-3">
+                  Время московское
+                </p>
+                <div className="grid grid-cols-3 sm:grid-cols-6 gap-2">
+                  {calendar.slots.map((s) => (
+                    <div
+                      key={s.start_minute}
+                      className={`rounded p-2 border text-sm ${s.state === 'free' ? 'border-emerald-500/40 bg-emerald-500/10' : 'border-[var(--border)] bg-[var(--surface-muted)]'}`}
+                    >
+                      <strong>
+                        {clock(s.start_minute)}–{clock(s.end_minute)}
+                      </strong>
+                      <p className="text-xs text-[var(--muted)]">
+                        {(
+                          {
+                            free: 'Свободно',
+                            hold: 'Ожидает оплаты',
+                            paid: 'Оплачено',
+                            reserved: 'Занято',
+                            blocked: 'Блокировка',
+                          } as Record<string, string>
+                        )[s.state] || s.state}
+                      </p>
                     </div>
                   ))}
-                </td>
-                <td className="p-4 whitespace-nowrap">
-                  <strong>{money(item.total_amount_minor)}</strong>
-                  <div className="text-xs text-[var(--muted)]">
-                    {paymentLabels[item.payment_method]} ·{' '}
-                    {item.payment_status === 'paid'
-                      ? 'Оплачено'
-                      : 'Не оплачено'}
-                  </div>
-                  {item.writeoff_min > 0 && (
-                    <div className="text-xs">Часы: {item.writeoff_min} мин</div>
-                  )}
-                </td>
-                <td className="p-4">
-                  <span
-                    className={
-                      item.requires_attention ? 'text-[var(--danger)]' : ''
-                    }
-                  >
-                    <OperationsStatusBadge
-                      status={item.status}
-                      label={item.status_label}
-                    />
-                  </span>
-                </td>
-              </tr>
-            ))}
-          </tbody>
-        </table>
-        {!list ? (
-          <p className="p-5 text-[var(--muted)]">Загрузка…</p>
-        ) : (
-          !list.items.length && (
-            <p className="p-5 text-[var(--muted)]">
-              Заявок по выбранным условиям нет.
-            </p>
-          )
+                </div>
+              </>
+            )}
+          </section>
         )}
-        {list && (
-          <div className="flex items-center justify-between p-4">
-            <button
-              className="btn btn-secondary"
-              disabled={filters.page <= 1}
-              onClick={() => setFilters((f) => ({ ...f, page: f.page - 1 }))}
-            >
-              Назад
-            </button>
-            <span className="text-sm text-[var(--muted)]">
-              Всего: {list.total} · Страница {filters.page}
-            </span>
-            <button
-              className="btn btn-secondary"
-              disabled={filters.page * list.per_page >= list.total}
-              onClick={() => setFilters((f) => ({ ...f, page: f.page + 1 }))}
-            >
-              Далее
-            </button>
-          </div>
-        )}
+        <BookingRequestsList
+          list={list}
+          loading={listLoading}
+          page={filters.page}
+          onPage={(page) => setFilters((f) => ({ ...f, page }))}
+          onOpen={(id) => void open(id)}
+          onReset={hasFilters ? resetFilters : undefined}
+        />
       </div>
       <AdminModal
         open={!!detail && !editor}
@@ -514,61 +506,8 @@ export default function BookingRequestsPage() {
         wide
       >
         {b && detail && (
-          <div className="space-y-5">
-            <div className="grid sm:grid-cols-2 gap-4">
-              <div>
-                <h3 className="font-semibold">
-                  {b.requester.name || 'Заказчик'}
-                </h3>
-                <p className="text-sm text-[var(--muted)]">
-                  {b.guest ? 'Гость' : 'Резидент'}
-                </p>
-                <p>{b.requester.phone}</p>
-                <p className="break-words">{b.requester.email}</p>
-              </div>
-              <div>
-                <h3 className="font-semibold">{b.room.title}</h3>
-                <p className="text-sm text-[var(--muted)]">
-                  Офис: {roomOfficeNumber(b.room)}
-                </p>
-                <p className="text-sm text-[var(--muted)]">
-                  Тип заявки: {bookingModeLabel(b.booking_mode)}
-                </p>
-                {b.segments.map((s, i) => (
-                  <p key={i}>
-                    {s.date} · {clock(s.start_minute)}–{clock(s.end_minute)}
-                  </p>
-                ))}
-                <OperationsStatusBadge
-                  status={b.status}
-                  label={b.status_label}
-                />
-              </div>
-            </div>
-            {b.requires_attention && (
-              <p className="p-3 border border-[var(--danger)] rounded text-sm text-[var(--danger)]">
-                {b.attention_reason || 'Требуется проверка администратора.'}
-              </p>
-            )}
-            <div className="card p-4">
-              <p className="font-semibold">
-                {money(b.total_amount_minor)} ·{' '}
-                {paymentLabels[b.payment_method]}
-              </p>
-              <p className="text-sm">
-                {b.payment_status === 'paid'
-                  ? 'Оплачено'
-                  : b.payment_method === 'postpay'
-                    ? 'Постоплата'
-                    : 'Оплата не получена'}
-              </p>
-              {b.writeoff_min > 0 && (
-                <p className="text-sm mt-1">
-                  Резидентские часы: {b.writeoff_min} мин · Списано:{' '}
-                  {b.hours_debited_min || 0} мин
-                </p>
-              )}
-            </div>
+          <div className="booking-detail space-y-5">
+            <BookingOverview booking={b} />
             {!!b.services.length && (
               <div>
                 <h3 className="font-semibold mb-2">Дополнительные услуги</h3>
@@ -593,7 +532,7 @@ export default function BookingRequestsPage() {
                 <p className="text-sm whitespace-pre-wrap">{b.comment_admin}</p>
               </div>
             )}
-            <div className="flex flex-wrap gap-2">
+            <div className="booking-detail-actions">
               <button
                 type="button"
                 className="btn btn-secondary"
@@ -724,7 +663,7 @@ export default function BookingRequestsPage() {
               </div>
             )}
             {detail.hours_account && (
-              <div className="card p-4">
+              <div className="booking-detail-section">
                 <h3 className="font-semibold">
                   Баланс часов: {detail.hours_account.balance_min} мин
                 </h3>
@@ -772,7 +711,7 @@ export default function BookingRequestsPage() {
               </div>
             )}
             {action && (
-              <div className="card p-4 space-y-3">
+              <div className="booking-detail-section booking-detail-section--action space-y-3">
                 <h3 className="font-semibold">
                   {
                     (
@@ -870,8 +809,10 @@ export default function BookingRequestsPage() {
                 </div>
               </div>
             )}
-            <div>
-              <h3 className="font-semibold mb-2">История действий</h3>
+            <details className="booking-history">
+              <summary>
+                История действий <span>{detail.history.length}</span>
+              </summary>
               <ul className="space-y-2 text-sm">
                 {detail.history.map((h) => (
                   <li
@@ -899,7 +840,10 @@ export default function BookingRequestsPage() {
                   </li>
                 ))}
               </ul>
-            </div>
+              {!detail.history.length && (
+                <p className="booking-secondary">История пока пуста.</p>
+              )}
+            </details>
           </div>
         )}
       </AdminModal>

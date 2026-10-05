@@ -109,14 +109,14 @@ export function Header() {
         borderColor: 'var(--header-border)',
       }}
     >
-      <div className="max-w-6xl mx-auto px-4 py-3 flex items-center justify-between gap-4">
-        <div className="flex items-center gap-6">
+      <div className="max-w-6xl mx-auto px-4 py-3 flex items-center justify-between gap-2 sm:gap-4">
+        <div className="flex min-w-0 items-center gap-6">
           <Link href={homePath} style={{ color: 'var(--header-text)' }}>
             <SiteBrand
               config={config}
               size="sm"
               variant={theme === 'dark' ? 'dark' : 'light'}
-              className="max-w-[200px] sm:max-w-none"
+              className="max-w-[200px] max-[360px]:[&_.font-semibold]:hidden max-[360px]:[&_img]:max-w-[112px] sm:max-w-none"
             />
           </Link>
           <nav className="hidden sm:flex items-center gap-1">
@@ -138,7 +138,7 @@ export function Header() {
             })}
           </nav>
         </div>
-        <div className="flex items-center gap-3">
+        <div className="flex shrink-0 items-center gap-1 sm:gap-3">
           {showOverdueAlerts &&
             overduePasses.length > 0 &&
             (onControlPage ? (

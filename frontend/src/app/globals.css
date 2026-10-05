@@ -1,5 +1,6 @@
 @import 'tailwindcss';
 @import './service-requests.css';
+@import './admin-operations.css';
 
 :root {
   --m-accent: #eb711c;

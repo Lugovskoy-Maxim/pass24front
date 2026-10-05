@@ -28,14 +28,14 @@ export function WorkQueueIndicator() {
         <Bell className="w-5 h-5" />
         <WorkQueueBadge count={counts?.total || 0} />
       </summary>
-      <div className="absolute right-0 mt-2 w-72 card p-3 shadow-lg z-50 text-[var(--text)]">
+      <div className="fixed right-4 top-16 mt-2 w-[min(18rem,calc(100vw-2rem))] sm:absolute sm:right-0 sm:top-auto card p-3 shadow-lg z-50 text-[var(--text)]">
         <p className="font-semibold text-sm mb-2">Требуют внимания</p>
         {canBook && (
           <Link
             className="flex items-center justify-between gap-2 p-2 rounded hover:bg-[var(--surface-muted)]"
             href="/admin/booking-requests?tab=pending"
           >
-            Заявки
+            Бронирования
             <WorkQueueBadge count={counts?.bookings || 0} />
           </Link>
         )}
@@ -44,7 +44,7 @@ export function WorkQueueIndicator() {
             className="flex items-center justify-between gap-2 p-2 rounded hover:bg-[var(--surface-muted)]"
             href="/admin/service-requests?needs_action=1"
           >
-            Обращения в сервисную службу
+            Сервисные заявки
             <WorkQueueBadge count={counts?.support || 0} />
           </Link>
         )}

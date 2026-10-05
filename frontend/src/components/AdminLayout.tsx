@@ -34,13 +34,13 @@ import { useAutoRefresh } from '@/hooks/useAutoRefresh';
 const NAV = [
   {
     href: '/admin/booking-requests',
-    label: 'Заявки',
+    label: 'Бронирования',
     icon: CalendarDays,
     permission: 'bookings.manage',
   },
   {
     href: '/admin/service-requests',
-    label: 'Обращения в сервисную службу',
+    label: 'Сервисные заявки',
     icon: MessagesSquare,
     permission: 'support.manage',
   },
@@ -101,9 +101,13 @@ const NAV = [
 export function AdminLayout({
   children,
   title,
+  description,
+  actions,
 }: {
   children: React.ReactNode;
   title: string;
+  description?: string;
+  actions?: React.ReactNode;
 }) {
   const pathname = usePathname();
   const { user } = useAuth();
@@ -290,7 +294,22 @@ export function AdminLayout({
           </div>
         </aside>
         <div className="flex-1 min-w-0">
-          <h1 className="page-title mb-6">{title}</h1>
+          {description ? (
+            <header className="operations-heading">
+              <div>
+                <p className="operations-heading__eyebrow">
+                  Рабочее пространство
+                </p>
+                <h1 className="page-title">{title}</h1>
+                <p className="operations-heading__description">{description}</p>
+              </div>
+              {actions && (
+                <div className="operations-heading__actions">{actions}</div>
+              )}
+            </header>
+          ) : (
+            <h1 className="page-title mb-6">{title}</h1>
+          )}
           {children}
         </div>
       </div>

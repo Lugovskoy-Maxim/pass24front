@@ -10,10 +10,18 @@ import {
   Search,
   Send,
   X,
+  RotateCcw,
 } from 'lucide-react';
 import { AdminLayout } from '@/components/AdminLayout';
 import { useToast } from '@/components/Toast';
 import { PageError } from '@/components/PageError';
+import {
+  OperationsFilters,
+  OperationsFilter,
+  OperationsQueueTabs,
+  OperationsEmptyState,
+  OperationsPagination,
+} from '@/components/OperationsWorkspace';
 import {
   RequestChatPlaceholder,
   RequestDetailHeader,
@@ -226,308 +234,370 @@ export default function ServiceRequestsPage() {
       toast(getErrorMessage(e), 'error');
     }
   };
+  const hasFilters = !!(
+    filters.search ||
+    filters.status ||
+    filters.topic ||
+    filters.category ||
+    filters.booking_id
+  );
+  const resetFilters = () =>
+    setFilters((current) => ({
+      ...current,
+      search: '',
+      status: '',
+      topic: '',
+      category: '',
+      booking_id: '',
+      page: 1,
+    }));
   return (
-    <AdminLayout title="Обращения в сервисную службу">
-      {counts && counts.mode !== 'pass' && (
-        <p className="card p-3 mb-4 text-sm text-[var(--muted)]">
-          {counts.mode === 'paused'
-            ? 'Приём изменений временно приостановлен.'
-            : 'Раздел готовится к подключению. Обращения пока обрабатываются на сайте.'}
-        </p>
-      )}
-      <div className="request-filter-bar">
-        <div className="request-filter-search">
-          <Search size={15} aria-hidden="true" />
-          <input
-            aria-label="Поиск обращений"
-            className="input"
-            placeholder="Номер, тема или автор"
-            value={filters.search}
-            onChange={(e) =>
-              setFilters((f) => ({ ...f, search: e.target.value, page: 1 }))
-            }
-          />
-        </div>
-        <select
-          className="input"
-          aria-label="Категория офиса"
-          value={filters.category}
-          onChange={(e) =>
-            setFilters((f) => ({ ...f, category: e.target.value, page: 1 }))
-          }
-        >
-          <option value="">Все категории офисов</option>
-          {categories.map((c) => (
-            <option key={c.code} value={c.code}>
-              {c.name}
-            </option>
-          ))}
-        </select>
-        <select
-          aria-label="Статус"
-          className="input"
-          value={filters.status}
-          onChange={(e) =>
-            setFilters((f) => ({ ...f, status: e.target.value, page: 1 }))
-          }
-        >
-          <option value="">Все статусы</option>
-          {Object.entries(list?.statuses || {}).map(([v, label]) => (
-            <option key={v} value={v}>
-              {label}
-            </option>
-          ))}
-        </select>
-        <select
-          aria-label="Тема"
-          className="input"
-          value={filters.topic}
-          onChange={(e) =>
-            setFilters((f) => ({ ...f, topic: e.target.value, page: 1 }))
-          }
-        >
-          <option value="">Все темы</option>
-          {Object.entries(list?.topics || {}).map(([v, label]) => (
-            <option key={v} value={v}>
-              {label}
-            </option>
-          ))}
-        </select>
-        <label className="flex gap-2 items-center text-xs py-2">
-          <input
-            type="checkbox"
-            checked={filters.needs_action === '1'}
-            onChange={(e) =>
-              setFilters((f) => ({
-                ...f,
-                needs_action: e.target.checked ? '1' : '',
-                page: 1,
-              }))
-            }
-          />
-          Требуют ответа
-        </label>
-      </div>
-      {error && <PageError message={error} onRetry={load} />}
-      <div className="request-workspace request-workspace--admin">
+    <AdminLayout
+      title="Сервисные заявки"
+      description="Обращения арендаторов, услуги для офисов и переписка с клиентами."
+    >
+      <div className="operations-page operations-page--support">
+        {counts && counts.mode !== 'pass' && (
+          <p className="operations-notice" role="status">
+            {counts.mode === 'paused'
+              ? 'Приём изменений временно приостановлен.'
+              : 'Раздел готовится к подключению. Обращения пока обрабатываются на сайте.'}
+          </p>
+        )}
         <section
-          className={'request-list ' + (mobileDetail ? 'hidden xl:flex' : '')}
-          aria-label="Список обращений"
+          className="operations-controls"
+          aria-label="Очереди и фильтры сервисных заявок"
         >
-          <div className="request-list__header">
-            <MessageSquare size={16} className="text-[var(--muted)]" />
-            Обращения
-            <span className="request-list__count">{list?.total ?? '…'}</span>
+          <div className="operations-controls__top">
+            <OperationsQueueTabs
+              label="Очереди обращений"
+              active={filters.needs_action}
+              items={[
+                { value: '', label: 'Все обращения' },
+                { value: '1', label: 'Требуют ответа', count: counts?.support },
+              ]}
+              onChange={(needs_action) =>
+                setFilters((f) => ({ ...f, needs_action, page: 1 }))
+              }
+            />
+            <span className="operations-controls__hint">
+              Выберите обращение, чтобы ответить
+            </span>
           </div>
-          <div className="request-list__items">
-            {!list ? (
-              <p className="p-5 text-sm text-[var(--muted)]" role="status">
-                Загрузка…
-              </p>
-            ) : !list.items.length ? (
-              <p className="p-5 text-sm text-[var(--muted)]">
-                Обращений по выбранным условиям нет.
-              </p>
-            ) : (
-              list.items.map((ticket) => (
-                <RequestListItem
-                  key={ticket.id}
-                  id={ticket.id}
-                  title={ticket.subject}
-                  preview={ticket.last_message_preview}
-                  requester={ticket.requester_name}
-                  updatedAt={ticket.last_message_at}
-                  status={ticket.status}
-                  statusLabel={ticket.status_label}
-                  office={{
-                    office: ticket.office,
-                    offices: ticket.offices,
-                    officeLabel: ticket.office_label,
-                    category: ticket.office_category,
-                  }}
-                  attention={ticket.needs_action ? 'Ждёт ответа' : undefined}
-                  selected={detail?.ticket.id === ticket.id}
-                  onClick={() => void open(ticket.id)}
-                />
-              ))
-            )}
-          </div>
-          {list && (list.total > list.per_page || filters.page > 1) && (
-            <div className="request-pagination">
-              <button
-                className="btn btn-secondary btn-sm"
-                disabled={filters.page <= 1}
-                onClick={() => setFilters((f) => ({ ...f, page: f.page - 1 }))}
+          <OperationsFilters
+            kind="support"
+            activeCount={
+              [filters.category, filters.status, filters.topic].filter(Boolean)
+                .length
+            }
+            search={
+              <OperationsFilter label="Поиск">
+                <span className="operations-search">
+                  <Search size={16} aria-hidden="true" />
+                  <input
+                    aria-label="Поиск обращений"
+                    className="input"
+                    placeholder="Номер, тема или автор"
+                    value={filters.search}
+                    onChange={(e) =>
+                      setFilters((f) => ({
+                        ...f,
+                        search: e.target.value,
+                        page: 1,
+                      }))
+                    }
+                  />
+                </span>
+              </OperationsFilter>
+            }
+          >
+            <OperationsFilter label="Категория офиса">
+              <select
+                className="input"
+                aria-label="Категория офиса"
+                value={filters.category}
+                onChange={(e) =>
+                  setFilters((f) => ({
+                    ...f,
+                    category: e.target.value,
+                    page: 1,
+                  }))
+                }
               >
-                Назад
-              </button>
+                <option value="">Все категории</option>
+                {categories.map((c) => (
+                  <option key={c.code} value={c.code}>
+                    {c.name}
+                  </option>
+                ))}
+              </select>
+            </OperationsFilter>
+            <OperationsFilter label="Статус">
+              <select
+                aria-label="Статус"
+                className="input"
+                value={filters.status}
+                onChange={(e) =>
+                  setFilters((f) => ({ ...f, status: e.target.value, page: 1 }))
+                }
+              >
+                <option value="">Все статусы</option>
+                {Object.entries(list?.statuses || {}).map(([v, label]) => (
+                  <option key={v} value={v}>
+                    {label}
+                  </option>
+                ))}
+              </select>
+            </OperationsFilter>
+            <OperationsFilter label="Тема">
+              <select
+                aria-label="Тема"
+                className="input"
+                value={filters.topic}
+                onChange={(e) =>
+                  setFilters((f) => ({ ...f, topic: e.target.value, page: 1 }))
+                }
+              >
+                <option value="">Все темы</option>
+                {Object.entries(list?.topics || {}).map(([v, label]) => (
+                  <option key={v} value={v}>
+                    {label}
+                  </option>
+                ))}
+              </select>
+            </OperationsFilter>
+          </OperationsFilters>
+          {hasFilters && (
+            <div className="operations-filter-summary">
               <span>
-                {filters.page} /{' '}
-                {Math.max(1, Math.ceil(list.total / list.per_page))}
+                {filters.booking_id ? (
+                  <>Связанная бронь №{filters.booking_id}</>
+                ) : (
+                  'Применены фильтры'
+                )}
               </span>
               <button
-                className="btn btn-secondary btn-sm"
-                disabled={filters.page * list.per_page >= list.total}
-                onClick={() => setFilters((f) => ({ ...f, page: f.page + 1 }))}
+                type="button"
+                className="operations-reset"
+                onClick={resetFilters}
               >
-                Далее
+                <RotateCcw size={13} />
+                Сбросить фильтры
               </button>
             </div>
           )}
         </section>
-        <section
-          ref={detailPanel}
-          tabIndex={-1}
-          className={'request-detail ' + (mobileDetail ? '' : 'hidden xl:flex')}
-        >
-          <button
-            type="button"
-            className="request-back xl:hidden"
-            onClick={() => {
-              selection.current = 0;
-              ++selectionVersion.current;
-              ++detailRequest.current;
-              setMobileDetail(false);
-              setDetail(null);
-              setDetailLoading(false);
-            }}
+        {error && <PageError message={error} onRetry={load} />}
+        <div className="request-workspace request-workspace--admin">
+          <section
+            className={'request-list ' + (mobileDetail ? 'hidden xl:flex' : '')}
+            aria-label="Список обращений"
           >
-            <ArrowLeft size={15} />
-            Назад к обращениям
-          </button>
-          {detailLoading ? (
-            <RequestChatPlaceholder loading />
-          ) : !detail ? (
-            <RequestChatPlaceholder />
-          ) : (
-            <>
-              <RequestDetailHeader
-                id={detail.ticket.id}
-                title={detail.ticket.subject}
-                requester={detail.ticket.requester_name}
-                createdAt={detail.ticket.created_at}
-                topic={detail.ticket.topic_label}
-                status={detail.ticket.status}
-                statusLabel={detail.ticket.status_label}
-                office={{
-                  office: detail.ticket.office,
-                  offices: detail.ticket.offices,
-                  officeLabel: detail.ticket.office_label,
-                  category: detail.ticket.office_category,
-                }}
-              >
-                <span className="text-xs text-[var(--muted)]">Статус</span>
-                <select
-                  aria-label="Изменить статус обращения"
-                  className="input"
-                  disabled={busy || counts?.mode !== 'pass'}
-                  value={detail.ticket.status}
-                  onChange={(e) => void status(e.target.value)}
-                >
-                  {Object.entries(list?.statuses || {}).map(([v, label]) => (
-                    <option key={v} value={v}>
-                      {label}
-                    </option>
-                  ))}
-                </select>
-                {detail.can_reply && (
-                  <button
-                    type="button"
-                    className="btn btn-secondary btn-sm ml-auto"
-                    onClick={() => replyRef.current?.focus()}
-                  >
-                    <Send size={13} />
-                    Ответить
-                  </button>
-                )}
-              </RequestDetailHeader>
-              {detail.ticket.booking_id && (
-                <Link
-                  href={
-                    '/admin/booking-requests?id=' + detail.ticket.booking_id
-                  }
-                  className="request-related"
-                >
-                  Связанная бронь №{detail.ticket.booking_id}
-                  <ExternalLink size={13} />
-                </Link>
-              )}
-              {detail.ticket.service_order && (
-                <RequestServiceOrder order={detail.ticket.service_order} />
-              )}
-              <RequestMessages
-                conversationId={detail.ticket.id}
-                messages={detail.messages}
-                perspective="support"
-                onDownload={(attachment) => void download(attachment)}
-              />
-              {detail.can_reply ? (
-                <form onSubmit={send} className="request-composer">
-                  <textarea
-                    ref={replyRef}
-                    aria-label="Ответ клиенту"
-                    className="input"
-                    rows={2}
-                    placeholder="Напишите ответ арендатору…"
-                    maxLength={20000}
-                    required
-                    value={message}
-                    onChange={(e) => setMessage(e.target.value)}
-                    disabled={busy}
+            <div className="request-list__header">
+              <MessageSquare size={16} className="text-[var(--muted)]" />
+              Обращения
+              <span className="request-list__count">{list?.total ?? '…'}</span>
+            </div>
+            <div className="request-list__items">
+              {!list ? (
+                <p className="p-5 text-sm text-[var(--muted)]" role="status">
+                  Загрузка…
+                </p>
+              ) : !list.items.length ? (
+                <OperationsEmptyState
+                  title="Обращений пока нет"
+                  description="Попробуйте другую очередь или измените фильтры."
+                  onReset={hasFilters ? resetFilters : undefined}
+                />
+              ) : (
+                list.items.map((ticket) => (
+                  <RequestListItem
+                    key={ticket.id}
+                    id={ticket.id}
+                    title={ticket.subject}
+                    preview={ticket.last_message_preview}
+                    requester={ticket.requester_name}
+                    updatedAt={ticket.last_message_at}
+                    status={ticket.status}
+                    statusLabel={ticket.status_label}
+                    office={{
+                      office: ticket.office,
+                      offices: ticket.offices,
+                      officeLabel: ticket.office_label,
+                      category: ticket.office_category,
+                    }}
+                    attention={ticket.needs_action ? 'Ждёт ответа' : undefined}
+                    selected={detail?.ticket.id === ticket.id}
+                    onClick={() => void open(ticket.id)}
                   />
-                  {file && (
-                    <div className="request-composer__file">
-                      <Paperclip size={13} />
-                      <span>{file.name}</span>
+                ))
+              )}
+            </div>
+            {list && (list.total > list.per_page || filters.page > 1) && (
+              <OperationsPagination
+                page={filters.page}
+                total={list.total}
+                perPage={list.per_page}
+                onChange={(page) => setFilters((f) => ({ ...f, page }))}
+              />
+            )}
+          </section>
+          <section
+            ref={detailPanel}
+            tabIndex={-1}
+            className={
+              'request-detail ' + (mobileDetail ? '' : 'hidden xl:flex')
+            }
+          >
+            <button
+              type="button"
+              className="request-back xl:hidden"
+              onClick={() => {
+                selection.current = 0;
+                ++selectionVersion.current;
+                ++detailRequest.current;
+                setMobileDetail(false);
+                setDetail(null);
+                setDetailLoading(false);
+              }}
+            >
+              <ArrowLeft size={15} />
+              Назад к обращениям
+            </button>
+            {detailLoading ? (
+              <RequestChatPlaceholder loading />
+            ) : !detail ? (
+              <RequestChatPlaceholder />
+            ) : (
+              <>
+                <RequestDetailHeader
+                  id={detail.ticket.id}
+                  title={detail.ticket.subject}
+                  requester={detail.ticket.requester_name}
+                  createdAt={detail.ticket.created_at}
+                  topic={detail.ticket.topic_label}
+                  status={detail.ticket.status}
+                  statusLabel={detail.ticket.status_label}
+                  office={{
+                    office: detail.ticket.office,
+                    offices: detail.ticket.offices,
+                    officeLabel: detail.ticket.office_label,
+                    category: detail.ticket.office_category,
+                  }}
+                >
+                  <span className="text-xs text-[var(--muted)]">Статус</span>
+                  <select
+                    aria-label="Изменить статус обращения"
+                    className="input"
+                    disabled={busy || counts?.mode !== 'pass'}
+                    value={detail.ticket.status}
+                    onChange={(e) => void status(e.target.value)}
+                  >
+                    {Object.entries(list?.statuses || {}).map(([v, label]) => (
+                      <option key={v} value={v}>
+                        {label}
+                      </option>
+                    ))}
+                  </select>
+                  {detail.can_reply && (
+                    <button
+                      type="button"
+                      className="btn btn-secondary btn-sm ml-auto"
+                      onClick={() => replyRef.current?.focus()}
+                    >
+                      <Send size={13} />
+                      Ответить
+                    </button>
+                  )}
+                </RequestDetailHeader>
+                {detail.ticket.booking_id && (
+                  <Link
+                    href={
+                      '/admin/booking-requests?id=' + detail.ticket.booking_id
+                    }
+                    className="request-related"
+                  >
+                    Связанная бронь №{detail.ticket.booking_id}
+                    <ExternalLink size={13} />
+                  </Link>
+                )}
+                {detail.ticket.service_order && (
+                  <RequestServiceOrder order={detail.ticket.service_order} />
+                )}
+                <RequestMessages
+                  conversationId={detail.ticket.id}
+                  messages={detail.messages}
+                  perspective="support"
+                  onDownload={(attachment) => void download(attachment)}
+                />
+                {detail.can_reply ? (
+                  <form onSubmit={send} className="request-composer">
+                    <textarea
+                      ref={replyRef}
+                      aria-label="Ответ клиенту"
+                      className="input"
+                      rows={2}
+                      placeholder="Напишите ответ арендатору…"
+                      maxLength={20000}
+                      required
+                      value={message}
+                      onChange={(e) => setMessage(e.target.value)}
+                      disabled={busy}
+                    />
+                    {file && (
+                      <div className="request-composer__file">
+                        <Paperclip size={13} />
+                        <span>{file.name}</span>
+                        <button
+                          type="button"
+                          aria-label="Удалить вложение"
+                          onClick={() => {
+                            setFile(null);
+                            uploaded.current = null;
+                          }}
+                        >
+                          <X size={14} />
+                        </button>
+                      </div>
+                    )}
+                    <div className="request-composer__actions">
+                      <label className="request-composer__attach">
+                        <Paperclip size={16} />
+                        Прикрепить файл
+                        <input
+                          type="file"
+                          className="sr-only"
+                          disabled={busy}
+                          accept=".pdf,.jpg,.jpeg,.png,.webp,.doc,.docx,.xls,.xlsx,.txt,.zip,.rar,.heic,.pages,.numbers"
+                          onChange={(e) => {
+                            setFile(e.target.files?.[0] || null);
+                            uploaded.current = null;
+                          }}
+                        />
+                      </label>
                       <button
-                        type="button"
-                        aria-label="Удалить вложение"
-                        onClick={() => {
-                          setFile(null);
-                          uploaded.current = null;
-                        }}
+                        className="btn btn-primary"
+                        type="submit"
+                        disabled={
+                          busy || !message.trim() || counts?.mode !== 'pass'
+                        }
                       >
-                        <X size={14} />
+                        <Send size={14} />
+                        {busy ? 'Отправка…' : 'Отправить'}
                       </button>
                     </div>
-                  )}
-                  <div className="request-composer__actions">
-                    <label className="request-composer__attach">
-                      <Paperclip size={16} />
-                      Прикрепить файл
-                      <input
-                        type="file"
-                        className="sr-only"
-                        disabled={busy}
-                        accept=".pdf,.jpg,.jpeg,.png,.webp,.doc,.docx,.xls,.xlsx,.txt,.zip,.rar,.heic,.pages,.numbers"
-                        onChange={(e) => {
-                          setFile(e.target.files?.[0] || null);
-                          uploaded.current = null;
-                        }}
-                      />
-                    </label>
-                    <button
-                      className="btn btn-primary"
-                      type="submit"
-                      disabled={
-                        busy || !message.trim() || counts?.mode !== 'pass'
-                      }
-                    >
-                      <Send size={14} />
-                      {busy ? 'Отправка…' : 'Отправить'}
-                    </button>
-                  </div>
-                </form>
-              ) : (
-                <p className="request-closed">
-                  <LockKeyhole size={15} />
-                  Обращение закрыто. Для продолжения переписки переведите его в
-                  работу.
-                </p>
-              )}
-            </>
-          )}
-        </section>
+                  </form>
+                ) : (
+                  <p className="request-closed">
+                    <LockKeyhole size={15} />
+                    Обращение закрыто. Для продолжения переписки переведите его
+                    в работу.
+                  </p>
+                )}
+              </>
+            )}
+          </section>
+        </div>
       </div>
     </AdminLayout>
   );
