@@ -99,6 +99,17 @@ export const officeMoney = (minor: number) =>
     currency: 'RUB',
     maximumFractionDigits: 2,
   }).format(minor / 100);
+export function publishedServicePrices(services: OfficeService[]) {
+  return services.filter(
+    (service) =>
+      service.show &&
+      service.name.trim() &&
+      service.mode !== 'unavailable' &&
+      service.priceMinor != null &&
+      Number.isFinite(service.priceMinor) &&
+      service.priceMinor >= 0,
+  );
+}
 export function servicePrice(service: ServiceRule) {
   if (service.mode === 'included') return 'Включено';
   if (service.mode === 'unavailable') return 'Недоступно';
@@ -152,7 +163,7 @@ export const officeServices = {
     key: string,
   ) =>
     request<{ ticket: { id: string } }>('/service-requests', {
-      ...body({ ...value, topic: 'office' }),
+      ...body({ ...value, topic: 'services' }),
       headers: { 'Idempotency-Key': key },
     }),
 };

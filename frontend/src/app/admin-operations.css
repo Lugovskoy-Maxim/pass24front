@@ -36,6 +36,31 @@
 .operations-page {
   --operations-radius: 14px;
 }
+.booking-workspace {
+  display: grid;
+  gap: 16px;
+  max-width: 1080px;
+}
+.booking-workspace__back {
+  justify-self: start;
+}
+.booking-workspace__content,
+.booking-editor-page {
+  min-width: 0;
+  padding: clamp(16px, 2.5vw, 28px);
+}
+.booking-editor-page {
+  max-width: 880px;
+}
+.booking-editor-form > fieldset,
+.booking-editor-form > label,
+.booking-editor-form > .grid {
+  padding-bottom: 18px;
+  border-bottom: 1px solid var(--border);
+}
+.booking-editor-form > fieldset > legend {
+  font-weight: 650;
+}
 .operations-notice {
   padding: 12px 16px;
   margin-bottom: 16px;

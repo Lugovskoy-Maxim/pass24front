@@ -66,6 +66,7 @@ export interface SiteSettingsDto {
   registrationNotifyUserIds: string[];
   /** Показывать плавающую кнопку «Помощь». */
   helpButtonEnabled: boolean;
+  tenantServiceRequestsEnabled: boolean;
   faqItems: NormalizedFaqItem[];
   helpGuideSections: NormalizedGuideSection[];
 }
@@ -227,6 +228,7 @@ export class SiteSettingsService implements OnModuleInit {
     registrationNotifyEmails?: string[];
     registrationNotifyUserIds?: string[];
     helpButtonEnabled?: boolean;
+    tenantServiceRequestsEnabled?: boolean;
     /** Сырой список из DTO — id опционален, нормализуется внутри */
     faqItems?: Array<{ id?: string; question?: string; answer?: string }>;
     helpGuideSections?: Array<{
@@ -336,6 +338,9 @@ export class SiteSettingsService implements OnModuleInit {
     if (data.helpButtonEnabled !== undefined) {
       update.helpButtonEnabled = !!data.helpButtonEnabled;
     }
+    if (data.tenantServiceRequestsEnabled !== undefined) {
+      update.tenantServiceRequestsEnabled = data.tenantServiceRequestsEnabled;
+    }
     if (data.faqItems !== undefined) {
       update.faqItems = normalizeFaqItems(data.faqItems);
     }
@@ -414,6 +419,7 @@ export class SiteSettingsService implements OnModuleInit {
         ? doc.registrationNotifyUserIds.map(String).filter(Boolean).slice(0, 50)
         : [],
       helpButtonEnabled: doc?.helpButtonEnabled !== false,
+      tenantServiceRequestsEnabled: doc?.tenantServiceRequestsEnabled === true,
       faqItems: normalizeFaqItems(
         doc?.faqItems?.length ? doc.faqItems : DEFAULT_FAQ_ITEMS,
       ),

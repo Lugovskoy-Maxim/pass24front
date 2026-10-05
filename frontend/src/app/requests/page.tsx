@@ -25,7 +25,14 @@ import {
   operations,
 } from '@/lib/operations';
 import { OfficeCategory, OfficeService } from '@/lib/office-services';
+import {
+  SERVICE_REQUEST_TOPICS,
+  ServiceRequestTopic,
+} from '@/lib/service-request-topics';
+import { ServiceRequestPriceList } from '@/components/ServiceRequestPriceList';
 import { useAutoRefresh } from '@/hooks/useAutoRefresh';
+import { useConfig } from '@/hooks/useConfig';
+import { canUseTenantServiceRequests } from '@/lib/permissions';
 type TenantTicket = {
   id: string;
   title: string;
@@ -68,9 +75,12 @@ function ticketOffice(ticket: TenantTicket) {
 }
 export default function RequestsPage() {
   const { user } = useAuth();
+  const config = useConfig();
+  const enabled = canUseTenantServiceRequests(user, config);
   const [tickets, setTickets] = useState<TenantTicket[]>([]);
   const [detail, setDetail] = useState<Detail | null>(null);
   const [officeId, setOfficeId] = useState('');
+  const [topic, setTopic] = useState<ServiceRequestTopic>('service');
   const [subject, setSubject] = useState('');
   const [body, setBody] = useState('');
   const [reply, setReply] = useState('');
@@ -86,7 +96,7 @@ export default function RequestsPage() {
   const selection = useRef('');
   const selectionVersion = useRef(0);
   const load = useCallback(async () => {
-    if (!user) return;
+    if (!user || !enabled) return;
     const sequence = ++listRequest.current;
     try {
       const nextList = await request<{ items: TenantTicket[] }>(
@@ -112,11 +122,11 @@ export default function RequestsPage() {
     } finally {
       if (sequence === listRequest.current) setLoading(false);
     }
-  }, [user]);
+  }, [user, enabled]);
   useEffect(() => {
     void load();
   }, [load]);
-  useAutoRefresh(load, { enabled: !!user });
+  useAutoRefresh(load, { enabled });
   useEffect(() => {
     if (
       mobileDetail &&
@@ -148,13 +158,14 @@ export default function RequestsPage() {
   }
   async function create(e: FormEvent) {
     e.preventDefault();
+    if (!enabled || busy) return;
     setBusy(true);
     setError('');
     try {
       const result = await command<{ ticket: TenantTicket }>(
         '/service-requests',
         {
-          topic: 'office',
+          topic,
           subject,
           body,
           officeId: officeId || user?.offices?.[0]?.id,
@@ -173,7 +184,7 @@ export default function RequestsPage() {
   }
   async function send(e: FormEvent) {
     e.preventDefault();
-    if (!detail || busy || !reply.trim()) return;
+    if (!enabled || !detail || busy || !reply.trim()) return;
     const id = detail.ticket.id;
     const version = selectionVersion.current;
     setBusy(true);
@@ -201,6 +212,21 @@ export default function RequestsPage() {
       setError(getErrorMessage(e));
     }
   }
+  if (user && !enabled)
+    return (
+      <ProtectedLayout>
+        <div className="card p-6 space-y-3" role="status">
+          <h1 className="text-xl font-semibold">
+            {config ? 'Обращения временно недоступны' : 'Загрузка…'}
+          </h1>
+          {config && (
+            <a href="/profile" className="btn btn-secondary">
+              К профилю
+            </a>
+          )}
+        </div>
+      </ProtectedLayout>
+    );
   return (
     <ProtectedLayout
       anyPermissions={[
@@ -234,6 +260,23 @@ export default function RequestsPage() {
         {creator && (
           <form className="card p-5 space-y-3" onSubmit={create}>
             <label className="block">
+              Категория
+              <select
+                className="input mt-1"
+                aria-label="Категория обращения"
+                value={topic}
+                onChange={(e) =>
+                  setTopic(e.target.value as ServiceRequestTopic)
+                }
+              >
+                {Object.entries(SERVICE_REQUEST_TOPICS).map(([key, label]) => (
+                  <option key={key} value={key}>
+                    {label}
+                  </option>
+                ))}
+              </select>
+            </label>
+            <label className="block">
               Офис
               <select
                 className="input mt-1"
@@ -247,6 +290,11 @@ export default function RequestsPage() {
                 ))}
               </select>
             </label>
+            {topic === 'services' && (
+              <ServiceRequestPriceList
+                officeId={officeId || user?.offices?.[0]?.id || ''}
+              />
+            )}
             <label className="block">
               Тема
               <input

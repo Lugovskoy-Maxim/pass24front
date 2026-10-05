@@ -25,6 +25,7 @@ import {
   ChevronRight,
   User,
   ArrowLeft,
+  SlidersHorizontal,
 } from 'lucide-react';
 import { AdminLayout } from '@/components/AdminLayout';
 import {
@@ -104,6 +105,24 @@ const EMPTY_MSTYLE_PROFILE: AdminMstyleProfileState = {
 };
 
 const MAX_COMPANY_LOGO_BYTES = 80 * 1024;
+
+const OFFICE_SEARCH_HINT_WORDS = new Set([
+  'оф',
+  'офис',
+  'офиса',
+  'офисы',
+  'офисов',
+  'офисе',
+  'офисом',
+  'office',
+]);
+function normalizeOfficeSearch(value: string) {
+  return value
+    .replace(/№/g, ' ')
+    .normalize('NFKC')
+    .toLowerCase()
+    .replace(/ё/g, 'е');
+}
 
 const EMPTY_NAME: PersonNameParts = {
   lastName: '',
@@ -221,6 +240,7 @@ function AdminUsersPageContent() {
   const [businessCenters, setBusinessCenters] = useState<BusinessCenter[]>([]);
   const [filters, setFilters] = useState(EMPTY_FILTERS);
   const [appliedFilters, setAppliedFilters] = useState(EMPTY_FILTERS);
+  const [filtersExpanded, setFiltersExpanded] = useState(false);
   // Всегда string — иначе useDebounce(string | undefined) ломает production typecheck
   const debouncedSearch = useDebounce(filters.search ?? '');
   const [loading, setLoading] = useState(true);
@@ -231,6 +251,9 @@ function AdminUsersPageContent() {
   const [officeIds, setOfficeIds] = useState<string[]>([]);
   const [propertyIds, setPropertyIds] = useState<string[]>([]);
   const [officePickerSearch, setOfficePickerSearch] = useState('');
+  const [officePickerScope, setOfficePickerScope] = useState<
+    'all' | 'available' | 'selected'
+  >('all');
   const [isActive, setIsActive] = useState(true);
   const [isBlocked, setIsBlocked] = useState(false);
   const [mstyleProfile, setMstyleProfile] =
@@ -471,6 +494,7 @@ function AdminUsersPageContent() {
     setOfficeIds([]);
     setPropertyIds([]);
     setOfficePickerSearch('');
+    setOfficePickerScope('all');
     setIsActive(true);
     setIsBlocked(false);
     setMstyleProfile(EMPTY_MSTYLE_PROFILE);
@@ -523,6 +547,7 @@ function AdminUsersPageContent() {
       u.propertyIds || u.businessCenters?.map((bc) => bc.id) || [],
     );
     setOfficePickerSearch('');
+    setOfficePickerScope('all');
     setIsActive(u.isActive && !u.invitePending);
     setIsBlocked(!!u.isBlocked);
     setMstyleProfile(EMPTY_MSTYLE_PROFILE);
@@ -609,20 +634,37 @@ function AdminUsersPageContent() {
     {} as Record<string, Office[]>,
   );
 
-  const officePickerQuery = officePickerSearch.trim().toLowerCase();
+  const officePickerTokens = (
+    normalizeOfficeSearch(officePickerSearch).match(/[\p{L}\p{N}]+/gu) || []
+  ).filter((token) => !OFFICE_SEARCH_HINT_WORDS.has(token));
   const filteredOfficesByBc = Object.entries(officesByBc).reduce(
     (acc, [bc, list]) => {
-      const filtered = officePickerQuery
+      const filtered = officePickerTokens.length
         ? list.filter((o) => {
-            const hay =
-              `${o.number} ${o.floor || ''} ${o.company || ''} ${o.tenantName || ''} ${formatOfficeTenants(o)} ${bc}`.toLowerCase();
-            return hay.includes(officePickerQuery);
+            const hay = normalizeOfficeSearch(
+              `${o.number} ${o.title || ''} ${o.floor ? `этаж ${o.floor}` : ''} ${o.company || ''} ${o.tenantName || ''} ${formatOfficeTenants(o)} ${bc}`,
+            );
+            return officePickerTokens.every((token) => hay.includes(token));
           })
         : list;
-      if (filtered.length) acc[bc] = filtered;
+      const scoped = filtered.filter((office) =>
+        officePickerScope === 'selected'
+          ? officeIds.includes(office.id)
+          : officePickerScope === 'available'
+            ? officeTenantIds(office).length === 0
+            : true,
+      );
+      if (scoped.length) acc[bc] = scoped;
       return acc;
     },
     {} as Record<string, Office[]>,
+  );
+  const availableOfficeCount = allOffices.filter(
+    (office) => officeTenantIds(office).length === 0,
+  ).length;
+  const matchingOfficeCount = Object.values(filteredOfficesByBc).reduce(
+    (count, offices) => count + offices.length,
+    0,
   );
 
   const selectedOfficeChips = allOffices.filter((o) =>
@@ -846,15 +888,45 @@ function AdminUsersPageContent() {
       ? 'Редактирование сотрудника компании'
       : 'Редактирование пользователя'
     : 'Новый пользователь';
+  const currentEditUser = editId
+    ? users.find((item) => item.id === editId) ||
+      users
+        .flatMap((item) => item.employees || [])
+        .find((item) => item.id === editId)
+    : null;
+  const originalOfficeIds =
+    currentEditUser?.offices?.map((office) => office.id) || [];
+  const addedOfficeCount = officeIds.filter(
+    (id) => !originalOfficeIds.includes(id),
+  ).length;
+  const removedOfficeCount = originalOfficeIds.filter(
+    (id) => !officeIds.includes(id),
+  ).length;
 
   return (
-    <AdminLayout title={showForm ? formTitle : 'Пользователи'}>
+    <AdminLayout
+      title={showForm ? formTitle : 'Пользователи'}
+      description={
+        showForm
+          ? undefined
+          : 'Арендаторы и сотрудники компаний, охрана и администраторы бизнес-центров.'
+      }
+      actions={
+        showForm ? undefined : (
+          <button
+            type="button"
+            className="btn btn-primary"
+            onClick={openCreate}
+          >
+            <Plus size={16} />
+            {category === 'tenants'
+              ? 'Добавить арендатора'
+              : 'Добавить сотрудника'}
+          </button>
+        )
+      }
+    >
       <div className={showForm ? 'hidden' : undefined}>
-        <p className="text-[var(--muted)] -mt-4 mb-6">
-          Учётные записи живут в Pass. Арендаторы и сотрудники компании · охрана
-          и админы БЦ
-        </p>
-
         {loadError && (
           <PageError
             className="mb-6"
@@ -886,12 +958,19 @@ function AdminUsersPageContent() {
           </button>
         </div>
 
-        <div className="card p-4 mb-6 space-y-4">
+        <section
+          className="card admin-users-toolbar p-4 mb-6 space-y-4"
+          aria-label="Поиск и фильтры пользователей"
+          data-expanded={filtersExpanded}
+          data-active={hasActiveFilters}
+        >
           <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-4 gap-3">
-            <div className="relative sm:col-span-2 lg:col-span-1">
+            <label className="relative sm:col-span-2 lg:col-span-1">
+              <span className="label">Поиск</span>
               <Search className="absolute left-3 top-1/2 -translate-y-1/2 w-4 h-4 text-[var(--muted)]" />
               <input
                 className="input input--icon-left"
+                type="search"
                 placeholder={
                   ph.userSearch || 'ФИО, email, телефон, компания, usr_…'
                 }
@@ -903,95 +982,141 @@ function AdminUsersPageContent() {
                   if (e.key === 'Enter') applyFilters();
                 }}
               />
-            </div>
+            </label>
 
-            <div className="select-wrap">
-              <select
-                className="input"
-                value={filters.isActive}
-                onChange={(e) =>
-                  setFilters((prev) => ({
-                    ...prev,
-                    isActive: e.target.value as UserFilters['isActive'],
-                  }))
-                }
-              >
-                <option value="">Все статусы</option>
-                <option value="true">Активные</option>
-                <option value="false">
-                  Неактивные / ожидают подтверждения
-                </option>
-              </select>
-            </div>
-
-            <div className="select-wrap">
-              <select
-                className="input"
-                value={filters.propertyId}
-                onChange={(e) =>
-                  setFilters((prev) => ({
-                    ...prev,
-                    propertyId: e.target.value,
-                    officeId: e.target.value ? prev.officeId : '',
-                  }))
-                }
-              >
-                <option value="">Все бизнес-центры</option>
-                {businessCenters.map((bc) => (
-                  <option key={bc.id} value={bc.id}>
-                    {bc.name}
-                  </option>
-                ))}
-              </select>
-            </div>
-
-            {category === 'tenants' ? (
-              <div className="select-wrap">
-                <select
-                  className="input"
-                  value={filters.officeId}
-                  onChange={(e) =>
-                    setFilters((prev) => ({
-                      ...prev,
-                      officeId: e.target.value,
-                    }))
-                  }
-                >
-                  <option value="">Все офисы</option>
-                  {officesForFilter.map((office) => (
-                    <option key={office.id} value={office.id}>
-                      {office.businessCenterName
-                        ? `${office.businessCenterName}: `
-                        : ''}
-                      оф. {office.number}
-                    </option>
-                  ))}
-                </select>
-              </div>
-            ) : (
-              <div className="select-wrap">
-                <select
-                  className="input"
-                  value={filters.role}
-                  onChange={(e) =>
-                    setFilters((prev) => ({ ...prev, role: e.target.value }))
-                  }
-                >
-                  <option value="">Все роли</option>
-                  {STAFF_ROLES.map((role) => (
-                    <option key={role} value={role}>
-                      {getRoleLabel(role)}
-                    </option>
-                  ))}
-                </select>
-              </div>
-            )}
-          </div>
-
-          <div className="flex flex-wrap items-center gap-2">
             <button
               type="button"
-              className="btn btn-primary text-sm"
+              className="admin-users-toolbar__toggle"
+              aria-expanded={filtersExpanded}
+              aria-controls="admin-users-extra-filters"
+              onClick={() => setFiltersExpanded((value) => !value)}
+            >
+              <SlidersHorizontal size={16} /> Фильтры
+              {[
+                filters.isActive,
+                filters.propertyId,
+                filters.officeId,
+                filters.role,
+              ].filter(Boolean).length > 0 && (
+                <span>
+                  {
+                    [
+                      filters.isActive,
+                      filters.propertyId,
+                      filters.officeId,
+                      filters.role,
+                    ].filter(Boolean).length
+                  }
+                </span>
+              )}
+            </button>
+            <div
+              className="admin-users-toolbar__extra"
+              id="admin-users-extra-filters"
+            >
+              <label>
+                <span className="label">Статус</span>
+                <span className="select-wrap block">
+                  <select
+                    className="input"
+                    value={filters.isActive}
+                    onChange={(e) =>
+                      setFilters((prev) => ({
+                        ...prev,
+                        isActive: e.target.value as UserFilters['isActive'],
+                      }))
+                    }
+                  >
+                    <option value="">Все статусы</option>
+                    <option value="true">Активные</option>
+                    <option value="false">
+                      Неактивные / ожидают подтверждения
+                    </option>
+                  </select>
+                </span>
+              </label>
+
+              <label>
+                <span className="label">Бизнес-центр</span>
+                <span className="select-wrap block">
+                  <select
+                    className="input"
+                    value={filters.propertyId}
+                    onChange={(e) =>
+                      setFilters((prev) => ({
+                        ...prev,
+                        propertyId: e.target.value,
+                        officeId: '',
+                      }))
+                    }
+                  >
+                    <option value="">Все бизнес-центры</option>
+                    {businessCenters.map((bc) => (
+                      <option key={bc.id} value={bc.id}>
+                        {bc.name}
+                      </option>
+                    ))}
+                  </select>
+                </span>
+              </label>
+
+              {category === 'tenants' ? (
+                <label>
+                  <span className="label">Офис</span>
+                  <span className="select-wrap block">
+                    <select
+                      className="input"
+                      value={filters.officeId}
+                      onChange={(e) =>
+                        setFilters((prev) => ({
+                          ...prev,
+                          officeId: e.target.value,
+                        }))
+                      }
+                    >
+                      <option value="">Все офисы</option>
+                      {officesForFilter.map((office) => (
+                        <option key={office.id} value={office.id}>
+                          {office.businessCenterName
+                            ? `${office.businessCenterName}: `
+                            : ''}
+                          оф. {office.number}
+                        </option>
+                      ))}
+                    </select>
+                  </span>
+                </label>
+              ) : (
+                <label>
+                  <span className="label">Роль</span>
+                  <span className="select-wrap block">
+                    <select
+                      className="input"
+                      value={filters.role}
+                      onChange={(e) =>
+                        setFilters((prev) => ({
+                          ...prev,
+                          role: e.target.value,
+                        }))
+                      }
+                    >
+                      <option value="">Все роли</option>
+                      {STAFF_ROLES.map((role) => (
+                        <option key={role} value={role}>
+                          {getRoleLabel(role)}
+                        </option>
+                      ))}
+                    </select>
+                  </span>
+                </label>
+              )}
+            </div>
+          </div>
+
+          <div className="admin-users-toolbar__actions flex flex-wrap items-center gap-2">
+            <button
+              type="button"
+              className="btn btn-secondary text-sm admin-users-toolbar__apply"
               onClick={applyFilters}
             >
               Применить
@@ -1006,25 +1131,8 @@ function AdminUsersPageContent() {
                 Сбросить
               </button>
             )}
-            <button
-              type="button"
-              className="btn btn-primary text-sm ml-auto"
-              onClick={openCreate}
-            >
-              <Plus className="w-4 h-4" />
-              {category === 'tenants'
-                ? 'Добавить арендатора'
-                : 'Добавить сотрудника'}
-            </button>
           </div>
-
-          {hasActiveFilters && (
-            <p className="text-xs text-[var(--muted)] flex items-center gap-1.5">
-              <Users className="w-3.5 h-3.5" />
-              Найдено: {total}
-            </p>
-          )}
-        </div>
+        </section>
 
         {category === 'tenants' && registrationRequests.length > 0 && (
           <div
@@ -1168,10 +1276,25 @@ function AdminUsersPageContent() {
             type="button"
             className="btn btn-secondary text-sm"
             onClick={() => setShowForm(false)}
+            disabled={saving}
           >
             <ArrowLeft className="w-4 h-4" />
             Назад к пользователям
           </button>
+          <div className="admin-user-summary card">
+            <span className="admin-user-summary__avatar" aria-hidden="true">
+              {nameParts.firstName?.[0] || form.email?.[0]?.toUpperCase() || (
+                <User size={20} />
+              )}
+            </span>
+            <div className="min-w-0">
+              <strong>{buildFullName(nameParts) || formTitle}</strong>
+              <p>{form.email || 'Укажите email и данные пользователя'}</p>
+            </div>
+            <span className="admin-user-summary__role">
+              {getRoleLabel(form.role)}
+            </span>
+          </div>
           <div className="card p-4 sm:p-5">
             <form
               id="admin-user-form"
@@ -1179,10 +1302,22 @@ function AdminUsersPageContent() {
               className="admin-user-form space-y-3"
               autoComplete="off"
             >
+              <div className="admin-user-form__section-heading">
+                <div>
+                  <span>
+                    <User size={14} />
+                  </span>
+                  <h2>Данные и доступ</h2>
+                </div>
+                <p>Контакты, роль и параметры учётной записи</p>
+              </div>
               <div className="admin-user-form__grid grid sm:grid-cols-2 lg:grid-cols-3 gap-3">
                 <div>
-                  <label className="label">Email *</label>
+                  <label className="label" htmlFor="admin-user-email">
+                    Email *
+                  </label>
                   <input
+                    id="admin-user-email"
                     className="input"
                     type="email"
                     value={form.email}
@@ -1194,10 +1329,11 @@ function AdminUsersPageContent() {
                   />
                 </div>
                 <div>
-                  <label className="label">
+                  <label className="label" htmlFor="admin-user-password">
                     {editId ? 'Новый пароль' : 'Пароль *'}
                   </label>
                   <input
+                    id="admin-user-password"
                     className="input"
                     type="password"
                     value={form.password}
@@ -1207,11 +1343,17 @@ function AdminUsersPageContent() {
                     required={!editId}
                     minLength={6}
                     autoComplete="new-password"
+                    placeholder={
+                      editId ? 'Оставьте пустым, чтобы не менять' : undefined
+                    }
                   />
                 </div>
                 <div>
-                  <label className="label">Логин (username)</label>
+                  <label className="label" htmlFor="admin-user-username">
+                    Логин
+                  </label>
                   <input
+                    id="admin-user-username"
                     className="input"
                     value={form.username || ''}
                     onChange={(e) =>
@@ -1222,8 +1364,11 @@ function AdminUsersPageContent() {
                   />
                 </div>
                 <div>
-                  <label className="label">Отображаемое имя</label>
+                  <label className="label" htmlFor="admin-user-display-name">
+                    Отображаемое имя
+                  </label>
                   <input
+                    id="admin-user-display-name"
                     className="input"
                     value={form.displayName || ''}
                     onChange={(e) =>
@@ -1244,9 +1389,12 @@ function AdminUsersPageContent() {
                   />
                 </div>
                 <div>
-                  <label className="label">Роль *</label>
+                  <label className="label" htmlFor="admin-user-role">
+                    Роль *
+                  </label>
                   <div className="select-wrap">
                     <select
+                      id="admin-user-role"
                       className="input"
                       value={form.role}
                       onChange={(e) =>
@@ -1290,8 +1438,11 @@ function AdminUsersPageContent() {
                   </div>
                 </div>
                 <div>
-                  <label className="label">Компания</label>
+                  <label className="label" htmlFor="admin-user-company">
+                    Компания
+                  </label>
                   <input
+                    id="admin-user-company"
                     className="input"
                     value={form.company}
                     onChange={(e) =>
@@ -1300,8 +1451,11 @@ function AdminUsersPageContent() {
                   />
                 </div>
                 <div>
-                  <label className="label">Телефон</label>
+                  <label className="label" htmlFor="admin-user-phone">
+                    Телефон
+                  </label>
                   <input
+                    id="admin-user-phone"
                     className="input"
                     type="tel"
                     value={form.phone}
@@ -1312,8 +1466,11 @@ function AdminUsersPageContent() {
                   />
                 </div>
                 <div>
-                  <label className="label">Дата рождения</label>
+                  <label className="label" htmlFor="admin-user-birthdate">
+                    Дата рождения
+                  </label>
                   <input
+                    id="admin-user-birthdate"
                     className="input"
                     type="date"
                     value={form.birthDate || ''}
@@ -1327,6 +1484,15 @@ function AdminUsersPageContent() {
                     .flatMap((x) => x.employees || [])
                     .some((e) => e.id === editId) && (
                     <>
+                      <div className="admin-user-form__section-heading admin-user-form__section-heading--grid">
+                        <div>
+                          <span>
+                            <Building2 size={14} />
+                          </span>
+                          <h2>Компания и профиль резидента</h2>
+                        </div>
+                        <p>Тип профиля, документы и резидентские часы</p>
+                      </div>
                       <div>
                         <label className="label">Тип профиля</label>
                         <div className="select-wrap">
@@ -1828,13 +1994,19 @@ function AdminUsersPageContent() {
                 !users
                   .flatMap((x) => x.employees || [])
                   .some((e) => e.id === editId) && (
-                  <div className="border border-[var(--border)] rounded-lg p-4 bg-[var(--surface-muted)] space-y-3">
+                  <div
+                    className="admin-office-assignment space-y-3"
+                    id="user-office-assignment"
+                  >
                     <div className="flex items-center justify-between gap-2">
                       <div className="flex items-center gap-2">
                         <Link2 className="w-4 h-4 text-[var(--primary)]" />
-                        <span className="font-medium text-sm">
-                          Привязка к офисам
-                        </span>
+                        <div>
+                          <h2 className="font-semibold">Офисы арендатора</h2>
+                          <p className="text-xs text-[var(--muted)]">
+                            Выбрано: {officeIds.length} из {allOffices.length}
+                          </p>
+                        </div>
                       </div>
                       {officeIds.length > 0 && (
                         <button
@@ -1846,9 +2018,9 @@ function AdminUsersPageContent() {
                         </button>
                       )}
                     </div>
-                    <p className="text-xs text-[var(--muted)]">
-                      Выберите офисы компании. Если офис уже занят, арендатор
-                      добавится к существующим — предыдущих не снимаем.
+                    <p className="text-sm text-[var(--muted)]">
+                      Офисы определяют доступ к пропускам. При выборе занятого
+                      офиса другой арендатор сохранит доступ.
                     </p>
 
                     {selectedOfficeChips.length > 0 && (
@@ -1878,28 +2050,75 @@ function AdminUsersPageContent() {
                       </p>
                     ) : (
                       <>
+                        <div
+                          className="admin-office-assignment__filters"
+                          role="group"
+                          aria-label="Показать офисы"
+                        >
+                          {(
+                            [
+                              ['all', `Все · ${allOffices.length}`],
+                              [
+                                'available',
+                                `Свободные · ${availableOfficeCount}`,
+                              ],
+                              ['selected', `Выбраны · ${officeIds.length}`],
+                            ] as const
+                          ).map(([scope, label]) => (
+                            <button
+                              key={scope}
+                              type="button"
+                              aria-pressed={officePickerScope === scope}
+                              onClick={() => setOfficePickerScope(scope)}
+                            >
+                              {label}
+                            </button>
+                          ))}
+                        </div>
+                        <label htmlFor="user-office-search" className="label">
+                          Поиск по офисам
+                        </label>
                         <div className="relative">
                           <Search className="absolute left-3 top-1/2 -translate-y-1/2 w-4 h-4 text-[var(--muted)]" />
                           <input
+                            id="user-office-search"
                             className="input input--icon-left text-sm"
                             value={officePickerSearch}
+                            type="search"
                             onChange={(e) =>
                               setOfficePickerSearch(e.target.value)
                             }
-                            placeholder="Поиск офиса, БЦ, компании..."
+                            placeholder="102 офис, БЦ или компания"
+                            aria-label="Поиск офиса для назначения"
+                            aria-controls="user-office-options"
                           />
                         </div>
-                        <div className="border border-[var(--border)] rounded-lg divide-y divide-[var(--border)] max-h-64 overflow-y-auto bg-[var(--surface)]">
+                        <p
+                          className="text-xs text-[var(--muted)]"
+                          role="status"
+                          aria-live="polite"
+                        >
+                          Найдено: {matchingOfficeCount}. Поиск не снимает
+                          выбранные офисы.
+                        </p>
+                        <div
+                          className="admin-office-assignment__list"
+                          id="user-office-options"
+                        >
                           {Object.keys(filteredOfficesByBc).length === 0 ? (
                             <div className="p-4 text-sm text-[var(--muted)] text-center">
-                              Ничего не найдено
+                              {officePickerScope === 'selected' &&
+                              !officeIds.length
+                                ? 'Выбранных офисов пока нет'
+                                : 'Офисы не найдены. Измените поиск или фильтр.'}
                             </div>
                           ) : (
                             Object.entries(filteredOfficesByBc).map(
                               ([bc, offices]) => (
                                 <div key={bc} className="p-3">
-                                  <div className="text-xs font-semibold text-[var(--muted)] uppercase mb-2">
-                                    {bc}
+                                  <div className="admin-office-assignment__group-title">
+                                    <span>{bc}</span>
+                                    <span>{offices.length}</span>
                                   </div>
                                   <div className="space-y-1.5">
                                     {offices.map((office) => {
@@ -1907,6 +2126,8 @@ function AdminUsersPageContent() {
                                         office.id,
                                       );
                                       const occupants = officeTenantIds(office);
+                                      const currentlyAssigned =
+                                        !!editId && occupants.includes(editId);
                                       const occupiedByOther = occupants.some(
                                         (id) => id !== editId,
                                       );
@@ -1921,10 +2142,10 @@ function AdminUsersPageContent() {
                                       return (
                                         <label
                                           key={office.id}
-                                          className={`flex items-start gap-2.5 text-sm cursor-pointer rounded-md px-2 py-1.5 -mx-1 ${
+                                          className={`admin-office-assignment__option ${
                                             checked
-                                              ? 'bg-[var(--status-approved-soft)]'
-                                              : 'hover:bg-[var(--surface-muted)]'
+                                              ? 'admin-office-assignment__option--selected'
+                                              : ''
                                           }`}
                                         >
                                           <input
@@ -1945,6 +2166,17 @@ function AdminUsersPageContent() {
                                                 · {office.floor} эт.
                                               </span>
                                             ) : null}
+                                            <span
+                                              className={`admin-office-assignment__state ${occupiedByOther ? 'admin-office-assignment__state--shared' : ''}`}
+                                            >
+                                              {occupiedByOther
+                                                ? 'Есть арендатор'
+                                                : checked
+                                                  ? 'Выбран'
+                                                  : currentlyAssigned
+                                                    ? 'Будет снят'
+                                                    : 'Свободен'}
+                                            </span>
                                             {occupiedByOther ? (
                                               <span className="block text-[11px] text-amber-700 mt-0.5">
                                                 Уже есть:{' '}
@@ -1972,10 +2204,16 @@ function AdminUsersPageContent() {
                         </div>
                       </>
                     )}
-                    <p className="text-xs text-[var(--muted)]">
+                    <p className="text-xs text-[var(--muted)]" role="status">
                       {officeIds.length > 0
                         ? `Выбрано офисов: ${officeIds.length}`
                         : 'Офисы не выбраны — заказ пропусков будет недоступен'}
+                      {(addedOfficeCount > 0 || removedOfficeCount > 0) && (
+                        <span className="block mt-1">
+                          При сохранении: добавить {addedOfficeCount}, снять{' '}
+                          {removedOfficeCount}. Изменения ещё не сохранены.
+                        </span>
+                      )}
                     </p>
                   </div>
                 )}
@@ -2027,6 +2265,15 @@ function AdminUsersPageContent() {
                 </div>
               )}
 
+              <div className="admin-user-form__section-heading">
+                <div>
+                  <span>
+                    <UserCog size={14} />
+                  </span>
+                  <h2>Состояние учётной записи</h2>
+                </div>
+                <p>Подтверждение данных и доступ к кабинету</p>
+              </div>
               <div className="flex flex-col sm:flex-row flex-wrap gap-3">
                 <label className="flex items-center gap-2 text-sm">
                   <input
@@ -2067,7 +2314,7 @@ function AdminUsersPageContent() {
                         checked={isBlocked}
                         onChange={(e) => setIsBlocked(e.target.checked)}
                       />
-                      Заблокирован (отзыв сессий Pass, +authVersion)
+                      Заблокировать вход и завершить текущие сеансы
                     </label>
                     {form.role === 'tenant' &&
                       !users
@@ -2154,8 +2401,24 @@ function AdminUsersPageContent() {
                     </div>
                   );
                 })()}
-              {error && <div className="text-sm text-red-600">{error}</div>}
-              <div className="flex gap-2">
+              {error && (
+                <div role="alert" className="text-sm text-red-600">
+                  {error}
+                </div>
+              )}
+              {currentEditUser && (
+                <div className="admin-user-form__danger">
+                  <button
+                    type="button"
+                    className="btn admin-user-form__delete"
+                    disabled={saving || deletingUserId === currentEditUser.id}
+                    onClick={() => void handleDeleteUser(currentEditUser)}
+                  >
+                    <Trash2 size={16} /> Удалить пользователя
+                  </button>
+                </div>
+              )}
+              <div className="admin-user-form__actions">
                 <button
                   type="submit"
                   className="btn btn-primary"
@@ -2171,6 +2434,7 @@ function AdminUsersPageContent() {
                   type="button"
                   className="btn btn-secondary"
                   onClick={() => setShowForm(false)}
+                  disabled={saving}
                 >
                   Отмена
                 </button>
@@ -2181,9 +2445,26 @@ function AdminUsersPageContent() {
       )}
 
       {!showForm && (
-        <div className="card overflow-hidden">
+        <div className="card admin-users-register overflow-hidden">
+          <div className="admin-users-register__heading">
+            <div>
+              <h2>
+                {category === 'tenants' ? 'Арендаторы' : 'Сотрудники'}{' '}
+                <span>{total}</span>
+              </h2>
+              <p>
+                {hasActiveFilters
+                  ? 'Результаты поиска и фильтров'
+                  : 'Учётные записи и назначенные помещения'}
+              </p>
+            </div>
+            <span>{loading ? 'Обновляем…' : `${users.length} показано`}</span>
+          </div>
           <div className="overflow-x-auto">
-            <table className="admin-users-table w-full text-sm min-w-[760px]">
+            <table
+              className="admin-users-table w-full text-sm min-w-[760px]"
+              aria-label={category === 'tenants' ? 'Арендаторы' : 'Сотрудники'}
+            >
               <thead className="surface-muted text-[var(--muted)]">
                 <tr>
                   <th className="text-left p-3 font-medium align-middle min-w-[12rem] w-[28%]">
@@ -2208,7 +2489,7 @@ function AdminUsersPageContent() {
                     Статус
                   </th>
                   <th className="p-3 text-right font-medium align-middle whitespace-nowrap w-[5.5rem]">
-                    Действия
+                    Карточка
                   </th>
                 </tr>
               </thead>
@@ -2278,12 +2559,14 @@ function AdminUsersPageContent() {
                                 />
                               )}
                               <div className="min-w-0 flex-1">
-                                <div
-                                  className="font-medium truncate leading-snug"
-                                  title={u.fullName}
+                                <button
+                                  type="button"
+                                  className="admin-users-table__name"
+                                  onClick={() => openEdit(u)}
+                                  title={`Открыть ${u.fullName}`}
                                 >
                                   {u.fullName}
-                                </div>
+                                </button>
                                 <div className="flex flex-wrap items-center gap-1 mt-0.5">
                                   {category === 'tenants' && (
                                     <span className="text-[10px] px-1.5 py-0.5 rounded-full bg-[var(--surface-muted)] text-[var(--muted)] font-normal leading-none">
@@ -2297,6 +2580,11 @@ function AdminUsersPageContent() {
                                       u.legalForm
                                         ? ` · ${legalFormLabel(u.legalForm)}`
                                         : ''}
+                                    </span>
+                                  )}
+                                  {category === 'staff' && (
+                                    <span className="admin-users-table__tag">
+                                      {getRoleLabel(u.role)}
                                     </span>
                                   )}
                                   {u.profileChangeRequest && (
@@ -2329,12 +2617,6 @@ function AdminUsersPageContent() {
                                     {u.company || '—'}
                                   </div>
                                 )}
-                                <div
-                                  className="text-xs text-[var(--muted)] sm:hidden mt-0.5 line-clamp-2"
-                                  title={bindings}
-                                >
-                                  {bindings}
-                                </div>
                               </div>
                             </div>
                           </td>
@@ -2380,6 +2662,11 @@ function AdminUsersPageContent() {
                             </td>
                           )}
                           <td className="p-3 align-middle hidden sm:table-cell text-[var(--muted)] text-xs">
+                            <span className="admin-users-table__mobile-label">
+                              {category === 'tenants'
+                                ? 'Офисы'
+                                : 'Бизнес-центры'}
+                            </span>
                             <div
                               className="line-clamp-2 break-words leading-snug"
                               title={bindings}
@@ -2393,23 +2680,14 @@ function AdminUsersPageContent() {
                             </div>
                           </td>
                           <td className="p-3 align-middle">
-                            <div className="flex items-center justify-end gap-1 min-w-[4.5rem]">
+                            <div className="flex items-center justify-end gap-1">
                               <button
                                 type="button"
-                                className="p-1.5 rounded-md border border-[var(--border)] hover:bg-[var(--surface-muted)] shrink-0"
+                                className="admin-users-table__open"
                                 onClick={() => openEdit(u)}
-                                title="Редактировать"
+                                aria-label={`Открыть пользователя ${u.fullName}`}
                               >
-                                <Pencil className="w-4 h-4" />
-                              </button>
-                              <button
-                                type="button"
-                                className="p-1.5 rounded-md border border-red-200 hover:bg-red-50 text-red-600 shrink-0"
-                                onClick={() => handleDeleteUser(u)}
-                                disabled={deletingUserId === u.id}
-                                title="Удалить"
-                              >
-                                <Trash2 className="w-4 h-4" />
+                                Открыть <ChevronRight size={15} />
                               </button>
                             </div>
                           </td>
@@ -2432,12 +2710,14 @@ function AdminUsersPageContent() {
                                       <User className="w-4 h-4 text-[var(--muted)]" />
                                     </span>
                                     <div className="min-w-0 flex-1">
-                                      <div
-                                        className="font-medium truncate leading-snug"
-                                        title={emp.fullName}
+                                      <button
+                                        type="button"
+                                        className="admin-users-table__name"
+                                        onClick={() => openEdit(emp)}
+                                        title={`Открыть ${emp.fullName}`}
                                       >
                                         {emp.fullName}
-                                      </div>
+                                      </button>
                                       <div className="mt-0.5">
                                         <span className="text-[10px] px-1.5 py-0.5 rounded-full bg-violet-50 text-violet-800 font-normal leading-none">
                                           Сотрудник
@@ -2477,6 +2757,9 @@ function AdminUsersPageContent() {
                                   </div>
                                 </td>
                                 <td className="p-3 align-middle hidden sm:table-cell text-[var(--muted)] text-xs">
+                                  <span className="admin-users-table__mobile-label">
+                                    Офисы
+                                  </span>
                                   <div
                                     className="line-clamp-2 leading-snug"
                                     title={empBindings}
@@ -2490,23 +2773,14 @@ function AdminUsersPageContent() {
                                   </div>
                                 </td>
                                 <td className="p-3 align-middle">
-                                  <div className="flex items-center justify-end gap-1 min-w-[4.5rem]">
+                                  <div className="flex items-center justify-end gap-1">
                                     <button
                                       type="button"
-                                      className="p-1.5 rounded-md border border-[var(--border)] hover:bg-[var(--surface-muted)] shrink-0"
+                                      className="admin-users-table__open"
                                       onClick={() => openEdit(emp)}
-                                      title="Редактировать сотрудника"
+                                      aria-label={`Открыть сотрудника ${emp.fullName}`}
                                     >
-                                      <Pencil className="w-4 h-4" />
-                                    </button>
-                                    <button
-                                      type="button"
-                                      className="p-1.5 rounded-md border border-red-200 hover:bg-red-50 text-red-600 shrink-0"
-                                      onClick={() => handleDeleteUser(emp)}
-                                      disabled={deletingUserId === emp.id}
-                                      title="Удалить сотрудника"
-                                    >
-                                      <Trash2 className="w-4 h-4" />
+                                      Открыть <ChevronRight size={15} />
                                     </button>
                                   </div>
                                 </td>

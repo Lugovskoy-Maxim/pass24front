@@ -1,5 +1,6 @@
 import { ForbiddenException, Injectable, Optional } from '@nestjs/common';
 import { OfficeServicesService } from '../office-services/office-services.service';
+import { SiteSettingsService } from '../site-settings/site-settings.service';
 import { GridFSBucket, ObjectId, ClientSession } from 'mongodb';
 import { OperationsStore } from './operations.store';
 import { OperationsIdentity } from './operations.identity';
@@ -12,6 +13,8 @@ import {
   sqlNow,
   SUPPORT_STATUSES,
   SUPPORT_TOPICS,
+  supportTopic,
+  supportTopicFilter,
   supportNeedsAction,
   textValue,
 } from './operations.rules';
@@ -79,14 +82,23 @@ export class OperationsSupport {
   constructor(
     readonly store: OperationsStore,
     private readonly identities: OperationsIdentity,
+    private readonly siteSettings: SiteSettingsService,
     @Optional() private readonly officeServices?: OfficeServicesService,
   ) {}
+  private async assertResidentRequestsEnabled(actor: OperationsActor) {
+    if (
+      actor.kind === 'resident' &&
+      !(await this.siteSettings.get()).tenantServiceRequestsEnabled
+    )
+      fail('forbidden', 'Обращения арендаторов временно недоступны.', 403);
+  }
   private bucket() {
     return new GridFSBucket(this.store.connection.db!, {
       bucketName: 'mstyle_ops_files',
     });
   }
   async assertAccess(actor: OperationsActor, row: any) {
+    await this.assertResidentRequestsEnabled(actor);
     if (!row) fail('not_found', 'Обращение не найдено.', 404);
     if (actor.kind === 'admin') {
       requirePermission(actor, 'support.manage');
@@ -110,13 +122,17 @@ export class OperationsSupport {
       fail('not_found', 'Обращение не найдено.', 404);
   }
   async list(actor: OperationsActor, query: any = {}) {
+    await this.assertResidentRequestsEnabled(actor);
     const filter: any = {};
     if (actor.kind === 'admin') requirePermission(actor, 'support.manage');
     else if (actor.kind === 'resident' && actor.subject)
       filter.owner_subject = actor.subject;
     else fail('unauthorized', 'Необходима авторизация.', 401);
     if (query.status) filter.status = textValue(query.status, 32);
-    if (query.topic) filter.topic_key = textValue(query.topic, 64);
+    if (query.topic)
+      filter.topic_key = {
+        $in: supportTopicFilter(textValue(query.topic, 64)),
+      };
     if (query.booking_id)
       filter.booking_id = integer(query.booking_id, 'booking_id', 1);
     const page = integer(query.page || 1, 'page', 1);
@@ -205,6 +221,8 @@ export class OperationsSupport {
       .filter(Boolean);
     return {
       ...safe,
+      topic_key: supportTopic(safe.topic_key) || 'other',
+      topic_label: SUPPORT_TOPICS[supportTopic(safe.topic_key) || 'other'],
       office_ids: officeIds,
       office_id: safe.office_id || office?.id || null,
       office,
@@ -301,6 +319,7 @@ export class OperationsSupport {
     };
   }
   async upload(actor: OperationsActor, input: any, key: string = randomUUID()) {
+    await this.assertResidentRequestsEnabled(actor);
     if (actor.kind === 'admin') requirePermission(actor, 'support.manage');
     else if (actor.kind !== 'resident')
       fail('forbidden', 'Необходима авторизация.', 403);
@@ -405,11 +424,11 @@ export class OperationsSupport {
     return files;
   }
   async create(actor: OperationsActor, input: any, key: string) {
+    await this.assertResidentRequestsEnabled(actor);
     if (actor.kind !== 'resident' || !actor.subject)
       fail('forbidden', 'Обращение создаёт авторизованный пользователь.', 403);
-    const topic = textValue(input.topic_key, 64, true);
-    if (!SUPPORT_TOPICS[topic])
-      fail('validation_error', 'Выберите тему обращения.', 400);
+    const topic = supportTopic(textValue(input.topic_key, 64, true));
+    if (!topic) fail('validation_error', 'Выберите тему обращения.', 400);
     const message = textValue(input.message_text, 20000, true);
     return this.store.command(
       actor,
@@ -569,6 +588,7 @@ export class OperationsSupport {
     );
   }
   async reply(actor: OperationsActor, id: number, input: any, key: string) {
+    await this.assertResidentRequestsEnabled(actor);
     const text = textValue(input.message_text, 20000, true);
     return this.store.command(
       actor,
@@ -651,6 +671,7 @@ export class OperationsSupport {
     );
   }
   async read(actor: OperationsActor, id: number, input: any, key: string) {
+    await this.assertResidentRequestsEnabled(actor);
     return this.store.command(
       actor,
       key,

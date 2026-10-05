@@ -69,7 +69,14 @@ const MAX_ICON_BYTES = 80 * 1024;
 const MAX_FAQ_ITEMS = 50;
 const MAX_GUIDE_SECTIONS = 40;
 
-type Tab = 'brand' | 'colors' | 'labels' | 'registration' | 'faq' | 'guide';
+type Tab =
+  | 'brand'
+  | 'colors'
+  | 'labels'
+  | 'registration'
+  | 'faq'
+  | 'guide'
+  | 'tenant-access';
 
 /** Редактор: steps/paragraphs как многострочный текст, на API — string[]. */
 type GuideSectionForm = {
@@ -148,6 +155,7 @@ function normalizeSettings(s: SiteSettings): SiteSettings {
       ? s.registrationNotifyUserIds.map(String)
       : [],
     helpButtonEnabled: s.helpButtonEnabled !== false,
+    tenantServiceRequestsEnabled: s.tenantServiceRequestsEnabled === true,
     faqItems: resolveFaqItems(s.faqItems).map((item) => ({ ...item })),
     helpGuideSections: resolveGuideSections(s.helpGuideSections).map(
       (item) => ({
@@ -496,6 +504,13 @@ export default function AdminSiteSettingsPage() {
       <div className="flex flex-wrap gap-2 mb-6">
         <button
           type="button"
+          className={`btn text-sm ${tab === 'tenant-access' ? 'btn-primary' : 'btn-secondary'}`}
+          onClick={() => setTab('tenant-access')}
+        >
+          <MessageSquare className="w-4 h-4" /> Доступ арендаторов
+        </button>
+        <button
+          type="button"
           className={`btn text-sm ${tab === 'brand' ? 'btn-primary' : 'btn-secondary'}`}
           onClick={() => setTab('brand')}
         >
@@ -547,6 +562,44 @@ export default function AdminSiteSettingsPage() {
       </div>
 
       <form onSubmit={handleSubmit}>
+        {tab === 'tenant-access' && (
+          <section className="card p-6 max-w-3xl space-y-4">
+            <h2 className="text-base font-semibold">
+              Обращения в сервисную службу
+            </h2>
+            <label className="flex items-start gap-3 rounded-lg border border-[var(--border)] bg-[var(--surface-muted)] p-4 cursor-pointer">
+              <input
+                type="checkbox"
+                className="checkbox mt-0.5"
+                checked={settings.tenantServiceRequestsEnabled !== true}
+                onChange={(e) =>
+                  setSettings({
+                    ...settings,
+                    tenantServiceRequestsEnabled: !e.target.checked,
+                  })
+                }
+              />
+              <span>
+                <span className="text-sm font-medium block">
+                  Скрыть обращения у арендаторов
+                </span>
+                <span className="text-xs text-[var(--muted)] block mt-1">
+                  Скрывает раздел и заказ услуг у арендаторов и сотрудников
+                  компаний в Pass и приложении. Создание обращений блокируется
+                  на сервере. Администраторы продолжают видеть и обрабатывать
+                  существующие заявки.
+                </span>
+              </span>
+            </label>
+            <p className="text-sm text-[var(--muted)]">
+              Сейчас:{' '}
+              {settings.tenantServiceRequestsEnabled === true
+                ? 'обращения доступны'
+                : 'обращения скрыты'}
+              . Изменение применяется после сохранения.
+            </p>
+          </section>
+        )}
         {tab === 'brand' && (
           <div className="grid lg:grid-cols-[1fr_280px] gap-6 max-w-4xl">
             <div className="card p-6 space-y-5">

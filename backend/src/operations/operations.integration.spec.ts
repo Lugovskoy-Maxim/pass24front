@@ -24,6 +24,7 @@ import {
   OperationsPrivateController,
 } from './operations.controller';
 import { ServiceRequestsController } from '../site-source/service-requests.controller';
+import { SiteSettingsService } from '../site-settings/site-settings.service';
 
 jest.setTimeout(900000);
 const secret = 'local-operations-test-secret-32-characters';
@@ -80,6 +81,9 @@ describe('Operations with real replica-set transactions', () => {
   let support: OperationsSupport;
   let payments: OperationsPayments;
   let officeServices: OfficeServicesService;
+  const supportSettings = {
+    get: jest.fn(async () => ({ tenantServiceRequestsEnabled: true })),
+  };
   beforeAll(async () => {
     mongo = await MongoMemoryReplSet.create({
       binary: {
@@ -110,7 +114,12 @@ describe('Operations with real replica-set transactions', () => {
       cfg,
       officeServices,
     );
-    support = new OperationsSupport(store, identity, officeServices);
+    support = new OperationsSupport(
+      store,
+      identity,
+      supportSettings as unknown as SiteSettingsService,
+      officeServices,
+    );
     payments = new OperationsPayments(store, bookings, catalog, cfg, {} as any);
   });
   afterAll(async () => {
@@ -118,6 +127,9 @@ describe('Operations with real replica-set transactions', () => {
     await mongo?.stop();
   });
   beforeEach(async () => {
+    supportSettings.get.mockResolvedValue({
+      tenantServiceRequestsEnabled: true,
+    });
     await connection.db!.collection('offices').deleteMany({});
     await connection.db!.collection('office_service_prices').deleteMany({});
     for (const col of await connection.db!.collections())
@@ -152,6 +164,55 @@ describe('Operations with real replica-set transactions', () => {
         contacts: { displayName: 'Резидент' },
       }),
     });
+  });
+  it('blocks tenant support while hidden and preserves administrator work', async () => {
+    const created = await support.create(
+      resident,
+      { topic_key: 'it', message_text: 'Не работает интернет' },
+      'visible-ticket',
+    );
+    supportSettings.get.mockResolvedValue({
+      tenantServiceRequestsEnabled: false,
+    });
+    await expect(
+      support.create(
+        resident,
+        { topic_key: 'service', message_text: 'Новая заявка' },
+        'hidden-ticket',
+      ),
+    ).rejects.toMatchObject({ status: 403 });
+    await expect(support.list(resident)).rejects.toMatchObject({ status: 403 });
+    await expect(
+      support.detail(resident, created.ticket.id),
+    ).rejects.toMatchObject({ status: 403 });
+    await expect(
+      support.reply(
+        resident,
+        created.ticket.id,
+        { message_text: 'Дополнение' },
+        'hidden-reply',
+      ),
+    ).rejects.toMatchObject({ status: 403 });
+    await expect(
+      support.upload(resident, {
+        name: 'test.txt',
+        base64: Buffer.from('test').toString('base64'),
+      }),
+    ).rejects.toMatchObject({ status: 403 });
+    expect((await support.list(admin)).total).toBe(1);
+    await support.reply(
+      admin,
+      created.ticket.id,
+      { message_text: 'Обрабатываем заявку' },
+      'admin-while-hidden',
+    );
+    expect(await store.collection('tickets').countDocuments()).toBe(1);
+    supportSettings.get.mockResolvedValue({
+      tenantServiceRequestsEnabled: true,
+    });
+    expect(
+      (await support.detail(resident, created.ticket.id)).messages,
+    ).toHaveLength(2);
   });
   async function manualOffice(category = 'standard') {
     const _id = new Types.ObjectId(),
@@ -946,6 +1007,16 @@ describe('Operations with real replica-set transactions', () => {
       },
       'support-create',
     );
+    expect(a.ticket.topic_key).toBe('other');
+    expect(a.ticket.topic_label).toBe('Другое');
+    expect(
+      (await support.list(admin, { topic: 'other' })).items.map(
+        (row) => row.id,
+      ),
+    ).toContain(a.ticket.id);
+    expect(
+      (await support.list(admin, { topic: 'service' })).items,
+    ).toHaveLength(0);
     expect(supportNeedsAction(a.ticket)).toBe(true);
     const seen = await support.read(admin, a.ticket.id, {}, 'support-read');
     expect(supportNeedsAction(seen.ticket)).toBe(true);

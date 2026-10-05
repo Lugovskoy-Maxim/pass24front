@@ -91,6 +91,7 @@ export class ServiceRequestsController {
       fields: [],
       items: result.items.map((row) => this.ticket(row)),
       total: result.total,
+      topics: result.topics,
     };
   }
   @Get('attachments/:id')
@@ -142,22 +143,10 @@ export class ServiceRequestsController {
       )
     )
       fail('forbidden', 'Создание обращений недоступно.', 403);
-    const topic =
-      (
-        {
-          access: 'guest_pass',
-          office: 'services',
-          parking: 'services',
-          engineering: 'plumbing',
-          cleaning: 'services',
-          security: 'services',
-          other: 'services',
-        } as Record<string, string>
-      )[dto.topic] || dto.topic;
     const result = await this.support.create(
       actor,
       {
-        topic_key: topic,
+        topic_key: dto.topic,
         subject: dto.subject,
         message_text: dto.body,
         office_id: dto.officeId,

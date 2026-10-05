@@ -4,7 +4,23 @@
  * canViewAllPasses=false для всей company (owner+employee): список компании
  * строится на бэке через team filter, не через permission view_all.
  */
-import { ROLE_LABELS, User } from './api';
+import { ROLE_LABELS, User, SiteSettings } from './api';
+
+export function canUseTenantServiceRequests(
+  user: User | null | undefined,
+  config: Pick<SiteSettings, 'tenantServiceRequestsEnabled'> | null | undefined,
+): boolean {
+  return (
+    config?.tenantServiceRequestsEnabled === true &&
+    !hasPermission(user, 'admin.panel') &&
+    hasAnyPermission(
+      user,
+      'requests.view_own',
+      'requests.create',
+      'passes.view_own',
+    )
+  );
+}
 
 export function isTenantOwner(user: User | null | undefined): boolean {
   return !!user?.is_tenant_owner;

@@ -8,13 +8,42 @@ export const OPERATION_PERMISSIONS = [
   'support.manage',
 ] as const;
 export const SUPPORT_TOPICS: Record<string, string> = {
-  payment: 'Проблема с оплатой',
-  guest_pass: 'Заявка на гостевой пропуск',
-  plumbing: 'Сантехнические работы',
-  booking: 'Вопрос по бронированию',
-  services: 'Дополнительные услуги',
-  resident_data: 'Изменение данных резидента',
+  service: 'Сервис',
+  it: 'IT',
+  passes: 'Пропуска',
+  services: 'Доп. услуги',
+  other: 'Другое',
 };
+export const SUPPORT_TOPIC_ALIASES: Record<string, string> = {
+  office: 'service',
+  engineering: 'service',
+  plumbing: 'service',
+  cleaning: 'service',
+  security: 'service',
+  access: 'passes',
+  guest_pass: 'passes',
+  parking: 'passes',
+  payment: 'other',
+  booking: 'other',
+  resident_data: 'other',
+};
+export function supportTopic(value: string): string | undefined {
+  return Object.hasOwn(SUPPORT_TOPICS, value)
+    ? value
+    : Object.hasOwn(SUPPORT_TOPIC_ALIASES, value)
+      ? SUPPORT_TOPIC_ALIASES[value]
+      : undefined;
+}
+export function supportTopicFilter(value: string): string[] {
+  const topic = supportTopic(value);
+  if (!topic) return [];
+  return [
+    topic,
+    ...Object.keys(SUPPORT_TOPIC_ALIASES).filter(
+      (key) => SUPPORT_TOPIC_ALIASES[key] === topic,
+    ),
+  ];
+}
 export const SUPPORT_STATUSES: Record<string, string> = {
   new: 'Новый',
   in_progress: 'В работе',

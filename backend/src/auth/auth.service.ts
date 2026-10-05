@@ -1053,10 +1053,7 @@ export class AuthService {
         requestedType,
         dto.legalForm ?? user.legalForm,
       ),
-      employeeLimit:
-        dto.employeeLimit !== undefined
-          ? dto.employeeLimit
-          : (user.employeeLimit ?? null),
+      employeeLimit: user.employeeLimit ?? null,
     };
 
     if (
@@ -1790,6 +1787,8 @@ export class AuthService {
 
     const view = identityView(user);
 
+    const siteSettings = await this.siteSettingsService.get();
+
     let companyLogo = user.companyLogo || undefined;
     let company = user.company;
     if (user.parentTenantId) {
@@ -1824,6 +1823,8 @@ export class AuthService {
       property_ids: propertyIds,
       permissions,
       enabledPassTypes,
+      tenant_service_requests_enabled:
+        siteSettings.tenantServiceRequestsEnabled,
       parent_tenant_id: user.parentTenantId?.toString(),
       is_tenant_owner: user.role === 'tenant' && !user.parentTenantId,
       is_active: user.isActive !== false,

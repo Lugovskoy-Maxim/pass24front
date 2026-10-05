@@ -107,6 +107,7 @@ export interface User {
   property_ids?: string[];
   permissions?: string[];
   enabledPassTypes?: PassType[];
+  tenant_service_requests_enabled?: boolean;
   parent_tenant_id?: string;
   is_tenant_owner?: boolean;
   is_active?: boolean;
@@ -1574,6 +1575,7 @@ export interface SiteSettings {
   registrationNotifyUserIds?: string[];
   /** Показывать плавающую кнопку «Помощь». */
   helpButtonEnabled?: boolean;
+  tenantServiceRequestsEnabled?: boolean;
   faqItems?: FaqItem[];
   helpGuideSections?: HelpGuideSection[];
 }

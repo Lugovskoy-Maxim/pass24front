@@ -177,6 +177,10 @@ export class UpdateSiteSettingsDto {
   helpButtonEnabled?: boolean;
 
   @IsOptional()
+  @IsBoolean()
+  tenantServiceRequestsEnabled?: boolean;
+
+  @IsOptional()
   @IsArray()
   @ArrayMaxSize(50)
   @ValidateNested({ each: true })

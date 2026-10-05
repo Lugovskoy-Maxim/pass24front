@@ -216,13 +216,18 @@ export class TicketMessageDto {
 }
 
 export const SERVICE_REQUEST_TOPICS = [
+  'service',
+  'it',
+  'passes',
+  'services',
+  'other',
+  // Accepted by older app versions; the support service normalizes these keys.
   'access',
   'office',
   'parking',
   'engineering',
   'cleaning',
   'security',
-  'other',
 ] as const;
 
 export const SERVICE_REQUEST_STATUSES = [

@@ -10,6 +10,9 @@ import {
 } from '@/lib/office-services';
 import { OfficeCategoryBadge } from './OfficeCategoryBadge';
 import { getErrorMessage } from '@/lib/api';
+import { useAuth } from '@/lib/auth';
+import { useConfig } from '@/hooks/useConfig';
+import { canUseTenantServiceRequests } from '@/lib/permissions';
 
 export function TenantOfficeCard({
   office,
@@ -24,6 +27,9 @@ export function TenantOfficeCard({
   };
   preview?: boolean;
 }) {
+  const { user } = useAuth();
+  const config = useConfig();
+  const requestsEnabled = canUseTenantServiceRequests(user, config);
   const [expanded, setExpanded] = useState(false);
   const [selected, setSelected] = useState<OfficeService | null>(null);
   const [quantity, setQuantity] = useState(1);
@@ -33,7 +39,7 @@ export function TenantOfficeCard({
   const [receipt, setReceipt] = useState<string | null>(null);
   const [key, setKey] = useState('');
   async function order() {
-    if (!selected) return;
+    if (!requestsEnabled || !selected || busy) return;
     setBusy(true);
     setMessage('');
     try {
@@ -133,21 +139,23 @@ export function TenantOfficeCard({
                         Забронировать
                       </Link>
                     ) : (
-                      <button
-                        type="button"
-                        className="btn btn-secondary text-sm mt-2"
-                        onClick={() => {
-                          setSelected(service);
-                          setKey(crypto.randomUUID());
-                          setQuantity(1);
-                          setComment('');
-                          setMessage('');
-                        }}
-                      >
-                        {service.mode === 'request'
-                          ? 'Уточнить стоимость'
-                          : 'Заказать'}
-                      </button>
+                      requestsEnabled && (
+                        <button
+                          type="button"
+                          className="btn btn-secondary text-sm mt-2"
+                          onClick={() => {
+                            setSelected(service);
+                            setKey(crypto.randomUUID());
+                            setQuantity(1);
+                            setComment('');
+                            setMessage('');
+                          }}
+                        >
+                          {service.mode === 'request'
+                            ? 'Уточнить стоимость'
+                            : 'Заказать'}
+                        </button>
+                      )
                     ))}
                 </div>
               ))}
@@ -155,7 +163,7 @@ export function TenantOfficeCard({
           )}
         </div>
       )}
-      {selected && (
+      {selected && requestsEnabled && (
         <div className="rounded-lg border border-[var(--border)] p-3 space-y-3">
           <h4 className="font-semibold">{selected.name}</h4>
           <label className="block text-sm">

@@ -20,6 +20,7 @@ import {
   canOrderPasses,
   canUseReception,
   canViewPasses,
+  canUseTenantServiceRequests,
   getHomePath,
   hasPermission,
 } from '@/lib/permissions';
@@ -60,11 +61,7 @@ export function MobileNav() {
       href: '/requests',
       label: 'Обращения',
       icon: MessageSquare,
-      show:
-        !hasPermission(user, 'admin.panel') &&
-        (hasPermission(user, 'requests.view_own') ||
-          hasPermission(user, 'requests.create') ||
-          hasPermission(user, 'passes.view_own')),
+      show: canUseTenantServiceRequests(user, config),
     },
     {
       href: '/admin',

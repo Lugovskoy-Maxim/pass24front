@@ -15,17 +15,14 @@ import {
 import { useAuth } from '@/lib/auth';
 import { useConfig } from '@/hooks/useConfig';
 import { SiteBrand } from '@/components/SiteBrand';
-import {
-  formatTenantOffices,
-  officeDisplayName,
-  officePaymentLabel,
-} from '@/lib/api';
+import { officeDisplayName, officePaymentLabel } from '@/lib/api';
 import { getUserRoleLabel } from '@/lib/permissions';
 import {
   canOrderPasses,
   canSeeOverdueAlerts,
   canUseReception,
   canViewPasses,
+  canUseTenantServiceRequests,
   getHomePath,
   hasPermission,
 } from '@/lib/permissions';
@@ -54,6 +51,12 @@ export function Header() {
     (office) =>
       office.paymentStatus === 'unpaid' || office.paymentStatus === 'overdue',
   );
+  const unpaidOfficeNotices = unpaidOffices.map((office) => (
+    <div key={office.id}>
+      {officePaymentLabel(office.paymentStatus)}: {officeDisplayName(office)}
+      {office.paidUntil ? ` до ${office.paidUntil}` : ''}
+    </div>
+  ));
 
   const scrollToOverdueSection = () => {
     document
@@ -87,11 +90,7 @@ export function Header() {
       href: '/requests',
       label: 'Обращения',
       icon: MessageSquare,
-      show:
-        !hasPermission(user, 'admin.panel') &&
-        (hasPermission(user, 'requests.view_own') ||
-          hasPermission(user, 'requests.create') ||
-          hasPermission(user, 'passes.view_own')),
+      show: canUseTenantServiceRequests(user, config),
     },
     {
       href: '/admin',
@@ -109,8 +108,8 @@ export function Header() {
         borderColor: 'var(--header-border)',
       }}
     >
-      <div className="max-w-6xl mx-auto px-4 py-3 flex items-center justify-between gap-2 sm:gap-4">
-        <div className="flex min-w-0 items-center gap-6">
+      <div className="app-header__row max-w-6xl mx-auto px-4 py-3 flex flex-wrap items-center justify-between gap-2 sm:gap-4">
+        <div className="flex min-w-0 items-center shrink-0">
           <Link href={homePath} style={{ color: 'var(--header-text)' }}>
             <SiteBrand
               config={config}
@@ -119,25 +118,28 @@ export function Header() {
               className="max-w-[200px] max-[360px]:[&_.font-semibold]:hidden max-[360px]:[&_img]:max-w-[112px] sm:max-w-none"
             />
           </Link>
-          <nav className="hidden sm:flex items-center gap-1">
-            {links.map(({ href, label, icon: Icon }) => {
-              const active =
-                pathname === href ||
-                (href !== '/admin' && pathname.startsWith(href)) ||
-                (href === '/admin' && pathname.startsWith('/admin'));
-              return (
-                <Link
-                  key={href}
-                  href={href}
-                  className={`flex items-center gap-1.5 px-3 py-1.5 rounded text-sm ${active ? 'nav-link-active' : 'nav-link'}`}
-                >
-                  <Icon className="w-4 h-4" />
-                  {label}
-                </Link>
-              );
-            })}
-          </nav>
         </div>
+        <nav
+          className="app-header__navigation hidden sm:flex items-center gap-1"
+          aria-label="Основное меню"
+        >
+          {links.map(({ href, label, icon: Icon }) => {
+            const active =
+              pathname === href ||
+              (href !== '/admin' && pathname.startsWith(href)) ||
+              (href === '/admin' && pathname.startsWith('/admin'));
+            return (
+              <Link
+                key={href}
+                href={href}
+                className={`flex items-center gap-1.5 px-3 py-1.5 rounded text-sm ${active ? 'nav-link-active' : 'nav-link'}`}
+              >
+                <Icon className="w-4 h-4" />
+                {label}
+              </Link>
+            );
+          })}
+        </nav>
         <div className="flex shrink-0 items-center gap-1 sm:gap-3">
           {showOverdueAlerts &&
             overduePasses.length > 0 &&
@@ -159,22 +161,52 @@ export function Header() {
               />
             ))}
           <div
-            className="text-right hidden md:block"
+            className="app-header__identity text-right hidden md:block"
             style={{ color: 'var(--header-text)' }}
           >
             <Link
               href="/profile"
-              className="text-sm font-medium hover:opacity-80 hover:underline block"
+              className="text-sm font-medium hover:opacity-80 hover:underline block truncate"
+              title={user.full_name}
             >
               {user.full_name}
             </Link>
-            <div className="text-xs" style={{ color: 'var(--header-muted)' }}>
+            <div
+              className="text-xs truncate"
+              title={[getUserRoleLabel(user), user.company]
+                .filter(Boolean)
+                .join(' · ')}
+              style={{ color: 'var(--header-muted)' }}
+            >
               {getUserRoleLabel(user)}
               {user.company && ` · ${user.company}`}
-              {user.offices?.length
-                ? ` · ${formatTenantOffices(user.offices)}`
-                : user.office && ` · оф. ${user.office}`}
             </div>
+            {!!(user.offices?.length || user.office) && (
+              <Link
+                href="/profile#profile-offices"
+                className="app-header__offices text-xs block truncate hover:underline"
+                title={
+                  user.offices
+                    ?.map((office) =>
+                      [office.businessCenterName, officeDisplayName(office)]
+                        .filter(Boolean)
+                        .join(' · '),
+                    )
+                    .join('; ') || `Офис ${user.office}`
+                }
+              >
+                {(user.offices?.length || 0) > 1
+                  ? `Офисы: ${user.offices!.length}`
+                  : user.offices?.length
+                    ? [
+                        user.offices[0].businessCenterName,
+                        officeDisplayName(user.offices[0]),
+                      ]
+                        .filter(Boolean)
+                        .join(' · ')
+                    : `оф. ${user.office}`}
+              </Link>
+            )}
           </div>
           <WorkQueueIndicator />
           <ThemeToggle compact />
@@ -195,13 +227,18 @@ export function Header() {
       {unpaidOffices.length > 0 && (
         <div className="border-t theme-alert">
           <div className="max-w-6xl mx-auto px-4 py-2 text-sm">
-            {unpaidOffices.map((office) => (
-              <div key={office.id}>
-                {officePaymentLabel(office.paymentStatus)}:{' '}
-                {officeDisplayName(office)}
-                {office.paidUntil ? ` до ${office.paidUntil}` : ''}
-              </div>
-            ))}
+            {unpaidOffices.length > 2 ? (
+              <details>
+                <summary className="cursor-pointer">
+                  Офисы, требующие оплаты: {unpaidOffices.length}
+                </summary>
+                <div className="max-h-40 overflow-y-auto mt-2 space-y-1">
+                  {unpaidOfficeNotices}
+                </div>
+              </details>
+            ) : (
+              unpaidOfficeNotices
+            )}
           </div>
         </div>
       )}

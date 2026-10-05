@@ -102,7 +102,6 @@ export default function ProfilePage() {
     'individual',
   );
   const [legalForm, setLegalForm] = useState<'ip' | 'ooo' | null>(null);
-  const [employeeLimit, setEmployeeLimit] = useState<number | null>(null);
   const [saving, setSaving] = useState(false);
   const [cancelling, setCancelling] = useState(false);
   const [fieldErrors, setFieldErrors] = useState<FieldErrors>({});
@@ -170,11 +169,6 @@ export default function ProfilePage() {
     );
     setLegalForm(
       ((pending?.legal_form ?? user.legal_form) as 'ip' | 'ooo' | null) ?? null,
-    );
-    setEmployeeLimit(
-      pending?.employee_limit !== undefined
-        ? pending.employee_limit
-        : (user.employee_limit ?? null),
     );
   }, [user, pending]);
 
@@ -259,7 +253,6 @@ export default function ProfilePage() {
         companyShortName: companyShortName.trim() || undefined,
         profileType,
         legalForm: profileType === 'company' ? legalForm || 'ooo' : null,
-        employeeLimit,
       });
       await refreshUser();
       toast('Изменения отправлены на подтверждение администратору', 'success');
@@ -624,7 +617,7 @@ export default function ProfilePage() {
             <ProfileInfoRow icon={Phone} label="Телефон" value={user.phone} />
           )}
           {user.offices?.length ? (
-            <div className="space-y-2">
+            <div className="space-y-2" id="profile-offices">
               <ProfileInfoRow
                 icon={Building2}
                 label="Офисы"
@@ -814,21 +807,6 @@ export default function ProfilePage() {
                   value={companyShortName}
                   onChange={(e) => setCompanyShortName(e.target.value)}
                   placeholder="для документов"
-                />
-              </FormField>
-              <FormField id="employeeLimit" label="Лимит сотрудников">
-                <FormInput
-                  id="employeeLimit"
-                  type="number"
-                  min={0}
-                  max={200}
-                  value={employeeLimit ?? ''}
-                  onChange={(e) =>
-                    setEmployeeLimit(
-                      e.target.value === '' ? null : Number(e.target.value),
-                    )
-                  }
-                  placeholder={`по умолчанию ${employeeCap}`}
                 />
               </FormField>
             </div>

@@ -111,6 +111,10 @@ export class AppSettings {
   @Prop({ default: true })
   helpButtonEnabled: boolean;
 
+  /** Приём обращений арендаторов включается администратором после доработки. */
+  @Prop({ default: false })
+  tenantServiceRequestsEnabled: boolean;
+
   /** Вопросы и ответы для панели помощи */
   @Prop({
     type: [
