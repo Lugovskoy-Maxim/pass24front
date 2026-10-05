@@ -1,6 +1,7 @@
 @import 'tailwindcss';
 @import './service-requests.css';
 @import './admin-operations.css';
+@import './app-header.css';
 
 :root {
   --m-accent: #eb711c;
@@ -3513,22 +3514,8 @@ a.pass-detail__chip:hover,
   }
 }
 
-.app-header__identity {
-  width: clamp(9rem, 15vw, 12rem);
-  min-width: 0;
-}
-.app-header__offices {
-  color: var(--header-muted);
-}
 #profile-offices {
   scroll-margin-top: 8rem;
-}
-@media (min-width: 640px) and (max-width: 1100px) {
-  .app-header__navigation {
-    order: 3;
-    flex-basis: 100%;
-    flex-wrap: wrap;
-  }
 }
 
 @media (max-width: 639px) {

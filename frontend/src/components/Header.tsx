@@ -1,31 +1,28 @@
 'use client';
 
+import { useEffect, useRef, useState } from 'react';
 import Link from 'next/link';
 import { usePathname } from 'next/navigation';
 import {
   AlertCircle,
+  ArrowUpRight,
+  Building2,
+  ChevronDown,
   LogOut,
-  Plus,
-  List,
-  ClipboardList,
-  Settings,
+  Menu,
   User,
-  MessageSquare,
+  X,
 } from 'lucide-react';
 import { useAuth } from '@/lib/auth';
 import { useConfig } from '@/hooks/useConfig';
 import { SiteBrand } from '@/components/SiteBrand';
 import { officeDisplayName, officePaymentLabel } from '@/lib/api';
-import { getUserRoleLabel } from '@/lib/permissions';
 import {
-  canOrderPasses,
   canSeeOverdueAlerts,
-  canUseReception,
-  canViewPasses,
-  canUseTenantServiceRequests,
   getHomePath,
-  hasPermission,
+  getUserRoleLabel,
 } from '@/lib/permissions';
+import { getPrimaryNavigation, isNavigationActive } from '@/lib/navigation';
 import { getUiLabels } from '@/lib/ui-labels';
 import { useOverdueGuests } from '@/hooks/useOverdueGuests';
 import { OverdueGuestsAlert } from '@/components/OverdueGuestsAlert';
@@ -41,13 +38,82 @@ export function Header() {
   const { theme } = useTheme();
   const showOverdueAlerts = user ? canSeeOverdueAlerts(user) : false;
   const { passes: overduePasses } = useOverdueGuests(showOverdueAlerts);
+  const [openPanel, setOpenPanel] = useState<'account' | 'navigation' | null>(
+    null,
+  );
+  const accountRef = useRef<HTMLDivElement>(null);
+  const navigationRef = useRef<HTMLDivElement>(null);
+  const accountButtonRef = useRef<HTMLButtonElement>(null);
+  const navigationButtonRef = useRef<HTMLButtonElement>(null);
+  const links = user
+    ? getPrimaryNavigation(user, config).filter(
+        (link) => link.href !== '/profile',
+      )
+    : [];
+  const navigationBreakpoint = links.length <= 3 ? 900 : 1100;
+
+  useEffect(() => setOpenPanel(null), [pathname]);
+
+  useEffect(() => {
+    if (!openPanel) return;
+    const panelRef = openPanel === 'account' ? accountRef : navigationRef;
+    const buttonRef =
+      openPanel === 'account' ? accountButtonRef : navigationButtonRef;
+    const dismiss = (event: PointerEvent | FocusEvent) => {
+      if (!panelRef.current?.contains(event.target as Node)) setOpenPanel(null);
+    };
+    const onKeyDown = (event: KeyboardEvent) => {
+      if (event.key !== 'Escape') return;
+      setOpenPanel(null);
+      buttonRef.current?.focus();
+    };
+    document.addEventListener('pointerdown', dismiss);
+    document.addEventListener('focusin', dismiss);
+    document.addEventListener('keydown', onKeyDown);
+    return () => {
+      document.removeEventListener('pointerdown', dismiss);
+      document.removeEventListener('focusin', dismiss);
+      document.removeEventListener('keydown', onKeyDown);
+    };
+  }, [openPanel]);
+
+  useEffect(() => {
+    const media = window.matchMedia(
+      `(min-width: ${navigationBreakpoint}px), (max-width: 639px)`,
+    );
+    const closeNavigation = () => {
+      if (media.matches)
+        setOpenPanel((current) => (current === 'navigation' ? null : current));
+    };
+    closeNavigation();
+    media.addEventListener('change', closeNavigation);
+    return () => media.removeEventListener('change', closeNavigation);
+  }, [navigationBreakpoint]);
 
   if (!user) return null;
 
+  const name =
+    user.full_name?.trim() || user.username || user.email || 'Аккаунт';
+  const initials = name
+    .split(/\s+/)
+    .slice(0, 2)
+    .map((part) => part[0])
+    .join('')
+    .toLocaleUpperCase('ru');
+  const roleLabel = getUserRoleLabel(user);
+  const offices = user.offices || [];
+  const officeLabel =
+    offices.length > 1
+      ? `Офисы: ${offices.length}`
+      : offices.length
+        ? officeDisplayName(offices[0])
+        : user.office
+          ? `Офис ${user.office}`
+          : '';
   const onControlPage = pathname === '/control';
   const showHeaderOverdueBanner =
     showOverdueAlerts && overduePasses.length > 0 && !onControlPage;
-  const unpaidOffices = (user.offices || []).filter(
+  const unpaidOffices = offices.filter(
     (office) =>
       office.paymentStatus === 'unpaid' || office.paymentStatus === 'overdue',
   );
@@ -57,171 +123,243 @@ export function Header() {
       {office.paidUntil ? ` до ${office.paidUntil}` : ''}
     </div>
   ));
-
-  const scrollToOverdueSection = () => {
-    document
-      .getElementById('reception-section-overdue')
-      ?.scrollIntoView({ behavior: 'smooth', block: 'start' });
-  };
-
-  const homePath = getHomePath(user);
-
-  const links = [
-    {
-      href: '/passes',
-      label: L.nav.passes,
-      icon: List,
-      show: canViewPasses(user),
-    },
-    {
-      href: '/passes/new',
-      label: L.nav.orderPass,
-      icon: Plus,
-      show: canOrderPasses(user),
-    },
-    {
-      href: '/control',
-      label: L.nav.reception,
-      icon: ClipboardList,
-      show: canUseReception(user),
-    },
-    { href: '/profile', label: L.nav.profile, icon: User, show: true },
-    {
-      href: '/requests',
-      label: 'Обращения',
-      icon: MessageSquare,
-      show: canUseTenantServiceRequests(user, config),
-    },
-    {
-      href: '/admin',
-      label: L.nav.admin,
-      icon: Settings,
-      show: hasPermission(user, 'admin.panel'),
-    },
-  ].filter((l) => l.show);
+  const navigationLinks = links.map(({ href, label, icon: Icon }) => {
+    const active = isNavigationActive(pathname, href);
+    return (
+      <Link
+        key={href}
+        href={href}
+        title={label}
+        className={`app-header__nav-link ${active ? 'is-active' : ''}`}
+        aria-current={active ? 'page' : undefined}
+        onClick={() => setOpenPanel(null)}
+      >
+        <Icon className="w-4 h-4 shrink-0" aria-hidden="true" />
+        <span>{label}</span>
+      </Link>
+    );
+  });
 
   return (
     <header
-      className="sticky top-0 z-50 border-b"
-      style={{
-        background: 'var(--header-bg)',
-        borderColor: 'var(--header-border)',
-      }}
+      className={`app-header ${links.length <= 3 ? 'app-header--compact-navigation' : ''}`}
     >
-      <div className="app-header__row max-w-6xl mx-auto px-4 py-3 flex flex-wrap items-center justify-between gap-2 sm:gap-4">
-        <div className="flex min-w-0 items-center shrink-0">
-          <Link href={homePath} style={{ color: 'var(--header-text)' }}>
+      <a href="#main-content" className="app-header__skip">
+        Перейти к содержимому
+      </a>
+      <div className="app-header__row">
+        <div className="app-header__start">
+          {links.length > 0 && (
+            <div ref={navigationRef} className="app-header__menu">
+              <button
+                ref={navigationButtonRef}
+                type="button"
+                className="app-header__control"
+                aria-label={
+                  openPanel === 'navigation' ? 'Закрыть меню' : 'Открыть меню'
+                }
+                aria-expanded={openPanel === 'navigation'}
+                aria-controls="header-navigation-panel"
+                onClick={() =>
+                  setOpenPanel((current) =>
+                    current === 'navigation' ? null : 'navigation',
+                  )
+                }
+              >
+                {openPanel === 'navigation' ? (
+                  <X className="w-5 h-5" aria-hidden="true" />
+                ) : (
+                  <Menu className="w-5 h-5" aria-hidden="true" />
+                )}
+              </button>
+              {openPanel === 'navigation' && (
+                <nav
+                  id="header-navigation-panel"
+                  className="app-header__panel app-header__menu-panel"
+                  aria-label="Основное меню"
+                >
+                  <p className="app-header__eyebrow">Разделы</p>
+                  {navigationLinks}
+                </nav>
+              )}
+            </div>
+          )}
+          <Link href={getHomePath(user)} className="app-header__brand">
             <SiteBrand
               config={config}
               size="sm"
               variant={theme === 'dark' ? 'dark' : 'light'}
-              className="max-w-[200px] max-[360px]:[&_.font-semibold]:hidden max-[360px]:[&_img]:max-w-[112px] sm:max-w-none"
+              className="app-header__brand-content"
             />
           </Link>
         </div>
-        <nav
-          className="app-header__navigation hidden sm:flex items-center gap-1"
-          aria-label="Основное меню"
-        >
-          {links.map(({ href, label, icon: Icon }) => {
-            const active =
-              pathname === href ||
-              (href !== '/admin' && pathname.startsWith(href)) ||
-              (href === '/admin' && pathname.startsWith('/admin'));
-            return (
-              <Link
-                key={href}
-                href={href}
-                className={`flex items-center gap-1.5 px-3 py-1.5 rounded text-sm ${active ? 'nav-link-active' : 'nav-link'}`}
-              >
-                <Icon className="w-4 h-4" />
-                {label}
-              </Link>
-            );
-          })}
+        <nav className="app-header__navigation" aria-label="Основное меню">
+          {navigationLinks}
         </nav>
-        <div className="flex shrink-0 items-center gap-1 sm:gap-3">
+        <div className="app-header__utilities">
           {showOverdueAlerts &&
             overduePasses.length > 0 &&
             (onControlPage ? (
               <button
                 type="button"
-                onClick={scrollToOverdueSection}
-                className="flex items-center gap-2 px-3 py-1.5 rounded-md text-xs font-medium theme-alert border hover:opacity-90 transition-opacity"
-              >
-                <AlertCircle className="w-3.5 h-3.5 shrink-0" />
-                <span className="truncate">{overduePasses.length}</span>
-              </button>
-            ) : (
-              <OverdueGuestsAlert
-                passes={overduePasses}
-                labels={L}
-                compact
-                linkHref="/control#reception-section-overdue"
-              />
-            ))}
-          <div
-            className="app-header__identity text-right hidden md:block"
-            style={{ color: 'var(--header-text)' }}
-          >
-            <Link
-              href="/profile"
-              className="text-sm font-medium hover:opacity-80 hover:underline block truncate"
-              title={user.full_name}
-            >
-              {user.full_name}
-            </Link>
-            <div
-              className="text-xs truncate"
-              title={[getUserRoleLabel(user), user.company]
-                .filter(Boolean)
-                .join(' · ')}
-              style={{ color: 'var(--header-muted)' }}
-            >
-              {getUserRoleLabel(user)}
-              {user.company && ` · ${user.company}`}
-            </div>
-            {!!(user.offices?.length || user.office) && (
-              <Link
-                href="/profile#profile-offices"
-                className="app-header__offices text-xs block truncate hover:underline"
-                title={
-                  user.offices
-                    ?.map((office) =>
-                      [office.businessCenterName, officeDisplayName(office)]
-                        .filter(Boolean)
-                        .join(' · '),
-                    )
-                    .join('; ') || `Офис ${user.office}`
+                className="app-header__control app-header__overdue"
+                title={L.reception.sectionOverdue}
+                aria-label={`${L.reception.sectionOverdue}: ${overduePasses.length}`}
+                onClick={() =>
+                  document
+                    .getElementById('reception-section-overdue')
+                    ?.scrollIntoView({ behavior: 'smooth', block: 'start' })
                 }
               >
-                {(user.offices?.length || 0) > 1
-                  ? `Офисы: ${user.offices!.length}`
-                  : user.offices?.length
-                    ? [
-                        user.offices[0].businessCenterName,
-                        officeDisplayName(user.offices[0]),
-                      ]
-                        .filter(Boolean)
-                        .join(' · ')
-                    : `оф. ${user.office}`}
+                <AlertCircle className="w-5 h-5" aria-hidden="true" />
+                <span className="app-header__count">
+                  {overduePasses.length > 99 ? '99+' : overduePasses.length}
+                </span>
+              </button>
+            ) : (
+              <Link
+                href="/control#reception-section-overdue"
+                className="app-header__control app-header__overdue"
+                title={L.reception.sectionOverdue}
+                aria-label={`${L.reception.sectionOverdue}: ${overduePasses.length}`}
+              >
+                <AlertCircle className="w-5 h-5" aria-hidden="true" />
+                <span className="app-header__count">
+                  {overduePasses.length > 99 ? '99+' : overduePasses.length}
+                </span>
               </Link>
+            ))}
+          <WorkQueueIndicator />
+          <ThemeToggle compact className="app-header__control" />
+          <div ref={accountRef} className="app-header__account">
+            <button
+              ref={accountButtonRef}
+              type="button"
+              className={`app-header__account-button ${isNavigationActive(pathname, '/profile') ? 'is-current' : ''}`}
+              aria-label={`Аккаунт: ${name}`}
+              aria-expanded={openPanel === 'account'}
+              aria-controls="header-account-panel"
+              onClick={() =>
+                setOpenPanel((current) =>
+                  current === 'account' ? null : 'account',
+                )
+              }
+            >
+              <span className="app-header__avatar" aria-hidden="true">
+                {initials}
+              </span>
+              <span className="app-header__identity">
+                <span className="app-header__name" title={name}>
+                  {name}
+                </span>
+                <span className="app-header__context">
+                  <span className="app-header__role" title={roleLabel}>
+                    {roleLabel}
+                  </span>
+                  {officeLabel && (
+                    <span className="app-header__offices" title={officeLabel}>
+                      {officeLabel}
+                    </span>
+                  )}
+                </span>
+              </span>
+              <ChevronDown
+                className="app-header__chevron w-4 h-4"
+                aria-hidden="true"
+              />
+            </button>
+            {openPanel === 'account' && (
+              <section
+                id="header-account-panel"
+                className="app-header__panel app-header__account-panel"
+                aria-label="Меню аккаунта"
+              >
+                <div className="app-header__account-info">
+                  <span className="app-header__role-badge">{roleLabel}</span>
+                  <p className="app-header__account-name">{name}</p>
+                  {user.company && (
+                    <p className="app-header__company">{user.company}</p>
+                  )}
+                </div>
+                {officeLabel && (
+                  <div className="app-header__office-section">
+                    <div className="app-header__office-heading">
+                      <span>
+                        <Building2 className="w-4 h-4" aria-hidden="true" />
+                        {offices.length > 1
+                          ? `Ваши офисы · ${offices.length}`
+                          : 'Ваш офис'}
+                      </span>
+                      <Link
+                        href="/profile#profile-offices"
+                        onClick={() => setOpenPanel(null)}
+                        aria-label="Открыть офисы в профиле"
+                      >
+                        <span>{offices.length > 1 ? 'Все' : 'Открыть'}</span>
+                        <ArrowUpRight className="w-4 h-4" aria-hidden="true" />
+                      </Link>
+                    </div>
+                    <ul
+                      className="app-header__office-list"
+                      aria-label="Ваши офисы"
+                      tabIndex={offices.length > 3 ? 0 : undefined}
+                    >
+                      {offices.length ? (
+                        offices.map((office) => (
+                          <li key={office.id}>
+                            <span className="app-header__office-name">
+                              {officeDisplayName(office)}
+                            </span>
+                            {office.businessCenterName && (
+                              <span className="app-header__office-bc">
+                                {office.businessCenterName}
+                              </span>
+                            )}
+                            {office.category?.name && (
+                              <span className="app-header__office-category">
+                                {office.category.name}
+                              </span>
+                            )}
+                          </li>
+                        ))
+                      ) : (
+                        <li>
+                          <span className="app-header__office-name">
+                            {officeLabel}
+                          </span>
+                        </li>
+                      )}
+                    </ul>
+                  </div>
+                )}
+                <div className="app-header__account-actions">
+                  <Link
+                    href="/profile"
+                    className="app-header__account-link"
+                    onClick={() => setOpenPanel(null)}
+                  >
+                    <User className="w-4 h-4" aria-hidden="true" />
+                    <span>{L.nav.profile}</span>
+                    <ArrowUpRight
+                      className="w-4 h-4 ml-auto"
+                      aria-hidden="true"
+                    />
+                  </Link>
+                  <button
+                    type="button"
+                    className="app-header__account-link app-header__logout"
+                    onClick={() => {
+                      setOpenPanel(null);
+                      logout();
+                    }}
+                  >
+                    <LogOut className="w-4 h-4" aria-hidden="true" />
+                    {L.nav.logout}
+                  </button>
+                </div>
+              </section>
             )}
           </div>
-          <WorkQueueIndicator />
-          <ThemeToggle compact />
-          <button
-            onClick={logout}
-            className="p-2 rounded transition-colors"
-            style={{
-              color: 'var(--header-muted)',
-              border: '1px solid var(--header-border)',
-              background: 'var(--header-control-bg)',
-            }}
-            title={L.nav.logout}
-          >
-            <LogOut className="w-4 h-4" />
-          </button>
         </div>
       </div>
       {unpaidOffices.length > 0 && (

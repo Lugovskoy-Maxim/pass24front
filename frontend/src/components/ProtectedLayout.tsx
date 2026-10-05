@@ -108,6 +108,8 @@ export function ProtectedLayout({
     <>
       <Header />
       <main
+        id="main-content"
+        tabIndex={-1}
         className={`app-main w-full mx-auto px-4 py-6 ${wide ? 'max-w-none' : 'max-w-6xl'}`}
       >
         <PendingApprovalBanner user={user} />
