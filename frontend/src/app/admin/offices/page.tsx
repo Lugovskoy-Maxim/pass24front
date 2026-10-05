@@ -1,6 +1,8 @@
 'use client';
 import Link from 'next/link';
 import { OfficeServiceEditor } from '@/components/OfficeServiceEditor';
+import { OfficeEditor } from '@/components/OfficeEditor';
+import { TenantAssignmentPicker } from '@/components/TenantAssignmentPicker';
 
 import {
   useEffect,
@@ -26,7 +28,6 @@ import {
   Table2,
   Download,
   Upload,
-  AlertTriangle,
   ArrowLeft,
 } from 'lucide-react';
 import { AdminLayout } from '@/components/AdminLayout';
@@ -131,6 +132,10 @@ export default function AdminOfficesPage() {
   const debouncedOfficeSearch = useDebounce(officeFilters.search);
 
   useEffect(() => {
+    if (showForm || editingId) window.scrollTo({ top: 0, behavior: 'auto' });
+  }, [showForm, editingId]);
+
+  useEffect(() => {
     setOfficeView(getInitialOfficeView());
   }, []);
 
@@ -154,7 +159,7 @@ export default function AdminOfficesPage() {
     ])
       .then(([{ offices: o }, { users: t }, { businessCenters: bc }]) => {
         setOffices(o);
-        setTenants(t.filter((u) => u.isActive));
+        setTenants(t);
         setBusinessCenters(bc);
         if (!propertyId && bc[0]) setPropertyId(bc[0].id);
       })
@@ -317,6 +322,7 @@ export default function AdminOfficesPage() {
   };
 
   const startEdit = (office: Office) => {
+    setTenantSearch('');
     setEditingId(office.id);
     setBindingOfficeId(null);
     setPropertyId(office.propertyId);
@@ -358,7 +364,6 @@ export default function AdminOfficesPage() {
 
   const clearBinding = () => {
     setTenantIds([]);
-    setCompany('');
   };
 
   const handleCreate = async (e: FormEvent) => {
@@ -374,7 +379,7 @@ export default function AdminOfficesPage() {
         number: number.trim(),
         floor: floor.trim() || undefined,
         areaSqm: areaSqm ? parseFloat(areaSqm) : undefined,
-        company: company.trim() || undefined,
+        company: company.trim(),
         tenantIds,
         tenantId: tenantIds[0],
         isActive: officeActive,
@@ -396,7 +401,7 @@ export default function AdminOfficesPage() {
       await api.admin.updateOffice(officeId, {
         tenantIds,
         tenantId: tenantIds[0] || '',
-        company: company.trim() || undefined,
+        company: company.trim(),
       });
       toast('Привязка сохранена', 'success');
       resetForm();
@@ -415,7 +420,7 @@ export default function AdminOfficesPage() {
         propertyId,
         number: number.trim(),
         floor: floor.trim(),
-        company: company.trim() || undefined,
+        company: company.trim(),
         tenantIds,
         tenantId: tenantIds[0] || '',
         areaSqm: areaSqm ? parseFloat(areaSqm) : undefined,
@@ -630,96 +635,52 @@ export default function AdminOfficesPage() {
     setAppliedOfficeFilters(EMPTY_OFFICE_FILTERS);
   };
 
-  const tenantLabel = (t: AdminUser) => {
-    const offices = t.offices?.length ? ` · ${t.offices.length} оф.` : '';
-    return `${t.fullName}${t.company ? ` (${t.company})` : ''}${offices}`;
-  };
-
   const bindingOffice = bindingOfficeId
-    ? offices.find((o) => o.id === bindingOfficeId) || null
+    ? offices.find((office) => office.id === bindingOfficeId) || null
     : null;
-
-  const filteredTenantsForBinding = useMemo(() => {
-    const q = tenantSearch.trim().toLowerCase();
-    if (!q) return tenants;
-    return tenants.filter((t) => {
-      const hay =
-        `${t.fullName} ${t.company || ''} ${t.email || ''}`.toLowerCase();
-      return hay.includes(q);
-    });
-  }, [tenants, tenantSearch]);
-
   const selectedTenant = tenantIds[0]
-    ? tenants.find((t) => t.id === tenantIds[0])
+    ? tenants.find((tenant) => tenant.id === tenantIds[0])
     : undefined;
-
-  /** Компактный выбор для формы создания/редактирования офиса */
-  const BindingSelectCompact = () => (
-    <div className="space-y-2">
-      <div className="border border-[var(--border)] rounded-lg max-h-40 overflow-y-auto divide-y divide-[var(--border)] bg-[var(--surface)]">
-        {tenants.length === 0 ? (
-          <div className="p-2 text-xs text-[var(--muted)]">
-            Нет активных арендаторов
-          </div>
-        ) : (
-          tenants.map((t) => {
-            const checked = tenantIds.includes(t.id);
-            const others = tenantIds.filter((id) => id !== t.id);
-            return (
-              <label
-                key={t.id}
-                className={`flex items-start gap-2 px-2 py-1.5 text-sm cursor-pointer ${
-                  checked ? 'bg-[var(--status-approved-soft)]' : ''
-                }`}
-              >
-                <input
-                  type="checkbox"
-                  className="mt-0.5"
-                  checked={checked}
-                  onChange={() => handleTenantSelect(t.id)}
-                />
-                <span className="min-w-0">
-                  <span className="font-medium">{t.fullName}</span>
-                  {t.company ? (
-                    <span className="text-[var(--muted)]"> · {t.company}</span>
-                  ) : null}
-                  {!checked && others.length > 0 ? (
-                    <span className="block text-[11px] text-amber-700">
-                      Уже есть {others.length} арендатор
-                      {others.length > 1 ? 'а' : ''} — будет добавлен ещё один
-                    </span>
-                  ) : null}
-                </span>
-              </label>
-            );
-          })
-        )}
-      </div>
-      {tenantIds.length > 1 && (
-        <p className="text-[11px] text-amber-800 flex items-start gap-1">
-          <AlertTriangle className="w-3.5 h-3.5 shrink-0 mt-0.5" />В офисе
-          несколько арендаторов. Оба смогут заказывать пропуска.
-        </p>
-      )}
-      {tenantIds.length > 0 && (
-        <div>
-          <label className="label text-xs">Компания на табличке</label>
-          <input
-            className="input text-sm"
-            value={company}
-            onChange={(e) => setCompany(e.target.value)}
-            placeholder={ph.company}
-          />
-        </div>
-      )}
-    </div>
+  const currentOffice = offices.find(
+    (office) => office.id === (editingId || bindingOfficeId),
+  );
+  const assignedTenantNames = Object.fromEntries(
+    (currentOffice?.tenants || []).map((tenant) => [tenant.id, tenant.name]),
   );
 
   const officeFormOpen = showForm || !!editingId;
   const officeFormTitle = editingId ? 'Редактирование офиса' : 'Новый офис';
 
   return (
-    <AdminLayout title={officeFormOpen ? officeFormTitle : 'Реестр офисов'}>
+    <AdminLayout
+      title={officeFormOpen ? officeFormTitle : 'Реестр офисов'}
+      description={
+        officeFormOpen
+          ? 'Параметры помещения, назначения арендаторов и обслуживание'
+          : undefined
+      }
+      actions={
+        officeFormOpen ? (
+          <>
+            <button
+              type="button"
+              className="btn btn-secondary text-sm"
+              disabled={saving}
+              onClick={resetForm}
+            >
+              <ArrowLeft size={16} />
+              Назад к офисам
+            </button>
+            <Link
+              href="/admin/office-services"
+              className="btn btn-secondary text-sm"
+            >
+              Прайс и категории офисов
+            </Link>
+          </>
+        ) : undefined
+      }
+    >
       <div className={officeFormOpen ? 'hidden' : undefined}>
         <p className="text-[var(--muted)] -mt-4 mb-6">
           Бизнес-центры, офисы и параметры пропускного режима для каждого БЦ.
@@ -1420,86 +1381,19 @@ export default function AdminOfficesPage() {
               </div>
             )}
 
-            {tenantIds.length > 1 && (
-              <div className="rounded-lg border border-amber-200 bg-amber-50 text-amber-900 p-3 mb-4 text-sm flex items-start gap-2">
-                <AlertTriangle className="w-4 h-4 shrink-0 mt-0.5" />
-                <div>
-                  В этом офисе уже есть арендатор. Можно добавить ещё одного —
-                  оба смогут заказывать пропуска в это помещение.
-                </div>
-              </div>
-            )}
-
             <div className="space-y-3">
-              <div>
-                <label className="label">Арендаторы (можно несколько)</label>
-                <div className="relative mb-2">
-                  <Search className="absolute left-3 top-1/2 -translate-y-1/2 w-4 h-4 text-[var(--muted)]" />
-                  <input
-                    className="input input--icon-left text-sm"
-                    value={tenantSearch}
-                    onChange={(e) => setTenantSearch(e.target.value)}
-                    placeholder="Поиск: ФИО, компания, email..."
-                  />
-                </div>
-                <div className="border border-[var(--border)] rounded-lg max-h-56 overflow-y-auto divide-y divide-[var(--border)] bg-[var(--surface)]">
-                  {filteredTenantsForBinding.length === 0 ? (
-                    <div className="p-4 text-sm text-[var(--muted)] text-center">
-                      {tenants.length === 0
-                        ? 'Нет активных арендаторов'
-                        : 'Никого не найдено'}
-                    </div>
-                  ) : (
-                    filteredTenantsForBinding.map((t) => {
-                      const officesCount = t.offices?.length || 0;
-                      const checked = tenantIds.includes(t.id);
-                      const others = tenantIds.filter((id) => id !== t.id);
-                      return (
-                        <label
-                          key={t.id}
-                          className={`flex items-start gap-3 p-3 cursor-pointer hover:bg-[var(--surface-muted)] ${
-                            checked ? 'bg-[var(--status-approved-soft)]' : ''
-                          }`}
-                        >
-                          <input
-                            type="checkbox"
-                            className="mt-1"
-                            checked={checked}
-                            onChange={() => handleTenantSelect(t.id)}
-                          />
-                          <span className="text-sm min-w-0">
-                            <span className="font-medium">{t.fullName}</span>
-                            {t.company && (
-                              <span className="block text-xs text-[var(--muted)] truncate">
-                                {t.company}
-                              </span>
-                            )}
-                            <span className="block text-xs text-[var(--muted)] truncate">
-                              {t.email}
-                              {officesCount > 0
-                                ? ` · уже ${officesCount} оф.`
-                                : ''}
-                            </span>
-                            {!checked && others.length > 0 ? (
-                              <span className="block text-[11px] text-amber-700 mt-0.5">
-                                Уже есть{' '}
-                                {others
-                                  .map(
-                                    (id) =>
-                                      tenants.find((x) => x.id === id)
-                                        ?.fullName || 'арендатор',
-                                  )
-                                  .join(', ')}{' '}
-                                — будет добавлен ещё один
-                              </span>
-                            ) : null}
-                          </span>
-                        </label>
-                      );
-                    })
-                  )}
-                </div>
-              </div>
+              <TenantAssignmentPicker
+                key={bindingOffice.id}
+                idPrefix="office-binding-tenant"
+                tenants={tenants}
+                selectedIds={tenantIds}
+                assignedNames={assignedTenantNames}
+                query={tenantSearch}
+                onQueryChange={setTenantSearch}
+                onToggle={handleTenantSelect}
+                onClear={clearBinding}
+                disabled={saving}
+              />
 
               {tenantIds.length > 0 && (
                 <div>
@@ -1540,138 +1434,56 @@ export default function AdminOfficesPage() {
       </div>
 
       {officeFormOpen && (
-        <section className="space-y-4">
-          <Link
-            href="/admin/office-services"
-            className="btn btn-secondary text-sm"
-          >
-            Прайс и категории офисов
-          </Link>
-          <button
-            type="button"
-            className="btn btn-secondary text-sm"
-            onClick={resetForm}
-          >
-            <ArrowLeft className="w-4 h-4" />
-            Назад к офисам
-          </button>
-          <div className="card p-4 sm:p-5">
-            <form
-              onSubmit={
-                editingId
-                  ? (e) => {
-                      e.preventDefault();
-                      handleUpdate(editingId);
-                    }
-                  : handleCreate
-              }
-              className="space-y-4"
-            >
-              <div>
-                <label className="label">Бизнес-центр *</label>
-                <div className="select-wrap">
-                  <select
-                    className="input"
-                    value={propertyId}
-                    onChange={(e) => setPropertyId(e.target.value)}
-                    required
-                  >
-                    <option value="">Выберите БЦ</option>
-                    {businessCenters.map((bc) => (
-                      <option key={bc.id} value={bc.id}>
-                        {bc.name}
-                      </option>
-                    ))}
-                  </select>
-                </div>
-              </div>
-              <div className="grid grid-cols-2 gap-3">
-                <div>
-                  <label className="label">Номер офиса *</label>
-                  <input
-                    className="input"
-                    value={number}
-                    onChange={(e) => setNumber(e.target.value)}
-                    required
-                    placeholder={ph.officeNumberShort}
-                  />
-                </div>
-                <div>
-                  <label className="label">Этаж</label>
-                  <input
-                    className="input"
-                    value={floor}
-                    onChange={(e) => setFloor(e.target.value)}
-                    placeholder={ph.officeFloor}
-                  />
-                </div>
-              </div>
-              <div className="grid grid-cols-2 gap-3">
-                <div>
-                  <label className="label">Площадь, м²</label>
-                  <input
-                    className="input"
-                    type="number"
-                    min={0}
-                    value={areaSqm}
-                    onChange={(e) => setAreaSqm(e.target.value)}
-                  />
-                </div>
-                <div>
-                  <label className="label">externalId</label>
-                  <input
-                    className="input"
-                    value={externalId}
-                    onChange={(e) => setExternalId(e.target.value)}
-                    placeholder="tf-room:107"
-                  />
-                </div>
-              </div>
-              <label className="flex items-center gap-2 text-sm">
-                <input
-                  type="checkbox"
-                  checked={officeActive}
-                  onChange={(e) => setOfficeActive(e.target.checked)}
-                />
-                Активен
-              </label>
-
-              <div className="border border-[var(--border)] rounded-lg p-4 bg-[var(--surface-muted)]">
-                <div className="flex items-center gap-2 mb-3">
-                  <Link2 className="w-4 h-4 text-[var(--primary)]" />
-                  <span className="font-medium text-sm">
-                    Привязка арендатора
-                  </span>
-                </div>
-                <BindingSelectCompact />
-              </div>
-
-              <div className="flex gap-2">
-                <button
-                  type="submit"
-                  className="btn btn-primary"
-                  disabled={saving}
-                >
-                  {saving
-                    ? 'Сохранение...'
-                    : editingId
-                      ? 'Сохранить'
-                      : 'Добавить'}
-                </button>
-                <button
-                  type="button"
-                  className="btn btn-secondary"
-                  onClick={resetForm}
-                >
-                  Отмена
-                </button>
-              </div>
-            </form>
-          </div>
+        <OfficeEditor
+          values={{
+            propertyId,
+            number,
+            floor,
+            areaSqm,
+            company,
+            externalId,
+            isActive: officeActive,
+          }}
+          onChange={(values) => {
+            setPropertyId(values.propertyId);
+            setNumber(values.number);
+            setFloor(values.floor);
+            setAreaSqm(values.areaSqm);
+            setCompany(values.company);
+            setExternalId(values.externalId);
+            setOfficeActive(values.isActive);
+          }}
+          businessCenters={businessCenters}
+          editing={!!editingId}
+          saving={saving}
+          onCancel={resetForm}
+          onSubmit={
+            editingId
+              ? (event) => {
+                  event.preventDefault();
+                  void handleUpdate(editingId);
+                }
+              : handleCreate
+          }
+          tenantPicker={
+            <TenantAssignmentPicker
+              key={editingId || 'new'}
+              idPrefix="office-editor-tenant"
+              tenants={tenants}
+              selectedIds={tenantIds}
+              assignedNames={assignedTenantNames}
+              query={tenantSearch}
+              onQueryChange={setTenantSearch}
+              onToggle={handleTenantSelect}
+              onClear={clearBinding}
+              disabled={saving}
+            />
+          }
+        >
           {editingId && (
             <OfficeServiceEditor key={editingId} officeId={editingId} />
           )}
-        </section>
+        </OfficeEditor>
       )}
 
       <div className={officeFormOpen ? 'hidden' : undefined}>

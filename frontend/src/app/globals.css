@@ -2,6 +2,7 @@
 @import './service-requests.css';
 @import './admin-operations.css';
 @import './app-header.css';
+@import './office-editor.css';
 
 :root {
   --m-accent: #eb711c;

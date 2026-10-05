@@ -47,6 +47,11 @@ import {
   officeTenantIds,
 } from '@/lib/api';
 import { PageError } from '@/components/PageError';
+import { SearchableSelect } from '@/components/SearchableSelect';
+import {
+  OFFICE_SEARCH_HINT_WORDS,
+  normalizeSearch as normalizeOfficeSearch,
+} from '@/lib/search';
 import { useToast } from '@/components/Toast';
 import { useDebounce } from '@/hooks/useDebounce';
 import { useAutoRefresh } from '@/hooks/useAutoRefresh';
@@ -105,24 +110,6 @@ const EMPTY_MSTYLE_PROFILE: AdminMstyleProfileState = {
 };
 
 const MAX_COMPANY_LOGO_BYTES = 80 * 1024;
-
-const OFFICE_SEARCH_HINT_WORDS = new Set([
-  'оф',
-  'офис',
-  'офиса',
-  'офисы',
-  'офисов',
-  'офисе',
-  'офисом',
-  'office',
-]);
-function normalizeOfficeSearch(value: string) {
-  return value
-    .replace(/№/g, ' ')
-    .normalize('NFKC')
-    .toLowerCase()
-    .replace(/ё/g, 'е');
-}
 
 const EMPTY_NAME: PersonNameParts = {
   lastName: '',
@@ -1061,31 +1048,29 @@ function AdminUsersPageContent() {
               </label>
 
               {category === 'tenants' ? (
-                <label>
-                  <span className="label">Офис</span>
-                  <span className="select-wrap block">
-                    <select
-                      className="input"
-                      value={filters.officeId}
-                      onChange={(e) =>
-                        setFilters((prev) => ({
-                          ...prev,
-                          officeId: e.target.value,
-                        }))
-                      }
-                    >
-                      <option value="">Все офисы</option>
-                      {officesForFilter.map((office) => (
-                        <option key={office.id} value={office.id}>
-                          {office.businessCenterName
-                            ? `${office.businessCenterName}: `
-                            : ''}
-                          оф. {office.number}
-                        </option>
-                      ))}
-                    </select>
-                  </span>
-                </label>
+                <div>
+                  <label className="label" htmlFor="users-office-filter">
+                    Офис
+                  </label>
+                  <SearchableSelect
+                    id="users-office-filter"
+                    label="Офис для фильтра пользователей"
+                    value={filters.officeId || ''}
+                    onChange={(officeId) =>
+                      setFilters((prev) => ({ ...prev, officeId }))
+                    }
+                    placeholder="Все офисы"
+                    searchPlaceholder="102 офис, БЦ или компания"
+                    officeWords
+                    options={officesForFilter.map((office) => ({
+                      value: office.id,
+                      label: [office.businessCenterName, `оф. ${office.number}`]
+                        .filter(Boolean)
+                        .join(' · '),
+                      searchText: `${office.number} ${office.title || ''} ${office.businessCenterName || ''} ${office.company || ''} ${formatOfficeTenants(office)}`,
+                    }))}
+                  />
+                </div>
               ) : (
                 <label>
                   <span className="label">Роль</span>
