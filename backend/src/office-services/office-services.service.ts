@@ -196,10 +196,10 @@ export class OfficeServicesService implements OnModuleInit {
         category: await this.category(office.officeFormat),
         externalId: office.externalId,
         revision: office.serviceRevision || 0,
-        details: office.serviceDetails || {
-          values: {},
-          visibleFields: [],
-          serviceOverrides: [],
+        details: {
+          values: office.serviceDetails?.values ?? {},
+          visibleFields: office.serviceDetails?.visibleFields ?? [],
+          serviceOverrides: office.serviceDetails?.serviceOverrides ?? [],
         },
       },
     };

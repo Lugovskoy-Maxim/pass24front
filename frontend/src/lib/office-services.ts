@@ -124,6 +124,16 @@ const body = (value: unknown, method = 'POST') => ({
   method,
   body: JSON.stringify(value),
 });
+function editableOffice(office: AdminOfficeDetails): AdminOfficeDetails {
+  return {
+    ...office,
+    details: {
+      values: office.details?.values ?? {},
+      visibleFields: office.details?.visibleFields ?? [],
+      serviceOverrides: office.details?.serviceOverrides ?? [],
+    },
+  };
+}
 export const officeServices = {
   categories: () =>
     request<{ categories: OfficeCategory[] }>('/office-services/categories'),
@@ -136,18 +146,22 @@ export const officeServices = {
       `/office-services/admin/prices${id ? `/${id}` : ''}`,
       body(value, id ? 'PATCH' : 'POST'),
     ),
-  office: (id: string) =>
-    request<{ office: AdminOfficeDetails }>(
+  office: async (id: string) => {
+    const result = await request<{ office: AdminOfficeDetails }>(
       `/office-services/admin/offices/${id}`,
-    ),
-  saveOffice: (
+    );
+    return { ...result, office: editableOffice(result.office) };
+  },
+  saveOffice: async (
     id: string,
     value: { details: OfficeDetails; officeFormat: string; revision: number },
-  ) =>
-    request<{ office: AdminOfficeDetails }>(
+  ) => {
+    const result = await request<{ office: AdminOfficeDetails }>(
       `/office-services/admin/offices/${id}`,
       body(value, 'PATCH'),
-    ),
+    );
+    return { ...result, office: editableOffice(result.office) };
+  },
   tenantOffice: (id: string) =>
     request<{ office: OfficeFeatures & { id: string; number: string } }>(
       `/office-services/offices/${id}`,
