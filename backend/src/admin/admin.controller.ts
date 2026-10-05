@@ -20,6 +20,7 @@ import {
   Req,
   Res,
   UseGuards,
+  UseFilters,
 } from '@nestjs/common';
 import type { Response } from 'express';
 import { AuditQuery } from '../audit/audit.service';
@@ -59,6 +60,8 @@ import { MSTYLE_ADMIN_PROBE_CLIENT_ID } from '../integrations/mstyle-v2/mstyle-v
 import { UpdateMstyleIntegrationSettingsDto } from './dto/update-mstyle-integration-settings.dto';
 import { UpdateMstyleManualTestingDto } from './dto/update-mstyle-manual-testing.dto';
 import { MANUAL_TEST_PROFILES } from '../integrations/mstyle-v2/mstyle-v2.manual-test-profiles';
+import { Bitrix24Service } from '../integrations/bitrix24/bitrix24.service';
+import { OperationsExceptionFilter } from '../operations/operations.controller';
 import { MstyleManualTestingService } from '../integrations/mstyle-v2/mstyle-v2.manual-testing.service';
 
 @Controller('admin')
@@ -74,6 +77,7 @@ export class AdminController {
     private readonly mstyleV2Config: MstyleV2Config,
     private readonly mstyleOauthService: MstyleOauthService,
     private readonly mstyleManualTestingService: MstyleManualTestingService,
+    private readonly bitrix: Bitrix24Service,
   ) {}
 
   @Get('dashboard')
@@ -168,6 +172,47 @@ export class AdminController {
   @RequireAllPermissions('admin.users')
   deleteUser(@Param('id') id: string, @Req() req: any) {
     return this.adminService.deleteUser(id, req.user);
+  }
+  @Get('bitrix/companies')
+  @RequireAllPermissions('admin.users')
+  @UseFilters(OperationsExceptionFilter)
+  crmCompanies(
+    @Query('search') search?: string,
+    @Query('start') start?: string,
+  ) {
+    const offset = Number(start || 0);
+    if (!Number.isSafeInteger(offset) || offset < 0)
+      throw new BadRequestException('Некорректная страница.');
+    return this.bitrix.companies(search, offset);
+  }
+  @Get('users/:id/bitrix-company')
+  @RequireAllPermissions('admin.users')
+  @UseFilters(OperationsExceptionFilter)
+  async tenantCrmCompany(@Param('id') id: string) {
+    return this.bitrix.tenantCompany(
+      await this.adminService.tenantProfileId(id),
+    );
+  }
+  @Patch('users/:id/bitrix-company')
+  @RequireAllPermissions('admin.users')
+  @UseFilters(OperationsExceptionFilter)
+  async linkTenantCrmCompany(
+    @Param('id') id: string,
+    @Body() body: any,
+    @Req() req: any,
+  ) {
+    const result = await this.bitrix.linkTenantCompany(
+      await this.adminService.tenantProfileId(id),
+      body,
+    );
+    await this.auditService.log({
+      action: 'user.bitrix_company_linked',
+      entityType: 'user',
+      entityId: id,
+      actor: req.user,
+      details: { companyId: result.company?.id || null },
+    });
+    return result;
   }
 
   @Get('registration-requests')

@@ -18,9 +18,11 @@ const {
   if (bitrix.enabled()) {
     try {
       const funnel = await bitrix.funnel(true);
+      const capabilities = await bitrix.capabilities().catch(() => null);
       result.bitrix = {
         ...result.bitrix,
         ready: true,
+        capabilities,
         funnelId: funnel.id,
         funnelName: funnel.name,
         stages: funnel.stages.map((stage) => ({
@@ -70,6 +72,58 @@ const {
       .db()
       .collection('mstyle_ops_outbox')
       .countDocuments({ type: 'bitrix.message', state: { $ne: 'done' } });
+    const db = mongo.db();
+    const assignment = await db
+      .collection('mstyle_ops_bitrix_state')
+      .findOne({ _id: 'assignment-settings' });
+    result.crmDefaultAssigneeConfigured = !!assignment?.user_id;
+    result.crmCustomerLinks = {
+      managedTickets: await db
+        .collection('mstyle_ops_tickets')
+        .countDocuments({ 'bitrix.managed': true }),
+      enrichedTickets: await db
+        .collection('mstyle_ops_tickets')
+        .countDocuments({ 'bitrix.customer_version': 1 }),
+      tenantCompanyLinks: await db
+        .collection('mstyle_ops_bitrix_state')
+        .countDocuments({ _id: /^tenant-company:/, company_id: { $gt: 0 } }),
+    };
+    result.crmCustomerChecks = [];
+    if (bitrix.enabled()) {
+      const tickets = await db
+        .collection('mstyle_ops_tickets')
+        .find(
+          { 'bitrix.deal_id': { $exists: true } },
+          { projection: { id: 1, bitrix: 1, office_id: 1, office_ids: 1 } },
+        )
+        .sort({ id: -1 })
+        .limit(5)
+        .toArray();
+      for (const ticket of tickets) {
+        try {
+          const { result: deal } = await bitrix.call('crm.deal.get', {
+            id: ticket.bitrix.deal_id,
+          });
+          const { result: contacts } = await bitrix.call(
+            'crm.deal.contact.items.get',
+            { id: ticket.bitrix.deal_id },
+          );
+          result.crmCustomerChecks.push({
+            officeInTitle: /^Офис(?:ы)?\s.+ · /.test(deal.TITLE || ''),
+            companyLinked: Number(deal.COMPANY_ID) > 0,
+            contactCount: Array.isArray(contacts) ? contacts.length : 0,
+            enriched: ticket.bitrix.customer_version === 1,
+            customerErrorCode: ticket.bitrix.customer_error_code || '',
+            assignmentErrorCode: ticket.bitrix.assignment_error_code || '',
+          });
+        } catch (error) {
+          result.crmCustomerChecks.push({
+            errorCode:
+              error instanceof Bitrix24Error ? error.code : 'check_failed',
+          });
+        }
+      }
+    }
   } catch {
     result.databaseErrorCode = 'check_failed';
   } finally {

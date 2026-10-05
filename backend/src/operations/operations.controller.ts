@@ -347,6 +347,40 @@ export class OperationsAdminController {
       integer(id, 'id', 1),
     );
   }
+  @Get('service-requests/integration/users')
+  @Header('Cache-Control', 'no-store')
+  @RequireAllPermissions('support.manage')
+  async crmUsers() {
+    return { items: (await this.bitrix?.client.staff()) || [] };
+  }
+  @Get('service-requests/integration/assignment-settings')
+  @Header('Cache-Control', 'no-store')
+  @RequireAllPermissions('support.manage')
+  crmAssignmentSettings() {
+    return this.bitrix?.assignmentSettings() || { userId: null, name: '' };
+  }
+  @Patch('service-requests/integration/assignment-settings')
+  @Header('Cache-Control', 'no-store')
+  @RequireAllPermissions('support.manage', 'admin.settings')
+  saveCrmAssignmentSettings(@Body() body: any) {
+    if (!this.bitrix) fail('service_unavailable', 'CRM недоступна.', 503);
+    return this.bitrix.saveAssignmentSettings(body);
+  }
+  @Post('service-requests/:id/assignment')
+  @Header('Cache-Control', 'no-store')
+  @RequireAllPermissions('support.manage')
+  assignTicket(
+    @Req() req: any,
+    @Param('id') id: string,
+    @Body() body: any,
+    @Headers('idempotency-key') key: string,
+  ) {
+    return this.identity
+      .nativeActor(req.user)
+      .then((actor) =>
+        this.support.assign(actor, integer(id, 'id', 1), body, key),
+      );
+  }
   @Post('service-requests/attachments')
   @Header('Cache-Control', 'no-store')
   async upload(

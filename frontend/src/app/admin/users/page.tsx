@@ -48,6 +48,7 @@ import {
 } from '@/lib/api';
 import { PageError } from '@/components/PageError';
 import { SearchableSelect } from '@/components/SearchableSelect';
+import { TenantBitrixCompany } from '@/components/TenantBitrixCompany';
 import {
   OFFICE_SEARCH_HINT_WORDS,
   normalizeSearch as normalizeOfficeSearch,
@@ -1464,6 +1465,13 @@ function AdminUsersPageContent() {
                     }
                   />
                 </div>
+                {editId &&
+                  form.role === 'tenant' &&
+                  !users
+                    .flatMap((user) => user.employees || [])
+                    .some((employee) => employee.id === editId) && (
+                    <TenantBitrixCompany key={editId} userId={editId} />
+                  )}
                 {form.role === 'tenant' &&
                   !users
                     .flatMap((x) => x.employees || [])

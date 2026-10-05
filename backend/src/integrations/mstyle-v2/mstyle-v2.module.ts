@@ -56,6 +56,7 @@ import { MstyleManualTestingService } from './mstyle-v2.manual-testing.service';
     SmsModule,
   ],
   exports: [
+    Bitrix24Service,
     OperationsBookings,
     OperationsHours,
     OperationsPayments,

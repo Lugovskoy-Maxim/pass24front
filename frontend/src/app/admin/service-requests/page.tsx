@@ -16,6 +16,10 @@ import { AdminLayout } from '@/components/AdminLayout';
 import { useToast } from '@/components/Toast';
 import { PageError } from '@/components/PageError';
 import {
+  BitrixDefaultResponsibility,
+  BitrixTicketResponsibility,
+} from '@/components/BitrixResponsibility';
+import {
   OperationsFilters,
   OperationsFilter,
   OperationsQueueTabs,
@@ -309,6 +313,18 @@ export default function ServiceRequestsPage() {
                 Комментарии видны арендаторам. Для внутренней заметки начните
                 текст с [Внутреннее].
               </p>
+              {integration.capabilities?.staff === false && (
+                <p className="text-xs mt-1">
+                  Для выбора ответственного добавьте вебхуку Bitrix24 доступ к
+                  списку пользователей.
+                </p>
+              )}
+              {integration.capabilities?.notifications === false && (
+                <p className="text-xs mt-1">
+                  Для уведомлений сотрудника добавьте вебхуку Bitrix24 доступ
+                  «Чат и уведомления».
+                </p>
+              )}
             </div>
             <button
               type="button"
@@ -327,6 +343,7 @@ export default function ServiceRequestsPage() {
               : 'Раздел готовится к подключению. Обращения пока обрабатываются на сайте.'}
           </p>
         )}
+        {integration?.enabled && <BitrixDefaultResponsibility />}
         <section
           className="operations-controls"
           aria-label="Очереди и фильтры сервисных заявок"
@@ -608,6 +625,16 @@ export default function ServiceRequestsPage() {
                     </button>
                   )}
                 </RequestDetailHeader>
+                {detail.ticket.crm?.managed && (
+                  <BitrixTicketResponsibility
+                    key={detail.ticket.id}
+                    ticket={detail.ticket}
+                    onSaved={(updated) => {
+                      if (selection.current === updated.ticket.id)
+                        setDetail(updated);
+                    }}
+                  />
+                )}
                 {detail.ticket.booking_id && (
                   <Link
                     href={

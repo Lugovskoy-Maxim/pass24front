@@ -54,9 +54,13 @@ export type Ticket = {
     lastSyncAt: string | null;
     pending: boolean;
     error: string;
+    assignee?: { id: number | null; name: string } | null;
+    assignmentPending?: boolean;
+    assignmentError?: string;
   } | null;
 };
 export type SupportIntegration = {
+  capabilities?: { staff: boolean; notifications: boolean } | null;
   enabled: boolean;
   configured: boolean;
   ready: boolean;
@@ -212,6 +216,24 @@ export function params(values: Record<string, string | number | undefined>) {
   return '?' + query.toString();
 }
 export const operations = {
+  crmStaff: () =>
+    request<{ items: Array<{ id: number; name: string; position: string }> }>(
+      '/admin/service-requests/integration/users',
+    ),
+  crmAssignmentSettings: () =>
+    request<{ userId: number | null; name: string }>(
+      '/admin/service-requests/integration/assignment-settings',
+    ),
+  saveCrmAssignmentSettings: (userId: number | null) =>
+    request<{ userId: number | null; name: string }>(
+      '/admin/service-requests/integration/assignment-settings',
+      { method: 'PATCH', body: JSON.stringify({ userId }) },
+    ),
+  assignTicket: (id: number, userId: number, revision: number) =>
+    command<TicketDetail>(`/admin/service-requests/${id}/assignment`, {
+      user_id: userId,
+      revision,
+    }),
   counts: () => request<Counts>('/admin/work-queue/counts'),
   tickets: (q: Record<string, string | number>) =>
     request<Page<Ticket>>('/admin/service-requests' + params(q)),

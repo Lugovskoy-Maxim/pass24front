@@ -206,8 +206,22 @@ export class OperationsSupport {
             stage: row.bitrix.stage_name || null,
             lastSyncAt: row.bitrix.last_synced_at || null,
             pending: !row.bitrix.deal_id,
+            assignee:
+              row.bitrix.assignment_revision >
+              (row.bitrix.assignment_synced_revision || 0)
+                ? {
+                    id: row.bitrix.assignment_user_id,
+                    name: row.bitrix.assignment_name,
+                  }
+                : row.bitrix.assignee || null,
+            assignmentPending:
+              row.bitrix.assignment_revision >
+              (row.bitrix.assignment_synced_revision || 0),
+            assignmentError: bitrixErrorLabel(row.bitrix.assignment_error_code),
             error: bitrixErrorLabel(
-              row.bitrix.delivery_error_code || row.bitrix.error_code,
+              row.bitrix.delivery_error_code ||
+                row.bitrix.error_code ||
+                row.bitrix.customer_error_code,
             ),
           }
         : null;
@@ -540,6 +554,11 @@ export class OperationsSupport {
           .findOne({ subject: actor.subject }, { session });
         const id = await this.store.nextId('tickets', session);
         const now = sqlNow();
+        const crmAssignment = this.bitrix?.enabled()
+          ? await this.store
+              .collection('bitrix_state')
+              .findOne({ _id: 'assignment-settings' }, { session })
+          : null;
         await this.store.collection('tickets').insertOne(
           {
             id,
@@ -567,7 +586,19 @@ export class OperationsSupport {
             message_seq: 1,
             last_message_preview: message.slice(0, 160),
             ...(this.bitrix?.enabled()
-              ? { bitrix: { managed: true, create_state: 'pending' } }
+              ? {
+                  bitrix: {
+                    managed: true,
+                    create_state: 'pending',
+                    ...(crmAssignment?.user_id
+                      ? {
+                          assignment_user_id: crmAssignment.user_id,
+                          assignment_name: crmAssignment.user_name,
+                          assignment_revision: 1,
+                        }
+                      : {}),
+                  },
+                }
               : {}),
           },
           { session },
@@ -718,6 +749,64 @@ export class OperationsSupport {
           'support.status_changed',
           actor,
           { from: row.status, to: input.status },
+          session,
+        );
+        return this.detail(actor, id, session);
+      },
+    );
+  }
+  async assign(actor: OperationsActor, id: number, input: any, key: string) {
+    requirePermission(actor, 'support.manage');
+    if (actor.kind !== 'admin' || !this.bitrix?.enabled())
+      fail('forbidden', 'Назначение недоступно.', 403);
+    await this.assertAccess(
+      actor,
+      await this.store.collection('tickets').findOne({ id }),
+    );
+    const userId = integer(input.user_id, 'user_id', 1);
+    const user = (await this.bitrix.staff(userId)).find(
+      (user) => user.id === userId,
+    );
+    if (!user)
+      fail(
+        'validation_error',
+        'Выберите действующего сотрудника Bitrix24.',
+        400,
+      );
+    return this.store.command(
+      actor,
+      key,
+      'support.assign:' + id,
+      input,
+      async (session) => {
+        const row = await this.store
+          .collection('tickets')
+          .findOne({ id }, { session });
+        await this.assertAccess(actor, row);
+        checkVersion(row, input.revision);
+        if (!row.bitrix?.managed)
+          fail('validation_error', 'Заявка не связана с CRM.', 400);
+        const nextRevision = (row.bitrix.assignment_revision || 0) + 1;
+        await this.store.collection('tickets').updateOne(
+          { id },
+          {
+            $set: {
+              'bitrix.assignment_user_id': userId,
+              'bitrix.assignment_name': user!.name,
+              'bitrix.assignment_revision': nextRevision,
+              'bitrix.next_poll_at': new Date(),
+              updated_at: sqlNow(),
+            },
+            $inc: { revision: 1 },
+          },
+          { session },
+        );
+        await this.store.event(
+          'ticket',
+          id,
+          'support.assigned',
+          actor,
+          { user_id: userId },
           session,
         );
         return this.detail(actor, id, session);

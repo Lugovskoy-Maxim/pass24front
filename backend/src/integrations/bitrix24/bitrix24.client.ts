@@ -81,6 +81,43 @@ export class Bitrix24Client {
   dealUrl(id: number) {
     return `${this.webhook().origin}/crm/deal/details/${id}/`;
   }
+  async staff(id?: number) {
+    const users = await this.list<any>('user.get', {
+      FILTER: {
+        ACTIVE: true,
+        USER_TYPE: 'employee',
+        ...(id ? { ID: id } : {}),
+      },
+      select: [
+        'ID',
+        'NAME',
+        'LAST_NAME',
+        'SECOND_NAME',
+        'ACTIVE',
+        'WORK_POSITION',
+      ],
+    });
+    return users
+      .filter((user) => user.ACTIVE === true || user.ACTIVE === 'Y')
+      .map((user) => ({
+        id: Number(user.ID),
+        name:
+          [user.LAST_NAME, user.NAME, user.SECOND_NAME]
+            .filter(Boolean)
+            .join(' ') || `Сотрудник №${user.ID}`,
+        position: user.WORK_POSITION || '',
+      }));
+  }
+  async capabilities() {
+    const { result } = await this.call<string[]>('scope');
+    if (!Array.isArray(result)) throw new Bitrix24Error('invalid_response');
+    return {
+      staff: ['user', 'user_brief', 'user_basic'].some((scope) =>
+        result.includes(scope),
+      ),
+      notifications: result.includes('im'),
+    };
+  }
   async call<T = any>(
     method: string,
     params: Record<string, unknown> = {},

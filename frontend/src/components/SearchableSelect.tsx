@@ -24,6 +24,7 @@ export function SearchableSelect({
   required,
   describedBy,
   officeWords = false,
+  emptyMessage = 'Офисы не найдены. Измените запрос.',
 }: {
   id: string;
   value: string;
@@ -37,6 +38,7 @@ export function SearchableSelect({
   required?: boolean;
   describedBy?: string;
   officeWords?: boolean;
+  emptyMessage?: string;
 }) {
   const uid = useId();
   const root = useRef<HTMLDivElement>(null);
@@ -208,7 +210,7 @@ export function SearchableSelect({
           <p className="search-select__result" role="status" aria-live="polite">
             {matching.length
               ? `Найдено: ${matching.filter((option) => option.value).length}`
-              : 'Офисы не найдены. Измените запрос.'}
+              : emptyMessage}
           </p>
         </div>
       )}

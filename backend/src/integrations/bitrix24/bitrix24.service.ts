@@ -7,8 +7,14 @@ import {
 import { GridFSBucket, ObjectId } from 'mongodb';
 import { createHash, randomUUID } from 'crypto';
 import { OperationsStore } from '../../operations/operations.store';
-import { OperationsActor, sqlNow } from '../../operations/operations.rules';
+import {
+  OperationsActor,
+  sqlNow,
+  integer,
+  fail,
+} from '../../operations/operations.rules';
 import { validateAttachment } from '../../operations/operations.support';
+import { Bitrix24Customers } from './bitrix24.customers';
 import {
   Bitrix24Client,
   Bitrix24Error,
@@ -66,12 +72,14 @@ export class Bitrix24Service implements OnModuleInit, OnModuleDestroy {
     if (check && this.client.enabled()) {
       try {
         const funnel = await this.client.funnel(true);
+        const capabilities = await this.client.capabilities().catch(() => null);
         await this.store.collection('bitrix_state').updateOne(
           { _id: 'health' },
           {
             $set: {
               checked_at: sqlNow(),
               error_code: '',
+              capabilities,
               funnel: {
                 id: funnel.id,
                 name: funnel.name,
@@ -97,6 +105,7 @@ export class Bitrix24Service implements OnModuleInit, OnModuleDestroy {
     return {
       enabled: this.client.enabled(),
       configured: this.client.configured(),
+      capabilities: state?.capabilities || null,
       ready: this.client.enabled() && !!state?.funnel && !state?.error_code,
       checkedAt: state?.checked_at || null,
       lastSyncAt: state?.last_sync_at || null,
@@ -267,6 +276,196 @@ export class Bitrix24Service implements OnModuleInit, OnModuleDestroy {
     if ((await this.store.ownership())?.mode !== 'pass')
       throw new Bitrix24Error('operations_paused');
   }
+  async assignmentSettings() {
+    const settings = await this.store
+      .collection('bitrix_state')
+      .findOne({ _id: 'assignment-settings' });
+    return {
+      userId: settings?.user_id || null,
+      name: settings?.user_name || '',
+    };
+  }
+  async saveAssignmentSettings(input: any) {
+    const id = input.userId == null ? null : integer(input.userId, 'userId', 1);
+    const user = id
+      ? (await this.client.staff(id)).find((user) => user.id === id)
+      : null;
+    if (id && !user)
+      fail(
+        'validation_error',
+        'Выберите действующего сотрудника Bitrix24.',
+        400,
+      );
+    await this.assertOwnership();
+    await this.store
+      .collection('bitrix_state')
+      .updateOne(
+        { _id: 'assignment-settings' },
+        { $set: { user_id: id, user_name: user?.name || '' } },
+        { upsert: true },
+      );
+    return this.assignmentSettings();
+  }
+  async companies(search = '', start = 0) {
+    const result = await this.client.call<any[]>('crm.company.list', {
+      filter: search.trim() ? { '%TITLE': search.trim().slice(0, 100) } : {},
+      select: ['ID', 'TITLE'],
+      order: { TITLE: 'ASC', ID: 'ASC' },
+      start,
+    });
+    return {
+      items: result.result.map((company) => ({
+        id: Number(company.ID),
+        name: company.TITLE,
+      })),
+      next: result.next ?? null,
+    };
+  }
+  async tenantCompany(profileId: string) {
+    const state = await this.store
+      .collection('bitrix_state')
+      .findOne({ _id: `tenant-company:${profileId}` });
+    return {
+      company: state?.company_id
+        ? { id: state.company_id, name: state.company_name }
+        : null,
+    };
+  }
+  async linkTenantCompany(profileId: string, input: any) {
+    const id =
+      input.companyId == null ? null : integer(input.companyId, 'companyId', 1);
+    let name = '';
+    if (id) {
+      const { result } = await this.client.call<any>('crm.company.get', { id });
+      if (Number(result?.ID) !== id)
+        fail('validation_error', 'Компания не найдена в Bitrix24.', 400);
+      name = result.TITLE || '';
+    }
+    await this.assertOwnership();
+    await this.store.transaction(async (session) => {
+      await this.store.assertWritable(session);
+      await this.store
+        .collection('bitrix_state')
+        .updateOne(
+          { _id: `tenant-company:${profileId}` },
+          { $set: { company_id: id, company_name: name } },
+          { upsert: true, session },
+        );
+      const profiles = await this.store
+        .canonical('profiles')
+        .find(
+          { $or: [{ profileId }, { resourceOwnerProfileId: profileId }] },
+          { session },
+        )
+        .toArray();
+      const profileIds = profiles.map((profile) => profile.profileId);
+      const members = await this.store
+        .canonical('memberships')
+        .find({ profileId: { $in: profileIds } }, { session })
+        .toArray();
+      await this.store.collection('tickets').updateMany(
+        {
+          'bitrix.managed': true,
+          $or: [
+            { profile_id: { $in: profileIds } },
+            {
+              owner_subject: { $in: members.map((member) => member.subject) },
+            },
+          ],
+        },
+        {
+          $unset: { 'bitrix.customer_version': '' },
+          $set: { 'bitrix.next_poll_at': new Date() },
+        },
+        { session },
+      );
+    });
+    return this.tenantCompany(profileId);
+  }
+
+  private async syncAssignment(ticket: any, deal: any) {
+    const row = await this.store
+      .collection('tickets')
+      .findOne({ id: ticket.id });
+    const assignment = row?.bitrix;
+    if (
+      assignment?.assignment_revision >
+      (assignment.assignment_synced_revision || 0)
+    ) {
+      await this.assertOwnership();
+      const { result } = await this.client.call<boolean>('crm.deal.update', {
+        id: Number(deal.ID),
+        fields: { ASSIGNED_BY_ID: assignment.assignment_user_id },
+      });
+      if (result !== true) throw new Bitrix24Error('invalid_response');
+      await this.store.collection('tickets').updateOne(
+        {
+          id: ticket.id,
+          'bitrix.assignment_revision': assignment.assignment_revision,
+        },
+        {
+          $set: {
+            'bitrix.assignment_synced_revision': assignment.assignment_revision,
+          },
+        },
+      );
+      deal.ASSIGNED_BY_ID = assignment.assignment_user_id;
+    }
+    // Notifications are sent only for a new Pass assignment, never during legacy backfill.
+    if (
+      assignment?.assignment_revision &&
+      assignment.assignment_revision >
+        (assignment.assignment_notified_revision || 0)
+    ) {
+      await this.assertOwnership();
+      const title = (
+        await new Bitrix24Customers(this.store, this.client).describe(row)
+      ).title;
+      const url = this.client.dealUrl(Number(deal.ID));
+      let result: number;
+      try {
+        ({ result } = await this.client.call<number>('im.notify.system.add', {
+          USER_ID: assignment.assignment_user_id,
+          MESSAGE: `Вам назначена сервисная заявка: [URL=${url}]${title.replace(/[[\]]/g, '')}[/URL]`,
+          MESSAGE_OUT: `Вам назначена сервисная заявка: ${title}. ${url}`,
+          CLIENT_ID: this.client.originator(),
+          TAG: `${this.client.originator()}:ticket:${ticket.id}:assignment:${assignment.assignment_revision}`,
+          SUB_TAG: `${this.client.originator()}:ticket:${ticket.id}`,
+        }));
+      } catch (error) {
+        if (
+          error instanceof Bitrix24Error &&
+          [
+            'insufficient_scope',
+            'ACCESS_DENIED',
+            'ERROR_METHOD_NOT_FOUND',
+          ].includes(error.code)
+        )
+          throw new Bitrix24Error('notification_permission_denied');
+        throw error;
+      }
+      if (!Number.isSafeInteger(Number(result)) || Number(result) <= 0)
+        throw new Bitrix24Error('notification_failed');
+      await this.store.collection('tickets').updateOne(
+        {
+          id: ticket.id,
+          'bitrix.assignment_revision': assignment.assignment_revision,
+        },
+        {
+          $set: {
+            'bitrix.assignment_notified_revision':
+              assignment.assignment_revision,
+          },
+        },
+      );
+    }
+    return {
+      id: Number(deal.ASSIGNED_BY_ID) || null,
+      name: Number(deal.ASSIGNED_BY_ID)
+        ? await this.client.author(String(deal.ASSIGNED_BY_ID))
+        : '',
+    };
+  }
   private async ensureDeal(ticket: any, funnel: ServiceFunnel) {
     if (ticket.bitrix?.deal_id) return Number(ticket.bitrix.deal_id);
     const originator = this.client.originator();
@@ -282,56 +481,43 @@ export class Bitrix24Service implements OnModuleInit, OnModuleDestroy {
       // Reconcile an interrupted/ambiguous creation; never create a second card blindly.
       if (['sending', 'uncertain'].includes(ticket.bitrix?.create_state))
         throw new Bitrix24Error('delivery_uncertain');
+      const { title, description } = await new Bitrix24Customers(
+        this.store,
+        this.client,
+      ).describe(ticket);
+      const assignment = ticket.bitrix?.assignment_user_id
+        ? {
+            userId: ticket.bitrix.assignment_user_id,
+            name: ticket.bitrix.assignment_name || '',
+          }
+        : { userId: null, name: '' };
       await this.assertOwnership();
-      await this.store
-        .collection('tickets')
-        .updateOne(
-          { id: ticket.id },
-          { $set: { 'bitrix.create_state': 'sending' } },
-        );
-      const officeIds = ticket.office_id
-        ? [ticket.office_id]
-        : ticket.office_ids || [];
-      const offices = await this.store.connection
-        .db!.collection<any>('offices')
-        .find({
-          $or: [
-            { externalId: { $in: officeIds } },
-            {
-              _id: {
-                $in: officeIds
-                  .filter((value: string) => /^[a-f\d]{24}$/i.test(value))
-                  .map((value: string) => new ObjectId(value)),
-              },
-            },
-          ],
-        })
-        .toArray();
-      const officeLabels = offices.map(
-        (office) =>
-          `Офис ${office.number}${office.company ? ' · ' + office.company : ''}`,
+      await this.store.collection('tickets').updateOne(
+        { id: ticket.id },
+        {
+          $set: {
+            'bitrix.create_state': 'sending',
+            ...(assignment.userId && !ticket.bitrix?.assignment_revision
+              ? {
+                  'bitrix.assignment_user_id': assignment.userId,
+                  'bitrix.assignment_name': assignment.name,
+                  'bitrix.assignment_revision': 1,
+                }
+              : {}),
+          },
+        },
       );
-      const description = [
-        `Заявка Pass №${ticket.id}`,
-        ticket.topic_label,
-        `Арендатор: ${ticket.requester_name}`,
-        ...officeLabels,
-        ticket.service_order &&
-          `Услуга: ${ticket.service_order.name} · ${ticket.service_order.quantity} шт.`,
-        ticket.service_order?.totalAmountMinor != null &&
-          `Стоимость: ${(ticket.service_order.totalAmountMinor / 100).toFixed(2)} руб.`,
-      ]
-        .filter(Boolean)
-        .join('\n');
       try {
+        await this.assertOwnership();
         const response = await this.client.call<number>('crm.deal.add', {
           fields: {
-            TITLE: `Pass №${ticket.id} · ${ticket.subject}`.slice(0, 255),
+            TITLE: title,
             CATEGORY_ID: funnel.id,
             STAGE_ID: funnel.initialStage,
             ORIGINATOR_ID: originator,
             ORIGIN_ID: String(ticket.id),
             COMMENTS: description,
+            ...(assignment.userId ? { ASSIGNED_BY_ID: assignment.userId } : {}),
             ...(ticket.service_order?.totalAmountMinor != null
               ? {
                   OPPORTUNITY: ticket.service_order.totalAmountMinor / 100,
@@ -480,6 +666,21 @@ export class Bitrix24Service implements OnModuleInit, OnModuleDestroy {
       String(deal.ORIGIN_ID) !== String(ticket.id)
     )
       throw new Bitrix24Error('deal_mismatch');
+    let customerError = '';
+    if (ticket.bitrix?.customer_version !== 1) {
+      try {
+        await new Bitrix24Customers(this.store, this.client).sync(ticket, deal);
+      } catch (error) {
+        customerError = this.errorCode(error);
+      }
+    }
+    let assignmentError = '';
+    let assignee: { id: number | null; name: string } | null = null;
+    try {
+      assignee = await this.syncAssignment(ticket, deal);
+    } catch (error) {
+      assignmentError = this.errorCode(error);
+    }
     const comments = await this.client.comments(dealId);
     const incoming = comments.filter(
       (comment) =>
@@ -680,6 +881,9 @@ export class Bitrix24Service implements OnModuleInit, OnModuleDestroy {
             'bitrix.stage_name': stageName,
             'bitrix.last_synced_at': sqlNow(),
             'bitrix.error_code': '',
+            'bitrix.customer_error_code': customerError,
+            'bitrix.assignment_error_code': assignmentError,
+            ...(assignee ? { 'bitrix.assignee': assignee } : {}),
             ...(row!.status !== status ? { updated_at: sqlNow() } : {}),
           },
           ...(row!.status !== status ? { $inc: { revision: 1 } } : {}),

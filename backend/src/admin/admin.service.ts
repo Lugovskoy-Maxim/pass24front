@@ -134,6 +134,14 @@ export class AdminService {
       },
     };
   }
+  async tenantProfileId(id: string) {
+    const user = await this.requireMstyleTenantOwner(id);
+    await this.identities.ensureFromUser(user);
+    const profile = await this.identities.getAdminProfileState(user);
+    if (!profile.profileId)
+      throw new BadRequestException('Не найден профиль арендатора.');
+    return profile.profileId;
+  }
 
   async updateUserMstyleProfile(
     id: string,

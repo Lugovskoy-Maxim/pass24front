@@ -19,6 +19,8 @@ import {
   ServiceFunnel,
 } from './bitrix24.client';
 import { Bitrix24Service } from './bitrix24.service';
+import { Bitrix24Customers } from './bitrix24.customers';
+import { ObjectId } from 'mongodb';
 
 jest.setTimeout(900000);
 const resident: OperationsActor = {
@@ -54,6 +56,12 @@ describe('Daily MySQL and Bitrix24 with transactional Mongo storage', () => {
     settings: any;
   let deals: any[],
     comments: any[],
+    contacts: any[],
+    companies: any[],
+    bindings: { deal: number; CONTACT_ID: number; IS_PRIMARY: string }[],
+    notifications: any[],
+    notificationFailure: string,
+    failAfterCustomer: string,
     failAfterDeal: boolean,
     failAfterComment: boolean;
   const supportSettings = {
@@ -118,6 +126,12 @@ describe('Daily MySQL and Bitrix24 with transactional Mongo storage', () => {
     jest.spyOn(client, 'author').mockResolvedValue('Сотрудник сервиса');
     deals = [];
     comments = [];
+    contacts = [];
+    companies = [];
+    bindings = [];
+    notifications = [];
+    notificationFailure = '';
+    failAfterCustomer = '';
     failAfterDeal = false;
     failAfterComment = false;
     jest
@@ -128,6 +142,24 @@ describe('Daily MySQL and Bitrix24 with transactional Mongo storage', () => {
             (deal) =>
               deal.ORIGINATOR_ID === params.filter.ORIGINATOR_ID &&
               deal.ORIGIN_ID === params.filter.ORIGIN_ID,
+          );
+        if (['crm.contact.list', 'crm.company.list'].includes(method)) {
+          const rows = method === 'crm.contact.list' ? contacts : companies;
+          return rows.filter((row) =>
+            Object.entries(params.filter).every(
+              ([field, value]) =>
+                String(row[field.replace(/^=/, '')]) === String(value),
+            ),
+          );
+        }
+        if (method === 'user.get')
+          return [
+            { ID: '10', NAME: 'Мастер', ACTIVE: true },
+            { ID: '20', NAME: 'Инженер', ACTIVE: true },
+            { ID: '30', NAME: 'Уволенный', ACTIVE: false },
+          ].filter(
+            (user) =>
+              !params.FILTER?.ID || Number(user.ID) === params.FILTER.ID,
           );
         throw new Error('Unexpected list: ' + method);
       });
@@ -158,6 +190,68 @@ describe('Daily MySQL and Bitrix24 with transactional Mongo storage', () => {
           return {
             result: deals.find((deal) => Number(deal.ID) === Number(params.id)),
           } as any;
+        if (method === 'crm.deal.update') {
+          Object.assign(
+            deals.find((deal) => Number(deal.ID) === Number(params.id)),
+            params.fields,
+          );
+          return { result: true } as any;
+        }
+        if (method === 'crm.duplicate.findbycomm') {
+          return {
+            result: {
+              CONTACT: contacts
+                .filter((contact) =>
+                  (contact[params.type] || []).some((item: any) =>
+                    params.values.includes(item.VALUE),
+                  ),
+                )
+                .map((contact) => Number(contact.ID)),
+            },
+          } as any;
+        }
+        if (['crm.contact.add', 'crm.company.add'].includes(method)) {
+          const rows = method === 'crm.contact.add' ? contacts : companies;
+          const row = { ...params.fields, ID: String(2000 + rows.length) };
+          rows.push(row);
+          if (failAfterCustomer === method) {
+            failAfterCustomer = '';
+            throw new Bitrix24Error('connection_failed', true);
+          }
+          return { result: Number(row.ID) } as any;
+        }
+        if (method === 'crm.deal.contact.items.get') {
+          return {
+            result: bindings.filter(
+              (binding) => binding.deal === Number(params.id),
+            ),
+          } as any;
+        }
+        if (method === 'crm.deal.contact.add') {
+          if (
+            !bindings.some(
+              (binding) =>
+                binding.deal === Number(params.id) &&
+                binding.CONTACT_ID === params.fields.CONTACT_ID,
+            )
+          )
+            bindings.push({ deal: Number(params.id), ...params.fields });
+          return { result: true } as any;
+        }
+        if (method === 'crm.company.get')
+          return {
+            result: companies.find(
+              (company) => Number(company.ID) === Number(params.id),
+            ),
+          } as any;
+        if (method === 'im.notify.system.add') {
+          if (notificationFailure) throw new Bitrix24Error(notificationFailure);
+          notifications = notifications.filter(
+            (notification) => notification.TAG !== params.TAG,
+          );
+          notifications.push(params);
+          return { result: 9000 + notifications.length } as any;
+        }
         if (method === 'crm.timeline.comment.add') {
           const comment = {
             ...params.fields,
@@ -193,7 +287,7 @@ describe('Daily MySQL and Bitrix24 with transactional Mongo storage', () => {
     );
     worker = new Bitrix24Service(store, client);
   });
-  const create = () =>
+  const create = (key = 'crm-create-test') =>
     support.create(
       resident,
       {
@@ -201,7 +295,7 @@ describe('Daily MySQL and Bitrix24 with transactional Mongo storage', () => {
         subject: 'Не работает вентиляция',
         message_text: 'Нужна помощь',
       },
-      'crm-create-test',
+      key,
     );
   const operatorComment = (text = 'Мастер уже идёт') => {
     const comment = {
@@ -217,6 +311,363 @@ describe('Daily MySQL and Bitrix24 with transactional Mongo storage', () => {
     return comment;
   };
 
+  const customerTicket = async (
+    officeCompany: string | null = 'ООО Ромашка',
+  ) => {
+    await store.canonical('identities').updateOne(
+      { subject: resident.subject },
+      {
+        $set: {
+          displayName: 'Иванов Иван Иванович',
+          name: {
+            firstName: 'Иван',
+            lastName: 'Иванов',
+            middleName: 'Иванович',
+          },
+          phone: '+79001234567',
+          email: 'tenant@example.invalid',
+        },
+      },
+    );
+    await store.canonical('profiles').updateOne(
+      { profileId: 'prf_crm' },
+      {
+        $set: {
+          companyName: 'ООО Компания профиля',
+          companyShortName: 'Компания профиля',
+        },
+      },
+    );
+    const officeId = new ObjectId();
+    await connection.db!.collection('offices').insertOne({
+      _id: officeId,
+      number: '102',
+      externalId: 'tf-room:102',
+      company: officeCompany,
+    });
+    const result = await create();
+    await store.collection('tickets').updateOne(
+      { id: result.ticket.id },
+      {
+        $set: {
+          office_id: String(officeId),
+          office_ids: ['tf-room:102'],
+          profile_id: 'prf_crm',
+        },
+      },
+    );
+    return result.ticket.id;
+  };
+
+  it('puts only the selected office and subject in the title and links a customer with phone/email', async () => {
+    const id = await customerTicket();
+    await connection.db!.collection('offices').insertOne({
+      number: '999',
+      externalId: 'tf-room:999',
+      company: 'Другая компания',
+    });
+    await store
+      .collection('tickets')
+      .updateOne({ id }, { $addToSet: { office_ids: 'tf-room:999' } });
+    await worker.tick();
+    expect(deals[0].TITLE).toBe('Офис 102 · Не работает вентиляция');
+    expect(deals[0].COMMENTS).toContain('Заявитель: Иванов Иван Иванович');
+    expect(deals[0].COMMENTS).toContain('Телефон: +79001234567');
+    expect(deals[0].COMMENTS).toContain('Email: tenant@example.invalid');
+    expect(deals[0].TITLE).not.toContain('999');
+    expect(companies).toHaveLength(1);
+    expect(companies[0].TITLE).toBe('ООО Ромашка');
+    expect(contacts).toHaveLength(1);
+    expect(contacts[0]).toMatchObject({
+      NAME: 'Иван',
+      LAST_NAME: 'Иванов',
+      SECOND_NAME: 'Иванович',
+      PHONE: [{ VALUE: '+79001234567' }],
+      EMAIL: [{ VALUE: 'tenant@example.invalid' }],
+    });
+    expect(deals[0].COMPANY_ID).toBe(Number(companies[0].ID));
+    expect(bindings).toMatchObject([
+      {
+        deal: Number(deals[0].ID),
+        CONTACT_ID: Number(contacts[0].ID),
+        IS_PRIMARY: 'Y',
+      },
+    ]);
+    await worker.sendTicket(id, funnel);
+    expect(contacts).toHaveLength(1);
+    expect(companies).toHaveLength(1);
+    expect(bindings).toHaveLength(1);
+    expect((await support.detail(admin, id)).ticket.crm.error).toBe('');
+  });
+
+  it('falls back to the profile company and reuses existing CRM clients instead of copying their data', async () => {
+    const id = await customerTicket(null);
+    companies.push({
+      ID: '55',
+      TITLE: 'ООО Компания профиля',
+      COMMENTS: 'Заметка оператора',
+    });
+    contacts.push({
+      ID: '66',
+      NAME: 'Имя в CRM',
+      PHONE: [{ VALUE: '+79001234567' }],
+      EMAIL: [{ VALUE: 'tenant@example.invalid' }],
+      COMPANY_ID: 9,
+    });
+    await worker.tick();
+    expect(deals[0].TITLE).toBe('Офис 102 · Не работает вентиляция');
+    expect(deals[0].COMMENTS).toContain('Компания: ООО Компания профиля');
+    expect(deals[0].COMPANY_ID).toBe(55);
+    expect(bindings[0].CONTACT_ID).toBe(66);
+    expect(companies).toHaveLength(1);
+    expect(contacts).toHaveLength(1);
+    expect(contacts[0].NAME).toBe('Имя в CRM');
+    expect(contacts[0].COMPANY_ID).toBe(9);
+    expect(
+      (await store.collection('tickets').findOne({ id }))!.bitrix
+        .customer_version,
+    ).toBe(1);
+  });
+
+  it('enriches an existing deal once while retaining CRM notes and manually assigned clients', async () => {
+    const id = await customerTicket();
+    await worker.tick();
+    const deal = deals[0];
+    deal.TITLE = `Pass №${id} · Не работает вентиляция`;
+    deal.COMMENTS = 'Заметка сотрудника CRM';
+    deal.COMPANY_ID = 555;
+    bindings.unshift({
+      deal: Number(deal.ID),
+      CONTACT_ID: 777,
+      IS_PRIMARY: 'Y',
+    });
+    await store
+      .collection('tickets')
+      .updateOne({ id }, { $unset: { 'bitrix.customer_version': '' } });
+    let ticket = await store.collection('tickets').findOne({ id });
+    await worker.syncTicket(ticket, funnel);
+    expect(deal.TITLE).toBe('Офис 102 · Не работает вентиляция');
+    expect(deal.COMMENTS).toContain('Заметка сотрудника CRM');
+    expect(deal.COMMENTS).toContain('Телефон: +79001234567');
+    expect(deal.COMPANY_ID).toBe(555);
+    expect(bindings.find((item) => item.CONTACT_ID === 777)!.IS_PRIMARY).toBe(
+      'Y',
+    );
+    const notes = deal.COMMENTS;
+    ticket = await store.collection('tickets').findOne({ id });
+    await worker.syncTicket(ticket, funnel);
+    expect(deal.COMMENTS).toBe(notes);
+    expect(contacts).toHaveLength(1);
+  });
+
+  it.each(['crm.company.add', 'crm.contact.add'])(
+    'reconciles an uncertain %s without duplicate clients',
+    async (method) => {
+      const id = await customerTicket();
+      failAfterCustomer = method;
+      await worker.sendTicket(id, funnel);
+      let ticket = await store.collection('tickets').findOne({ id });
+      expect(ticket!.bitrix.customer_error_code).toBe('connection_failed');
+      expect(ticket!.status).toBe('in_progress');
+      await worker.syncTicket(ticket, funnel);
+      ticket = await store.collection('tickets').findOne({ id });
+      expect(ticket!.bitrix.customer_version).toBe(1);
+      expect(ticket!.bitrix.customer_error_code).toBe('');
+      expect(companies).toHaveLength(1);
+      expect(contacts).toHaveLength(1);
+      expect(bindings).toHaveLength(1);
+    },
+  );
+
+  it('keeps chat/status synchronization working when customer matching is ambiguous', async () => {
+    const id = await customerTicket();
+    contacts.push(
+      ...['66', '67'].map((ID) => ({
+        ID,
+        PHONE: [{ VALUE: '+79001234567' }],
+        EMAIL: [{ VALUE: 'tenant@example.invalid' }],
+      })),
+    );
+    await worker.tick();
+    expect(bindings).toHaveLength(0);
+    expect(contacts).toHaveLength(2);
+    expect((await support.detail(admin, id)).ticket.crm.error).toContain(
+      'несколько совпадений',
+    );
+    operatorComment();
+    deals[0].STAGE_ID = 'C7:WON';
+    deals[0].STAGE_SEMANTIC_ID = 'S';
+    await worker.syncTicket(
+      await store.collection('tickets').findOne({ id }),
+      funnel,
+    );
+    const detail = await support.detail(resident, id);
+    expect(detail.ticket.status).toBe('completed');
+    expect(detail.messages[1].message_text).toBe('Мастер уже идёт');
+  });
+
+  it('handles missing client/office data, caps titles and does not use names to match contacts', async () => {
+    const result = await create();
+    await store
+      .collection('tickets')
+      .updateOne(
+        { id: result.ticket.id },
+        { $set: { subject: 'Т'.repeat(600) } },
+      );
+    const data = await new Bitrix24Customers(store, client).describe(
+      await store.collection('tickets').findOne({ id: result.ticket.id }),
+    );
+    expect(data.title).toHaveLength(255);
+    expect(data.title).toBe('Т'.repeat(255));
+    expect(data.description).not.toMatch(/undefined|null/);
+    contacts.push({ ID: '66', NAME: 'Арендатор' });
+    await worker.tick();
+    expect(contacts).toHaveLength(2);
+    expect(companies).toHaveLength(0);
+    expect(bindings[0].CONTACT_ID).not.toBe(66);
+  });
+
+  it('links a tenant to an explicitly chosen existing CRM company and refreshes their existing tickets', async () => {
+    const id = await customerTicket();
+    await worker.tick();
+    companies.push({ ID: '555', TITLE: 'Существующая компания CRM' });
+    const result = await worker.linkTenantCompany('prf_crm', {
+      companyId: 555,
+    });
+    expect(result.company).toEqual({
+      id: 555,
+      name: 'Существующая компания CRM',
+    });
+    const ticket = await store.collection('tickets').findOne({ id });
+    expect(ticket!.bitrix.customer_version).toBeUndefined();
+    await worker.syncTicket(ticket, funnel);
+    expect(deals[0].COMPANY_ID).toBe(555);
+    expect(deals[0].COMMENTS).toContain('Компания: Существующая компания CRM');
+    expect(deals[0].TITLE).toBe('Офис 102 · Не работает вентиляция');
+    expect(companies).toHaveLength(2);
+    expect(contacts).toHaveLength(1);
+    expect(await worker.tenantCompany('prf_crm')).toEqual(result);
+    await expect(
+      worker.linkTenantCompany('prf_crm', { companyId: 123456 }),
+    ).rejects.toMatchObject({
+      response: { error: { code: 'validation_error' } },
+    });
+    expect(await worker.tenantCompany('prf_crm')).toEqual(result);
+    await worker.linkTenantCompany('prf_crm', { companyId: null });
+    expect((await worker.tenantCompany('prf_crm')).company).toBeNull();
+  });
+
+  it('assigns the configured default only to new tickets, notifies once and permits a Pass administrator to replace it', async () => {
+    const legacy = await create('legacy-before-default');
+    expect(notifications).toHaveLength(0);
+    expect(await worker.saveAssignmentSettings({ userId: 10 })).toEqual({
+      userId: 10,
+      name: 'Мастер',
+    });
+    await worker.tick();
+    expect(notifications).toHaveLength(0);
+    const created = await create('new-with-default');
+    await worker.tick();
+    const deal = deals.find(
+      (deal) => deal.ORIGIN_ID === String(created.ticket.id),
+    );
+    expect(deal.ASSIGNED_BY_ID).toBe(10);
+    expect(notifications).toHaveLength(1);
+    expect(notifications[0]).toMatchObject({
+      USER_ID: 10,
+      CLIENT_ID: client.originator(),
+    });
+    expect(notifications[0].MESSAGE).toContain(client.dealUrl(Number(deal.ID)));
+    await worker.sendTicket(created.ticket.id, funnel);
+    expect(notifications).toHaveLength(1);
+    let ticket = await store
+      .collection('tickets')
+      .findOne({ id: created.ticket.id });
+    expect(ticket!.bitrix.assignment_notified_revision).toBe(1);
+    await support.assign(
+      admin,
+      ticket!.id,
+      { user_id: 20, revision: ticket!.revision },
+      'replace-assignee',
+    );
+    await worker.syncTicket(
+      await store.collection('tickets').findOne({ id: ticket!.id }),
+      funnel,
+    );
+    expect(deal.ASSIGNED_BY_ID).toBe(20);
+    expect(notifications).toHaveLength(2);
+    expect(notifications[1].USER_ID).toBe(20);
+    await worker.saveAssignmentSettings({ userId: 20 });
+    await worker.syncTicket(
+      await store.collection('tickets').findOne({ id: legacy.ticket.id }),
+      funnel,
+    );
+    expect(
+      deals.find((deal) => deal.ORIGIN_ID === String(legacy.ticket.id))
+        .ASSIGNED_BY_ID,
+    ).toBeUndefined();
+    expect(notifications).toHaveLength(2);
+    ticket = await store
+      .collection('tickets')
+      .findOne({ id: created.ticket.id });
+    await expect(
+      support.assign(
+        resident,
+        ticket!.id,
+        { user_id: 10, revision: ticket!.revision },
+        'tenant-cannot-assign',
+      ),
+    ).rejects.toBeDefined();
+    await expect(
+      support.assign(
+        admin,
+        ticket!.id,
+        { user_id: 30, revision: ticket!.revision },
+        'inactive-staff',
+      ),
+    ).rejects.toMatchObject({
+      response: { error: { code: 'validation_error' } },
+    });
+    await expect(
+      support.assign(
+        admin,
+        ticket!.id,
+        { user_id: 10, revision: 1 },
+        'stale-assignment',
+      ),
+    ).rejects.toBeDefined();
+    expect(deal.ASSIGNED_BY_ID).toBe(20);
+  });
+
+  it('retains assignments and CRM status when notification access is missing, and retries after recovery', async () => {
+    await worker.saveAssignmentSettings({ userId: 10 });
+    const created = await create();
+    notificationFailure = 'insufficient_scope';
+    await worker.tick();
+    let ticket = await store
+      .collection('tickets')
+      .findOne({ id: created.ticket.id });
+    expect(ticket!.status).toBe('in_progress');
+    expect(ticket!.bitrix.assignment_synced_revision).toBe(1);
+    expect(ticket!.bitrix.assignment_notified_revision).toBeUndefined();
+    expect(
+      (await support.detail(admin, ticket!.id)).ticket.crm.assignmentError,
+    ).toContain('Чат и уведомления');
+    notificationFailure = '';
+    await worker.syncTicket(ticket, funnel);
+    ticket = await store
+      .collection('tickets')
+      .findOne({ id: created.ticket.id });
+    expect(ticket!.bitrix.assignment_error_code).toBe('');
+    expect(notifications).toHaveLength(1);
+    await store
+      .collection('settings')
+      .updateOne({ key: 'ownership' }, { $set: { mode: 'paused' } });
+    await expect(worker.saveAssignmentSettings({ userId: 20 })).rejects.toThrow(
+      'operations_paused',
+    );
+    expect((await worker.assignmentSettings()).userId).toBe(10);
+  });
   it('atomically queues a new request and exports one deal and one comment after replay', async () => {
     const result = await create();
     await create();
