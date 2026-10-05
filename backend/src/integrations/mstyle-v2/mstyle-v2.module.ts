@@ -20,6 +20,8 @@ import { Office, OfficeSchema, User, UserSchema } from '../../schemas';
 import { SmsModule } from '../../sms/sms.module';
 import { MstyleAuthService } from './mstyle-v2.auth.service';
 import { MstyleV2Config } from './mstyle-v2.config';
+import { Bitrix24Client } from '../bitrix24/bitrix24.client';
+import { Bitrix24Service } from '../bitrix24/bitrix24.service';
 import { MstyleDirectoryService } from './mstyle-v2.directory.service';
 import { MstyleEventsService } from './mstyle-v2.events';
 import { MstyleGuestsService } from './mstyle-v2.guests.service';
@@ -73,6 +75,8 @@ import { MstyleManualTestingService } from './mstyle-v2.manual-testing.service';
     OperationsPrivateController,
   ],
   providers: [
+    Bitrix24Client,
+    Bitrix24Service,
     OperationsStore,
     OperationsIdentity,
     OperationsSupport,

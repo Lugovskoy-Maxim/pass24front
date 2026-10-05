@@ -45,3 +45,4 @@ jobs:
             else
               APP_DIR="$PWD" BRANCH=main "$UPDATE_SCRIPT"
             fi
+            docker compose -f docker-compose.yml -f docker-compose.prod.yml --env-file .env exec -T backend node scripts/check-integrations.cjs

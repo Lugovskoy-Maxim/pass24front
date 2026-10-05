@@ -10,6 +10,7 @@ import {
   HttpCode,
   HttpException,
   Logger,
+  Optional,
   Param,
   Patch,
   Post,
@@ -35,6 +36,7 @@ import {
 import { membershipIsEffective } from '../integrations/mstyle-v2/mstyle-v2.membership-policy';
 import { ProblemException } from '../integrations/mstyle-v2/mstyle-v2.problem';
 import { OperationsStore } from './operations.store';
+import { Bitrix24Service } from '../integrations/bitrix24/bitrix24.service';
 import { OperationsIdentity } from './operations.identity';
 import { OperationsSupport } from './operations.support';
 import { OperationsBookings } from './operations.bookings';
@@ -96,6 +98,7 @@ export class OperationsAdminController {
     readonly bookings: OperationsBookings,
     readonly payments: OperationsPayments,
     readonly hours: OperationsHours,
+    @Optional() readonly bitrix?: Bitrix24Service,
   ) {}
   @Get('work-queue/counts')
   @Header('Cache-Control', 'no-store')
@@ -310,6 +313,31 @@ export class OperationsAdminController {
   @Header('Cache-Control', 'no-store')
   async tickets(@Req() req: any, @Query() q: any) {
     return this.support.list(await this.identity.nativeActor(req.user), q);
+  }
+  @Get('service-requests/integration')
+  @Header('Cache-Control', 'no-store')
+  @RequireAllPermissions('support.manage')
+  integration() {
+    return (
+      this.bitrix?.health() || {
+        enabled: false,
+        configured: false,
+        ready: false,
+      }
+    );
+  }
+
+  @Post('service-requests/integration/check')
+  @Header('Cache-Control', 'no-store')
+  @RequireAllPermissions('support.manage')
+  checkIntegration() {
+    return (
+      this.bitrix?.health(true) || {
+        enabled: false,
+        configured: false,
+        ready: false,
+      }
+    );
   }
   @Get('service-requests/:id')
   @Header('Cache-Control', 'no-store')

@@ -218,6 +218,8 @@ type ChatMessage = {
   body?: string;
   message_text?: string;
   attachments?: Attachment[];
+  edited_at?: string;
+  deleted?: boolean;
 };
 
 export function RequestMessages({
@@ -287,7 +289,10 @@ export function RequestMessages({
                 year: 'numeric',
               }).format(previous)
             : '';
-          const outgoing = item.author_type === perspective;
+          const outgoing =
+            perspective === 'client'
+              ? ['client', 'customer'].includes(item.author_type)
+              : item.author_type === 'support';
           return (
             <Fragment key={item.id}>
               {day !== previousDay && (
@@ -322,6 +327,11 @@ export function RequestMessages({
                   <p className="request-message__body">
                     {item.body || item.message_text}
                   </p>
+                )}
+                {item.edited_at && (
+                  <small className="text-[var(--muted)]">
+                    {item.deleted ? 'Удалён или скрыт в CRM' : 'Изменён в CRM'}
+                  </small>
                 )}
                 {item.attachments?.map((attachment) => (
                   <button

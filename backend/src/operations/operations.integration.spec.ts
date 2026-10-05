@@ -165,6 +165,20 @@ describe('Operations with real replica-set transactions', () => {
       }),
     });
   });
+  it('keeps CRM jobs pending when the payment worker runs', async () => {
+    await store.collection('outbox').insertOne({
+      key: 'bitrix.message:99',
+      type: 'bitrix.message',
+      state: 'pending',
+      payload: { ticket_id: 99, message_id: 99 },
+      retry_at: new Date(0),
+      attempts: 0,
+    });
+    await payments.tick();
+    expect(
+      await store.collection('outbox').findOne({ key: 'bitrix.message:99' }),
+    ).toMatchObject({ state: 'pending', attempts: 0 });
+  });
   it('blocks tenant support while hidden and preserves administrator work', async () => {
     const created = await support.create(
       resident,

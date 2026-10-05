@@ -10,7 +10,9 @@ import {
 import { ConfigService } from '@nestjs/config';
 import { InjectModel } from '@nestjs/mongoose';
 import { Model } from 'mongoose';
+import { randomUUID } from 'crypto';
 import * as mysql from 'mysql2/promise';
+import { dailyMysqlSlot, mysqlSourceFingerprint } from './site-source.schedule';
 import { normalizeOfficeCategory } from '../office-services/office-services.rules';
 import {
   decryptJson,
@@ -166,6 +168,12 @@ export type SiteMysqlPublic = {
   writeEnabled: boolean;
   autoSyncEnabled: boolean;
   autoSyncIntervalSec: number;
+  autoSyncSchedule: 'daily' | 'interval';
+  autoSyncTime: string;
+  nextCheckAt?: string;
+  lastSyncAt?: string;
+  lastSyncResult?: { updated: number; skipped: number; total: number };
+  lastSyncError?: string;
   autoApply: boolean;
   lastCheckedAt?: string;
   lastChangedAt?: string;
@@ -186,6 +194,8 @@ export type ManualTestingPrincipalInput = {
 export class SiteSourceService implements OnModuleInit, OnModuleDestroy {
   private readonly logger = new Logger(SiteSourceService.name);
   private timer: ReturnType<typeof setInterval> | null = null;
+  private checking?: Promise<any>;
+  private scheduledCheckRunning = false;
 
   constructor(
     private readonly config: ConfigService,
@@ -200,7 +210,24 @@ export class SiteSourceService implements OnModuleInit, OnModuleDestroy {
     private readonly notifications: NotificationsService,
   ) {}
 
-  onModuleInit() {
+  async onModuleInit() {
+    // Adopt the requested daily schedule once for an existing connection.
+    // Subsequent admin changes, including disabling it, remain authoritative.
+    await this.settings.updateOne(
+      {
+        key: SETTINGS_KEY,
+        'siteMysql.enabled': true,
+        'siteMysql.autoSyncSchedule': { $exists: false },
+      },
+      {
+        $set: {
+          'siteMysql.autoSyncSchedule': 'daily',
+          'siteMysql.autoSyncTime': '03:00',
+          'siteMysql.autoSyncEnabled': true,
+          'siteMysql.autoApply': true,
+        },
+      },
+    );
     this.restartTimer();
   }
 
@@ -211,6 +238,23 @@ export class SiteSourceService implements OnModuleInit, OnModuleDestroy {
 
   async getPublicConfig(): Promise<SiteMysqlPublic> {
     const raw = (await this.loadDoc()).siteMysql || {};
+    const now = new Date();
+    const slot = dailyMysqlSlot(now, raw.autoSyncTime || '03:00');
+    const due =
+      raw.autoSyncSchedule === 'interval'
+        ? (Date.parse(raw.lastCheckedAt || '') || 0) +
+          (Number(raw.autoSyncIntervalSec) || 86400) * 1000
+        : raw.autoSyncLastDate && raw.autoSyncLastDate >= slot.key
+          ? slot.next.getTime()
+          : now.getTime();
+    const nextCheckAt = new Date(
+      Math.max(
+        now.getTime(),
+        due,
+        new Date(raw.autoSyncRetryAt || 0).getTime(),
+        new Date(raw.autoSyncLeaseUntil || 0).getTime(),
+      ),
+    ).toISOString();
     return {
       enabled: !!raw.enabled,
       host: raw.host || '',
@@ -220,7 +264,13 @@ export class SiteSourceService implements OnModuleInit, OnModuleDestroy {
       hasPassword: !!raw.passwordEnc,
       writeEnabled: !!raw.writeEnabled,
       autoSyncEnabled: !!raw.autoSyncEnabled,
-      autoSyncIntervalSec: Number(raw.autoSyncIntervalSec) || 300,
+      autoSyncIntervalSec: Number(raw.autoSyncIntervalSec) || 86400,
+      autoSyncSchedule: raw.autoSyncSchedule || 'daily',
+      autoSyncTime: raw.autoSyncTime || '03:00',
+      nextCheckAt: raw.enabled && raw.autoSyncEnabled ? nextCheckAt : undefined,
+      lastSyncAt: raw.lastSyncAt,
+      lastSyncResult: raw.lastSyncResult,
+      lastSyncError: raw.lastSyncError,
       autoApply: !!raw.autoApply,
       lastCheckedAt: raw.lastCheckedAt,
       lastChangedAt: raw.lastChangedAt,
@@ -240,6 +290,8 @@ export class SiteSourceService implements OnModuleInit, OnModuleDestroy {
       writeEnabled?: boolean;
       autoSyncEnabled?: boolean;
       autoSyncIntervalSec?: number;
+      autoSyncSchedule?: 'daily' | 'interval';
+      autoSyncTime?: string;
       autoApply?: boolean;
     } & Partial<SiteMysqlMapping>,
   ): Promise<SiteMysqlPublic> {
@@ -269,10 +321,35 @@ export class SiteSourceService implements OnModuleInit, OnModuleDestroy {
         Number(input.autoSyncIntervalSec) || 300,
       );
     }
+    next.autoSyncSchedule =
+      input.autoSyncSchedule || current.autoSyncSchedule || 'daily';
+    next.autoSyncTime = input.autoSyncTime || current.autoSyncTime || '03:00';
     if (input.autoApply !== undefined) next.autoApply = input.autoApply;
-    doc.siteMysql = next;
-    doc.markModified('siteMysql');
-    await doc.save();
+    const configKeys = [
+      'enabled',
+      'host',
+      'port',
+      'database',
+      'user',
+      'passwordEnc',
+      'writeEnabled',
+      'autoSyncEnabled',
+      'autoSyncIntervalSec',
+      'autoSyncSchedule',
+      'autoSyncTime',
+      'autoApply',
+      ...MAPPING_KEYS,
+    ];
+    await this.settings.updateOne(
+      { key: SETTINGS_KEY },
+      {
+        $set: Object.fromEntries(
+          configKeys
+            .filter((key) => next[key] !== undefined)
+            .map((key) => [`siteMysql.${key}`, next[key]]),
+        ),
+      },
+    );
     this.restartTimer();
     return this.getPublicConfig();
   }
@@ -729,11 +806,11 @@ export class SiteSourceService implements OnModuleInit, OnModuleDestroy {
     return { ok: true };
   }
 
-  async syncLinked() {
-    const preview = await this.previewOffices();
+  async syncLinked(sourceItems?: SourceOfficeItem[]) {
+    const items = sourceItems || (await this.previewOffices()).items;
     let updated = 0;
     let skipped = 0;
-    for (const item of preview.items) {
+    for (const item of items) {
       if (!item.externalId) {
         skipped += 1;
         continue;
@@ -755,7 +832,7 @@ export class SiteSourceService implements OnModuleInit, OnModuleDestroy {
       updated += 1;
     }
     await this.markPending(false);
-    return { updated, skipped, total: preview.items.length };
+    return { updated, skipped, total: items.length };
   }
 
   async pushOffice(
@@ -844,71 +921,89 @@ export class SiteSourceService implements OnModuleInit, OnModuleDestroy {
     return { ok: true, externalId: office.externalId, postId };
   }
 
-  async checkSource() {
+  checkSource() {
+    if (this.checking) return this.checking;
+    this.checking = this.performSourceCheck().finally(() => {
+      this.checking = undefined;
+    });
+    return this.checking;
+  }
+
+  private async performSourceCheck() {
     const conn = await this.connect();
     try {
       const tables = await this.listTables(conn);
       const prefix = await this.resolvePrefix(conn, tables);
       const mapping = await this.currentMapping();
-      const posts = `${prefix}posts`;
+      const source = await this.resolveOfficeSource(conn, tables, prefix);
+      if (source.name === 'not_found')
+        throw new BadRequestException(
+          'Источник офисов MySQL не найден. Проверьте настройки таблиц.',
+        );
       const tickets = tableName(prefix, mapping.serviceRequestsTable);
-      let rooms = { n: 0, maxId: 0, maxMod: '' };
-      if (tables.includes(posts)) {
-        const [rows] = await conn.query(
-          `SELECT COUNT(*) AS n, MAX(ID) AS maxId, MAX(post_modified) AS maxMod
-           FROM ${ident(posts)} WHERE post_type = ?`,
-          [mapping.roomPostType],
-        );
-        const row = (rows as any[])[0] || {};
-        rooms = {
-          n: Number(row.n || 0),
-          maxId: Number(row.maxId || 0),
-          maxMod: row.maxMod ? String(row.maxMod) : '',
-        };
+      const groups: Record<string, unknown[]> = { offices: source.items };
+      for (const suffix of [
+        mapping.serviceRequestsTable,
+        mapping.serviceRequestMessagesTable,
+        mapping.servicesTable,
+      ]) {
+        const table = tableName(prefix, suffix);
+        if (tables.includes(table)) {
+          const [rows] = await conn.query(`SELECT * FROM ${ident(table)}`);
+          groups[table] = rows as unknown[];
+        }
       }
-      let ticket = { n: 0, maxId: 0 };
-      if (tables.includes(tickets)) {
-        const cols = await this.tableColumns(conn, tickets);
-        const idCol = cols.includes('id')
-          ? 'id'
-          : cols.includes('ID')
-            ? 'ID'
-            : cols[0];
-        const [rows] = await conn.query(
-          `SELECT COUNT(*) AS n, MAX(${ident(idCol)}) AS maxId FROM ${ident(tickets)}`,
-        );
-        const row = (rows as any[])[0] || {};
-        ticket = { n: Number(row.n || 0), maxId: Number(row.maxId || 0) };
-      }
-      const fingerprint = `r${rooms.n}:${rooms.maxId}:${rooms.maxMod}|t${ticket.n}:${ticket.maxId}`;
+      const fingerprint = mysqlSourceFingerprint(groups);
       const doc = await this.loadDoc();
       const raw = doc.siteMysql || {};
       const changed =
         !!raw.lastFingerprint && raw.lastFingerprint !== fingerprint;
-      raw.lastCheckedAt = new Date().toISOString();
-      if (!raw.lastFingerprint || changed) {
-        if (changed) {
-          raw.pendingChanges = true;
-          raw.lastChangedAt = raw.lastCheckedAt;
-        }
-        raw.lastFingerprint = fingerprint;
+      const lastCheckedAt = new Date().toISOString();
+      const pendingChanges =
+        changed ||
+        !!raw.pendingChanges ||
+        (!!raw.autoApply && !raw.lastFingerprint);
+      await this.settings.updateOne(
+        { key: SETTINGS_KEY },
+        {
+          $set: {
+            'siteMysql.lastCheckedAt': lastCheckedAt,
+            'siteMysql.lastFingerprint': fingerprint,
+            'siteMysql.pendingChanges': pendingChanges,
+            ...(changed ? { 'siteMysql.lastChangedAt': lastCheckedAt } : {}),
+          },
+        },
+      );
+      const autoApplied = !!(
+        raw.autoApply &&
+        (changed || pendingChanges || !raw.lastFingerprint)
+      );
+      let result:
+        | { updated: number; skipped: number; total: number }
+        | undefined;
+      if (autoApplied) {
+        result = await this.syncLinked(source.items);
+        await this.settings.updateOne(
+          { key: SETTINGS_KEY },
+          {
+            $set: {
+              'siteMysql.lastSyncAt': lastCheckedAt,
+              'siteMysql.lastSyncResult': result,
+              'siteMysql.lastSyncError': '',
+            },
+          },
+        );
       }
-      if (changed && raw.autoApply) {
-        await this.syncLinked();
-        raw.pendingChanges = false;
-      }
-      doc.siteMysql = raw;
-      doc.markModified('siteMysql');
-      await doc.save();
       return {
         fingerprint,
         changed,
-        pendingChanges: !!raw.pendingChanges,
-        lastCheckedAt: raw.lastCheckedAt,
-        lastChangedAt: raw.lastChangedAt,
-        rooms,
-        tickets: ticket,
-        autoApplied: !!(changed && raw.autoApply),
+        pendingChanges: autoApplied ? false : pendingChanges,
+        lastCheckedAt,
+        lastChangedAt: changed ? lastCheckedAt : raw.lastChangedAt,
+        rooms: { n: source.items.length },
+        tickets: { n: groups[tickets]?.length || 0 },
+        autoApplied,
+        result,
       };
     } finally {
       await conn.end();
@@ -1111,7 +1206,6 @@ export class SiteSourceService implements OnModuleInit, OnModuleDestroy {
       conn,
       ident(posts),
       mapping.roomPostType,
-      500,
     );
     const ids = rows.map((r) => r.ID);
     const financeByRoom = await this.loadRoomFinance(
@@ -1454,7 +1548,7 @@ export class SiteSourceService implements OnModuleInit, OnModuleDestroy {
 
     const profiles = `${prefix}tf_client_profiles`;
     if (tables.includes(profiles)) {
-      const sample = await this.sampleTable(conn, profiles, 200);
+      const sample = await this.sampleTable(conn, profiles);
       for (const row of sample) {
         let data: any = {};
         try {
@@ -1777,10 +1871,10 @@ export class SiteSourceService implements OnModuleInit, OnModuleDestroy {
   private async sampleTable(
     conn: mysql.Connection,
     table: string,
-    limit: number,
+    limit?: number,
   ) {
     const [rows] = await conn.query(
-      `SELECT * FROM ${ident(table)} LIMIT ${Math.min(limit, 200)}`,
+      `SELECT * FROM ${ident(table)}${limit ? ` LIMIT ${Math.min(limit, 200)}` : ''}`,
     );
     return (rows as Record<string, unknown>[]).map(plainRow);
   }
@@ -1789,12 +1883,11 @@ export class SiteSourceService implements OnModuleInit, OnModuleDestroy {
     conn: mysql.Connection,
     postsIdent: string,
     postType: string,
-    limit: number,
   ) {
     const [rows] = await conn.query(
       `SELECT ID, post_title, post_status, post_date FROM ${postsIdent}
        WHERE post_type = ? AND post_status IN ('publish','private')
-       ORDER BY ID ASC LIMIT ${Math.min(limit, 500)}`,
+       ORDER BY ID ASC`,
       [postType],
     );
     return rows as Array<{
@@ -1820,7 +1913,7 @@ export class SiteSourceService implements OnModuleInit, OnModuleDestroy {
     const [rows] = await conn.query(
       `SELECT post_id, meta_key, meta_value FROM ${postmetaIdent} WHERE post_id IN (${ids
         .map(() => '?')
-        .join(',')})${keyFilter}`,
+        .join(',')})${keyFilter} ORDER BY meta_id ASC`,
       keys && keys.length ? [...ids, ...keys] : ids,
     );
     for (const row of rows as Array<{
@@ -1839,28 +1932,126 @@ export class SiteSourceService implements OnModuleInit, OnModuleDestroy {
   private restartTimer() {
     if (this.timer) clearInterval(this.timer);
     this.timer = null;
-    void this.getPublicConfig()
-      .then((cfg) => {
-        if (!cfg.enabled || !cfg.autoSyncEnabled) return;
-        const ms = Math.max(60, cfg.autoSyncIntervalSec) * 1000;
-        this.timer = setInterval(() => {
-          void this.checkSource().catch((err) =>
-            this.logger.warn(
-              `auto-check MySQL: ${err instanceof Error ? err.message : err}`,
-            ),
-          );
-        }, ms);
-      })
-      .catch(() => undefined);
+    this.timer = setInterval(() => {
+      void this.runScheduledCheck();
+    }, 60000);
+    this.timer.unref();
+    void this.runScheduledCheck();
+  }
+
+  async runScheduledCheck(now = new Date()) {
+    if (this.scheduledCheckRunning) return;
+    this.scheduledCheckRunning = true;
+    try {
+      const raw = (await this.loadDoc()).siteMysql || {};
+      if (!raw.enabled || !raw.autoSyncEnabled) return;
+      const daily = raw.autoSyncSchedule !== 'interval';
+      const slot = dailyMysqlSlot(now, raw.autoSyncTime || '03:00');
+      if (daily && raw.autoSyncLastDate && raw.autoSyncLastDate >= slot.key)
+        return;
+      if (
+        !daily &&
+        now.getTime() <
+          Date.parse(raw.lastCheckedAt || '') +
+            (Number(raw.autoSyncIntervalSec) || 86400) * 1000
+      )
+        return;
+      const lease = randomUUID();
+      const claimed = await this.settings.findOneAndUpdate(
+        {
+          key: SETTINGS_KEY,
+          'siteMysql.enabled': true,
+          'siteMysql.autoSyncEnabled': true,
+          ...(daily
+            ? { 'siteMysql.autoSyncLastDate': { $not: { $gte: slot.key } } }
+            : {
+                'siteMysql.lastCheckedAt': raw.lastCheckedAt || {
+                  $exists: false,
+                },
+              }),
+          $and: [
+            {
+              $or: [
+                { 'siteMysql.autoSyncLeaseUntil': { $exists: false } },
+                { 'siteMysql.autoSyncLeaseUntil': { $lte: now } },
+              ],
+            },
+            {
+              $or: [
+                { 'siteMysql.autoSyncRetryAt': { $exists: false } },
+                { 'siteMysql.autoSyncRetryAt': { $lte: now } },
+              ],
+            },
+          ],
+        },
+        {
+          $set: {
+            'siteMysql.autoSyncLeaseUntil': new Date(now.getTime() + 600000),
+            'siteMysql.autoSyncLease': lease,
+          },
+        },
+      );
+      if (!claimed) return;
+      const heartbeat = setInterval(() => {
+        void this.settings
+          .updateOne(
+            { key: SETTINGS_KEY, 'siteMysql.autoSyncLease': lease },
+            {
+              $set: {
+                'siteMysql.autoSyncLeaseUntil': new Date(Date.now() + 600000),
+              },
+            },
+          )
+          .catch(() => undefined);
+      }, 60000);
+      heartbeat.unref();
+      try {
+        await this.checkSource();
+        await this.settings.updateOne(
+          { key: SETTINGS_KEY, 'siteMysql.autoSyncLease': lease },
+          {
+            $set: {
+              ...(daily ? { 'siteMysql.autoSyncLastDate': slot.key } : {}),
+              'siteMysql.lastSyncError': '',
+            },
+            $unset: {
+              'siteMysql.autoSyncLeaseUntil': '',
+              'siteMysql.autoSyncLease': '',
+              'siteMysql.autoSyncRetryAt': '',
+            },
+          },
+        );
+      } catch {
+        await this.settings.updateOne(
+          { key: SETTINGS_KEY, 'siteMysql.autoSyncLease': lease },
+          {
+            $set: {
+              'siteMysql.lastSyncError':
+                'Не удалось проверить MySQL. Автоматический повтор через час.',
+              'siteMysql.autoSyncRetryAt': new Date(now.getTime() + 3600000),
+            },
+            $unset: {
+              'siteMysql.autoSyncLeaseUntil': '',
+              'siteMysql.autoSyncLease': '',
+            },
+          },
+        );
+        this.logger.warn('Daily MySQL check failed; retry scheduled.');
+      } finally {
+        clearInterval(heartbeat);
+      }
+    } catch {
+      this.logger.warn('MySQL schedule is temporarily unavailable.');
+    } finally {
+      this.scheduledCheckRunning = false;
+    }
   }
 
   private async markPending(value: boolean) {
-    const doc = await this.loadDoc();
-    const raw = doc.siteMysql || {};
-    raw.pendingChanges = value;
-    doc.siteMysql = raw;
-    doc.markModified('siteMysql');
-    await doc.save();
+    await this.settings.updateOne(
+      { key: SETTINGS_KEY },
+      { $set: { 'siteMysql.pendingChanges': value } },
+    );
   }
 
   private async upsertMeta(

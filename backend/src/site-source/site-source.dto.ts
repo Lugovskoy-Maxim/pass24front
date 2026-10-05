@@ -9,6 +9,7 @@ import {
   IsString,
   Max,
   MaxLength,
+  Matches,
   Min,
   MinLength,
   ValidateNested,
@@ -131,6 +132,15 @@ export class UpdateSiteSourceDto {
   @Min(60)
   @Max(86400)
   autoSyncIntervalSec?: number;
+
+  @IsOptional()
+  @IsIn(['daily', 'interval'])
+  autoSyncSchedule?: 'daily' | 'interval';
+
+  @IsOptional()
+  @IsString()
+  @Matches(/^([01]\d|2[0-3]):[0-5]\d$/)
+  autoSyncTime?: string;
 
   @IsOptional()
   @IsBoolean()

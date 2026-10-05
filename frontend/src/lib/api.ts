@@ -1525,6 +1525,12 @@ export interface SiteMysqlSettings {
   writeEnabled?: boolean;
   autoSyncEnabled?: boolean;
   autoSyncIntervalSec?: number;
+  autoSyncSchedule?: 'daily' | 'interval';
+  autoSyncTime?: string;
+  nextCheckAt?: string;
+  lastSyncAt?: string;
+  lastSyncResult?: { updated: number; skipped: number; total: number };
+  lastSyncError?: string;
   autoApply?: boolean;
   lastCheckedAt?: string;
   lastChangedAt?: string;

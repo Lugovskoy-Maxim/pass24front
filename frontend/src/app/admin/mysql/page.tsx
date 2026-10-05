@@ -31,8 +31,10 @@ const EMPTY: SiteMysqlSettings = {
   servicesTable: 'tf_services',
   writeEnabled: false,
   autoSyncEnabled: false,
-  autoSyncIntervalSec: 300,
-  autoApply: false,
+  autoSyncIntervalSec: 86400,
+  autoSyncSchedule: 'daily',
+  autoSyncTime: '03:00',
+  autoApply: true,
 };
 
 type Field = {
@@ -142,7 +144,9 @@ export default function MysqlAdminPage() {
         servicesTable: form.servicesTable,
         writeEnabled: !!form.writeEnabled,
         autoSyncEnabled: !!form.autoSyncEnabled,
-        autoSyncIntervalSec: form.autoSyncIntervalSec || 300,
+        autoSyncIntervalSec: form.autoSyncIntervalSec || 86400,
+        autoSyncSchedule: form.autoSyncSchedule || 'daily',
+        autoSyncTime: form.autoSyncTime || '03:00',
         autoApply: !!form.autoApply,
         ...(password ? { password } : {}),
       });
@@ -274,8 +278,8 @@ export default function MysqlAdminPage() {
           <section className="card p-5 space-y-4">
             <h2 className="font-semibold">Поля заявок</h2>
             <p className="text-sm text-[var(--muted)]">
-              Суффикс без префикса или полное имя таблицы. Pass заявки не
-              копирует — только читает.
+              Суффикс без префикса или полное имя архивной таблицы сайта. Новые
+              обращения и переписка ведутся через сервисные заявки и Bitrix24.
             </p>
             <div className="grid sm:grid-cols-2 gap-3">
               {TICKET_FIELDS.map((field) => (
@@ -302,7 +306,7 @@ export default function MysqlAdminPage() {
                   }))
                 }
               />
-              Разрешить запись в MySQL (офисы и ответы на заявки)
+              Разрешить запись изменений офисов в MySQL
             </label>
             <label className="flex items-center gap-2 text-sm">
               <input
@@ -315,7 +319,7 @@ export default function MysqlAdminPage() {
                   }))
                 }
               />
-              Автопроверка изменений в БД
+              Автоматически проверять изменения в MySQL
             </label>
             <label className="flex items-center gap-2 text-sm">
               <input
@@ -328,21 +332,93 @@ export default function MysqlAdminPage() {
               При изменении сразу обновлять связанные офисы
             </label>
             <div>
-              <label className="label">Интервал проверки, сек</label>
-              <input
+              <label className="label" htmlFor="mysql-schedule">
+                Расписание
+              </label>
+              <select
+                id="mysql-schedule"
                 className="input"
-                type="number"
-                min={60}
-                value={form.autoSyncIntervalSec || 300}
+                value={form.autoSyncSchedule || 'daily'}
                 onChange={(e) =>
-                  setField('autoSyncIntervalSec', Number(e.target.value) || 300)
+                  setForm((prev) => ({
+                    ...prev,
+                    autoSyncSchedule: e.target.value as 'daily' | 'interval',
+                  }))
                 }
-              />
+              >
+                <option value="daily">Один раз в день</option>
+                <option value="interval">Через заданный интервал</option>
+              </select>
             </div>
+            {form.autoSyncSchedule !== 'interval' ? (
+              <div>
+                <label className="label" htmlFor="mysql-sync-time">
+                  Время проверки · Москва
+                </label>
+                <input
+                  id="mysql-sync-time"
+                  type="time"
+                  className="input"
+                  value={form.autoSyncTime || '03:00'}
+                  onChange={(e) => setField('autoSyncTime', e.target.value)}
+                  required
+                />
+                <p className="text-xs text-[var(--muted)] mt-2">
+                  Обновляются связанные офисы. Изменения площади, этажа,
+                  категории, аренды и других полей проверяются по содержимому.
+                  После перезапуска пропущенная проверка выполняется
+                  автоматически.
+                </p>
+              </div>
+            ) : (
+              <div>
+                <label className="label" htmlFor="mysql-sync-interval">
+                  Интервал проверки, сек
+                </label>
+                <input
+                  id="mysql-sync-interval"
+                  className="input"
+                  type="number"
+                  min={60}
+                  max={86400}
+                  value={form.autoSyncIntervalSec || 86400}
+                  onChange={(e) =>
+                    setField(
+                      'autoSyncIntervalSec',
+                      Number(e.target.value) || 86400,
+                    )
+                  }
+                />
+              </div>
+            )}
             {form.lastCheckedAt && (
               <p className="text-xs text-[var(--muted)]">
                 Проверка: {new Date(form.lastCheckedAt).toLocaleString('ru-RU')}
                 {form.pendingChanges ? ' · есть изменения' : ''}
+              </p>
+            )}
+            {form.nextCheckAt && (
+              <p className="text-xs text-[var(--muted)]">
+                Следующая проверка:{' '}
+                {new Date(form.nextCheckAt).toLocaleString('ru-RU', {
+                  timeZone: 'Europe/Moscow',
+                })}{' '}
+                · Москва
+              </p>
+            )}
+            {form.lastSyncAt && (
+              <p className="text-xs text-[var(--muted)]">
+                Обновление офисов:{' '}
+                {new Date(form.lastSyncAt).toLocaleString('ru-RU', {
+                  timeZone: 'Europe/Moscow',
+                })}
+                {form.lastSyncResult &&
+                  ` · обновлено ${form.lastSyncResult.updated}, без связи ${form.lastSyncResult.skipped}`}
+              </p>
+            )}
+            {form.lastSyncError && (
+              <p className="theme-alert text-sm p-3" role="alert">
+                {form.lastSyncError}
               </p>
             )}
           </section>

@@ -179,6 +179,15 @@ export class AppSettings {
     writeEnabled?: boolean;
     autoSyncEnabled?: boolean;
     autoSyncIntervalSec?: number;
+    autoSyncSchedule?: 'daily' | 'interval';
+    autoSyncTime?: string;
+    autoSyncLastDate?: string;
+    autoSyncLeaseUntil?: Date;
+    autoSyncLease?: string;
+    autoSyncRetryAt?: Date;
+    lastSyncAt?: string;
+    lastSyncResult?: { updated: number; skipped: number; total: number };
+    lastSyncError?: string;
     autoApply?: boolean;
     lastFingerprint?: string;
     lastCheckedAt?: string;

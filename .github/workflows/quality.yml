@@ -49,7 +49,7 @@ jobs:
       - run: npm run format:check
       - run: npm run lint
       - run: npx tsc --noEmit -p tsconfig.build.json
-      - run: npm test -- --runInBand src/operations/booking-status.contract.spec.ts
+      - run: npm test -- --runInBand src/operations/booking-status.contract.spec.ts src/integrations/bitrix24/bitrix24.client.spec.ts src/site-source/site-source-operations.spec.ts
 
   booking-integration:
     name: Booking lifecycle integration tests
@@ -72,4 +72,4 @@ jobs:
           path: ~/.cache/mongodb-binaries
           key: mongodb-${{ runner.os }}-7.0.24
       - run: npm ci
-      - run: npm test -- --runInBand src/operations/operations.integration.spec.ts
+      - run: npm test -- --runInBand src/operations/operations.integration.spec.ts src/integrations/bitrix24/bitrix24.integration.spec.ts

@@ -19,6 +19,8 @@ import {
   textValue,
 } from './operations.rules';
 import { createHash, randomUUID } from 'crypto';
+import { Bitrix24Client } from '../integrations/bitrix24/bitrix24.client';
+import { bitrixErrorLabel } from '../integrations/bitrix24/bitrix24.rules';
 
 const EXTENSIONS: Record<string, string> = {
   pdf: 'application/pdf',
@@ -84,6 +86,7 @@ export class OperationsSupport {
     private readonly identities: OperationsIdentity,
     private readonly siteSettings: SiteSettingsService,
     @Optional() private readonly officeServices?: OfficeServicesService,
+    @Optional() private readonly bitrix?: Bitrix24Client,
   ) {}
   private async assertResidentRequestsEnabled(actor: OperationsActor) {
     if (
@@ -193,6 +196,21 @@ export class OperationsSupport {
   async present(row: any, actor?: OperationsActor) {
     const safe = { ...row };
     delete safe._id;
+    delete safe.bitrix;
+    const crm =
+      row.bitrix?.managed && actor?.kind === 'admin'
+        ? {
+            managed: true,
+            dealId: row.bitrix.deal_id || null,
+            url: row.bitrix.url || null,
+            stage: row.bitrix.stage_name || null,
+            lastSyncAt: row.bitrix.last_synced_at || null,
+            pending: !row.bitrix.deal_id,
+            error: bitrixErrorLabel(
+              row.bitrix.delivery_error_code || row.bitrix.error_code,
+            ),
+          }
+        : null;
     const profile = safe.profile_id
       ? await this.store
           .canonical('profiles')
@@ -221,6 +239,7 @@ export class OperationsSupport {
       .filter(Boolean);
     return {
       ...safe,
+      crm,
       topic_key: supportTopic(safe.topic_key) || 'other',
       topic_label: SUPPORT_TOPICS[supportTopic(safe.topic_key) || 'other'],
       office_ids: officeIds,
@@ -306,12 +325,17 @@ export class OperationsSupport {
       .find({ request_id: id }, { session, projection: { _id: 0 } })
       .sort({ id: 1 })
       .toArray();
-    const compatibleMessages = messages.map((message) => ({
-      ...message,
-      body: message.message_text,
-      text: message.message_text,
-      author: message.author_label,
-    }));
+    const compatibleMessages = messages.map((message) => {
+      const safe = { ...message };
+      delete safe.bitrix;
+      delete safe.source_key;
+      return {
+        ...safe,
+        body: message.message_text,
+        text: message.message_text,
+        author: message.author_label,
+      };
+    });
     return {
       ticket: await this.present(row, actor),
       messages: compatibleMessages,
@@ -542,6 +566,9 @@ export class OperationsSupport {
             support_read_seq: 0,
             message_seq: 1,
             last_message_preview: message.slice(0, 160),
+            ...(this.bitrix?.enabled()
+              ? { bitrix: { managed: true, create_state: 'pending' } }
+              : {}),
           },
           { session },
         );
@@ -565,9 +592,10 @@ export class OperationsSupport {
     files: unknown,
     session: ClientSession,
   ) {
+    const id = await this.store.nextId('messages', session);
     await this.store.collection('messages').insertOne(
       {
-        id: await this.store.nextId('messages', session),
+        id,
         request_id: requestId,
         author_type: actor.kind === 'admin' ? 'support' : 'customer',
         author_ref: actor.ref,
@@ -586,6 +614,24 @@ export class OperationsSupport {
       },
       { session },
     );
+    const ticket = await this.store
+      .collection('tickets')
+      .findOne({ id: requestId }, { session });
+    if (this.bitrix?.enabled() || ticket?.bitrix?.managed) {
+      await this.store
+        .collection('tickets')
+        .updateOne(
+          { id: requestId },
+          { $set: { 'bitrix.managed': true } },
+          { session },
+        );
+      await this.store.enqueue(
+        `bitrix.message:${id}`,
+        'bitrix.message',
+        { ticket_id: requestId, message_id: id },
+        session,
+      );
+    }
   }
   async reply(actor: OperationsActor, id: number, input: any, key: string) {
     await this.assertResidentRequestsEnabled(actor);
@@ -611,7 +657,9 @@ export class OperationsSupport {
           {
             $set: {
               status:
-                admin && row.status === 'new' ? 'in_progress' : row.status,
+                admin && row.status === 'new' && !row.bitrix?.managed
+                  ? 'in_progress'
+                  : row.status,
               [admin ? 'last_support_seq' : 'last_customer_seq']: seq,
               [admin ? 'support_read_seq' : 'customer_read_seq']: seq,
               message_seq: seq,
@@ -649,6 +697,12 @@ export class OperationsSupport {
           .collection('tickets')
           .findOne({ id }, { session });
         await this.assertAccess(actor, row);
+        if (row.bitrix?.managed)
+          fail(
+            'crm_managed_status',
+            'Статус этой заявки меняется в CRM Bitrix24.',
+            409,
+          );
         checkVersion(row, input.revision);
         await this.store.collection('tickets').updateOne(
           { id },

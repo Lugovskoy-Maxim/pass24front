@@ -40,6 +40,7 @@ import {
   Ticket,
   TicketDetail,
   Attachment,
+  SupportIntegration,
 } from '@/lib/operations';
 
 export default function ServiceRequestsPage() {
@@ -48,6 +49,10 @@ export default function ServiceRequestsPage() {
   const [list, setList] = useState<Page<Ticket> | null>(null);
   const [detail, setDetail] = useState<TicketDetail | null>(null);
   const [categories, setCategories] = useState<OfficeCategory[]>([]);
+  const [integration, setIntegration] = useState<SupportIntegration | null>(
+    null,
+  );
+  const [checkingCrm, setCheckingCrm] = useState(false);
   const [filters, setFilters] = useState({
     status: '',
     topic: '',
@@ -130,6 +135,27 @@ export default function ServiceRequestsPage() {
     }));
   }, []);
   useAutoRefresh(load);
+  const loadIntegration = useCallback(async () => {
+    try {
+      setIntegration(await operations.supportIntegration());
+    } catch {
+      /* The request queue remains available independently. */
+    }
+  }, []);
+  useAutoRefresh(loadIntegration);
+  useEffect(() => {
+    void loadIntegration();
+  }, [loadIntegration]);
+  const checkCrm = async () => {
+    setCheckingCrm(true);
+    try {
+      setIntegration(await operations.checkSupportIntegration());
+    } catch (error) {
+      toast(getErrorMessage(error, 'Не удалось проверить CRM'), 'error');
+    } finally {
+      setCheckingCrm(false);
+    }
+  };
   const open = async (id: number) => {
     selection.current = id;
     ++selectionVersion.current;
@@ -257,6 +283,43 @@ export default function ServiceRequestsPage() {
       description="Обращения арендаторов, услуги для офисов и переписка с клиентами."
     >
       <div className="operations-page operations-page--support">
+        {integration && (
+          <div
+            className="operations-notice flex flex-col items-stretch sm:flex-row sm:items-center gap-3"
+            role="status"
+          >
+            <div className="flex-1 min-w-0">
+              <strong>
+                Bitrix24 · {integration.funnel?.name || 'Сервис'}
+                {integration.ready
+                  ? ' · подключён'
+                  : integration.enabled
+                    ? ' · требуется проверка'
+                    : integration.configured
+                      ? ' · выключен'
+                      : ' · не настроен'}
+              </strong>
+              <p className="text-xs mt-1">
+                {integration.error ||
+                  (integration.enabled
+                    ? 'Заявки передаются в CRM. Ответы из комментариев и статусы обновляются примерно раз в минуту.'
+                    : 'Для подключения задайте полный адрес CRM-вебхука в BITRIX_API_KEY на сервере и включите BITRIX_ENABLED.')}
+              </p>
+              <p className="text-xs mt-1">
+                Комментарии видны арендаторам. Для внутренней заметки начните
+                текст с [Внутреннее].
+              </p>
+            </div>
+            <button
+              type="button"
+              className="btn btn-secondary btn-sm"
+              disabled={checkingCrm}
+              onClick={() => void checkCrm()}
+            >
+              {checkingCrm ? 'Проверка…' : 'Проверить Bitrix24'}
+            </button>
+          </div>
+        )}
         {counts && counts.mode !== 'pass' && (
           <p className="operations-notice" role="status">
             {counts.mode === 'paused'
@@ -485,20 +548,55 @@ export default function ServiceRequestsPage() {
                     category: detail.ticket.office_category,
                   }}
                 >
-                  <span className="text-xs text-[var(--muted)]">Статус</span>
-                  <select
-                    aria-label="Изменить статус обращения"
-                    className="input"
-                    disabled={busy || counts?.mode !== 'pass'}
-                    value={detail.ticket.status}
-                    onChange={(e) => void status(e.target.value)}
-                  >
-                    {Object.entries(list?.statuses || {}).map(([v, label]) => (
-                      <option key={v} value={v}>
-                        {label}
-                      </option>
-                    ))}
-                  </select>
+                  {detail.ticket.crm?.managed ? (
+                    <div className="flex flex-wrap items-center gap-2 text-xs">
+                      <span>
+                        Статус из CRM
+                        {detail.ticket.crm.stage
+                          ? ` · ${detail.ticket.crm.stage}`
+                          : ''}
+                      </span>
+                      {detail.ticket.crm.url && (
+                        <a
+                          className="btn btn-secondary btn-sm"
+                          href={detail.ticket.crm.url}
+                          target="_blank"
+                          rel="noopener noreferrer"
+                        >
+                          Открыть CRM <ExternalLink size={13} />
+                        </a>
+                      )}
+                      {detail.ticket.crm.pending && (
+                        <span>Передаётся в CRM…</span>
+                      )}
+                      {detail.ticket.crm.error && (
+                        <span className="theme-alert p-2" role="alert">
+                          {detail.ticket.crm.error}
+                        </span>
+                      )}
+                    </div>
+                  ) : (
+                    <>
+                      <span className="text-xs text-[var(--muted)]">
+                        Статус
+                      </span>
+                      <select
+                        aria-label="Изменить статус обращения"
+                        className="input"
+                        disabled={busy || counts?.mode !== 'pass'}
+                        value={detail.ticket.status}
+                        onChange={(e) => void status(e.target.value)}
+                      >
+                        {Object.entries(list?.statuses || {}).map(
+                          ([v, label]) => (
+                            <option key={v} value={v}>
+                              {label}
+                            </option>
+                          ),
+                        )}
+                      </select>
+                    </>
+                  )}
                   {detail.can_reply && (
                     <button
                       type="button"

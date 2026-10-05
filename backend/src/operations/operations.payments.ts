@@ -804,6 +804,14 @@ export class OperationsPayments implements OnModuleInit, OnModuleDestroy {
       const now = new Date();
       const job = await this.store.collection('outbox').findOneAndUpdate(
         {
+          type: {
+            $in: [
+              'payment.create',
+              'payment.check',
+              'invoice.create',
+              'invoice.send',
+            ],
+          },
           $or: [
             { state: 'pending', retry_at: { $lte: now } },
             { state: 'running', lease_until: { $lt: now } },

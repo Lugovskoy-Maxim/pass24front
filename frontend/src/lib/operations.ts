@@ -46,6 +46,29 @@ export type Ticket = {
   needs_action: boolean;
   unread_for_customer?: boolean;
   unread_for_support?: boolean;
+  crm?: {
+    managed: boolean;
+    dealId: number | null;
+    url: string | null;
+    stage: string | null;
+    lastSyncAt: string | null;
+    pending: boolean;
+    error: string;
+  } | null;
+};
+export type SupportIntegration = {
+  enabled: boolean;
+  configured: boolean;
+  ready: boolean;
+  checkedAt?: string | null;
+  lastSyncAt?: string | null;
+  error?: string;
+  pollIntervalSec?: number;
+  funnel?: {
+    id: number;
+    name: string;
+    stages: Array<{ id: string; name: string }>;
+  } | null;
 };
 export type TicketDetail = {
   ticket: Ticket;
@@ -57,6 +80,8 @@ export type TicketDetail = {
     message_text: string;
     created_at: string;
     attachments: Attachment[];
+    edited_at?: string;
+    deleted?: boolean;
   }>;
 };
 export type Booking = {
@@ -190,6 +215,12 @@ export const operations = {
   counts: () => request<Counts>('/admin/work-queue/counts'),
   tickets: (q: Record<string, string | number>) =>
     request<Page<Ticket>>('/admin/service-requests' + params(q)),
+  supportIntegration: () =>
+    request<SupportIntegration>('/admin/service-requests/integration'),
+  checkSupportIntegration: () =>
+    request<SupportIntegration>('/admin/service-requests/integration/check', {
+      method: 'POST',
+    }),
   ticket: (id: number) =>
     request<TicketDetail>('/admin/service-requests/' + id),
   bookings: (q: Record<string, string | number>) =>
