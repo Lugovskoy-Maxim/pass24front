@@ -126,7 +126,10 @@ describe('Daily MySQL and Bitrix24 with transactional Mongo storage', () => {
       }),
     );
     jest.spyOn(client, 'funnel').mockResolvedValue(funnel);
-    jest.spyOn(client, 'author').mockResolvedValue('Сотрудник сервиса');
+    jest.spyOn(client, 'authorProfile').mockResolvedValue({
+      name: 'Сотрудник сервиса',
+      position: 'Инженер сервиса',
+    });
     deals = [];
     comments = [];
     contacts = [];
@@ -759,7 +762,17 @@ describe('Daily MySQL and Bitrix24 with transactional Mongo storage', () => {
     await worker.syncTicket(ticket, funnel);
     let detail = await support.detail(resident, result.ticket.id);
     expect(detail.messages).toHaveLength(2);
-    expect(detail.messages[1].author_label).toBe('Сотрудник сервиса');
+    expect(detail.messages[1].author_label).toBe('Инженер сервиса');
+    expect(detail.messages[1].author).toBe('Инженер сервиса');
+    expect(JSON.stringify(detail.messages[1])).not.toContain(
+      'Сотрудник сервиса',
+    );
+    expect(
+      (await support.detail(admin, result.ticket.id)).messages[1],
+    ).toMatchObject({
+      author_label: 'Сотрудник сервиса',
+      author: 'Сотрудник сервиса',
+    });
     expect(detail.ticket.unread_for_customer).toBe(true);
     expect(
       await store
@@ -779,6 +792,93 @@ describe('Daily MySQL and Bitrix24 with transactional Mongo storage', () => {
     expect(detail.messages[1].deleted).toBe(true);
     expect(detail.messages[1].message_text).toContain('удалён');
     expect(detail.ticket.last_message_preview).toContain('удалён');
+  });
+  it('backfills and refreshes positions on unchanged CRM replies without marking them edited or unread', async () => {
+    const created = await create();
+    await worker.tick();
+    operatorComment();
+    const ticket = await store
+      .collection('tickets')
+      .findOne({ id: created.ticket.id });
+    await worker.syncTicket(ticket, funnel);
+    const imported = await store.collection('messages').findOne({
+      request_id: ticket!.id,
+      'bitrix.direction': 'in',
+    });
+    await support.read(resident, ticket!.id, {}, 'read-crm-reply');
+    await store
+      .collection('messages')
+      .updateOne({ id: imported!.id }, { $unset: { author_position: '' } });
+    // An old record must never expose its stored personal name before backfill.
+    expect(
+      (await support.detail(resident, ticket!.id)).messages[1],
+    ).toMatchObject({
+      author_label: 'Служба сервиса',
+      author: 'Служба сервиса',
+    });
+    const before = await support.detail(resident, ticket!.id);
+    await worker.syncTicket(ticket, funnel);
+    let detail = await support.detail(resident, ticket!.id);
+    expect(detail.messages).toHaveLength(2);
+    expect(detail.messages[1]).toMatchObject({
+      author_label: 'Инженер сервиса',
+      author: 'Инженер сервиса',
+      message_text: imported!.message_text,
+      created_at: imported!.created_at,
+    });
+    expect(detail.messages[1]).not.toHaveProperty('edited_at');
+    expect(detail.ticket.unread_for_customer).toBe(false);
+    expect(detail.ticket.message_seq).toBe(before.ticket.message_seq);
+    expect(detail.ticket.revision).toBe(before.ticket.revision);
+    jest.mocked(client.authorProfile).mockResolvedValue({
+      name: 'Сотрудник сервиса',
+      position: 'Руководитель сервиса',
+    });
+    await worker.syncTicket(ticket, funnel);
+    detail = await support.detail(resident, ticket!.id);
+    expect(detail.messages[1].author_label).toBe('Руководитель сервиса');
+    expect(detail.messages[1]).not.toHaveProperty('edited_at');
+    expect(detail.ticket.unread_for_customer).toBe(false);
+    expect(detail.ticket.revision).toBe(before.ticket.revision);
+  });
+  it('falls back to the service label for CRM replies without a position and preserves native Pass authors', async () => {
+    jest.mocked(client.authorProfile).mockResolvedValue({
+      name: 'Сотрудник сервиса',
+      position: '',
+    });
+    const created = await create();
+    await worker.tick();
+    operatorComment();
+    await worker.syncTicket(
+      await store.collection('tickets').findOne({ id: created.ticket.id }),
+      funnel,
+    );
+    const detail = await support.detail(resident, created.ticket.id);
+    expect(detail.messages[1]).toMatchObject({
+      author_label: 'Служба сервиса',
+      author: 'Служба сервиса',
+      message_text: 'Мастер уже идёт',
+    });
+    expect(JSON.stringify(detail.messages[1])).not.toContain(
+      'Сотрудник сервиса',
+    );
+    expect(
+      (await support.detail(admin, created.ticket.id)).messages[1].author_label,
+    ).toBe('Сотрудник сервиса');
+    await support.reply(
+      admin,
+      created.ticket.id,
+      {
+        message_text: 'Ответ администратора Pass',
+      },
+      'native-pass-reply',
+    );
+    expect(
+      (await support.detail(resident, created.ticket.id)).messages[2],
+    ).toMatchObject({
+      author_label: admin.name,
+      author: admin.name,
+    });
   });
   it('imports only explicitly marked replies, never downloads unmarked files and permits adding/removing the marker', async () => {
     const created = await create();

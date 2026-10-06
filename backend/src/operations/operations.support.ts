@@ -341,13 +341,20 @@ export class OperationsSupport {
       .toArray();
     const compatibleMessages = messages.map((message) => {
       const safe = { ...message };
+      if (actor.kind !== 'admin' && message.bitrix?.direction === 'in') {
+        safe.author_label =
+          typeof message.author_position === 'string' &&
+          message.author_position.trim()
+            ? message.author_position.trim()
+            : 'Служба сервиса';
+      }
       delete safe.bitrix;
       delete safe.source_key;
       return {
         ...safe,
         body: message.message_text,
         text: message.message_text,
-        author: message.author_label,
+        author: safe.author_label,
       };
     });
     return {

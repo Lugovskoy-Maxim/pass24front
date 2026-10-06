@@ -31,11 +31,12 @@ export type CrmComment = {
   CREATED: string;
   FILES?: Record<string, any>;
 };
+export type CrmAuthor = { name: string; position: string };
 
 @Injectable()
 export class Bitrix24Client {
   private cached?: { value: ServiceFunnel; expires: number };
-  private users = new Map<string, string>();
+  private users = new Map<string, { value: CrmAuthor; expires: number }>();
   constructor(private readonly config: ConfigService) {}
   enabled() {
     return (
@@ -246,22 +247,38 @@ export class Bitrix24Client {
     });
   }
   async author(id: string) {
-    if (this.users.has(id)) return this.users.get(id)!;
+    return (await this.authorProfile(id)).name;
+  }
+  async authorProfile(id: string): Promise<CrmAuthor> {
+    const cached = this.users.get(id);
+    if (cached && cached.expires > Date.now()) return cached.value;
+    let value: CrmAuthor = { name: 'Служба сервиса', position: '' };
     try {
-      const { result } = await this.call<any[]>('user.get', { ID: id });
-      const name =
-        result?.[0] &&
-        [result[0].LAST_NAME, result[0].NAME, result[0].SECOND_NAME]
-          .filter(Boolean)
-          .join(' ');
-      if (name) {
-        this.users.set(id, name);
-        return name as string;
+      const { result } = await this.call<any[]>('user.get', {
+        FILTER: { ID: id },
+        select: ['ID', 'NAME', 'LAST_NAME', 'SECOND_NAME', 'WORK_POSITION'],
+      });
+      const user = Array.isArray(result)
+        ? result.find((row) => String(row.ID) === id)
+        : undefined;
+      if (user) {
+        value = {
+          name:
+            [user.LAST_NAME, user.NAME, user.SECOND_NAME]
+              .filter(Boolean)
+              .join(' ')
+              .trim() || value.name,
+          position:
+            typeof user.WORK_POSITION === 'string'
+              ? user.WORK_POSITION.replace(/\s+/g, ' ').trim()
+              : '',
+        };
       }
     } catch {
       /* The webhook may have only CRM scope. */
     }
-    this.users.set(id, 'Служба сервиса');
-    return 'Служба сервиса';
+    // Refresh positions and recover from restricted access without polling per message.
+    this.users.set(id, { value, expires: Date.now() + 300000 });
+    return value;
   }
 }

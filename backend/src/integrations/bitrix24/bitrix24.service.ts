@@ -753,12 +753,36 @@ export class Bitrix24Service implements OnModuleInit, OnModuleDestroy {
           );
         continue;
       }
+      const author = await this.client.authorProfile(String(comment.AUTHOR_ID));
+      const authorFields = {
+        author_ref: 'bitrix:user:' + comment.AUTHOR_ID,
+        author_label: author.name,
+        author_position: author.position,
+      };
       if (
         existing?.bitrix?.hash === hash &&
         !existing.bitrix?.files_pending &&
         !existing.deleted
-      )
+      ) {
+        if (
+          existing.author_ref !== authorFields.author_ref ||
+          existing.author_label !== authorFields.author_label ||
+          existing.author_position !== authorFields.author_position
+        ) {
+          // Enrich old replies without editing the body or creating unread messages.
+          await this.store.transaction(async (session) => {
+            await this.store.assertWritable(session);
+            await this.store
+              .collection('messages')
+              .updateOne(
+                { id: existing.id, source_key: sourceKey },
+                { $set: authorFields },
+                { session },
+              );
+          });
+        }
         continue;
+      }
       const files = await this.receiveFiles(ticket.id, comment);
       const text =
         (
@@ -767,7 +791,6 @@ export class Bitrix24Service implements OnModuleInit, OnModuleDestroy {
             .map((name) => `\nВложение «${name}» пока недоступно.`)
             .join('')
         ).trim() || 'Вложение';
-      const author = await this.client.author(String(comment.AUTHOR_ID));
       await this.store.transaction(async (session) => {
         await this.store.assertWritable(session);
         const current = await this.store
@@ -778,6 +801,7 @@ export class Bitrix24Service implements OnModuleInit, OnModuleDestroy {
             { id: current.id },
             {
               $set: {
+                ...authorFields,
                 message_text: text,
                 attachments: files.attachments,
                 deleted: false,
@@ -808,8 +832,7 @@ export class Bitrix24Service implements OnModuleInit, OnModuleDestroy {
               request_id: ticket.id,
               source_key: sourceKey,
               author_type: 'support',
-              author_ref: 'bitrix:user:' + comment.AUTHOR_ID,
-              author_label: author,
+              ...authorFields,
               author_role: 'Служба сервиса',
               message_text: text,
               attachments: files.attachments,

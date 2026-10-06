@@ -109,6 +109,57 @@ describe('Bitrix24 webhook REST contracts', () => {
       .mockRejectedValue(new Bitrix24Error('insufficient_scope'));
     expect(await api.author('42')).toBe('Служба сервиса');
     expect(await api.author('42')).toBe('Служба сервиса');
+    expect(await api.authorProfile('42')).toEqual({
+      name: 'Служба сервиса',
+      position: '',
+    });
     expect(request).toHaveBeenCalledTimes(1);
+  });
+  it('reads the matching employee position, shares the name cache and refreshes changed positions', async () => {
+    const api = client();
+    const clock = jest.spyOn(Date, 'now').mockReturnValue(1000000);
+    const employee = {
+      ID: '42',
+      LAST_NAME: 'Иванов',
+      NAME: 'Иван',
+      WORK_POSITION: '  Главный\n инженер  ',
+    };
+    const request = jest.spyOn(api, 'call').mockResolvedValue({
+      result: [
+        { ID: '99', NAME: 'Другой', WORK_POSITION: 'Директор' },
+        employee,
+      ],
+    });
+    expect(await api.authorProfile('42')).toEqual({
+      name: 'Иванов Иван',
+      position: 'Главный инженер',
+    });
+    expect(await api.author('42')).toBe('Иванов Иван');
+    expect(request).toHaveBeenCalledTimes(1);
+    expect(request).toHaveBeenCalledWith('user.get', {
+      FILTER: { ID: '42' },
+      select: ['ID', 'NAME', 'LAST_NAME', 'SECOND_NAME', 'WORK_POSITION'],
+    });
+    employee.WORK_POSITION = 'Руководитель сервиса';
+    clock.mockReturnValue(1300000);
+    expect((await api.authorProfile('42')).position).toBe(
+      'Руководитель сервиса',
+    );
+    expect(request).toHaveBeenCalledTimes(2);
+  });
+  it('keeps missing or unavailable positions empty instead of substituting a personal name', async () => {
+    const api = client();
+    const request = jest.spyOn(api, 'call').mockResolvedValue({
+      result: [{ ID: '42', NAME: 'Иван', WORK_POSITION: '  ' }],
+    });
+    expect(await api.authorProfile('42')).toEqual({
+      name: 'Иван',
+      position: '',
+    });
+    request.mockResolvedValue({ result: [{ ID: '99', NAME: 'Другой' }] });
+    expect(await api.authorProfile('43')).toEqual({
+      name: 'Служба сервиса',
+      position: '',
+    });
   });
 });
