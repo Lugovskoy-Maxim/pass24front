@@ -162,4 +162,128 @@ describe('Bitrix24 webhook REST contracts', () => {
       position: '',
     });
   });
+  it('downloads a CRM file using a signed Drive link and follows validated redirects', async () => {
+    const api = client();
+    const request = jest.spyOn(api, 'call').mockResolvedValue({
+      result: {
+        ID: '25',
+        SIZE: '5',
+        DOWNLOAD_URL:
+          'https://portal.bitrix24.ru/rest/download.json?auth=test-download-token',
+      },
+    });
+    const fetch = jest
+      .spyOn(global, 'fetch')
+      .mockResolvedValueOnce(
+        new Response(null, {
+          status: 302,
+          headers: {
+            location: 'https://s3.bitrix24.ru/file/25?signature=test-signature',
+          },
+        }),
+      )
+      .mockResolvedValueOnce(
+        new Response(Buffer.from('hello'), {
+          headers: { 'content-type': 'text/plain' },
+        }),
+      );
+    expect((await api.downloadFile(25)).toString()).toBe('hello');
+    expect(request).toHaveBeenCalledWith('disk.file.get', { id: 25 });
+    expect(fetch).toHaveBeenCalledTimes(2);
+    expect(fetch.mock.calls[0][1]).toMatchObject({
+      redirect: 'manual',
+      headers: { Referer: 'https://portal.bitrix24.ru/' },
+    });
+    expect(fetch.mock.calls[1][0].toString()).not.toContain(
+      'test-download-token',
+    );
+  });
+  it('reports missing Drive scope without exposing download credentials', async () => {
+    const api = client();
+    jest
+      .spyOn(api, 'call')
+      .mockRejectedValue(new Bitrix24Error('insufficient_scope'));
+    await expect(api.downloadFile(25)).rejects.toMatchObject({
+      code: 'file_scope_required',
+    });
+    jest.mocked(api.call).mockResolvedValue({
+      result: {
+        ID: '25',
+        DOWNLOAD_URL:
+          'https://portal.bitrix24.ru/rest/download.json?auth=secret-download-token',
+      },
+    });
+    jest
+      .spyOn(global, 'fetch')
+      .mockRejectedValue(new Error('Fetch failed at secret-download-token'));
+    let captured: unknown;
+    try {
+      await api.downloadFile(25);
+    } catch (error) {
+      captured = error;
+    }
+    expect(captured).toMatchObject({ code: 'file_download_failed' });
+    expect(String(captured)).not.toContain('secret-download-token');
+  });
+  it.each([
+    ['https://untrusted.example/file', 302, 'file_url_invalid'],
+    ['http://portal.bitrix24.ru/file', 302, 'file_url_invalid'],
+    ['/login', 200, 'file_download_failed'],
+  ])(
+    'rejects unsafe redirects or HTML login responses (%s)',
+    async (location, status, code) => {
+      const api = client();
+      jest.spyOn(api, 'call').mockResolvedValue({
+        result: {
+          ID: '25',
+          DOWNLOAD_URL:
+            'https://portal.bitrix24.ru/rest/download.json?auth=test-token',
+        },
+      });
+      const fetch = jest.spyOn(global, 'fetch').mockResolvedValue(
+        new Response('login', {
+          status,
+          headers: { location, 'content-type': 'text/html' },
+        }),
+      );
+      await expect(api.downloadFile(25)).rejects.toMatchObject({ code });
+      expect(fetch).toHaveBeenCalledTimes(1);
+    },
+  );
+  it('rejects mismatched file IDs and enforces the limit before and during download', async () => {
+    const api = client();
+    const request = jest.spyOn(api, 'call').mockResolvedValue({
+      result: {
+        ID: '26',
+        DOWNLOAD_URL:
+          'https://portal.bitrix24.ru/rest/download.json?auth=test-token',
+      },
+    });
+    const fetch = jest.spyOn(global, 'fetch');
+    await expect(api.downloadFile(25)).rejects.toMatchObject({
+      code: 'file_invalid',
+    });
+    request.mockResolvedValue({
+      result: {
+        ID: '25',
+        SIZE: '10485761',
+        DOWNLOAD_URL: '/rest/download.json?auth=test-token',
+      },
+    });
+    await expect(api.downloadFile(25)).rejects.toMatchObject({
+      code: 'file_too_large',
+    });
+    expect(fetch).not.toHaveBeenCalled();
+    request.mockResolvedValue({
+      result: {
+        ID: '25',
+        SIZE: '1',
+        DOWNLOAD_URL: '/rest/download.json?auth=test-token',
+      },
+    });
+    fetch.mockResolvedValue(new Response(Buffer.alloc(10485761)));
+    await expect(api.downloadFile(25)).rejects.toMatchObject({
+      code: 'file_too_large',
+    });
+  });
 });

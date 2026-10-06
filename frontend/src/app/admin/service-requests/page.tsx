@@ -325,6 +325,12 @@ export default function ServiceRequestsPage() {
                   «Чат и уведомления».
                 </p>
               )}
+              {integration.capabilities?.files === false && (
+                <p className="text-xs mt-1">
+                  Для получения вложений из CRM добавьте вебхуку Bitrix24 доступ
+                  «Диск».
+                </p>
+              )}
             </div>
             <button
               type="button"
@@ -594,6 +600,11 @@ export default function ServiceRequestsPage() {
                       {detail.ticket.crm.error && (
                         <span className="theme-alert p-2" role="alert">
                           {detail.ticket.crm.error}
+                        </span>
+                      )}
+                      {detail.ticket.crm.attachmentError && (
+                        <span className="theme-alert p-2" role="alert">
+                          {detail.ticket.crm.attachmentError}
                         </span>
                       )}
                     </div>

@@ -117,7 +117,92 @@ export class Bitrix24Client {
         result.includes(scope),
       ),
       notifications: result.includes('im'),
+      files: result.includes('disk'),
     };
+  }
+  async downloadFile(id: number): Promise<Buffer> {
+    if (!Number.isSafeInteger(id) || id <= 0)
+      throw new Bitrix24Error('file_invalid');
+    let file: any;
+    try {
+      ({ result: file } = await this.call('disk.file.get', { id }));
+    } catch (error) {
+      if (error instanceof Bitrix24Error && error.code === 'insufficient_scope')
+        throw new Bitrix24Error('file_scope_required');
+      if (
+        error instanceof Bitrix24Error &&
+        ['ACCESS_DENIED', 'access_denied', 'ERROR_ACCESS_DENIED'].includes(
+          error.code,
+        )
+      )
+        throw new Bitrix24Error('file_access_denied');
+      throw error;
+    }
+    if (Number(file?.ID) !== id || typeof file?.DOWNLOAD_URL !== 'string')
+      throw new Bitrix24Error('file_invalid');
+    if (Number(file.SIZE) > 10485760) throw new Bitrix24Error('file_too_large');
+    const portal = this.webhook().origin;
+    try {
+      let url = new URL(file.DOWNLOAD_URL, portal);
+      if (url.origin !== portal) throw new Bitrix24Error('file_url_invalid');
+      const signal = AbortSignal.timeout(20000);
+      for (let hop = 0; hop < 5; hop++) {
+        if (
+          url.protocol !== 'https:' ||
+          url.username ||
+          url.password ||
+          (url.origin !== portal &&
+            !/\.(?:bitrix24\.(?:ru|com|net)|bitrix\.info|cloudfront\.net)$/i.test(
+              url.hostname,
+            ))
+        )
+          throw new Bitrix24Error('file_url_invalid');
+        const response = await fetch(url, {
+          redirect: 'manual',
+          signal,
+          headers: {
+            'User-Agent': 'Pass-MStyle/1.0',
+            Accept: '*/*',
+            'Accept-Language': 'ru-RU,ru;q=0.9,en;q=0.8',
+            Referer: portal + '/',
+          },
+        });
+        if ([301, 302, 303, 307, 308].includes(response.status)) {
+          await response.body?.cancel();
+          const location = response.headers.get('location');
+          if (!location) throw new Bitrix24Error('file_download_failed');
+          url = new URL(location, url);
+          continue;
+        }
+        const contentType = response.headers.get('content-type') || '';
+        if (
+          !response.ok ||
+          !response.body ||
+          /(?:text\/html|application\/json)/i.test(contentType)
+        ) {
+          await response.body?.cancel();
+          throw new Bitrix24Error('file_download_failed');
+        }
+        if (Number(response.headers.get('content-length')) > 10485760) {
+          await response.body.cancel();
+          throw new Bitrix24Error('file_too_large');
+        }
+        const chunks: Buffer[] = [];
+        let size = 0;
+        for await (const chunk of response.body) {
+          size += chunk.length;
+          if (size > 10485760) throw new Bitrix24Error('file_too_large');
+          chunks.push(Buffer.from(chunk));
+        }
+        if (!size) throw new Bitrix24Error('file_download_failed');
+        return Buffer.concat(chunks);
+      }
+      throw new Bitrix24Error('file_download_failed');
+    } catch (error) {
+      // Download links contain a REST token: never propagate fetch errors or URLs.
+      if (error instanceof Bitrix24Error) throw error;
+      throw new Bitrix24Error('file_download_failed');
+    }
   }
   async call<T = any>(
     method: string,

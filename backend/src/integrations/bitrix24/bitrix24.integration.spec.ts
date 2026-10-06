@@ -24,6 +24,7 @@ import {
   Bitrix24Customers,
 } from './bitrix24.customers';
 import { ObjectId } from 'mongodb';
+import { commentMarker } from './bitrix24.rules';
 
 jest.setTimeout(900000);
 const resident: OperationsActor = {
@@ -66,7 +67,8 @@ describe('Daily MySQL and Bitrix24 with transactional Mongo storage', () => {
     notificationFailure: string,
     failAfterCustomer: string,
     failAfterDeal: boolean,
-    failAfterComment: boolean;
+    failAfterComment: boolean,
+    filePermissionFailure: string;
   const supportSettings = {
     get: jest.fn(async () => ({ tenantServiceRequestsEnabled: true })),
   };
@@ -140,6 +142,7 @@ describe('Daily MySQL and Bitrix24 with transactional Mongo storage', () => {
     failAfterCustomer = '';
     failAfterDeal = false;
     failAfterComment = false;
+    filePermissionFailure = '';
     jest
       .spyOn(client, 'list')
       .mockImplementation(async (method: string, params: any) => {
@@ -169,16 +172,48 @@ describe('Daily MySQL and Bitrix24 with transactional Mongo storage', () => {
           );
         throw new Error('Unexpected list: ' + method);
       });
-    jest
-      .spyOn(client, 'comments')
-      .mockImplementation(async (id) =>
-        comments
-          .filter((comment) => Number(comment.ENTITY_ID) === id)
-          .map((comment) => ({ ...comment })),
-      );
+    jest.spyOn(client, 'comments').mockImplementation(async (id) =>
+      comments
+        .filter((comment) => Number(comment.ENTITY_ID) === id)
+        .map((comment) => ({
+          ...comment,
+          FILES: Array.isArray(comment.FILES)
+            ? Object.fromEntries(
+                comment.FILES.map((file: any, index: number) => [
+                  String(index + 1),
+                  {
+                    id: index + 1,
+                    name: file[0],
+                    size: Buffer.from(file[1], 'base64').length,
+                  },
+                ]),
+              )
+            : comment.FILES,
+        })),
+    );
     jest
       .spyOn(client, 'call')
       .mockImplementation(async (method: string, params: any) => {
+        if (method === 'disk.file.get') {
+          if (filePermissionFailure)
+            throw new Bitrix24Error(filePermissionFailure);
+          return {
+            result: {
+              ID: String(params.id),
+              SIZE: '10',
+              DOWNLOAD_URL: `https://portal.bitrix24.ru/rest/download.json?token=test-download-${params.id}`,
+            },
+          } as any;
+        }
+        if (method === 'crm.timeline.comment.update') {
+          Object.assign(
+            comments.find(
+              (comment) => Number(comment.ID) === Number(params.id),
+            ),
+            params.fields,
+          );
+          return { result: true } as any;
+        }
         if (method === 'crm.deal.add') {
           const deal = {
             ...params.fields,
@@ -735,7 +770,10 @@ describe('Daily MySQL and Bitrix24 with transactional Mongo storage', () => {
       STAGE_ID: 'C7:NEW',
       ORIGIN_ID: String(result.ticket.id),
     });
-    expect(comments[0].COMMENT).toContain('Арендатор');
+    expect(comments[0].COMMENT).toBe(
+      'Сообщение отправлено пользователем в Pass\n\nНужна помощь',
+    );
+    expect(comments[0].COMMENT).not.toContain('[PASS:');
     expect(comments[0].COMMENT).toContain('Нужна помощь');
     const detail = await support.detail(admin, result.ticket.id);
     expect(detail.ticket.status).toBe('in_progress');
@@ -749,6 +787,38 @@ describe('Daily MySQL and Bitrix24 with transactional Mongo storage', () => {
     expect(own.ticket.crm).toBeNull();
     expect(JSON.stringify(own)).not.toContain('test-secret');
     expect(own.messages[0]).not.toHaveProperty('bitrix');
+  });
+  it('cleans legacy CRM codes and sender names while preserving edited content and attachments', async () => {
+    const created = await create();
+    await worker.tick();
+    const message = await store
+      .collection('messages')
+      .findOne({ request_id: created.ticket.id });
+    comments[0].COMMENT = `Арендатор · Арендатор\nТекст поправлен в CRM\n\n${commentMarker(client.originator(), message!.id)}`;
+    comments[0].FILES = { '25': { id: 25, name: 'kept.txt', size: 5 } };
+    const ticket = await store
+      .collection('tickets')
+      .findOne({ id: created.ticket.id });
+    await worker.syncTicket(ticket, funnel);
+    expect(comments[0].COMMENT).toBe(
+      'Сообщение отправлено пользователем в Pass\n\nТекст поправлен в CRM',
+    );
+    expect(comments[0].FILES['25'].name).toBe('kept.txt');
+    expect((await support.detail(resident, ticket!.id)).messages).toHaveLength(
+      1,
+    );
+    expect(
+      (await support.detail(resident, ticket!.id)).messages[0].message_text,
+    ).toBe('Нужна помощь');
+    jest.mocked(client.call).mockClear();
+    await worker.syncTicket(ticket, funnel);
+    expect(
+      jest
+        .mocked(client.call)
+        .mock.calls.some(
+          ([method]) => method === 'crm.timeline.comment.update',
+        ),
+    ).toBe(false);
   });
   it('imports replies once, tracks edits/deletions and excludes internal notes without echo', async () => {
     const result = await create();
@@ -1084,6 +1154,107 @@ describe('Daily MySQL and Bitrix24 with transactional Mongo storage', () => {
       ),
     ).rejects.toMatchObject({ response: { error: { code: 'forbidden' } } });
   });
+  it('reconciles repeated identical messages after a timeout without reusing a previous CRM comment', async () => {
+    const created = await create();
+    await worker.sendTicket(created.ticket.id, funnel);
+    await support.reply(
+      resident,
+      created.ticket.id,
+      { message_text: 'Нужна помощь' },
+      'identical-reply',
+    );
+    failAfterComment = true;
+    await expect(worker.sendTicket(created.ticket.id, funnel)).rejects.toThrow(
+      'connection_failed',
+    );
+    await worker.sendTicket(created.ticket.id, funnel);
+    expect(comments).toHaveLength(2);
+    expect(comments[0].COMMENT).toBe(comments[1].COMMENT);
+    expect(comments[1].COMMENT).not.toContain('[PASS:');
+    const sent = await store
+      .collection('messages')
+      .find({ request_id: created.ticket.id })
+      .sort({ id: 1 })
+      .toArray();
+    expect(sent[0].bitrix.comment_id).not.toBe(sent[1].bitrix.comment_id);
+    expect(sent.every((message) => message.bitrix.sent)).toBe(true);
+    expect(sent.some((message) => message.bitrix.attempt)).toBe(false);
+    expect(
+      (await support.detail(resident, created.ticket.id)).messages,
+    ).toHaveLength(2);
+  });
+  it('never adopts another author or ambiguous duplicates during marker-free reconciliation', async () => {
+    const created = await create();
+    failAfterComment = true;
+    await expect(worker.sendTicket(created.ticket.id, funnel)).rejects.toThrow(
+      'connection_failed',
+    );
+    comments[0].AUTHOR_ID = '10';
+    await expect(worker.sendTicket(created.ticket.id, funnel)).rejects.toThrow(
+      'delivery_uncertain',
+    );
+    expect(comments).toHaveLength(1);
+    comments[0].AUTHOR_ID = '42';
+    comments.push({ ...comments[0], ID: '999' });
+    await expect(worker.sendTicket(created.ticket.id, funnel)).rejects.toThrow(
+      'delivery_uncertain',
+    );
+    expect(comments).toHaveLength(2);
+    comments.pop();
+    await worker.sendTicket(created.ticket.id, funnel);
+    expect(comments).toHaveLength(1);
+    expect(
+      (await support.detail(resident, created.ticket.id)).messages,
+    ).toHaveLength(1);
+  });
+  it('retries pending Drive files after rights are restored while preserving CRM replies and statuses', async () => {
+    const created = await create();
+    await worker.tick();
+    const external = operatorComment('(ответ) Ответ с файлом');
+    external.FILES = { '25': { id: 25, name: 'answer.txt', size: 10 } };
+    filePermissionFailure = 'insufficient_scope';
+    const download = jest
+      .spyOn(global, 'fetch')
+      .mockResolvedValue(new Response(Buffer.from('Ответ')));
+    const ticket = await store
+      .collection('tickets')
+      .findOne({ id: created.ticket.id });
+    await worker.syncTicket(ticket, funnel);
+    let detail = await support.detail(resident, created.ticket.id);
+    expect(detail.messages).toHaveLength(2);
+    expect(detail.messages[1].message_text).toContain('пока недоступно');
+    expect(detail.messages[1].attachments).toEqual([]);
+    expect(download).not.toHaveBeenCalled();
+    expect(
+      (await support.detail(admin, created.ticket.id)).ticket.crm
+        .attachmentError,
+    ).toContain('«Диск»');
+    deals[0].STAGE_ID = 'C7:WON';
+    deals[0].STAGE_SEMANTIC_ID = 'S';
+    await worker.syncTicket(ticket, funnel);
+    expect(
+      (await support.detail(resident, created.ticket.id)).ticket.status,
+    ).toBe('completed');
+    filePermissionFailure = '';
+    await worker.syncTicket(ticket, funnel);
+    detail = await support.detail(resident, created.ticket.id);
+    expect(detail.messages).toHaveLength(2);
+    expect(detail.messages[1].message_text).toBe('Ответ с файлом');
+    expect(detail.messages[1].attachments).toHaveLength(1);
+    expect(
+      (
+        await support.download(
+          resident,
+          detail.messages[1].attachments[0].attachment_id,
+        )
+      ).bytes.toString(),
+    ).toBe('Ответ');
+    expect(
+      (await support.detail(admin, created.ticket.id)).ticket.crm
+        .attachmentError,
+    ).toBe('');
+    expect(JSON.stringify(detail)).not.toContain('test-download');
+  });
   it('sends a private attachment to CRM and saves a downloaded CRM attachment behind ticket access checks', async () => {
     const file = await support.upload(
       resident,
@@ -1118,7 +1289,7 @@ describe('Daily MySQL and Bitrix24 with transactional Mongo storage', () => {
         urlDownload: 'https://portal.bitrix24.ru/file/25',
       },
     };
-    jest
+    const download = jest
       .spyOn(global, 'fetch')
       .mockResolvedValue(new Response(Buffer.from('Ответ')));
     await worker.syncTicket(
@@ -1127,6 +1298,11 @@ describe('Daily MySQL and Bitrix24 with transactional Mongo storage', () => {
     );
     const detail = await support.detail(resident, result.ticket.id);
     const attachment = detail.messages[1].attachments[0];
+    expect(download.mock.calls[0][0].toString()).toContain(
+      '/rest/download.json?token=',
+    );
+    expect(download.mock.calls[0][0].toString()).not.toContain('/file/25');
+    expect(JSON.stringify(detail)).not.toContain('test-download');
     expect(attachment.original_name).toBe('answer.txt');
     expect(
       (

@@ -9,6 +9,10 @@ const {
 const {
   BITRIX_CUSTOMER_VERSION,
 } = require('../dist/integrations/bitrix24/bitrix24.customers');
+const {
+  crmReplyText,
+} = require('../dist/integrations/bitrix24/bitrix24.rules');
+const { validateAttachment } = require('../dist/operations/operations.support');
 
 (async () => {
   const result = {};
@@ -92,6 +96,16 @@ const {
         .countDocuments({ _id: /^tenant-company:/, company_id: { $gt: 0 } }),
     };
     result.crmCustomerChecks = [];
+    result.crmAttachments = {
+      pendingMessages: await db
+        .collection('mstyle_ops_messages')
+        .countDocuments({
+          'bitrix.direction': 'in',
+          deleted: { $ne: true },
+          'bitrix.files_pending': true,
+        }),
+      checks: [],
+    };
     if (bitrix.enabled()) {
       const tickets = await db
         .collection('mstyle_ops_tickets')
@@ -122,6 +136,33 @@ const {
             customerErrorCode: ticket.bitrix.customer_error_code || '',
             assignmentErrorCode: ticket.bitrix.assignment_error_code || '',
           });
+          if (result.crmAttachments.checks.length < 2) {
+            try {
+              const comments = await bitrix.comments(ticket.bitrix.deal_id);
+              const reply = comments.find(
+                (comment) =>
+                  crmReplyText(comment.COMMENT) !== null &&
+                  Object.keys(comment.FILES || {}).length > 0,
+              );
+              const file = reply && Object.values(reply.FILES)[0];
+              if (file) {
+                const bytes = await bitrix.downloadFile(Number(file.id));
+                validateAttachment(String(file.name), bytes);
+                result.crmAttachments.checks.push({
+                  downloadable: true,
+                  size: bytes.length,
+                });
+              }
+            } catch (error) {
+              result.crmAttachments.checks.push({
+                downloadable: false,
+                errorCode:
+                  error instanceof Bitrix24Error
+                    ? error.code
+                    : 'file_check_failed',
+              });
+            }
+          }
         } catch (error) {
           result.crmCustomerChecks.push({
             errorCode:

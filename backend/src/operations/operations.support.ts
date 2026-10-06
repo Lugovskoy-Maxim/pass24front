@@ -218,6 +218,7 @@ export class OperationsSupport {
               row.bitrix.assignment_revision >
               (row.bitrix.assignment_synced_revision || 0),
             assignmentError: bitrixErrorLabel(row.bitrix.assignment_error_code),
+            attachmentError: bitrixErrorLabel(row.bitrix.file_error_code),
             error: bitrixErrorLabel(
               row.bitrix.delivery_error_code ||
                 row.bitrix.error_code ||

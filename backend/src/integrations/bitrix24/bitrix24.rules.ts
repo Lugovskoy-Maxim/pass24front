@@ -58,11 +58,39 @@ export function crmOfficeReference(
 export function commentMarker(originator: string, messageId: number) {
   return `[PASS:${originator}:${messageId}]`;
 }
-export function commentText(message: any, originator: string) {
-  return `${message.author_label || 'Резидент'} · ${message.author_type === 'support' ? 'Служба сервиса' : 'Арендатор'}\n${message.message_text}\n\n${commentMarker(originator, message.id)}`;
+export function commentText(message: any) {
+  return `Сообщение отправлено ${message.author_type === 'support' ? 'сотрудником' : 'пользователем'} в Pass\n\n${message.message_text}`;
+}
+export function commentFiles(files?: Record<string, any>) {
+  return Object.values(files || {})
+    .map((file: any) => ({
+      name: String(file.name || ''),
+      size: Number(file.size),
+    }))
+    .sort((a, b) => a.name.localeCompare(b.name) || a.size - b.size);
+}
+export function matchesPendingComment(message: any, comment: any) {
+  const attempt = message.bitrix?.attempt;
+  return !!(
+    ['sending', 'uncertain'].includes(message.bitrix?.state) &&
+    attempt &&
+    !attempt.comment_ids.includes(String(comment.ID)) &&
+    String(comment.AUTHOR_ID) === attempt.author_id &&
+    crmPlainText(comment.COMMENT) === attempt.text &&
+    JSON.stringify(commentFiles(comment.FILES)) ===
+      JSON.stringify(attempt.files)
+  );
 }
 export function bitrixErrorLabel(code?: string) {
   if (!code) return '';
+  if (code === 'file_scope_required')
+    return 'Для загрузки вложений добавьте вебхуку Bitrix24 доступ «Диск». Загрузка повторится автоматически.';
+  if (code === 'file_access_denied')
+    return 'У владельца вебхука Bitrix24 нет доступа к файлу. Проверьте права на вложение.';
+  if (code === 'file_too_large')
+    return 'Вложение Bitrix24 превышает допустимый размер 10 МБ.';
+  if (code?.startsWith('file_'))
+    return 'Не удалось загрузить вложение из Bitrix24. Повторная загрузка выполняется автоматически.';
   if (code === 'webhook_not_configured')
     return 'Проверьте полный адрес вебхука в BITRIX_API_KEY на сервере.';
   if (code === 'service_funnel_not_found')

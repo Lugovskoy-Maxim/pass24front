@@ -28,6 +28,9 @@ import {
   bitrixErrorLabel,
   commentMarker,
   commentText,
+  commentFiles,
+  crmPlainText,
+  matchesPendingComment,
   crmReplyText,
   crmTicketStatus,
 } from './bitrix24.rules';
@@ -566,6 +569,20 @@ export class Bitrix24Service implements OnModuleInit, OnModuleDestroy {
     if (!ticket) return;
     const dealId = await this.ensureDeal(ticket, funnel);
     const comments = await this.client.comments(dealId);
+    const linked = await this.store
+      .collection('messages')
+      .find(
+        {
+          request_id: id,
+          'bitrix.direction': 'out',
+          'bitrix.comment_id': { $exists: true },
+        },
+        { projection: { 'bitrix.comment_id': 1 } },
+      )
+      .toArray();
+    const linkedIds = new Set(
+      linked.map((row) => String(row.bitrix.comment_id)),
+    );
     const messages = await this.store
       .collection('messages')
       .find({
@@ -577,8 +594,13 @@ export class Bitrix24Service implements OnModuleInit, OnModuleDestroy {
       .toArray();
     for (const message of messages) {
       const marker = commentMarker(this.client.originator(), message.id);
-      const matches = comments.filter((comment) =>
-        comment.COMMENT?.includes(marker),
+      const matches = comments.filter(
+        (comment) =>
+          comment.ENTITY_TYPE === 'deal' &&
+          Number(comment.ENTITY_ID) === dealId &&
+          !linkedIds.has(String(comment.ID)) &&
+          (comment.COMMENT?.includes(marker) ||
+            matchesPendingComment(message, comment)),
       );
       if (matches.length > 1) throw new Bitrix24Error('delivery_uncertain');
       let commentId = Number(matches[0]?.ID || 0);
@@ -602,12 +624,30 @@ export class Bitrix24Service implements OnModuleInit, OnModuleDestroy {
             Buffer.concat(chunks).toString('base64'),
           ]);
         }
-        await this.store
-          .collection('messages')
-          .updateOne(
-            { id: message.id },
-            { $set: { 'bitrix.state': 'sending' } },
-          );
+        await this.store.collection('messages').updateOne(
+          { id: message.id },
+          {
+            $set: {
+              'bitrix.state': 'sending',
+              'bitrix.attempt': {
+                comment_ids: [
+                  ...new Set([
+                    ...comments.map((comment) => String(comment.ID)),
+                    ...linkedIds,
+                  ]),
+                ],
+                author_id: this.client.webhook().pathname.split('/')[2],
+                text: crmPlainText(commentText(message)),
+                files: commentFiles(
+                  (message.attachments || []).map((file: any) => ({
+                    name: file.original_name,
+                    size: file.size,
+                  })),
+                ),
+              },
+            },
+          },
+        );
         try {
           const response = await this.client.call<number>(
             'crm.timeline.comment.add',
@@ -615,7 +655,7 @@ export class Bitrix24Service implements OnModuleInit, OnModuleDestroy {
               fields: {
                 ENTITY_TYPE: 'deal',
                 ENTITY_ID: dealId,
-                COMMENT: commentText(message, this.client.originator()),
+                COMMENT: commentText(message),
                 ...(files.length ? { FILES: files } : {}),
               },
             },
@@ -647,8 +687,10 @@ export class Bitrix24Service implements OnModuleInit, OnModuleDestroy {
             'bitrix.comment_id': commentId,
             'bitrix.direction': 'out',
           },
+          $unset: { 'bitrix.attempt': '' },
         },
       );
+      linkedIds.add(String(commentId));
     }
     await this.store
       .collection('tickets')
@@ -657,6 +699,20 @@ export class Bitrix24Service implements OnModuleInit, OnModuleDestroy {
       { ...ticket, bitrix: { ...ticket.bitrix, deal_id: dealId } },
       funnel,
     );
+  }
+  private async cleanLegacyComment(comment: CrmComment, message: any) {
+    const marker = commentMarker(this.client.originator(), message.id);
+    if (!comment.COMMENT?.includes(marker)) return;
+    const header = `${message.author_label || 'Резидент'} · ${message.author_type === 'support' ? 'Служба сервиса' : 'Арендатор'}\n`;
+    let body = comment.COMMENT.replace(marker, '').trimEnd();
+    if (body.startsWith(header)) body = body.slice(header.length);
+    await this.assertOwnership();
+    await this.client.call('crm.timeline.comment.update', {
+      id: Number(comment.ID),
+      fields: {
+        COMMENT: commentText({ ...message, message_text: body.trim() }),
+      },
+    });
   }
   async syncTicket(ticket: any, funnel: ServiceFunnel) {
     const dealId = Number(ticket.bitrix.deal_id);
@@ -689,6 +745,7 @@ export class Bitrix24Service implements OnModuleInit, OnModuleDestroy {
       (comment) =>
         comment.ENTITY_TYPE === 'deal' && Number(comment.ENTITY_ID) === dealId,
     );
+    let fileError = '';
     for (const comment of incoming) {
       const sourceKey = `${this.client.originator()}:crm-comment:${comment.ID}`;
       // Linked Pass comments are already in the conversation; don't echo them back.
@@ -697,7 +754,10 @@ export class Bitrix24Service implements OnModuleInit, OnModuleDestroy {
         'bitrix.comment_id': Number(comment.ID),
         'bitrix.direction': 'out',
       });
-      if (outgoing) continue;
+      if (outgoing) {
+        await this.cleanLegacyComment(comment, outgoing);
+        continue;
+      }
       const ownMarker = new RegExp(
         `\\[PASS:${this.client.originator()}:(\\d+)\\]`,
       ).exec(comment.COMMENT || '');
@@ -719,6 +779,7 @@ export class Bitrix24Service implements OnModuleInit, OnModuleDestroy {
               },
             },
           );
+          await this.cleanLegacyComment(comment, original);
           continue;
         }
       }
@@ -784,6 +845,7 @@ export class Bitrix24Service implements OnModuleInit, OnModuleDestroy {
         continue;
       }
       const files = await this.receiveFiles(ticket.id, comment);
+      fileError ||= files.errorCode;
       const text =
         (
           plain +
@@ -808,6 +870,7 @@ export class Bitrix24Service implements OnModuleInit, OnModuleDestroy {
                 edited_at: sqlNow(),
                 'bitrix.hash': hash,
                 'bitrix.files_pending': files.errors.length > 0,
+                'bitrix.file_error_code': files.errorCode,
               },
             },
             { session },
@@ -844,6 +907,7 @@ export class Bitrix24Service implements OnModuleInit, OnModuleDestroy {
                 comment_id: Number(comment.ID),
                 hash,
                 files_pending: files.errors.length > 0,
+                file_error_code: files.errorCode,
               },
             },
             { session },
@@ -911,6 +975,7 @@ export class Bitrix24Service implements OnModuleInit, OnModuleDestroy {
             'bitrix.error_code': '',
             'bitrix.customer_error_code': customerError,
             'bitrix.assignment_error_code': assignmentError,
+            'bitrix.file_error_code': fileError,
             ...(assignee ? { 'bitrix.assignee': assignee } : {}),
             ...(row!.status !== status ? { updated_at: sqlNow() } : {}),
           },
@@ -980,6 +1045,7 @@ export class Bitrix24Service implements OnModuleInit, OnModuleDestroy {
   private async receiveFiles(ticketId: number, comment: CrmComment) {
     const attachments: any[] = [],
       errors: string[] = [];
+    let errorCode = '';
     for (const file of Object.values(comment.FILES || {}).slice(0, 10)) {
       const name = String(file.name || 'Вложение').replace(/[\\/]/g, '_');
       const key = `${this.client.originator()}:crm-file:${comment.ID}:${file.id}:${file.date || ''}`;
@@ -996,31 +1062,9 @@ export class Bitrix24Service implements OnModuleInit, OnModuleDestroy {
           });
           continue;
         }
-        const url = new URL(file.urlDownload, this.client.webhook().origin);
-        if (
-          url.origin !== this.client.webhook().origin ||
-          url.protocol !== 'https:' ||
-          Number(file.size) > 10485760
-        )
-          throw new Error();
-        const response = await fetch(url, {
-          redirect: 'error',
-          signal: AbortSignal.timeout(20000),
-        });
-        if (
-          !response.ok ||
-          !response.body ||
-          Number(response.headers.get('content-length')) > 10485760
-        )
-          throw new Error();
-        const chunks: Buffer[] = [];
-        let size = 0;
-        for await (const chunk of response.body as any) {
-          size += chunk.length;
-          if (size > 10485760) throw new Error();
-          chunks.push(Buffer.from(chunk));
-        }
-        const bytes = Buffer.concat(chunks);
+        if (Number(file.size) > 10485760)
+          throw new Bitrix24Error('file_too_large');
+        const bytes = await this.client.downloadFile(Number(file.id));
         const mime = validateAttachment(name, bytes);
         const stream = this.bucket().openUploadStream(name);
         await new Promise<void>((resolve, reject) => {
@@ -1066,10 +1110,12 @@ export class Bitrix24Service implements OnModuleInit, OnModuleDestroy {
               .delete(stream.id)
               .catch(() => undefined);
         }
-      } catch {
+      } catch (error) {
+        errorCode ||=
+          error instanceof Bitrix24Error ? error.code : 'file_download_failed';
         errors.push(name);
       }
     }
-    return { attachments, errors };
+    return { attachments, errors, errorCode };
   }
 }

@@ -57,10 +57,15 @@ export type Ticket = {
     assignee?: { id: number | null; name: string } | null;
     assignmentPending?: boolean;
     assignmentError?: string;
+    attachmentError?: string;
   } | null;
 };
 export type SupportIntegration = {
-  capabilities?: { staff: boolean; notifications: boolean } | null;
+  capabilities?: {
+    staff: boolean;
+    notifications: boolean;
+    files?: boolean;
+  } | null;
   enabled: boolean;
   configured: boolean;
   ready: boolean;
