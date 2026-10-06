@@ -353,8 +353,9 @@ export default function RequestsPage() {
                   status={ticket.status}
                   statusLabel={statuses[ticket.status] || ticket.status}
                   office={ticketOffice(ticket)}
+                  //Если есть непрочитанные сообщения и обращение не закрыто, показываем бейдж "Новый ответ"
                   attention={
-                    ticket.raw?.unread_for_customer ? 'Новый ответ' : undefined
+                    ticket.raw?.unread_for_customer ? ticket.status != 'closed' ? 'Новый ответ' : undefined : undefined
                   }
                   selected={detail?.ticket.id === ticket.id}
                   onClick={() => void open(ticket.id)}

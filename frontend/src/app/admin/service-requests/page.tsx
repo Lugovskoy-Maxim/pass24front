@@ -506,7 +506,8 @@ export default function ServiceRequestsPage() {
                       officeLabel: ticket.office_label,
                       category: ticket.office_category,
                     }}
-                    attention={ticket.needs_action ? 'Ждёт ответа' : undefined}
+                    //Если есть непрочитанные сообщения и обращение не закрыто, показываем бейдж "Ждёт ответ"
+                    attention={ticket.needs_action ? ticket.status != 'closed' ? 'Ждёт ответа' : undefined : undefined}
                     selected={detail?.ticket.id === ticket.id}
                     onClick={() => void open(ticket.id)}
                   />
