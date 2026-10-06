@@ -310,8 +310,8 @@ export default function ServiceRequestsPage() {
                     : 'Для подключения задайте полный адрес CRM-вебхука в BITRIX_API_KEY на сервере и включите BITRIX_ENABLED.')}
               </p>
               <p className="text-xs mt-1">
-                Комментарии видны арендаторам. Для внутренней заметки начните
-                текст с [Внутреннее].
+                Для ответа арендатору начните комментарий в CRM с (ответ).
+                Остальные комментарии остаются в Bitrix24.
               </p>
               {integration.capabilities?.staff === false && (
                 <p className="text-xs mt-1">

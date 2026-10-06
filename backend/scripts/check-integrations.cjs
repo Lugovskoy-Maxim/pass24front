@@ -6,6 +6,9 @@ const {
   Bitrix24Client,
   Bitrix24Error,
 } = require('../dist/integrations/bitrix24/bitrix24.client');
+const {
+  BITRIX_CUSTOMER_VERSION,
+} = require('../dist/integrations/bitrix24/bitrix24.customers');
 
 (async () => {
   const result = {};
@@ -83,7 +86,7 @@ const {
         .countDocuments({ 'bitrix.managed': true }),
       enrichedTickets: await db
         .collection('mstyle_ops_tickets')
-        .countDocuments({ 'bitrix.customer_version': 1 }),
+        .countDocuments({ 'bitrix.customer_version': BITRIX_CUSTOMER_VERSION }),
       tenantCompanyLinks: await db
         .collection('mstyle_ops_bitrix_state')
         .countDocuments({ _id: /^tenant-company:/, company_id: { $gt: 0 } }),
@@ -109,10 +112,13 @@ const {
             { id: ticket.bitrix.deal_id },
           );
           result.crmCustomerChecks.push({
-            officeInTitle: /^Офис(?:ы)?\s.+ · /.test(deal.TITLE || ''),
+            officeInTitle: /^(?:[\p{L}\d-]+\/|Офис\s).+, .+$/u.test(
+              deal.TITLE || '',
+            ),
             companyLinked: Number(deal.COMPANY_ID) > 0,
             contactCount: Array.isArray(contacts) ? contacts.length : 0,
-            enriched: ticket.bitrix.customer_version === 1,
+            enriched:
+              ticket.bitrix.customer_version === BITRIX_CUSTOMER_VERSION,
             customerErrorCode: ticket.bitrix.customer_error_code || '',
             assignmentErrorCode: ticket.bitrix.assignment_error_code || '',
           });

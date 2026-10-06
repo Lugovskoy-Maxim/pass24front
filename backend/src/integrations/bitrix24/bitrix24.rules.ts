@@ -22,7 +22,38 @@ export function crmPlainText(text: string) {
     .replace(/&amp;/g, '&')
     .replace(/&quot;/g, '"')
     .replace(/&#39;/g, "'")
+    .replace(/&nbsp;|&#160;|&#x0*a0;/gi, ' ')
     .trim();
+}
+export function crmReplyText(comment: string) {
+  const text = crmPlainText(comment);
+  const marker = /^\(\s*ответ\s*\)\s*/iu.exec(text);
+  return marker ? text.slice(marker[0].length).trim() : null;
+}
+export function crmOfficeReference(
+  number: unknown,
+  areaSqm: unknown,
+  businessCenterName: unknown,
+) {
+  const officeNumber = String(number || '').trim();
+  if (!officeNumber) return '';
+  const name = String(businessCenterName || '')
+    .replace(/^\s*(?:бизнес[\s-]*центр|бц)\s*/iu, '')
+    .replace(/[«»"“”]/g, '')
+    .trim();
+  const parts = name.match(/[\p{L}]+|\d+/gu) || [];
+  const abbreviation = parts
+    .map((part) =>
+      /^\d+$/.test(part) ? '-' + part : part[0].toLocaleUpperCase('ru'),
+    )
+    .join('')
+    .replace(/^-/, '');
+  const area = Number(String(areaSqm ?? '').replace(',', '.'));
+  const areaLabel =
+    Number.isFinite(area) && area > 0
+      ? `-${new Intl.NumberFormat('ru-RU', { useGrouping: false, maximumFractionDigits: 20 }).format(area)} м²`
+      : '';
+  return `${abbreviation ? abbreviation + '/' : 'Офис '}${officeNumber}${areaLabel}`;
 }
 export function commentMarker(originator: string, messageId: number) {
   return `[PASS:${originator}:${messageId}]`;

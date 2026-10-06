@@ -14,7 +14,10 @@ import {
   fail,
 } from '../../operations/operations.rules';
 import { validateAttachment } from '../../operations/operations.support';
-import { Bitrix24Customers } from './bitrix24.customers';
+import {
+  BITRIX_CUSTOMER_VERSION,
+  Bitrix24Customers,
+} from './bitrix24.customers';
 import {
   Bitrix24Client,
   Bitrix24Error,
@@ -25,7 +28,7 @@ import {
   bitrixErrorLabel,
   commentMarker,
   commentText,
-  crmPlainText,
+  crmReplyText,
   crmTicketStatus,
 } from './bitrix24.rules';
 
@@ -667,7 +670,7 @@ export class Bitrix24Service implements OnModuleInit, OnModuleDestroy {
     )
       throw new Bitrix24Error('deal_mismatch');
     let customerError = '';
-    if (ticket.bitrix?.customer_version !== 1) {
+    if (ticket.bitrix?.customer_version !== BITRIX_CUSTOMER_VERSION) {
       try {
         await new Bitrix24Customers(this.store, this.client).sync(ticket, deal);
       } catch (error) {
@@ -719,9 +722,11 @@ export class Bitrix24Service implements OnModuleInit, OnModuleDestroy {
           continue;
         }
       }
-      const plain = crmPlainText(comment.COMMENT);
-      // Explicitly marked internal notes never enter the tenant conversation.
-      const internal = /^\[(?:внутреннее|internal)\]/i.test(plain);
+      const plain = crmReplyText(comment.COMMENT);
+      // Only explicitly addressed replies enter Pass, including their attachments.
+      const publish =
+        plain !== null &&
+        (!!plain || Object.keys(comment.FILES || {}).length > 0);
       const hash = createHash('sha256')
         .update(
           JSON.stringify({
@@ -738,7 +743,7 @@ export class Bitrix24Service implements OnModuleInit, OnModuleDestroy {
       const existing = await this.store
         .collection('messages')
         .findOne({ source_key: sourceKey });
-      if (internal) {
+      if (!publish) {
         if (existing && !existing.deleted)
           await this.updateImportedMessage(
             existing,

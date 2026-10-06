@@ -852,6 +852,15 @@ export class OperationsSupport {
       actor,
       await this.store.collection('tickets').findOne({ id: file.request_id }),
     );
+    if (String(file.source_key || '').includes(':crm-file:')) {
+      const published = await this.store.collection('messages').findOne({
+        request_id: file.request_id,
+        'bitrix.direction': 'in',
+        deleted: { $ne: true },
+        'attachments.attachment_id': id,
+      });
+      if (!published) fail('not_found', 'Файл не найден.', 404);
+    }
     const chunks: Buffer[] = [];
     for await (const chunk of this.bucket().openDownloadStream(
       new ObjectId(file.grid_id),

@@ -49,7 +49,7 @@ jobs:
       - run: npm run format:check
       - run: npm run lint
       - run: npx tsc --noEmit -p tsconfig.build.json
-      - run: npm test -- --runInBand src/operations/booking-status.contract.spec.ts src/integrations/bitrix24/bitrix24.client.spec.ts src/site-source/site-source-operations.spec.ts src/office-services/office-services.service.spec.ts
+      - run: npm test -- --runInBand src/operations/booking-status.contract.spec.ts src/integrations/bitrix24/bitrix24.client.spec.ts src/integrations/bitrix24/bitrix24.rules.spec.ts src/site-source/site-source-operations.spec.ts src/office-services/office-services.service.spec.ts
 
   booking-integration:
     name: Booking lifecycle integration tests

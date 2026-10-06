@@ -19,7 +19,10 @@ import {
   ServiceFunnel,
 } from './bitrix24.client';
 import { Bitrix24Service } from './bitrix24.service';
-import { Bitrix24Customers } from './bitrix24.customers';
+import {
+  BITRIX_CUSTOMER_VERSION,
+  Bitrix24Customers,
+} from './bitrix24.customers';
 import { ObjectId } from 'mongodb';
 
 jest.setTimeout(900000);
@@ -297,7 +300,7 @@ describe('Daily MySQL and Bitrix24 with transactional Mongo storage', () => {
       },
       key,
     );
-  const operatorComment = (text = 'Мастер уже идёт') => {
+  const operatorComment = (text = '(ответ) Мастер уже идёт') => {
     const comment = {
       ID: String(200 + comments.length),
       ENTITY_ID: deals[0].ID,
@@ -339,8 +342,15 @@ describe('Daily MySQL and Bitrix24 with transactional Mongo storage', () => {
       },
     );
     const officeId = new ObjectId();
+    const propertyId = new ObjectId();
+    await connection.db!.collection('properties').insertOne({
+      _id: propertyId,
+      name: 'БЦ Добрынинский-2',
+    });
     await connection.db!.collection('offices').insertOne({
       _id: officeId,
+      property: propertyId,
+      areaSqm: 18,
       number: '102',
       externalId: 'tf-room:102',
       company: officeCompany,
@@ -370,7 +380,7 @@ describe('Daily MySQL and Bitrix24 with transactional Mongo storage', () => {
       .collection('tickets')
       .updateOne({ id }, { $addToSet: { office_ids: 'tf-room:999' } });
     await worker.tick();
-    expect(deals[0].TITLE).toBe('Офис 102 · Не работает вентиляция');
+    expect(deals[0].TITLE).toBe('Д-2/102-18 м², Не работает вентиляция');
     expect(deals[0].COMMENTS).toContain('Заявитель: Иванов Иван Иванович');
     expect(deals[0].COMMENTS).toContain('Телефон: +79001234567');
     expect(deals[0].COMMENTS).toContain('Email: tenant@example.invalid');
@@ -415,7 +425,7 @@ describe('Daily MySQL and Bitrix24 with transactional Mongo storage', () => {
       COMPANY_ID: 9,
     });
     await worker.tick();
-    expect(deals[0].TITLE).toBe('Офис 102 · Не работает вентиляция');
+    expect(deals[0].TITLE).toBe('Д-2/102-18 м², Не работает вентиляция');
     expect(deals[0].COMMENTS).toContain('Компания: ООО Компания профиля');
     expect(deals[0].COMPANY_ID).toBe(55);
     expect(bindings[0].CONTACT_ID).toBe(66);
@@ -426,7 +436,44 @@ describe('Daily MySQL and Bitrix24 with transactional Mongo storage', () => {
     expect(
       (await store.collection('tickets').findOne({ id }))!.bitrix
         .customer_version,
-    ).toBe(1);
+    ).toBe(BITRIX_CUSTOMER_VERSION);
+  });
+
+  it('renames previously enriched CRM cards to the current office reference without duplicating clients', async () => {
+    const id = await customerTicket();
+    await worker.tick();
+    deals[0].TITLE = 'Офис 102 · Не работает вентиляция';
+    await store.collection('tickets').updateOne(
+      { id },
+      {
+        $set: { 'bitrix.customer_version': 1 },
+      },
+    );
+    const ticket = await store.collection('tickets').findOne({ id });
+    await connection.db!.collection('offices').updateOne(
+      { externalId: 'tf-room:102' },
+      {
+        $set: { number: '6', areaSqm: 18 },
+      },
+    );
+    await worker.syncTicket(ticket, funnel);
+    expect(deals[0].TITLE).toBe('Д-2/6-18 м², Не работает вентиляция');
+    expect(contacts).toHaveLength(1);
+    expect(companies).toHaveLength(1);
+    expect(bindings).toHaveLength(1);
+    expect(notifications).toHaveLength(0);
+    const updates = jest
+      .mocked(client.call)
+      .mock.calls.filter(([method]) => method === 'crm.deal.update').length;
+    await worker.syncTicket(
+      await store.collection('tickets').findOne({ id }),
+      funnel,
+    );
+    expect(
+      jest
+        .mocked(client.call)
+        .mock.calls.filter(([method]) => method === 'crm.deal.update'),
+    ).toHaveLength(updates);
   });
 
   it('enriches an existing deal once while retaining CRM notes and manually assigned clients', async () => {
@@ -446,7 +493,7 @@ describe('Daily MySQL and Bitrix24 with transactional Mongo storage', () => {
       .updateOne({ id }, { $unset: { 'bitrix.customer_version': '' } });
     let ticket = await store.collection('tickets').findOne({ id });
     await worker.syncTicket(ticket, funnel);
-    expect(deal.TITLE).toBe('Офис 102 · Не работает вентиляция');
+    expect(deal.TITLE).toBe('Д-2/102-18 м², Не работает вентиляция');
     expect(deal.COMMENTS).toContain('Заметка сотрудника CRM');
     expect(deal.COMMENTS).toContain('Телефон: +79001234567');
     expect(deal.COMPANY_ID).toBe(555);
@@ -471,7 +518,7 @@ describe('Daily MySQL and Bitrix24 with transactional Mongo storage', () => {
       expect(ticket!.status).toBe('in_progress');
       await worker.syncTicket(ticket, funnel);
       ticket = await store.collection('tickets').findOne({ id });
-      expect(ticket!.bitrix.customer_version).toBe(1);
+      expect(ticket!.bitrix.customer_version).toBe(BITRIX_CUSTOMER_VERSION);
       expect(ticket!.bitrix.customer_error_code).toBe('');
       expect(companies).toHaveLength(1);
       expect(contacts).toHaveLength(1);
@@ -543,7 +590,7 @@ describe('Daily MySQL and Bitrix24 with transactional Mongo storage', () => {
     await worker.syncTicket(ticket, funnel);
     expect(deals[0].COMPANY_ID).toBe(555);
     expect(deals[0].COMMENTS).toContain('Компания: Существующая компания CRM');
-    expect(deals[0].TITLE).toBe('Офис 102 · Не работает вентиляция');
+    expect(deals[0].TITLE).toBe('Д-2/102-18 м², Не работает вентиляция');
     expect(companies).toHaveLength(2);
     expect(contacts).toHaveLength(1);
     expect(await worker.tenantCompany('prf_crm')).toEqual(result);
@@ -719,7 +766,7 @@ describe('Daily MySQL and Bitrix24 with transactional Mongo storage', () => {
         .collection('outbox')
         .countDocuments({ type: 'bitrix.message' }),
     ).toBe(1);
-    external.COMMENT = '[b]Мастер прибудет к 12:00[/b]';
+    external.COMMENT = '[b](ответ) Мастер прибудет к 12:00[/b]';
     await worker.syncTicket(ticket, funnel);
     detail = await support.detail(resident, result.ticket.id);
     expect(detail.messages).toHaveLength(2);
@@ -732,6 +779,80 @@ describe('Daily MySQL and Bitrix24 with transactional Mongo storage', () => {
     expect(detail.messages[1].deleted).toBe(true);
     expect(detail.messages[1].message_text).toContain('удалён');
     expect(detail.ticket.last_message_preview).toContain('удалён');
+  });
+  it('imports only explicitly marked replies, never downloads unmarked files and permits adding/removing the marker', async () => {
+    const created = await create();
+    await worker.tick();
+    const note = operatorComment('Внутренняя заметка без метки');
+    note.FILES = {
+      '55': {
+        id: 55,
+        name: 'internal.txt',
+        urlDownload: 'https://portal.bitrix24.ru/file/55',
+      },
+    };
+    operatorComment('Метка (ответ) внутри заметки');
+    operatorComment('(ответить) внутренняя заметка');
+    operatorComment('(ответ)');
+    const fetch = jest
+      .spyOn(global, 'fetch')
+      .mockResolvedValue(new Response('private'));
+    const row = await store
+      .collection('tickets')
+      .findOne({ id: created.ticket.id });
+    await worker.syncTicket(row, funnel);
+    expect(fetch).not.toHaveBeenCalled();
+    expect((await support.detail(resident, row!.id)).messages).toHaveLength(1);
+    expect(
+      (await support.detail(resident, row!.id)).ticket.unread_for_customer,
+    ).toBe(false);
+    note.FILES = {};
+    note.COMMENT = '<p>(ответ) Мастер прибудет</p>';
+    await worker.syncTicket(row, funnel);
+    let detail = await support.detail(resident, row!.id);
+    expect(detail.messages).toHaveLength(2);
+    expect(detail.messages[1].message_text).toBe('Мастер прибудет');
+    note.COMMENT = 'Только для сотрудников';
+    await worker.syncTicket(row, funnel);
+    detail = await support.detail(resident, row!.id);
+    expect(detail.messages[1].deleted).toBe(true);
+    expect(detail.messages[1].message_text).toBe('Комментарий скрыт в CRM');
+    expect(detail.ticket.last_message_preview).toBe('Комментарий скрыт в CRM');
+    note.COMMENT = '(ОТВЕТ) Снова опубликован';
+    await worker.syncTicket(row, funnel);
+    detail = await support.detail(resident, row!.id);
+    expect(detail.messages).toHaveLength(2);
+    expect(detail.messages[1].deleted).toBe(false);
+    expect(detail.messages[1].message_text).toBe('Снова опубликован');
+  });
+  it('hides an unmarked comment previously imported under the old publication rule', async () => {
+    const created = await create();
+    await worker.tick();
+    const note = operatorComment(
+      'Ранее опубликованная заметка для сотрудников',
+    );
+    const original = await store
+      .collection('messages')
+      .findOne({ request_id: created.ticket.id });
+    const id = await store.transaction((session) =>
+      store.nextId('messages', session),
+    );
+    const fields = { ...original!, _id: new ObjectId() };
+    await store.collection('messages').insertOne({
+      ...fields,
+      id,
+      source_key: `${client.originator()}:crm-comment:${note.ID}`,
+      author_type: 'support',
+      message_text: note.COMMENT,
+      bitrix: { direction: 'in', comment_id: Number(note.ID) },
+    });
+    await worker.syncTicket(
+      await store.collection('tickets').findOne({ id: created.ticket.id }),
+      funnel,
+    );
+    const detail = await support.detail(resident, created.ticket.id);
+    expect(detail.messages[1].deleted).toBe(true);
+    expect(JSON.stringify(detail)).not.toContain(note.COMMENT);
   });
   it('keeps a delivery error visible when reading the CRM status succeeds', async () => {
     const result = await create();
@@ -887,7 +1008,7 @@ describe('Daily MySQL and Bitrix24 with transactional Mongo storage', () => {
     ]);
     // The API returns a FILES object on reads, not the add-method upload array.
     comments[0].FILES = {};
-    const external: any = operatorComment('Ответ с файлом');
+    const external: any = operatorComment('(ответ) Ответ с файлом');
     external.FILES = {
       '25': {
         id: 25,
@@ -918,6 +1039,33 @@ describe('Daily MySQL and Bitrix24 with transactional Mongo storage', () => {
         attachment.attachment_id,
       ),
     ).rejects.toMatchObject({ response: { error: { code: 'not_found' } } });
+    external.COMMENT = 'Файл только для сотрудников';
+    await worker.syncTicket(
+      await store.collection('tickets').findOne({ id: result.ticket.id }),
+      funnel,
+    );
+    await expect(
+      support.download(resident, attachment.attachment_id),
+    ).rejects.toMatchObject({
+      response: { error: { code: 'not_found' } },
+    });
+    const hidden = await support.detail(resident, result.ticket.id);
+    expect(hidden.messages[1].attachments).toEqual([]);
+    external.COMMENT = '(ответ)';
+    await worker.syncTicket(
+      await store.collection('tickets').findOne({ id: result.ticket.id }),
+      funnel,
+    );
+    const republished = await support.detail(resident, result.ticket.id);
+    expect(republished.messages[1].message_text).toBe('Вложение');
+    expect(republished.messages[1].attachments[0].attachment_id).toBe(
+      attachment.attachment_id,
+    );
+    expect(
+      (
+        await support.download(resident, attachment.attachment_id)
+      ).bytes.toString(),
+    ).toBe('Ответ');
   });
 
   function source(check?: () => Promise<any>) {

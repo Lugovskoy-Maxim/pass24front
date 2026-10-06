@@ -2,6 +2,9 @@ import { createHash } from 'crypto';
 import { ObjectId } from 'mongodb';
 import { OperationsStore } from '../../operations/operations.store';
 import { Bitrix24Client, Bitrix24Error } from './bitrix24.client';
+import { crmOfficeReference } from './bitrix24.rules';
+
+export const BITRIX_CUSTOMER_VERSION = 2;
 
 const text = (value: unknown) =>
   String(value || '')
@@ -60,11 +63,38 @@ export class Bitrix24Customers {
                 },
               ],
             },
-            { projection: { number: 1, company: 1, externalId: 1 } },
+            {
+              projection: {
+                number: 1,
+                company: 1,
+                externalId: 1,
+                property: 1,
+                areaSqm: 1,
+              },
+            },
           )
           .sort({ number: 1, _id: 1 })
           .toArray()
       : [];
+    const propertyIds = [
+      ...new Set<string>(
+        offices
+          .map((office) => String(office.property || ''))
+          .filter((id) => /^[a-f\d]{24}$/i.test(id)),
+      ),
+    ];
+    const properties = propertyIds.length
+      ? await this.store.connection
+          .db!.collection<any>('properties')
+          .find(
+            { _id: { $in: propertyIds.map((id) => new ObjectId(id)) } },
+            { projection: { name: 1 } },
+          )
+          .toArray()
+      : [];
+    const propertyNames = new Map(
+      properties.map((property) => [String(property._id), property.name]),
+    );
     const officeCompanies = [
       ...new Set(offices.map((office) => text(office.company)).filter(Boolean)),
     ];
@@ -106,9 +136,16 @@ export class Bitrix24Customers {
     const officeNumbers = offices
       .map((office) => text(office.number))
       .filter(Boolean);
-    const officeTitle = officeNumbers.length
-      ? `${officeNumbers.length === 1 ? 'Офис' : 'Офисы'} ${officeNumbers.join(', ')}`
-      : '';
+    const officeTitle = offices
+      .map((office) =>
+        crmOfficeReference(
+          office.number,
+          office.areaSqm,
+          propertyNames.get(String(office.property)),
+        ),
+      )
+      .filter(Boolean)
+      .join('; ');
     const title = [
       officeTitle.slice(0, 100),
       text(ticket.subject) ||
@@ -116,7 +153,7 @@ export class Bitrix24Customers {
         `Заявка №${ticket.id}`,
     ]
       .filter(Boolean)
-      .join(' · ')
+      .join(', ')
       .slice(0, 255);
     const description = [
       `Заявка Pass №${ticket.id}`,
@@ -337,7 +374,7 @@ export class Bitrix24Customers {
       { id: ticket.id },
       {
         $set: {
-          'bitrix.customer_version': 1,
+          'bitrix.customer_version': BITRIX_CUSTOMER_VERSION,
           'bitrix.customer_error_code': '',
         },
       },
