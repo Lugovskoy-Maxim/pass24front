@@ -103,11 +103,13 @@ export function AdminLayout({
   title,
   description,
   actions,
+  compactHeader = false,
 }: {
   children: React.ReactNode;
   title: string;
   description?: string;
   actions?: React.ReactNode;
+  compactHeader?: boolean;
 }) {
   const pathname = usePathname();
   const { user } = useAuth();
@@ -174,7 +176,7 @@ export function AdminLayout({
       wide
     >
       <div
-        className={`flex flex-col lg:flex-row ${compactNav ? 'gap-4' : 'gap-6'}`}
+        className={`flex flex-col lg:flex-row ${compactNav ? 'gap-4' : 'gap-6'} ${compactHeader ? 'admin-shell--inbox' : ''}`}
       >
         <aside
           className={`${compactNav ? 'lg:w-[4.5rem]' : 'lg:w-60'} w-full shrink-0 transition-[width] duration-200`}
@@ -294,14 +296,22 @@ export function AdminLayout({
           </div>
         </aside>
         <div className="flex-1 min-w-0">
-          {description ? (
-            <header className="operations-heading">
+          {description || compactHeader ? (
+            <header
+              className={`operations-heading ${compactHeader ? 'operations-heading--compact' : ''}`}
+            >
               <div>
-                <p className="operations-heading__eyebrow">
-                  Рабочее пространство
-                </p>
+                {!compactHeader && (
+                  <p className="operations-heading__eyebrow">
+                    Рабочее пространство
+                  </p>
+                )}
                 <h1 className="page-title">{title}</h1>
-                <p className="operations-heading__description">{description}</p>
+                {!compactHeader && (
+                  <p className="operations-heading__description">
+                    {description}
+                  </p>
+                )}
               </div>
               {actions && (
                 <div className="operations-heading__actions">{actions}</div>

@@ -180,6 +180,7 @@ export function RequestDetailHeader({
   statusLabel,
   office,
   children,
+  compactOffice = false,
 }: {
   id: string | number;
   title: string;
@@ -190,6 +191,7 @@ export function RequestDetailHeader({
   statusLabel: string;
   office: RequestOfficeMetadata;
   children?: ReactNode;
+  compactOffice?: boolean;
 }) {
   return (
     <header className="request-detail__header">
@@ -199,7 +201,7 @@ export function RequestDetailHeader({
         </h2>
         <OperationsStatusBadge status={status} label={statusLabel} />
       </div>
-      <RequestOfficeSummary {...office} />
+      <RequestOfficeSummary {...office} compact={compactOffice} />
       <div className="request-detail__metadata">
         {requester && <span>{requester}</span>}
         {topic && <span>{topic}</span>}
@@ -227,21 +229,42 @@ export function RequestMessages({
   messages,
   perspective,
   onDownload,
+  followLatest = 0,
 }: {
   conversationId: string | number;
   messages: ChatMessage[];
   perspective: 'support' | 'client';
   onDownload: (attachment: Attachment) => void;
+  followLatest?: number;
 }) {
   const scrollRef = useRef<HTMLDivElement>(null);
   const pinned = useRef(true);
+  const geometry = useRef({ height: 0, content: 0 });
   const previousConversation = useRef<string | number | null>(null);
+  const previousFollow = useRef(followLatest);
   const [hasNewMessages, setHasNewMessages] = useState(false);
   const latest = messages.at(-1)?.id;
   useEffect(() => {
+    const panel = scrollRef.current;
+    if (!panel) return;
+    const observer = new ResizeObserver(() => {
+      geometry.current = {
+        height: panel.clientHeight,
+        content: panel.scrollHeight,
+      };
+      if (pinned.current && panel.clientHeight)
+        panel.scrollTop = panel.scrollHeight;
+    });
+    observer.observe(panel);
+    if (panel.firstElementChild) observer.observe(panel.firstElementChild);
+    return () => observer.disconnect();
+  }, []);
+  useEffect(() => {
     const changed = previousConversation.current !== conversationId;
+    const sent = previousFollow.current !== followLatest;
+    previousFollow.current = followLatest;
     previousConversation.current = conversationId;
-    if (changed || pinned.current) {
+    if (changed || sent || pinned.current) {
       const frame = requestAnimationFrame(() => {
         const panel = scrollRef.current;
         if (panel) panel.scrollTop = panel.scrollHeight;
@@ -251,7 +274,7 @@ export function RequestMessages({
       return () => cancelAnimationFrame(frame);
     }
     setHasNewMessages(true);
-  }, [conversationId, latest]);
+  }, [conversationId, latest, followLatest]);
   return (
     <div className="request-timeline">
       <div
@@ -263,102 +286,113 @@ export function RequestMessages({
         onScroll={() => {
           const panel = scrollRef.current;
           if (!panel) return;
+          // A resize or arriving message can emit a scroll event before the
+          // observer restores the bottom. Preserve the reader's previous intent.
+          if (
+            panel.clientHeight !== geometry.current.height ||
+            panel.scrollHeight !== geometry.current.content
+          )
+            return;
           pinned.current =
             panel.scrollHeight - panel.scrollTop - panel.clientHeight < 64;
           if (pinned.current) setHasNewMessages(false);
         }}
       >
-        {messages.map((item, index) => {
-          const date = messageDate(item.created_at);
-          const day = date
-            ? new Intl.DateTimeFormat('ru-RU', {
-                timeZone: 'Europe/Moscow',
-                day: 'numeric',
-                month: 'long',
-                year: 'numeric',
-              }).format(date)
-            : item.created_at;
-          const previous = index
-            ? messageDate(messages[index - 1].created_at)
-            : null;
-          const previousDay = previous
-            ? new Intl.DateTimeFormat('ru-RU', {
-                timeZone: 'Europe/Moscow',
-                day: 'numeric',
-                month: 'long',
-                year: 'numeric',
-              }).format(previous)
-            : '';
-          const outgoing =
-            perspective === 'client'
-              ? ['client', 'customer'].includes(item.author_type)
-              : item.author_type === 'support';
-          return (
-            <Fragment key={item.id}>
-              {day !== previousDay && (
-                <div className="request-day">
-                  <span>{day}</span>
-                </div>
-              )}
-              <article
-                className={`request-message ${outgoing ? 'request-message--outgoing' : ''}`}
-              >
-                <div className="request-message__meta">
-                  <span>
-                    {item.author_label ||
-                      (item.author_type === 'support'
-                        ? 'Сервисная служба'
-                        : 'Арендатор')}
-                  </span>
-                  <time
-                    dateTime={date?.toISOString()}
-                    title={operationDate(item.created_at)}
-                  >
-                    {date
-                      ? new Intl.DateTimeFormat('ru-RU', {
-                          timeZone: 'Europe/Moscow',
-                          hour: '2-digit',
-                          minute: '2-digit',
-                        }).format(date)
-                      : ''}
-                  </time>
-                </div>
-                {(item.body || item.message_text) && (
-                  <p className="request-message__body">
-                    {item.body || item.message_text}
-                  </p>
+        <div className="request-messages__content">
+          {messages.map((item, index) => {
+            const date = messageDate(item.created_at);
+            const day = date
+              ? new Intl.DateTimeFormat('ru-RU', {
+                  timeZone: 'Europe/Moscow',
+                  day: 'numeric',
+                  month: 'long',
+                  year: 'numeric',
+                }).format(date)
+              : item.created_at;
+            const previous = index
+              ? messageDate(messages[index - 1].created_at)
+              : null;
+            const previousDay = previous
+              ? new Intl.DateTimeFormat('ru-RU', {
+                  timeZone: 'Europe/Moscow',
+                  day: 'numeric',
+                  month: 'long',
+                  year: 'numeric',
+                }).format(previous)
+              : '';
+            const outgoing =
+              perspective === 'client'
+                ? ['client', 'customer'].includes(item.author_type)
+                : item.author_type === 'support';
+            return (
+              <Fragment key={item.id}>
+                {day !== previousDay && (
+                  <div className="request-day">
+                    <span>{day}</span>
+                  </div>
                 )}
-                {item.edited_at && (
-                  <small className="text-[var(--muted)]">
-                    {item.deleted ? 'Удалён или скрыт в CRM' : 'Изменён в CRM'}
-                  </small>
-                )}
-                {item.attachments?.map((attachment) => (
-                  <button
-                    key={attachment.attachment_id}
-                    type="button"
-                    className="request-attachment"
-                    aria-label={attachment.original_name}
-                    onClick={() => onDownload(attachment)}
-                  >
-                    <FileText size={20} aria-hidden="true" />
+                <article
+                  className={`request-message ${outgoing ? 'request-message--outgoing' : ''}`}
+                >
+                  <div className="request-message__meta">
                     <span>
-                      <span className="request-attachment__name">
-                        {attachment.original_name}
-                      </span>
-                      <span className="request-attachment__size">
-                        {attachment.size >= 1048576
-                          ? `${(attachment.size / 1048576).toFixed(1)} МБ`
-                          : `${Math.max(1, Math.round(attachment.size / 1024))} КБ`}
-                      </span>
+                      {item.author_label ||
+                        (item.author_type === 'support'
+                          ? 'Сервисная служба'
+                          : 'Арендатор')}
                     </span>
-                    <Download size={15} aria-hidden="true" />
-                  </button>
-                ))}
-              </article>
-            </Fragment>
-          );
-        })}
+                    <time
+                      dateTime={date?.toISOString()}
+                      title={operationDate(item.created_at)}
+                    >
+                      {date
+                        ? new Intl.DateTimeFormat('ru-RU', {
+                            timeZone: 'Europe/Moscow',
+                            hour: '2-digit',
+                            minute: '2-digit',
+                          }).format(date)
+                        : ''}
+                    </time>
+                  </div>
+                  {(item.body || item.message_text) && (
+                    <p className="request-message__body">
+                      {item.body || item.message_text}
+                    </p>
+                  )}
+                  {item.edited_at && (
+                    <small className="text-[var(--muted)]">
+                      {item.deleted
+                        ? 'Удалён или скрыт в CRM'
+                        : 'Изменён в CRM'}
+                    </small>
+                  )}
+                  {item.attachments?.map((attachment) => (
+                    <button
+                      key={attachment.attachment_id}
+                      type="button"
+                      className="request-attachment"
+                      aria-label={attachment.original_name}
+                      onClick={() => onDownload(attachment)}
+                    >
+                      <FileText size={20} aria-hidden="true" />
+                      <span>
+                        <span className="request-attachment__name">
+                          {attachment.original_name}
+                        </span>
+                        <span className="request-attachment__size">
+                          {attachment.size >= 1048576
+                            ? `${(attachment.size / 1048576).toFixed(1)} МБ`
+                            : `${Math.max(1, Math.round(attachment.size / 1024))} КБ`}
+                        </span>
+                      </span>
+                      <Download size={15} aria-hidden="true" />
+                    </button>
+                  ))}
+                </article>
+              </Fragment>
+            );
+          })}
+        </div>
       </div>
       {hasNewMessages && (
         <button

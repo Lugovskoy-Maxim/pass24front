@@ -87,7 +87,11 @@ function StaffPicker({
   );
 }
 
-export function BitrixDefaultResponsibility() {
+export function BitrixDefaultResponsibility({
+  compact = false,
+}: {
+  compact?: boolean;
+}) {
   const { user } = useAuth();
   const [saved, setSaved] = useState<{
     userId: number | null;
@@ -161,7 +165,9 @@ export function BitrixDefaultResponsibility() {
             уведомление в Bitrix24. Ответственного отдельной заявки можно
             заменить.
           </p>
-          <div className="flex flex-col sm:flex-row gap-2">
+          <div
+            className={`flex flex-col ${compact ? '' : 'sm:flex-row'} gap-2`}
+          >
             <StaffPicker
               label="Ответственный по умолчанию"
               value={value}
@@ -197,9 +203,11 @@ export function BitrixDefaultResponsibility() {
 export function BitrixTicketResponsibility({
   ticket,
   onSaved,
+  compact = false,
 }: {
   ticket: Ticket;
   onSaved: (detail: TicketDetail) => void;
+  compact?: boolean;
 }) {
   const [value, setValue] = useState(String(ticket.crm?.assignee?.id || ''));
   const [editing, setEditing] = useState(false);
@@ -232,7 +240,9 @@ export function BitrixTicketResponsibility({
       className="border-b border-[var(--border)] px-4 py-3 text-xs"
       aria-label="Ответственный за заявку"
     >
-      <div className="flex items-center justify-between gap-2">
+      <div
+        className={`flex ${compact ? 'flex-wrap' : ''} items-center justify-between gap-2`}
+      >
         <span>
           <span className="text-[var(--muted)]">Ответственный: </span>
           <strong>{ticket.crm?.assignee?.name || 'Не назначен'}</strong>
@@ -245,12 +255,23 @@ export function BitrixTicketResponsibility({
             setEditing(!editing);
           }}
           disabled={busy}
+          aria-label={
+            editing
+              ? 'Отменить выбор ответственного'
+              : 'Изменить ответственного'
+          }
         >
-          {editing ? 'Отмена' : 'Изменить ответственного'}
+          {editing
+            ? 'Отмена'
+            : compact
+              ? 'Изменить'
+              : 'Изменить ответственного'}
         </button>
       </div>
       {editing && (
-        <div className="mt-2 flex flex-col sm:flex-row gap-2">
+        <div
+          className={`mt-2 flex flex-col ${compact ? '' : 'sm:flex-row'} gap-2`}
+        >
           <StaffPicker
             label="Ответственный за заявку"
             value={value}

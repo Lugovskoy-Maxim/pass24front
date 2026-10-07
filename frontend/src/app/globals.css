@@ -3,6 +3,7 @@
 @import './admin-operations.css';
 @import './app-header.css';
 @import './office-editor.css';
+@import './support-inbox.css';
 
 :root {
   --m-accent: #eb711c;
