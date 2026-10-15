@@ -124,3 +124,5 @@ services:
       - "127.0.0.1:3000:3000"
     environment:
       - NEXT_PUBLIC_API_URL=${PUBLIC_API_URL}
+    volumes:
+      - ./data/help-videos:/app/public/help:ro

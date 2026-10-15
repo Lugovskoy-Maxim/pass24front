@@ -15,6 +15,9 @@ data/*
 data/mongo/*
 !data/mongo/.gitkeep
 
+# Large help videos are uploaded to production separately from Git.
+/frontend/public/help/*.mp4
+
 # WiredTiger / journal / diagnostic artifacts (if path changes)
 *.wt
 WiredTiger*

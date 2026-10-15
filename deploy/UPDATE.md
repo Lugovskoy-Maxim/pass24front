@@ -12,6 +12,23 @@
 подключается по SSH и запускает `./scripts/update.sh` в `/opt/pass24front`.
 Вручную тот же job: Actions → **Deploy production** → Run workflow.
 
+### Видеоинструкции
+
+Большие видео не хранятся в Git. Загрузите их на сервер в каталог
+`/opt/pass24front/data/help-videos/` с именами:
+
+- `registration.mp4` — видео о регистрации;
+- `pass-order.mp4` — видео о заказе пропуска.
+
+Приложение раздаёт их по адресам `/help/registration.mp4` и
+`/help/pass-order.mp4`. После первой загрузки или замены файлов перезапустите
+frontend, чтобы Next.js перечитал содержимое каталога:
+
+```bash
+cd /opt/pass24front
+docker compose -f docker-compose.yml -f docker-compose.prod.yml --env-file .env restart frontend
+```
+
 В репозитории GitHub → Settings → Secrets and variables → Actions задайте:
 
 | Secret | Пример |
