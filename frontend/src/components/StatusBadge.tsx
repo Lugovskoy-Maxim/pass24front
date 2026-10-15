@@ -17,6 +17,8 @@ function badgeSizeClass(size: BadgeSize): string {
 interface StatusBadgeProps {
   status: PassStatus;
   labels?: UiLabels;
+  /** Контекстное пояснение статуса в карточке. */
+  label?: string;
   size?: BadgeSize;
   /** При просрочке — статус + отдельный бейдж просрочки */
   overdueKind?: GuestOverdueKind | null;
@@ -25,6 +27,7 @@ interface StatusBadgeProps {
 export function StatusBadge({
   status,
   labels,
+  label,
   size = 'md',
   overdueKind,
 }: StatusBadgeProps) {
@@ -36,7 +39,7 @@ export function StatusBadge({
         .join(' ')}
     >
       <span className="pass-badge__dot" aria-hidden />
-      {getStatusLabel(status, L)}
+      {label || getStatusLabel(status, L)}
     </span>
   );
 

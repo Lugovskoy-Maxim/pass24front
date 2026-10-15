@@ -126,6 +126,21 @@ export interface User {
   private_data_revision?: number | null;
 }
 
+export interface ResidentRequisites {
+  available: boolean;
+  profileType?: 'individual' | 'company';
+  legalForm?: 'ip' | 'ooo' | null;
+  values?: Record<string, unknown>;
+  revision?: number;
+  editPolicy?: 'initial' | 'self_service' | 'request_only' | 'locked';
+  changeRequest?: {
+    status: string;
+    changedFieldCodes: string[];
+    createdAt?: string | null;
+    reasonCode?: string;
+  } | null;
+}
+
 export interface TenantEmployee {
   id: string;
   email: string;
@@ -482,6 +497,18 @@ export const api = {
     }),
 
   me: () => request<{ user: User }>('/auth/me'),
+
+  getResidentRequisites: () =>
+    request<ResidentRequisites>('/auth/profile/requisites'),
+
+  updateResidentRequisites: (data: {
+    expectedRevision: number;
+    data: Record<string, unknown>;
+  }) =>
+    request<Record<string, unknown>>('/auth/profile/requisites', {
+      method: 'PATCH',
+      body: JSON.stringify(data),
+    }),
 
   getDevAccounts: () =>
     request<{

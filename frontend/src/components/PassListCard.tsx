@@ -4,32 +4,25 @@ import Link from 'next/link';
 import {
   Building2,
   Car,
+  CalendarDays,
   MapPin,
-  Package,
   Phone,
-  User,
-  Wrench,
+  Clock3,
+  UserRound,
 } from 'lucide-react';
 import { Pass, PassType, TYPE_LABELS } from '@/lib/api';
 import { getGuestOverdueKind, getUiLabels, UiLabels } from '@/lib/ui-labels';
 import {
   getPassCardShellClass,
-  getPassIconTileClass,
   getPassStatusStripeClass,
 } from '@/lib/pass-status';
 import { useConfig } from '@/hooks/useConfig';
 import { formatVisitDateLabel, formatVisitTimeWindow } from '@/lib/local-date';
 import { formatOfficeDestination } from '@/lib/pass-display';
+import { isAwaitingEntry } from '@/lib/pass-entry';
 import { StatusBadge } from './StatusBadge';
 import { PassNumber } from './PassNumber';
 import { PassOfficeHighlight } from './PassOfficeHighlight';
-
-const TYPE_ICONS: Record<PassType, typeof User> = {
-  visitor: User,
-  parking: Car,
-  delivery: Package,
-  contractor: Wrench,
-};
 
 interface PassListCardProps {
   pass: Pass;
@@ -40,6 +33,8 @@ interface PassListCardProps {
   onClick?: () => void;
   /** Quick actions between main info and office block (e.g. check-in / reject on reception). */
   actions?: React.ReactNode;
+  /** Larger, scannable layout used on the main passes page. */
+  prominent?: boolean;
 }
 
 export function PassListCard({
@@ -50,10 +45,10 @@ export function PassListCard({
   href,
   onClick,
   actions,
+  prominent = false,
 }: PassListCardProps) {
   const config = useConfig();
   const labels = labelsProp || getUiLabels(config);
-  const Icon = TYPE_ICONS[pass.passType as PassType] || User;
   const overdueKind = getGuestOverdueKind(pass);
   const stillInside = overdueKind !== null;
   const visitDateLabel = formatVisitDateLabel(pass.visitDate);
@@ -92,34 +87,37 @@ export function PassListCard({
         aria-hidden
       />
 
-      <div className="pass-card__body pass-card__body--row px-3 py-2.5 min-w-0">
-        {pass.companyLogo ? (
-          <div className="w-11 h-11 shrink-0 overflow-hidden self-center">
-            {/* eslint-disable-next-line @next/next/no-img-element */}
-            <img
-              src={pass.companyLogo}
-              alt={pass.companyName || 'Логотип'}
-              className="w-full h-full object-contain"
-            />
-          </div>
-        ) : (
-          <div
-            className={`w-9 h-9 rounded-lg shrink-0 ${getPassIconTileClass(pass.status, stillInside)} self-center flex items-center justify-center`}
-          >
-            <Icon className="w-4 h-4" />
-          </div>
-        )}
-
+      <div
+        className={`pass-card__body pass-card__body--row ${prominent ? 'pass-card__body--prominent' : ''} px-3 py-2.5 min-w-0`}
+      >
         <div className="pass-card__main flex-1 min-w-0 self-center">
           <div className="flex items-center gap-2 min-w-0 flex-wrap">
-            <div className="pass-card__title text-sm" title={pass.visitorName}>
+            {pass.companyLogo && (
+              <div className="pass-card__logo w-12 h-12 shrink-0 overflow-hidden rounded-xl self-start">
+                {/* eslint-disable-next-line @next/next/no-img-element */}
+                <img
+                  src={pass.companyLogo}
+                  alt={pass.companyName || 'Логотип компании'}
+                  className="w-full h-full object-contain rounded-lg"
+                />
+              </div>
+            )}
+            <div
+              className={`pass-card__title ${prominent ? 'text-lg sm:text-xl' : 'text-sm'}`}
+              title={pass.visitorName}
+            >
               {pass.visitorName}
             </div>
             <div className="pass-card__badges">
               <StatusBadge
                 status={pass.status}
                 labels={labels}
-                size="sm"
+                label={
+                  prominent && isAwaitingEntry(pass.status)
+                    ? 'Ожидает входа'
+                    : undefined
+                }
+                size={prominent ? 'md' : 'sm'}
                 overdueKind={overdueKind}
               />
             </div>
@@ -129,25 +127,49 @@ export function PassListCard({
             <PassNumber value={pass.passNumber} size="sm" />
           </div>
 
-          <p
-            className="pass-card__meta-line mt-0.5 text-[11px] text-[var(--muted)]"
-            title={metaTitle}
-          >
-            <span className="pass-card__visit-date text-[var(--text)] font-medium">
-              {metaParts[0]}
-            </span>
-            {metaParts.length > 1 && (
-              <span className="text-[var(--muted)]">
-                {' '}
-                · {metaParts.slice(1).join(' · ')}
+          {prominent ? (
+            <div className="pass-card__visit-meta mt-1.5" title={metaTitle}>
+              <CalendarDays className="w-4 h-4 shrink-0" aria-hidden />
+              <span className="pass-card__visit-date">{visitDateLabel}</span>
+              {visitWindow && (
+                <span className="pass-card__visit-time">
+                  <Clock3 className="w-3.5 h-3.5 shrink-0" aria-hidden />
+                  {visitWindow}
+                </span>
+              )}
+            </div>
+          ) : (
+            <p
+              className="pass-card__meta-line mt-0.5 text-[11px] text-[var(--muted)]"
+              title={metaTitle}
+            >
+              <span className="pass-card__visit-date text-[var(--text)] font-medium">
+                {metaParts[0]}
               </span>
-            )}
-            <span className="pass-card__office--inline ml-1">
-              · {officeInline}
-            </span>
-          </p>
+              {metaParts.length > 1 && (
+                <span className="text-[var(--muted)]">
+                  {' '}
+                  · {metaParts.slice(1).join(' · ')}
+                </span>
+              )}
+              <span className="pass-card__office--inline ml-1">
+                {' '}
+                · {officeInline}
+              </span>
+            </p>
+          )}
 
-          <div className="pass-card__chips mt-1 text-[11px] text-[var(--muted)]">
+          {prominent && showCreator && pass.creatorName && (
+            <div className="pass-card__creator mt-1.5" title={pass.creatorName}>
+              <UserRound className="w-3.5 h-3.5 shrink-0" aria-hidden />
+              <span>{labels.card.orderedBy}:</span>
+              <strong>{pass.creatorName}</strong>
+            </div>
+          )}
+
+          <div
+            className={`pass-card__chips mt-1.5 ${prominent ? 'text-[12px]' : 'text-[11px]'} text-[var(--muted)]`}
+          >
             {pass.companyName && (
               <span className="pass-card__chip" title={pass.companyName}>
                 <Building2 className="w-3 h-3 shrink-0" />
@@ -175,9 +197,12 @@ export function PassListCard({
                 {pass.vehiclePlate}
               </span>
             )}
-            {showCreator && pass.creatorName && (
+            {!prominent && showCreator && pass.creatorName && (
               <span className="pass-card__chip" title={pass.creatorName}>
-                {labels.card.orderedBy}: {pass.creatorName}
+                <UserRound className="w-3 h-3 shrink-0" />
+                <span>
+                  {labels.card.orderedBy}: {pass.creatorName}
+                </span>
               </span>
             )}
           </div>
@@ -199,7 +224,7 @@ export function PassListCard({
           businessCenterName={pass.businessCenterName}
           label={labels.card.office}
           floorSuffix={labels.card.floorSuffix}
-          size="sm"
+          size={prominent ? 'lg' : 'sm'}
           className="shrink-0 self-center"
           title={officeInline}
         />

@@ -4,6 +4,7 @@ import { PassportModule } from '@nestjs/passport';
 import { ConfigModule, ConfigService } from '@nestjs/config';
 import { MongooseModule } from '@nestjs/mongoose';
 import { AuthController } from './auth.controller';
+import { MstyleV2Module } from '../integrations/mstyle-v2/mstyle-v2.module';
 import { AuthService } from './auth.service';
 import { JwtStrategy } from './jwt.strategy';
 import { PermissionsGuard } from './permissions.guard';
@@ -25,6 +26,7 @@ import {
 @Module({
   imports: [
     AccessConfigModule,
+    MstyleV2Module,
     AuthDatabaseModule.forFeature([
       { name: User.name, schema: UserSchema },
       { name: RegistrationPending.name, schema: RegistrationPendingSchema },

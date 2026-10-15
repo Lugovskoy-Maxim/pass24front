@@ -734,6 +734,91 @@ input[type='checkbox']:not(.checkbox) {
   gap: 0.625rem;
 }
 
+.pass-card__body--prominent {
+  align-items: center;
+  gap: 0.875rem;
+  padding-top: 0.85rem;
+  padding-bottom: 0.85rem;
+}
+
+.pass-card__body--prominent .pass-card__main {
+  align-self: center;
+}
+
+.pass-card__body--prominent .pass-card__title {
+  white-space: normal;
+  overflow: visible;
+  overflow-wrap: anywhere;
+  line-height: 1.2;
+}
+
+.pass-card__body--prominent .pass-badge {
+  min-height: 1.6rem;
+  padding: 0.25rem 0.6rem;
+  font-size: 0.78rem;
+  font-weight: 700;
+}
+
+.pass-card__visit-meta {
+  display: flex;
+  align-items: center;
+  flex-wrap: wrap;
+  gap: 0.35rem 0.65rem;
+  min-width: 0;
+  color: var(--text);
+  font-size: 0.875rem;
+  line-height: 1.4;
+}
+
+.pass-card__visit-meta > svg:first-child {
+  color: var(--accent);
+}
+
+.pass-card__visit-date {
+  font-weight: 650;
+}
+
+.pass-card__visit-time {
+  display: inline-flex;
+  align-items: center;
+  gap: 0.25rem;
+  color: var(--muted);
+  font-variant-numeric: tabular-nums;
+}
+
+.pass-card__body--prominent .pass-card__chips {
+  gap: 0.35rem 0.75rem;
+}
+
+.pass-card__creator {
+  display: flex;
+  align-items: center;
+  flex-wrap: wrap;
+  gap: 0.3rem;
+  color: var(--muted);
+  font-size: 0.8rem;
+  line-height: 1.4;
+}
+
+.pass-card__creator svg {
+  color: var(--accent);
+}
+
+.pass-card__creator strong {
+  color: var(--text);
+  font-weight: 600;
+}
+
+.pass-card__body--prominent .pass-card__chip {
+  font-size: 0.78rem;
+  line-height: 1.4;
+}
+
+.pass-detail-page {
+  width: min(100%, 58rem);
+  margin-inline: auto;
+}
+
 .pass-card__quick-actions {
   display: flex;
   flex-direction: column;
@@ -748,6 +833,39 @@ input[type='checkbox']:not(.checkbox) {
 
 .pass-card__quick-actions .btn {
   width: 100%;
+}
+
+.pass-card__quick-actions .reception-action {
+  min-height: 2.5rem;
+  padding: 0.55rem 0.75rem;
+  border: 1px solid transparent;
+  border-radius: 0.625rem;
+  font-size: 0.8125rem;
+  font-weight: 600;
+  line-height: 1.25;
+  box-shadow: 0 1px 2px rgba(0, 0, 0, 0.12);
+}
+
+.pass-card__quick-actions .reception-action--entry {
+  color: var(--status-active);
+  background: var(--status-active-soft);
+  border-color: var(--status-active-border);
+}
+
+.pass-card__quick-actions .reception-action--entry:hover:not(:disabled) {
+  background: color-mix(in srgb, var(--status-active-soft) 72%, var(--status-active));
+  border-color: var(--status-active);
+}
+
+.pass-card__quick-actions .reception-action--reject {
+  color: var(--status-rejected);
+  background: var(--status-rejected-soft);
+  border-color: var(--status-rejected-border);
+}
+
+.pass-card__quick-actions .reception-action--reject:hover:not(:disabled) {
+  background: color-mix(in srgb, var(--status-rejected-soft) 72%, var(--status-rejected));
+  border-color: var(--status-rejected);
 }
 
 .pass-card__quick-actions .input {
@@ -769,6 +887,64 @@ input[type='checkbox']:not(.checkbox) {
 
   .pass-card__body--row:has(.pass-card__quick-actions) {
     flex-wrap: wrap;
+  }
+
+  .pass-card__body--prominent {
+    display: grid;
+    grid-template-columns: 2.5rem minmax(0, 1fr);
+    align-items: start;
+    column-gap: 0.65rem;
+    row-gap: 0.55rem;
+  }
+
+  .pass-card__body--prominent .pass-card__main {
+    grid-column: 1 / -1;
+    grid-row: 1;
+  }
+
+  .pass-card__body--prominent .pass-card__office {
+    grid-column: 1 / -1;
+    grid-row: 2;
+    display: flex;
+    align-items: baseline;
+    flex-wrap: wrap;
+    gap: 0.3rem 0.6rem;
+    width: 100%;
+    max-width: none;
+    padding: 0.55rem 0 0;
+    border: 0;
+    border-top: 1px solid var(--border);
+    text-align: left;
+  }
+
+  .pass-card__body--prominent .pass-card__office > div:first-child {
+    margin: 0;
+    font-size: 0.68rem;
+    text-align: left;
+  }
+
+  .pass-card__body--prominent .pass-card__office-value {
+    font-size: 1.75rem;
+    text-align: left;
+  }
+
+  .pass-card__body--prominent .pass-card__office > div:nth-child(3),
+  .pass-card__body--prominent .pass-card__office > div:nth-child(4) {
+    margin: 0;
+    text-align: left;
+  }
+
+  .pass-card__body--prominent .pass-card__chips {
+    display: flex;
+    flex-wrap: wrap;
+    min-width: 0;
+    grid-column: 1 / -1;
+    gap: 0.35rem 0.75rem;
+  }
+
+  .pass-card__body--prominent .pass-card__quick-actions {
+    grid-column: 1 / -1;
+    grid-row: auto;
   }
 
   .pass-card__quick-actions .btn {
@@ -2708,18 +2884,117 @@ a.pass-detail__chip:hover,
   margin-top: 0.75rem;
 }
 
-@media (max-width: 639px) {
-  .pass-ticket-page--staff .pass-ticket-staff {
-    position: sticky;
-    bottom: 0;
-    z-index: 20;
-    margin-top: 0.5rem;
-    padding-bottom: env(safe-area-inset-bottom, 0px);
-    background: linear-gradient(to top, var(--bg) 85%, transparent);
+.pass-ticket-page__layout {
+  width: 100%;
+  min-width: 0;
+}
+
+.pass-ticket-page__layout .pass-ticket {
+  max-width: 32rem;
+}
+
+.pass-ticket-page__back .btn {
+  min-height: 2.75rem;
+}
+
+.pass-ticket-staff__inner {
+  box-shadow: var(--card-shadow);
+}
+
+@media (min-width: 640px) {
+  .pass-ticket-page__header {
+    padding: 0.75rem 1.5rem;
+    padding-top: calc(0.75rem + env(safe-area-inset-top, 0px));
   }
 
-  .pass-ticket-staff__inner {
-    box-shadow: var(--card-shadow);
+  .pass-ticket-page__header-inner,
+  .pass-ticket-page__main {
+    max-width: 40rem;
+  }
+
+  .pass-ticket-page__main {
+    padding: 1.5rem 1.5rem 2rem;
+  }
+
+  .pass-ticket-page--staff .pass-ticket-page__main {
+    padding-bottom: 2rem;
+  }
+
+  .pass-ticket--compact .pass-ticket__header {
+    padding: 0.85rem 1rem 0.75rem;
+  }
+
+  .pass-ticket--compact .pass-ticket__guest {
+    padding: 0.85rem 1rem 0.75rem;
+  }
+
+  .pass-ticket--compact .pass-ticket__name {
+    font-size: 1.15rem;
+  }
+
+  .pass-ticket--compact .pass-ticket__meta {
+    padding: 0.85rem 1rem;
+    gap: 0.75rem;
+  }
+
+  .pass-ticket--compact .pass-ticket__qr {
+    padding: 0.85rem 1rem;
+  }
+
+  .pass-ticket--compact .pass-ticket__footer {
+    padding: 0.75rem 1rem;
+  }
+
+  .pass-ticket--compact .pass-ticket__timeline {
+    display: block;
+    padding: 0.75rem 1rem;
+  }
+
+  .pass-ticket-staff {
+    margin-top: 1rem;
+  }
+}
+
+@media (min-width: 960px) {
+  .pass-ticket-page__header-inner,
+  .pass-ticket-page__main {
+    max-width: 72rem;
+  }
+
+  .pass-ticket-page__main {
+    padding: 2rem 2rem 2.5rem;
+  }
+
+  .pass-ticket-page__layout--staff {
+    display: grid;
+    grid-template-columns: minmax(0, 34rem) minmax(20rem, 25rem);
+    align-items: start;
+    justify-content: center;
+    gap: 1.5rem;
+  }
+
+  .pass-ticket-page__layout--staff .pass-ticket {
+    max-width: 34rem;
+    margin-inline: 0;
+  }
+
+  .pass-ticket-page__layout--staff .pass-ticket-staff {
+    position: sticky;
+    top: 1.5rem;
+    margin-top: 0;
+  }
+
+  .pass-ticket-page__layout:not(.pass-ticket-page__layout--staff)
+    .pass-ticket {
+    max-width: 34rem;
+  }
+
+  .pass-ticket--compact .pass-ticket__office-number {
+    font-size: 1.8rem;
+  }
+
+  .pass-ticket--compact .pass-ticket__number .pass-number--lg {
+    font-size: 1.2rem;
   }
 }
 
@@ -3236,21 +3511,37 @@ a.pass-detail__chip:hover,
 
 .help-faq__panel {
   pointer-events: auto;
-  width: min(22.5rem, calc(100vw - 1.75rem));
-  max-height: min(32rem, calc(100dvh - 6.5rem));
+  width: min(38rem, calc(100vw - 2rem));
+  max-height: min(46rem, calc(100dvh - 6.5rem));
   display: flex;
   flex-direction: column;
   background: var(--surface);
   border: 1px solid var(--border);
-  border-radius: 12px;
-  box-shadow: 0 12px 40px rgba(0, 0, 0, 0.28);
+  border-radius: 18px;
+  box-shadow: 0 20px 64px rgba(0, 0, 0, 0.3);
   overflow: hidden;
   animation: help-faq-pop 0.18s ease-out;
 }
 
 @media (max-width: 639px) {
+  .help-faq {
+    right: max(0.5rem, env(safe-area-inset-right, 0px));
+    left: max(0.5rem, env(safe-area-inset-left, 0px));
+    align-items: stretch;
+  }
+
   body:has(.mobile-nav) .help-faq__panel {
-    max-height: min(28rem, calc(100dvh - 10rem));
+    max-height: min(48rem, calc(100dvh - 6rem - env(safe-area-inset-bottom, 0px)));
+  }
+
+  .help-faq__panel {
+    width: 100%;
+    max-height: min(48rem, calc(100dvh - 5.5rem));
+    border-radius: 18px;
+  }
+
+  .help-faq__trigger {
+    align-self: flex-end;
   }
 }
 
@@ -3274,7 +3565,7 @@ a.pass-detail__chip:hover,
   align-items: flex-start;
   justify-content: space-between;
   gap: 0.75rem;
-  padding: 0.875rem 0.875rem 0.625rem;
+  padding: 1.1rem 1.25rem 0.9rem;
   border-bottom: 1px solid var(--border);
   background: linear-gradient(
     180deg,
@@ -3285,7 +3576,7 @@ a.pass-detail__chip:hover,
 
 .help-faq__title {
   margin: 0;
-  font-size: 1rem;
+  font-size: 1.2rem;
   font-weight: 700;
   color: var(--text);
   line-height: 1.3;
@@ -3293,7 +3584,7 @@ a.pass-detail__chip:hover,
 
 .help-faq__subtitle {
   margin: 0.15rem 0 0;
-  font-size: 0.75rem;
+  font-size: 0.875rem;
   color: var(--muted);
   line-height: 1.35;
 }
@@ -3302,8 +3593,8 @@ a.pass-detail__chip:hover,
   display: inline-flex;
   align-items: center;
   justify-content: center;
-  width: 2rem;
-  height: 2rem;
+  width: 2.5rem;
+  height: 2.5rem;
   border: none;
   border-radius: var(--radius-sm);
   background: transparent;
@@ -3322,8 +3613,8 @@ a.pass-detail__chip:hover,
 
 .help-faq__tabs {
   display: flex;
-  gap: 0.25rem;
-  padding: 0.5rem 0.75rem;
+  gap: 0.375rem;
+  padding: 0.7rem 1rem;
   border-bottom: 1px solid var(--border);
   background: var(--surface-muted);
 }
@@ -3334,12 +3625,13 @@ a.pass-detail__chip:hover,
   align-items: center;
   justify-content: center;
   gap: 0.35rem;
-  padding: 0.4rem 0.5rem;
+  min-height: 2.75rem;
+  padding: 0.55rem 0.8rem;
   border: 1px solid transparent;
   border-radius: 999px;
   background: transparent;
   color: var(--muted);
-  font-size: 0.75rem;
+  font-size: 0.9rem;
   font-weight: 600;
   cursor: pointer;
   transition:
@@ -3366,7 +3658,7 @@ a.pass-detail__chip:hover,
   overflow-y: auto;
   overscroll-behavior: contain;
   -webkit-overflow-scrolling: touch;
-  padding: 0.5rem 0.5rem 0.75rem;
+  padding: 1rem 1rem 1.25rem;
 }
 
 .help-faq__list {
@@ -3375,7 +3667,7 @@ a.pass-detail__chip:hover,
   padding: 0;
   display: flex;
   flex-direction: column;
-  gap: 0.35rem;
+  gap: 0.55rem;
 }
 
 .help-faq__item {
@@ -3390,12 +3682,14 @@ a.pass-detail__chip:hover,
   display: flex;
   align-items: flex-start;
   justify-content: space-between;
-  gap: 0.5rem;
-  padding: 0.65rem 0.7rem;
+  align-items: center;
+  gap: 0.75rem;
+  min-height: 3.25rem;
+  padding: 0.8rem 1rem;
   border: none;
   background: transparent;
   color: var(--text);
-  font-size: 0.8125rem;
+  font-size: 0.95rem;
   font-weight: 600;
   text-align: left;
   line-height: 1.35;
@@ -3420,9 +3714,9 @@ a.pass-detail__chip:hover,
 }
 
 .help-faq__item-body {
-  padding: 0 0.7rem 0.7rem;
-  font-size: 0.8125rem;
-  line-height: 1.5;
+  padding: 0.2rem 1rem 1rem;
+  font-size: 0.95rem;
+  line-height: 1.65;
   color: var(--muted);
   border-top: 1px solid transparent;
 }
@@ -3437,18 +3731,282 @@ a.pass-detail__chip:hover,
 
 .help-faq__steps {
   margin: 0.25rem 0 0;
-  padding-left: 1.15rem;
+  padding-left: 1.5rem;
   display: flex;
   flex-direction: column;
-  gap: 0.35rem;
+  gap: 0.6rem;
   color: var(--muted);
 }
 
 .help-faq__steps li {
-  padding-left: 0.15rem;
+  padding-left: 0.3rem;
+}
+
+.help-faq__quick {
+  margin: 0;
+}
+
+.help-faq__quick-heading {
+  margin: 0 0 0.65rem;
+}
+
+.help-faq__quick-kicker {
+  color: var(--accent);
+  font-size: 0.7rem;
+  font-weight: 800;
+  letter-spacing: 0.1em;
+}
+
+.help-faq__quick-heading h3 {
+  margin: 0.15rem 0 0;
+  color: var(--text);
+  font-size: 1rem;
+  line-height: 1.35;
+}
+
+.help-faq__quick-actions {
+  display: flex;
+  flex-direction: column;
+  gap: 0.6rem;
+}
+
+.help-faq__quick-card {
+  min-width: 0;
+  border: 1px solid var(--border);
+  border-radius: 14px;
+  background: var(--surface-elevated);
+  transition:
+    border-color 0.15s ease,
+    transform 0.15s ease,
+    box-shadow 0.15s ease;
+}
+
+.help-faq__quick-card:hover {
+  border-color: var(--accent-border);
+  box-shadow: 0 5px 16px rgba(0, 0, 0, 0.08);
+  transform: translateY(-1px);
+}
+
+.help-faq__quick-card--open {
+  border-color: var(--accent-border);
+  box-shadow: 0 0 0 2px color-mix(in srgb, var(--accent-soft) 65%, transparent);
+}
+
+.help-faq__quick-main {
+  display: grid;
+  grid-template-columns: 2.75rem minmax(0, 1fr) auto;
+  align-items: center;
+  gap: 0.8rem;
+  width: 100%;
+  min-height: 4rem;
+  padding: 0.7rem 0.85rem;
+  border: 0;
+  border-radius: inherit;
+  background: transparent;
+  color: var(--text);
+  text-align: left;
+  cursor: pointer;
+}
+
+.help-faq__quick-main:focus-visible,
+.help-faq__video-link:focus-visible {
+  outline: 3px solid var(--focus-ring);
+  outline-offset: 2px;
+}
+
+.help-faq__quick-number {
+  color: var(--accent);
+  font-size: 0.8rem;
+  font-weight: 800;
+}
+
+.help-faq__quick-icon {
+  display: grid;
+  width: 2.75rem;
+  height: 2.75rem;
+  place-items: center;
+  border-radius: 11px;
+  background: var(--accent-soft);
+  color: var(--accent);
+}
+
+.help-faq__quick-icon svg {
+  width: 1.25rem;
+  height: 1.25rem;
+}
+
+.help-faq__quick-copy {
+  display: flex;
+  min-width: 0;
+  flex-direction: column;
+  gap: 0.2rem;
+}
+
+.help-faq__quick-copy strong {
+  font-size: 0.95rem;
+  line-height: 1.3;
+}
+
+.help-faq__quick-copy > span {
+  color: var(--muted);
+  font-size: 0.75rem;
+  line-height: 1.35;
+}
+
+.help-faq__quick-copy > span::after {
+  content: ' · 3 шага';
+  color: var(--accent);
+  font-weight: 650;
+}
+
+.help-faq__quick-arrow {
+  width: 1rem;
+  height: 1rem;
+  color: var(--accent);
+}
+
+.help-faq__quick-arrow--open {
+  transform: rotate(180deg);
+}
+
+.help-faq__quick-details {
+  padding: 0.15rem 1rem 1rem 4.35rem;
+  color: var(--muted);
+  font-size: 0.9rem;
+  line-height: 1.6;
+}
+
+.help-faq__quick-details > p {
+  margin: 0 0 0.55rem;
+}
+
+.help-faq__quick-details .help-faq__steps {
+  margin-top: 0;
+  gap: 0.45rem;
+  font-size: 0.875rem;
+}
+
+.help-faq__video-link {
+  display: inline-flex;
+  align-items: center;
+  gap: 0.5rem;
+  min-height: 2.5rem;
+  margin-top: 0.75rem;
+  padding: 0.45rem 0.75rem;
+  border: 1px solid var(--accent-border);
+  border-radius: 999px;
+  background: var(--accent-soft);
+  color: var(--accent);
+  font-size: 0.8125rem;
+  font-weight: 700;
+  text-align: left;
+  cursor: pointer;
+}
+
+.help-faq__video-link:hover {
+  background: var(--surface-elevated);
+}
+
+.help-faq__videos {
+  display: flex;
+  flex-direction: column;
+  gap: 0.5rem;
+  margin-top: 1.25rem;
+}
+
+.help-faq__inline-video {
+  margin-top: 0.75rem;
+  padding: 0.75rem;
+  border-radius: 12px;
+  background: var(--surface-muted);
+}
+
+.help-faq__inline-video > p {
+  margin: 0 0 0.6rem;
+  font-size: 0.8125rem;
+}
+
+.help-faq__more-guides {
+  margin-top: 1.2rem;
+  padding-top: 1rem;
+  border-top: 1px solid var(--border);
+}
+
+.help-faq__more-guides > h3 {
+  margin: 0 0 0.65rem;
+  color: var(--muted);
+  font-size: 0.8rem;
+  font-weight: 700;
+  letter-spacing: 0.04em;
+  text-transform: uppercase;
+}
+
+.help-faq__videos-title {
+  display: flex;
+  align-items: center;
+  gap: 0.5rem;
+  margin: 0 0 0.2rem;
+  color: var(--text);
+  font-size: 1rem;
+}
+
+.help-faq__video {
+  overflow: hidden;
+  border: 1px solid var(--border);
+  border-radius: var(--radius);
+  background: var(--surface-elevated);
+}
+
+.help-faq__video-content {
+  padding: 0 1rem 1rem;
+  color: var(--muted);
+  font-size: 0.9rem;
+  line-height: 1.55;
+}
+
+.help-faq__video-content > p {
+  margin: 0 0 0.75rem;
+}
+
+.help-faq__video-player {
+  display: block;
+  width: 100%;
+  max-height: 25rem;
+  border-radius: 10px;
+  background: #111;
+}
+
+.help-faq__video-script {
+  margin-top: 0.75rem;
+  padding: 0.75rem 0.85rem;
+  border-radius: 10px;
+  background: var(--surface-muted);
+}
+
+.help-faq__video-script summary {
+  color: var(--text);
+  font-weight: 650;
+  cursor: pointer;
+}
+
+.help-faq__video-script p {
+  margin: 0.65rem 0 0;
+}
+
+@media (max-width: 420px) {
+  .help-faq__body {
+    padding: 0.75rem;
+  }
+
+  .help-faq__quick-details {
+    padding-left: 0.9rem;
+  }
 }
 
 .help-faq__footer {
+  flex: 0 0 auto;
+  max-height: 6.5rem;
+  overflow-y: auto;
   padding: 0.65rem 0.875rem 0.75rem;
   border-top: 1px solid var(--border);
   background: var(--surface-muted);
@@ -3465,8 +4023,8 @@ a.pass-detail__chip:hover,
 
 .help-faq__contacts {
   display: flex;
-  flex-direction: column;
-  gap: 0.25rem;
+  flex-wrap: wrap;
+  gap: 0.25rem 0.8rem;
 }
 
 .help-faq__contact {
@@ -3477,6 +4035,22 @@ a.pass-detail__chip:hover,
   color: var(--link);
   text-decoration: none;
   width: fit-content;
+}
+
+.help-faq__body:has(.help-faq__quick) .help-faq__quick {
+  margin-bottom: 0.75rem;
+  padding: 0.9rem 1rem;
+}
+
+.help-faq__body:has(.help-faq__quick) .help-faq__quick-heading {
+  margin-bottom: 0.65rem;
+}
+
+@media (min-width: 640px) {
+  .help-faq__panel {
+    width: min(44rem, calc(100vw - 3rem));
+    max-height: min(50rem, calc(100dvh - 4rem));
+  }
 }
 
 .help-faq__contact:hover {

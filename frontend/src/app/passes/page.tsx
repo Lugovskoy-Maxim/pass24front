@@ -4,6 +4,7 @@ import { Suspense, useEffect, useState, useCallback, useRef } from 'react';
 import { useRouter, useSearchParams } from 'next/navigation';
 import Link from 'next/link';
 import {
+  ArrowLeft,
   ChevronDown,
   Download,
   Inbox,
@@ -14,7 +15,6 @@ import {
 } from 'lucide-react';
 import { ProtectedLayout } from '@/components/ProtectedLayout';
 import { PassListCard } from '@/components/PassListCard';
-import { PassDetailModal } from '@/components/PassDetailModal';
 import { PassDetailPanel } from '@/components/PassDetailPanel';
 import { PassPrintCard } from '@/components/PassPrintCard';
 import { SharePassActions } from '@/components/SharePassActions';
@@ -181,14 +181,24 @@ function PassesPageContent() {
   const closeDetail = useCallback(() => {
     setSelected(null);
     if (searchParams.get('id')) {
-      router.replace('/passes');
+      const params = new URLSearchParams(searchParams.toString());
+      params.delete('id');
+      router.replace(params.size ? `/passes?${params.toString()}` : '/passes');
     }
   }, [router, searchParams]);
+
+  const openPass = (pass: Pass) => {
+    setSelected(pass);
+    const params = new URLSearchParams(searchParams.toString());
+    params.set('id', pass.id);
+    router.push(`/passes?${params.toString()}`);
+  };
 
   useEffect(() => {
     if (loading) return;
     const idFromUrl = searchParams.get('id');
     setSelected((prev) => {
+      if (!idFromUrl) return null;
       if (idFromUrl) {
         const fromUrl = passes.find((p) => p.id === idFromUrl);
         if (fromUrl) return fromUrl;
@@ -313,70 +323,80 @@ function PassesPageContent() {
     <ProtectedLayout
       anyPermissions={['passes.view_own', 'passes.view_all', 'admin.panel']}
     >
-      <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-4 mb-6">
-        <div className="flex flex-col sm:flex-row sm:items-center gap-3 sm:gap-4 min-w-0">
-          <div>
-            {/* <h1 className="page-title">{labels.pages.passesTitle}</h1>
-            <p className="text-sm text-[var(--muted)] mt-1">
-              {canViewAll
-                ? labels.pages.passesSubtitleAll
-                : labels.pages.passesSubtitleOwn}
-            </p> */}
-          </div>
-          {canCreate && (
-            <Link
-              href="/passes/new"
-              className="btn btn-primary shrink-0 self-start sm:self-center"
-            >
-              <Plus className="w-4 h-4" />
-              {labels.buttons.order}
-            </Link>
-          )}
-        </div>
-        <div className="flex flex-wrap gap-2">
-          <div className="relative flex-1 sm:w-56">
-            <Search className="absolute left-3 top-1/2 -translate-y-1/2 w-4 h-4 text-[var(--muted)]" />
-            <input
-              className="input input--icon-left"
-              placeholder={labels.passes.searchPlaceholder}
-              value={search}
-              onChange={(e) => setSearch(e.target.value)}
-            />
-          </div>
-          <input
-            className="input input--auto"
-            type="date"
-            value={dateFilter}
-            onChange={(e) => setDateFilter(e.target.value)}
-          />
-          <div className="select-wrap select-wrap--auto">
-            <select
-              className="input input--auto"
-              value={statusFilter}
-              onChange={(e) => setStatusFilter(e.target.value)}
-            >
-              <option value="">{labels.passes.allStatuses}</option>
-              {ALL_STATUSES.map((status) => (
-                <option key={status} value={status}>
-                  {getStatusLabel(status, labels)}
-                </option>
-              ))}
-            </select>
-          </div>
-          <Link href="/passes/report" className="btn btn-secondary shrink-0">
-            <Table2 className="w-4 h-4" />
-            Отчёт
-          </Link>
+      {selected ? (
+        <div className="pass-detail-page mb-4">
           <button
             type="button"
-            className="btn btn-secondary shrink-0"
-            onClick={() => setExportOpen(true)}
+            className="btn btn-secondary"
+            onClick={closeDetail}
           >
-            <Download className="w-4 h-4" />
-            {labels.buttons.export}
+            <ArrowLeft className="w-4 h-4" />
+            Назад к пропускам
           </button>
         </div>
-      </div>
+      ) : (
+        <div className="space-y-4 mb-6">
+          <div className="flex flex-wrap items-center justify-between gap-3">
+            <div className="min-w-0">
+              <h1 className="page-title">{labels.pages.passesTitle}</h1>
+              <p className="text-sm text-[var(--muted)] mt-1">
+                {canViewAll
+                  ? labels.pages.passesSubtitleAll
+                  : labels.pages.passesSubtitleOwn}
+              </p>
+            </div>
+            {canCreate && (
+              <Link href="/passes/new" className="btn btn-primary shrink-0">
+                <Plus className="w-4 h-4" />
+                {labels.buttons.order}
+              </Link>
+            )}
+          </div>
+          <div className="grid grid-cols-1 sm:grid-cols-2 xl:grid-cols-[minmax(16rem,1fr)_auto_auto_auto_auto] gap-2">
+            <div className="relative min-w-0">
+              <Search className="absolute left-3 top-1/2 -translate-y-1/2 w-4 h-4 text-[var(--muted)]" />
+              <input
+                className="input input--icon-left w-full"
+                placeholder={labels.passes.searchPlaceholder}
+                value={search}
+                onChange={(e) => setSearch(e.target.value)}
+              />
+            </div>
+            <input
+              className="input input--auto"
+              type="date"
+              value={dateFilter}
+              onChange={(e) => setDateFilter(e.target.value)}
+            />
+            <div className="select-wrap select-wrap--auto">
+              <select
+                className="input input--auto"
+                value={statusFilter}
+                onChange={(e) => setStatusFilter(e.target.value)}
+              >
+                <option value="">{labels.passes.allStatuses}</option>
+                {ALL_STATUSES.map((status) => (
+                  <option key={status} value={status}>
+                    {getStatusLabel(status, labels)}
+                  </option>
+                ))}
+              </select>
+            </div>
+            <Link href="/passes/report" className="btn btn-secondary shrink-0">
+              <Table2 className="w-4 h-4" />
+              Отчёт
+            </Link>
+            <button
+              type="button"
+              className="btn btn-secondary shrink-0"
+              onClick={() => setExportOpen(true)}
+            >
+              <Download className="w-4 h-4" />
+              {labels.buttons.export}
+            </button>
+          </div>
+        </div>
+      )}
 
       <PassExportPanel
         open={exportOpen}
@@ -388,7 +408,7 @@ function PassesPageContent() {
         }}
       />
 
-      {loadError && (
+      {!selected && loadError && (
         <PageError
           className="mb-4"
           message={loadError}
@@ -398,125 +418,120 @@ function PassesPageContent() {
         />
       )}
 
-      <div className="min-w-0">
-        {loading ? (
-          <ListSkeleton rows={5} />
-        ) : passes.length === 0 ? (
-          <div className="card">
-            <EmptyState
-              icon={Inbox}
-              title={labels.passes.notFound}
-              description={
-                canCreate
-                  ? 'Закажите первый пропуск для посетителя или курьера'
-                  : undefined
-              }
-            />
-          </div>
-        ) : (
-          <div className="flex flex-col gap-1.5">
-            <p className="text-xs text-[var(--muted)] mb-1 px-1">
-              {passes.length < total
-                ? `Показано ${passes.length} из ${total}`
-                : formatPassCount(passes.length, labels)}
-            </p>
-            {shownPasses.length === 0 && archivedPasses.length > 0 && (
-              <div className="rounded-lg border border-dashed border-[var(--border)] px-4 py-3 text-sm text-[var(--muted)] bg-[var(--surface)]">
-                Свежих пропусков нет
-              </div>
-            )}
-            {shownPasses.map((pass) => (
-              <PassListCard
-                key={pass.id}
-                pass={pass}
-                labels={labels}
-                selected={selected?.id === pass.id}
-                showCreator={showCreatorInfo}
-                onClick={() => setSelected(pass)}
+      {!selected && (
+        <div className="min-w-0">
+          {loading ? (
+            <ListSkeleton rows={5} />
+          ) : passes.length === 0 ? (
+            <div className="card">
+              <EmptyState
+                icon={Inbox}
+                title={labels.passes.notFound}
+                description={
+                  canCreate
+                    ? 'Закажите первый пропуск для посетителя или курьера'
+                    : undefined
+                }
               />
-            ))}
-            {archivedPasses.length > 0 && (
-              <div className="mt-2">
+            </div>
+          ) : (
+            <div className="flex flex-col gap-1.5">
+              <p className="text-xs text-[var(--muted)] mb-1 px-1">
+                {passes.length < total
+                  ? `Показано ${passes.length} из ${total}`
+                  : formatPassCount(passes.length, labels)}
+              </p>
+              {shownPasses.length === 0 && archivedPasses.length > 0 && (
+                <div className="rounded-lg border border-dashed border-[var(--border)] px-4 py-3 text-sm text-[var(--muted)] bg-[var(--surface)]">
+                  Свежих пропусков нет
+                </div>
+              )}
+              {shownPasses.map((pass) => (
+                <PassListCard
+                  key={pass.id}
+                  pass={pass}
+                  labels={labels}
+                  showCreator={showCreatorInfo}
+                  prominent
+                  onClick={() => openPass(pass)}
+                />
+              ))}
+              {archivedPasses.length > 0 && (
+                <div className="mt-2">
+                  <button
+                    type="button"
+                    className="w-full flex items-center justify-between gap-3 rounded-lg border border-[var(--border)] bg-[var(--surface)] px-4 py-3 text-left text-sm font-medium text-[var(--text)] hover:border-[var(--border-strong)] transition"
+                    onClick={() => setArchivedOpen((value) => !value)}
+                    aria-expanded={archivedOpen}
+                  >
+                    <span>
+                      Завершённые, отменённые и остальные ·{' '}
+                      {formatPassCount(archivedPasses.length, labels)}
+                    </span>
+                    <ChevronDown
+                      className={`w-4 h-4 shrink-0 text-[var(--muted)] transition-transform ${
+                        archivedOpen ? 'rotate-180' : ''
+                      }`}
+                    />
+                  </button>
+                  {archivedOpen && (
+                    <div className="flex flex-col gap-1.5 mt-1.5">
+                      {archivedPasses.map((pass) => (
+                        <PassListCard
+                          key={pass.id}
+                          pass={pass}
+                          labels={labels}
+                          showCreator={showCreatorInfo}
+                          prominent
+                          onClick={() => openPass(pass)}
+                        />
+                      ))}
+                    </div>
+                  )}
+                </div>
+              )}
+              {hasMore && (
                 <button
                   type="button"
-                  className="w-full flex items-center justify-between gap-3 rounded-lg border border-[var(--border)] bg-[var(--surface)] px-4 py-3 text-left text-sm font-medium text-[var(--text)] hover:border-[var(--border-strong)] transition"
-                  onClick={() => setArchivedOpen((value) => !value)}
-                  aria-expanded={archivedOpen}
+                  className="btn btn-secondary w-full sm:w-auto self-center mt-2"
+                  disabled={loadingMore}
+                  onClick={loadMore}
                 >
-                  <span>
-                    Завершённые, отменённые и остальные ·{' '}
-                    {formatPassCount(archivedPasses.length, labels)}
-                  </span>
-                  <ChevronDown
-                    className={`w-4 h-4 shrink-0 text-[var(--muted)] transition-transform ${
-                      archivedOpen ? 'rotate-180' : ''
-                    }`}
-                  />
+                  {loadingMore ? '...' : labels.buttons.loadMore}
                 </button>
-                {archivedOpen && (
-                  <div className="flex flex-col gap-1.5 mt-1.5">
-                    {archivedPasses.map((pass) => (
-                      <PassListCard
-                        key={pass.id}
-                        pass={pass}
-                        labels={labels}
-                        selected={selected?.id === pass.id}
-                        showCreator={showCreatorInfo}
-                        onClick={() => setSelected(pass)}
-                      />
-                    ))}
-                  </div>
-                )}
-              </div>
-            )}
-            {hasMore && (
-              <button
-                type="button"
-                className="btn btn-secondary w-full sm:w-auto self-center mt-2"
-                disabled={loadingMore}
-                onClick={loadMore}
-              >
-                {loadingMore ? '...' : labels.buttons.loadMore}
-              </button>
-            )}
-          </div>
-        )}
-      </div>
+              )}
+            </div>
+          )}
+        </div>
+      )}
 
-      <PassDetailModal
-        open={!!selected}
-        title={labels.passes.detailTitle}
-        closeLabel={labels.passes.close}
-        onClose={closeDetail}
-      >
-        {selected && (
-          <div className="space-y-3">
-            {canPrintPass(selected) && (
-              <div className="print-pass-host" aria-hidden="true">
-                <PassPrintCard
-                  pass={selected}
-                  businessCenterName={
-                    selected.businessCenterName || config?.businessCenterName
-                  }
-                  hidePrintButton
-                />
-              </div>
-            )}
-            <PassDetailPanel
-              pass={selected}
-              labels={labels}
-              showCreator={showCreatorInfo}
-              actions={renderDetailActions(selected)}
-              onPassUpdated={(updated) => {
-                setPasses((prev) =>
-                  prev.map((p) => (p.id === updated.id ? updated : p)),
-                );
-                setSelected(updated);
-              }}
-            />
-          </div>
-        )}
-      </PassDetailModal>
+      {selected && (
+        <div className="pass-detail-page space-y-3">
+          {canPrintPass(selected) && (
+            <div className="print-pass-host" aria-hidden="true">
+              <PassPrintCard
+                pass={selected}
+                businessCenterName={
+                  selected.businessCenterName || config?.businessCenterName
+                }
+                hidePrintButton
+              />
+            </div>
+          )}
+          <PassDetailPanel
+            pass={selected}
+            labels={labels}
+            showCreator={showCreatorInfo}
+            actions={renderDetailActions(selected)}
+            onPassUpdated={(updated) => {
+              setPasses((prev) =>
+                prev.map((p) => (p.id === updated.id ? updated : p)),
+              );
+              setSelected(updated);
+            }}
+          />
+        </div>
+      )}
     </ProtectedLayout>
   );
 }

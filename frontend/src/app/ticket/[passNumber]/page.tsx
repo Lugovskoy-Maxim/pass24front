@@ -108,7 +108,9 @@ export default function PassTicketPage() {
             </div>
           </div>
         ) : ticket ? (
-          <>
+          <div
+            className={`pass-ticket-page__layout ${showStaffPanel ? 'pass-ticket-page__layout--staff' : ''}`}
+          >
             <PassTicketView
               ticket={ticket}
               enableEmailShare={!!user && !showStaffPanel}
@@ -122,13 +124,13 @@ export default function PassTicketPage() {
               />
             )}
             {user && !showStaffPanel && (
-              <div className="mt-4 text-center">
+              <div className="pass-ticket-page__back mt-4 text-center">
                 <Link href={backHref} className="btn btn-primary text-sm">
                   {backLabel}
                 </Link>
               </div>
             )}
-          </>
+          </div>
         ) : null}
       </main>
     </div>

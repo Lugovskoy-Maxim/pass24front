@@ -1111,6 +1111,50 @@ export class MstyleDirectoryService {
     );
   }
 
+  async ownerResidentRequisites(profileId: string, subject: string) {
+    const profile = await this.requireProfile(profileId);
+    await this.assertActiveOwner(subject, profileId);
+    const doc = await this.privateData.findOne({
+      partyType: 'resident_profile',
+      partyId: profileId,
+    });
+    let latestRequest = await this.changeRequests
+      .findOne({ profileId })
+      .sort({ createdAt: -1 });
+    if (
+      latestRequest?.status === 'pending' &&
+      Date.parse(latestRequest.expiresAt) <= Date.now()
+    ) {
+      latestRequest = await this.expireChangeRequest(latestRequest);
+    }
+    return {
+      profileType: profile.type,
+      legalForm: profile.legalForm,
+      profileRevision: profile.revision,
+      values: doc
+        ? normalizeResidentInput(
+            decryptJson<Record<string, unknown>>(
+              this.cfg.piiSecret(),
+              doc.valuesEnc,
+            ),
+            profile.type,
+            profile.legalForm,
+          )
+        : {},
+      revision: doc?.revision ?? 0,
+      editPolicy: doc?.editPolicy ?? 'initial',
+      changeRequest: latestRequest
+        ? {
+            status: latestRequest.status,
+            changedFieldCodes: latestRequest.changedFieldCodes,
+            createdAt:
+              (latestRequest as any).createdAt?.toISOString?.() ?? null,
+            reasonCode: latestRequest.reasonCode,
+          }
+        : null,
+    };
+  }
+
   async currentChangeRequest(profileId: string, residentSubject: string) {
     await this.requireProfile(profileId);
     await this.assertActiveOwner(residentSubject, profileId);

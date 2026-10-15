@@ -58,6 +58,80 @@ import { useConfig } from '@/hooks/useConfig';
 import { TenantOfficeCard } from '@/components/TenantOfficeCard';
 import { getUiLabels } from '@/lib/ui-labels';
 
+type RequisiteField = { path: string; label: string; type?: 'text' | 'date' };
+const BANK_REQUISITE_FIELDS: RequisiteField[] = [
+  { path: 'bank.name', label: 'Наименование банка' },
+  { path: 'bank.bik', label: 'БИК' },
+  { path: 'bank.accountNumber', label: 'Расчётный счёт' },
+  { path: 'bank.correspondentAccountNumber', label: 'Корреспондентский счёт' },
+];
+function requisiteFields(
+  type: 'individual' | 'company',
+  legalForm?: 'ip' | 'ooo' | null,
+): RequisiteField[] {
+  if (type === 'company' && legalForm === 'ip')
+    return [
+      { path: 'entrepreneur.inn', label: 'ИНН ИП' },
+      { path: 'entrepreneur.ogrnip', label: 'ОГРНИП' },
+      {
+        path: 'entrepreneur.registrationAddress',
+        label: 'Адрес регистрации ИП',
+      },
+      ...BANK_REQUISITE_FIELDS,
+    ];
+  if (type === 'company')
+    return [
+      { path: 'company.fullName', label: 'Полное название компании' },
+      { path: 'company.legalAddress', label: 'Юридический адрес' },
+      { path: 'company.actualAddress', label: 'Фактический адрес' },
+      { path: 'company.generalDirector', label: 'Генеральный директор' },
+      { path: 'company.ogrn', label: 'ОГРН' },
+      { path: 'company.inn', label: 'ИНН' },
+      { path: 'company.kpp', label: 'КПП' },
+      ...BANK_REQUISITE_FIELDS,
+    ];
+  return [
+    { path: 'individual.inn', label: 'ИНН физического лица' },
+    { path: 'individual.registrationAddress', label: 'Адрес регистрации' },
+    { path: 'individual.passport.gender', label: 'Пол' },
+    { path: 'individual.passport.number', label: 'Серия и номер паспорта' },
+    { path: 'individual.passport.departmentCode', label: 'Код подразделения' },
+    {
+      path: 'individual.passport.issuedDate',
+      label: 'Дата выдачи',
+      type: 'date',
+    },
+    { path: 'individual.passport.issuedBy', label: 'Кем выдан' },
+    ...BANK_REQUISITE_FIELDS,
+  ];
+}
+function getRequisiteValue(
+  source: Record<string, unknown>,
+  path: string,
+): string {
+  let value: unknown = source;
+  for (const key of path.split('.')) {
+    if (!value || typeof value !== 'object') return '';
+    value = (value as Record<string, unknown>)[key];
+  }
+  return value == null ? '' : String(value);
+}
+function setRequisiteValue(
+  source: Record<string, unknown>,
+  path: string,
+  value: string,
+): Record<string, unknown> {
+  const result = structuredClone(source);
+  const keys = path.split('.');
+  let node = result;
+  for (const key of keys.slice(0, -1)) {
+    if (!node[key] || typeof node[key] !== 'object') node[key] = {};
+    node = node[key] as Record<string, unknown>;
+  }
+  node[keys[keys.length - 1]] = value || null;
+  return result;
+}
+
 function ProfileInfoRow({
   icon: Icon,
   label,
@@ -132,12 +206,54 @@ export default function ProfilePage() {
     null,
   );
   const [logoSaving, setLogoSaving] = useState(false);
+  const [requisites, setRequisites] = useState<{
+    profileType: 'individual' | 'company';
+    legalForm?: 'ip' | 'ooo' | null;
+    values: Record<string, unknown>;
+    revision: number;
+    editPolicy: string;
+    changeRequest?: {
+      status: string;
+      changedFieldCodes: string[];
+      createdAt?: string | null;
+    } | null;
+  } | null>(null);
+  const [requisitesLoading, setRequisitesLoading] = useState(false);
+  const [requisitesSaving, setRequisitesSaving] = useState(false);
+  const [requisiteValues, setRequisiteValues] = useState<
+    Record<string, unknown>
+  >({});
 
   const tenantOwner = isTenantOwner(user);
   const tenantEmployee = isTenantEmployee(user);
   const tenantCompanyUser = isTenantCompanyUser(user);
   const pending = user?.profile_change_request;
   const employeeCap = user?.employee_limit_effective ?? 3;
+
+  useEffect(() => {
+    if (!tenantOwner) return;
+    setRequisitesLoading(true);
+    void api
+      .getResidentRequisites()
+      .then((result) => {
+        if (!result.available || !result.profileType) {
+          setRequisites(null);
+          return;
+        }
+        const loaded = {
+          profileType: result.profileType,
+          legalForm: result.legalForm,
+          values: result.values || {},
+          revision: result.revision || 0,
+          editPolicy: result.editPolicy || 'initial',
+          changeRequest: result.changeRequest,
+        };
+        setRequisites(loaded);
+        setRequisiteValues(loaded.values);
+      })
+      .catch(() => setRequisites(null))
+      .finally(() => setRequisitesLoading(false));
+  }, [tenantOwner]);
 
   useEffect(() => {
     if (!user) return;
@@ -260,6 +376,62 @@ export default function ProfilePage() {
       toast(getErrorMessage(err, 'Не удалось выполнить действие'), 'error');
     } finally {
       setSaving(false);
+    }
+  };
+
+  const handleSubmitRequisites = async (e: FormEvent) => {
+    e.preventDefault();
+    if (!requisites) return;
+    const changed = requisiteFields(
+      requisites.profileType,
+      requisites.legalForm,
+    ).filter(
+      (field) =>
+        getRequisiteValue(requisiteValues, field.path) !==
+        getRequisiteValue(requisites.values, field.path),
+    );
+    if (!changed.length) {
+      toast('Изменений нет', 'info');
+      return;
+    }
+    const data = changed.reduce<Record<string, unknown>>(
+      (patch, field) =>
+        setRequisiteValue(
+          patch,
+          field.path,
+          getRequisiteValue(requisiteValues, field.path),
+        ),
+      {},
+    );
+    setRequisitesSaving(true);
+    try {
+      await api.updateResidentRequisites({
+        expectedRevision: requisites.revision,
+        data,
+      });
+      const latest = await api.getResidentRequisites();
+      if (latest.available && latest.profileType) {
+        const loaded = {
+          profileType: latest.profileType,
+          legalForm: latest.legalForm,
+          values: latest.values || {},
+          revision: latest.revision || 0,
+          editPolicy: latest.editPolicy || 'initial',
+          changeRequest: latest.changeRequest,
+        };
+        setRequisites(loaded);
+        setRequisiteValues(loaded.values);
+      }
+      toast(
+        requisites.editPolicy === 'self_service'
+          ? 'Реквизиты сохранены'
+          : 'Изменения отправлены на подтверждение',
+        'success',
+      );
+    } catch (err) {
+      toast(getErrorMessage(err, 'Не удалось сохранить реквизиты'), 'error');
+    } finally {
+      setRequisitesSaving(false);
     }
   };
 
@@ -635,6 +807,104 @@ export default function ProfilePage() {
             />
           ) : null}
         </div>
+
+        {tenantOwner && requisitesLoading && (
+          <div className="card p-5 mb-6 text-sm text-[var(--muted)] animate-pulse">
+            Загружаем реквизиты организации…
+          </div>
+        )}
+        {tenantOwner && requisites && (
+          <form
+            onSubmit={handleSubmitRequisites}
+            className="card p-6 space-y-5 mb-6"
+          >
+            <div>
+              <h2 className="font-semibold">
+                {requisites.profileType === 'company'
+                  ? 'Реквизиты организации'
+                  : 'Реквизиты физического лица'}
+              </h2>
+              <p className="text-sm text-[var(--muted)] mt-1">
+                Измените нужные данные. При отправке на подтверждение текущие
+                реквизиты останутся активными до решения администратора.
+              </p>
+            </div>
+
+            {requisites.changeRequest?.status === 'pending' && (
+              <div className="rounded-lg border border-amber-300 bg-amber-50 px-4 py-3 text-sm text-amber-950">
+                <div className="font-medium">
+                  Заявка на изменение реквизитов ожидает подтверждения
+                </div>
+                {requisites.changeRequest.createdAt && (
+                  <div className="mt-1 text-amber-900">
+                    Отправлена{' '}
+                    {new Date(
+                      requisites.changeRequest.createdAt,
+                    ).toLocaleString('ru-RU')}
+                  </div>
+                )}
+              </div>
+            )}
+
+            <div className="grid gap-4 sm:grid-cols-2">
+              {requisiteFields(
+                requisites.profileType,
+                requisites.legalForm,
+              ).map((field) => (
+                <FormField
+                  key={field.path}
+                  id={`requisite-${field.path}`}
+                  label={field.label}
+                >
+                  <FormInput
+                    id={`requisite-${field.path}`}
+                    type={field.type || 'text'}
+                    value={getRequisiteValue(requisiteValues, field.path)}
+                    disabled={
+                      requisitesSaving ||
+                      requisites.changeRequest?.status === 'pending' ||
+                      requisites.editPolicy === 'locked' ||
+                      requisites.editPolicy === 'initial'
+                    }
+                    onChange={(event) =>
+                      setRequisiteValues((current) =>
+                        setRequisiteValue(
+                          current,
+                          field.path,
+                          event.target.value,
+                        ),
+                      )
+                    }
+                  />
+                </FormField>
+              ))}
+            </div>
+
+            {requisites.editPolicy === 'locked' ||
+            requisites.editPolicy === 'initial' ? (
+              <p className="text-sm text-[var(--muted)]">
+                {requisites.editPolicy === 'locked'
+                  ? 'Редактирование реквизитов отключено. Обратитесь к администратору.'
+                  : 'Администратор ещё не настроил редактирование реквизитов для этого профиля.'}
+              </p>
+            ) : (
+              <button
+                type="submit"
+                className="btn btn-primary text-sm"
+                disabled={
+                  requisitesSaving ||
+                  requisites.changeRequest?.status === 'pending'
+                }
+              >
+                {requisitesSaving
+                  ? 'Сохранение…'
+                  : requisites.editPolicy === 'self_service'
+                    ? 'Сохранить реквизиты'
+                    : 'Отправить на подтверждение'}
+              </button>
+            )}
+          </form>
+        )}
 
         {needsEmailVerification && (
           <div className="card p-5 mb-6 border theme-alert-subtle space-y-4">

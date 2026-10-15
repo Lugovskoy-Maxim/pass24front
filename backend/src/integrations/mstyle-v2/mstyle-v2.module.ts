@@ -64,6 +64,7 @@ import { MstyleManualTestingService } from './mstyle-v2.manual-testing.service';
     OperationsIdentity,
     OperationsSupport,
     MstyleIdentityService,
+    MstyleDirectoryService,
     MstylePrivateDataService,
     MstyleOauthService,
     MstyleV2Config,

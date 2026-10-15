@@ -234,7 +234,6 @@ export default function RequestsPage() {
         'requests.create',
         'passes.view_own',
       ]}
-      wide
     >
       <div className="space-y-4">
         <div className="flex flex-wrap justify-between items-center gap-3">

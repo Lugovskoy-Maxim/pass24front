@@ -3,6 +3,7 @@
 import { Suspense, useEffect, useState, useCallback, useRef } from 'react';
 import { useSearchParams } from 'next/navigation';
 import {
+  ArrowLeft,
   BarChart3,
   Building2,
   LogIn,
@@ -16,7 +17,6 @@ import {
 } from 'lucide-react';
 import { ProtectedLayout } from '@/components/ProtectedLayout';
 import { PassListCard } from '@/components/PassListCard';
-import { PassDetailModal } from '@/components/PassDetailModal';
 import { PassDetailPanel } from '@/components/PassDetailPanel';
 import { getReceptionSections } from '@/components/ReceptionPassCard';
 import { useToast } from '@/components/Toast';
@@ -308,7 +308,7 @@ function ControlPageContent() {
         <>
           <button
             type="button"
-            className="btn btn-success btn-sm"
+            className="btn btn-sm reception-action reception-action--entry"
             disabled={actionId === pass.id}
             onClick={() => handleCheckIn(pass.id)}
             title={labels.buttons.checkIn}
@@ -340,7 +340,7 @@ function ControlPageContent() {
               <div className="flex gap-1">
                 <button
                   type="button"
-                  className="btn btn-danger btn-sm flex-1"
+                  className="btn btn-sm reception-action reception-action--reject flex-1"
                   disabled={
                     actionId === pass.id || !rejectReason[pass.id]?.trim()
                   }
@@ -362,7 +362,7 @@ function ControlPageContent() {
           ) : (
             <button
               type="button"
-              className="btn btn-danger btn-sm"
+              className="btn btn-sm reception-action reception-action--reject"
               disabled={actionId === pass.id}
               onClick={() => setRejectOpenId(pass.id)}
               title={labels.buttons.reject}
@@ -483,7 +483,7 @@ function ControlPageContent() {
     <ProtectedLayout
       anyPermissions={['passes.reception', 'passes.lookup', 'admin.panel']}
     >
-      <div className="flex flex-col sm:flex-row sm:items-start justify-between gap-3 mb-5">
+      {!(selected && isMobile) && <div className="flex flex-col sm:flex-row sm:items-start justify-between gap-3 mb-5">
         <div className="min-w-0">
           <h1 className="page-title">{labels.pages.receptionTitle}</h1>
           <p className="text-[var(--muted)] text-sm mt-0.5">
@@ -523,9 +523,9 @@ function ControlPageContent() {
             aria-label="Дата журнала"
           />
         </div>
-      </div>
+      </div>}
 
-      <div className="card p-3 sm:p-4 mb-5 flex flex-col sm:flex-row gap-2.5 sm:gap-3 sm:items-center">
+      {!(selected && isMobile) && <div className="card p-3 sm:p-4 mb-5 flex flex-col sm:flex-row gap-2.5 sm:gap-3 sm:items-center">
         <div className="relative flex-1 min-w-0">
           <Search className="absolute left-3 top-1/2 -translate-y-1/2 w-4 h-4 text-[var(--muted)] pointer-events-none" />
           <input
@@ -555,9 +555,9 @@ function ControlPageContent() {
             <span className="text-sm text-[var(--muted)] px-2">...</span>
           )}
         </div>
-      </div>
+      </div>}
 
-      {showOverdueAlerts && overdueCount > 0 && !overdueSectionInView && (
+      {!(selected && isMobile) && showOverdueAlerts && overdueCount > 0 && !overdueSectionInView && (
         <OverdueGuestsAlert
           passes={overduePasses}
           labels={labels}
@@ -566,7 +566,7 @@ function ControlPageContent() {
         />
       )}
 
-      <div className="mb-5">
+      {!(selected && isMobile) && <div className="mb-5">
         <button
           type="button"
           className="btn btn-secondary btn-sm"
@@ -613,9 +613,9 @@ function ControlPageContent() {
             })}
           </div>
         )}
-      </div>
+      </div>}
 
-      {loadError && (
+      {!(selected && isMobile) && loadError && (
         <PageError
           className="mb-4"
           message={loadError}
@@ -626,7 +626,7 @@ function ControlPageContent() {
       )}
 
       <div className="grid lg:grid-cols-[minmax(0,1fr)_minmax(300px,380px)] gap-4 lg:gap-5 items-start">
-        <div className="min-w-0">
+        {!(selected && isMobile) && <div className="min-w-0">
           {loading ? (
             <ListSkeleton rows={4} />
           ) : passes.length === 0 && overdueCount === 0 ? (
@@ -661,7 +661,15 @@ function ControlPageContent() {
                         pass={pass}
                         labels={labels}
                         selected={selected?.id === pass.id}
-                        onClick={() => setSelected(pass)}
+                        prominent
+                        onClick={() => {
+                          setSelected(pass);
+                          if (isMobile) {
+                            requestAnimationFrame(() => {
+                              window.scrollTo({ top: 0, behavior: 'smooth' });
+                            });
+                          }
+                        }}
                         actions={renderCardActions(pass)}
                       />
                     ))}
@@ -695,7 +703,15 @@ function ControlPageContent() {
                           pass={pass}
                           labels={labels}
                           selected={selected?.id === pass.id}
-                          onClick={() => setSelected(pass)}
+                          prominent
+                          onClick={() => {
+                            setSelected(pass);
+                            if (isMobile) {
+                              requestAnimationFrame(() => {
+                                window.scrollTo({ top: 0, behavior: 'smooth' });
+                              });
+                            }
+                          }}
                           actions={renderCardActions(pass)}
                         />
                       ))}
@@ -705,7 +721,7 @@ function ControlPageContent() {
               })}
             </div>
           )}
-        </div>
+        </div>}
 
         {/* Desktop: sticky side panel */}
         {selected && !isMobile && (
@@ -731,18 +747,21 @@ function ControlPageContent() {
         )}
       </div>
 
-      {/* Mobile: detail as bottom-sheet modal */}
-      <PassDetailModal
-        open={!!selected && isMobile}
-        title={labels.reception.selectedPass}
-        closeLabel={labels.passes.close}
-        onClose={() => setSelected(null)}
-      >
-        {selected && (
+      {selected && isMobile && (
+        <div className="pass-detail-page card p-3 sm:p-4">
+          <button
+            type="button"
+            className="btn btn-secondary mb-4"
+            onClick={() => setSelected(null)}
+          >
+            <ArrowLeft className="w-4 h-4" />
+            Назад к журналу
+          </button>
           <PassDetailPanel
             pass={selected}
             labels={labels}
             showCreator
+            actions={renderCardActions(selected)}
             onPassUpdated={(updated) => {
               setPasses((prev) =>
                 prev.map((p) => (p.id === updated.id ? updated : p)),
@@ -750,8 +769,8 @@ function ControlPageContent() {
               setSelected(updated);
             }}
           />
-        )}
-      </PassDetailModal>
+        </div>
+      )}
     </ProtectedLayout>
   );
 }

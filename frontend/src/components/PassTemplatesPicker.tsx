@@ -9,15 +9,10 @@ import {
   Trash2,
   User,
   Wrench,
+  X,
 } from 'lucide-react';
 import { useToast } from '@/components/Toast';
-import {
-  api,
-  getErrorMessage,
-  PassTemplate,
-  PassType,
-  TYPE_LABELS,
-} from '@/lib/api';
+import { api, getErrorMessage, PassTemplate, PassType } from '@/lib/api';
 
 const TYPE_ICONS: Record<PassType, typeof User> = {
   visitor: User,
@@ -42,6 +37,7 @@ export function PassTemplatesPicker({
   const [loading, setLoading] = useState(true);
   const [syncing, setSyncing] = useState(false);
   const [deletingId, setDeletingId] = useState<string | null>(null);
+  const [expanded, setExpanded] = useState(false);
 
   const load = useCallback(() => {
     setLoading(true);
@@ -91,93 +87,115 @@ export function PassTemplatesPicker({
   };
 
   return (
-    <div className="card p-4 mb-5 space-y-3 w-full">
-      <div className="flex items-start justify-between gap-3">
-        <div className="flex items-start gap-2 min-w-0">
-          <Bookmark className="w-4 h-4 text-[var(--accent)] shrink-0 mt-0.5" />
-          <div>
-            <h2 className="text-sm font-semibold">Шаблоны</h2>
-            <p className="text-xs text-[var(--muted)] mt-0.5">
-              Выберите шаблон, чтобы заполнить форму
-            </p>
-          </div>
-        </div>
-        <button
-          type="button"
-          className="btn btn-secondary text-xs shrink-0"
-          onClick={handleSync}
-          disabled={syncing}
-        >
-          <RefreshCw
-            className={`w-3.5 h-3.5 ${syncing ? 'animate-spin' : ''}`}
-          />
-          {syncing ? 'Импорт...' : 'Из пропусков'}
-        </button>
-      </div>
+    <div className="relative flex justify-end mb-2">
+      <button
+        type="button"
+        className="relative inline-flex h-9 items-center justify-center gap-2 rounded-lg px-3 text-sm text-[var(--muted)] hover:bg-[var(--surface-muted)] hover:text-[var(--text)] transition-colors"
+        onClick={() => setExpanded((value) => !value)}
+        aria-label="Шаблоны пропусков"
+        aria-expanded={expanded}
+        title="Шаблоны"
+      >
+        <Bookmark className="w-4 h-4" />
+        <span>Шаблоны</span>
+        {!loading && templates.length > 0 && (
+          <span className="absolute -right-0.5 -top-0.5 min-w-4 h-4 px-1 rounded-full bg-[var(--accent)] text-white text-[9px] leading-4 text-center">
+            {templates.length}
+          </span>
+        )}
+      </button>
 
-      {loading ? (
-        <p className="text-sm text-[var(--muted)] animate-pulse">
-          Загрузка шаблонов...
-        </p>
-      ) : templates.length === 0 ? (
-        <p className="text-sm text-[var(--muted)]">
-          Шаблонов пока нет. Импортируйте из прошлых пропусков или заполните
-          форму вручную.
-        </p>
-      ) : (
-        <div className="flex flex-wrap gap-2">
-          {templates.map((template) => {
-            const Icon = TYPE_ICONS[template.passType];
-            const active = selectedId === template.id;
-            const disabledType = !enabledTypes.includes(template.passType);
-            return (
-              <div
-                key={template.id}
-                className={`flex items-center gap-1 rounded-lg border transition-colors ${
-                  active
-                    ? 'border-[var(--status-approved-border)] bg-[var(--status-approved-soft)]'
-                    : 'border-[var(--border)] bg-[var(--surface)]'
-                }`}
+      {expanded && (
+        <div className="absolute right-0 top-full z-20 mt-1 w-[min(22rem,calc(100vw-2rem))] rounded-xl border border-[var(--border)] bg-[var(--surface)] p-3 shadow-xl">
+          <div className="flex items-center justify-between gap-3 mb-2">
+            <div className="flex items-center gap-2 text-sm font-semibold">
+              <Bookmark className="w-4 h-4 text-[var(--muted)]" />
+              Шаблоны
+            </div>
+            <div className="flex items-center gap-1">
+              <button
+                type="button"
+                className="inline-flex items-center gap-1 rounded-md px-2 py-1.5 text-xs text-[var(--muted)] hover:text-[var(--text)] hover:bg-[var(--surface-muted)] transition-colors"
+                onClick={handleSync}
+                disabled={syncing}
+                title="Создать шаблоны из прошлых пропусков"
               >
-                <button
-                  type="button"
-                  className="flex items-center gap-2 px-3 py-2 text-sm text-left min-w-0 disabled:opacity-50"
-                  disabled={disabledType}
-                  title={
-                    disabledType
-                      ? 'Тип пропуска отключён'
-                      : template.visitorName
-                  }
-                  onClick={() => onSelect(template)}
-                >
-                  <Icon className="w-3.5 h-3.5 shrink-0 text-[var(--status-approved)]" />
-                  <span className="font-medium truncate max-w-[140px] sm:max-w-[200px]">
-                    {template.name}
-                  </span>
-                  <span className="text-xs text-[var(--muted)] hidden sm:inline truncate max-w-[120px]">
-                    {template.visitorName}
-                  </span>
-                </button>
-                <button
-                  type="button"
-                  className="p-2 text-[var(--muted)] hover:text-[var(--danger)] shrink-0"
-                  disabled={deletingId === template.id}
-                  onClick={() => handleDelete(template.id)}
-                  aria-label="Удалить шаблон"
-                >
-                  <Trash2 className="w-3.5 h-3.5" />
-                </button>
-              </div>
-            );
-          })}
-        </div>
-      )}
+                <RefreshCw
+                  className={`w-3.5 h-3.5 ${syncing ? 'animate-spin' : ''}`}
+                />
+                {syncing ? 'Импорт…' : 'Из пропусков'}
+              </button>
+              <button
+                type="button"
+                className="inline-flex h-7 w-7 items-center justify-center rounded-md text-[var(--muted)] hover:bg-[var(--surface-muted)] hover:text-[var(--text)]"
+                onClick={() => setExpanded(false)}
+                aria-label="Закрыть шаблоны"
+              >
+                <X className="w-4 h-4" />
+              </button>
+            </div>
+          </div>
 
-      {templates.length > 0 && (
-        <p className="text-xs text-[var(--muted)]">
-          {TYPE_LABELS.visitor}, {TYPE_LABELS.parking} и другие типы
-          подставляются из шаблона
-        </p>
+          {loading ? (
+            <p className="py-2 text-xs text-[var(--muted)] animate-pulse">
+              Загрузка…
+            </p>
+          ) : templates.length > 0 ? (
+            <div className="flex flex-col gap-1 max-h-[55vh] overflow-y-auto">
+              {templates.map((template) => {
+                const Icon = TYPE_ICONS[template.passType];
+                const active = selectedId === template.id;
+                const disabledType = !enabledTypes.includes(template.passType);
+                return (
+                  <div
+                    key={template.id}
+                    className={`flex items-center gap-1 rounded-lg border transition-colors ${
+                      active
+                        ? 'border-[var(--status-approved-border)] bg-[var(--status-approved-soft)]'
+                        : 'border-[var(--border)] bg-[var(--surface)]'
+                    }`}
+                  >
+                    <button
+                      type="button"
+                      className="flex flex-1 min-w-0 items-center gap-2 px-3 py-2 text-sm text-left disabled:opacity-50"
+                      disabled={disabledType}
+                      title={
+                        disabledType
+                          ? 'Тип пропуска отключён'
+                          : template.visitorName
+                      }
+                      onClick={() => {
+                        onSelect(template);
+                        setExpanded(false);
+                      }}
+                    >
+                      <Icon className="w-3.5 h-3.5 shrink-0 text-[var(--status-approved)]" />
+                      <span className="font-medium truncate">
+                        {template.name}
+                      </span>
+                      <span className="text-xs text-[var(--muted)] truncate">
+                        {template.visitorName}
+                      </span>
+                    </button>
+                    <button
+                      type="button"
+                      className="p-2 text-[var(--muted)] hover:text-[var(--danger)] shrink-0"
+                      disabled={deletingId === template.id}
+                      onClick={() => handleDelete(template.id)}
+                      aria-label="Удалить шаблон"
+                    >
+                      <Trash2 className="w-3.5 h-3.5" />
+                    </button>
+                  </div>
+                );
+              })}
+            </div>
+          ) : (
+            <p className="py-2 text-xs text-[var(--muted)]">
+              Сохранённых шаблонов пока нет
+            </p>
+          )}
+        </div>
       )}
     </div>
   );

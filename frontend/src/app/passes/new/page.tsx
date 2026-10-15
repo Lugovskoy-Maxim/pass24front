@@ -26,7 +26,6 @@ import {
   FormErrorBanner,
   FormField,
   FormInput,
-  FormSelect,
   FormTextarea,
 } from '@/components/FormField';
 import {
@@ -118,19 +117,6 @@ function NewPassForm() {
     });
     return map;
   }, [tenantOffices, config?.businessCenters]);
-
-  const officeSelectOptions = useMemo(() => {
-    return tenantOffices.map((o) => {
-      const bcName =
-        o.businessCenterName ||
-        bcHoursById.get(o.propertyId)?.name ||
-        'Бизнес-центр';
-      return {
-        id: o.id,
-        label: `оф. ${o.number} — ${bcName}`,
-      };
-    });
-  }, [tenantOffices, bcHoursById]);
 
   const selectedBcId =
     propertyId ||
@@ -312,7 +298,7 @@ function NewPassForm() {
       isTenantCompanyUser(user) && (user.offices?.length ?? 0) === 0;
     return (
       <ProtectedLayout permissions={['passes.create']}>
-        <div className="w-full max-w-xl mx-auto">
+        <div className="w-full max-w-6xl mx-auto">
           <h1 className="page-title mb-2">Заказ пропуска</h1>
           <div className="card p-6 space-y-4 border-[var(--alert-border)] bg-[var(--alert-surface-subtle)]">
             <p className="text-[var(--alert-text)]">
@@ -335,7 +321,7 @@ function NewPassForm() {
 
   return (
     <ProtectedLayout permissions={['passes.create']}>
-      <div className="w-full max-w-xl mx-auto">
+      <div className="w-full max-w-6xl mx-auto">
         <h1 className="page-title mb-2">
           {selectedTemplateId || templateId
             ? 'Заказ по шаблону'
@@ -350,11 +336,11 @@ function NewPassForm() {
         )}
         <form
           onSubmit={handleSubmit}
-          className="card p-6 space-y-5 w-full"
+          className="card grid grid-cols-1 lg:grid-cols-2 gap-x-6 gap-y-5 p-6 w-full"
           noValidate
         >
           {enabledTypes.length > 1 && (
-            <div>
+            <div className="lg:col-span-2">
               <label className="label">Тип пропуска</label>
               <div className="grid grid-cols-2 sm:grid-cols-4 gap-2">
                 {(Object.entries(TYPE_LABELS) as [PassType, string][])
@@ -409,7 +395,7 @@ function NewPassForm() {
           </FormField>
 
           {passType === 'parking' && (
-            <div className="form-grid-2">
+            <div className="form-grid-2 lg:col-span-2">
               <FormField
                 id="vehiclePlate"
                 label="Гос. номер"
@@ -456,34 +442,58 @@ function NewPassForm() {
             />
           </FormField>
 
-          {tenantCompanyUser || tenantOffices.length > 0 ? (
+          {tenantOffices.length > 0 ? (
             <FormField
               id="officeId"
               label="Офис (куда)"
               required
               error={fieldErrors.officeId}
-              hint={
-                officeSelectOptions.length > 1
-                  ? 'Офис и бизнес-центр в одном списке'
-                  : undefined
-              }
             >
-              <FormSelect
-                id="officeId"
-                value={officeId}
-                onChange={(e) => {
-                  handleOfficeSelect(e.target.value);
-                  clearFieldError('officeId');
-                }}
-                invalid={!!fieldErrors.officeId}
+              <div
+                className="grid grid-cols-2 sm:grid-cols-3 gap-2 w-full"
+                role="radiogroup"
+                aria-label="Офис"
               >
-                <option value="">Выберите офис</option>
-                {officeSelectOptions.map((o) => (
-                  <option key={o.id} value={o.id}>
-                    {o.label}
-                  </option>
-                ))}
-              </FormSelect>
+                {tenantOffices.map((item) => {
+                  const selected = officeId === item.id;
+                  const centerName =
+                    item.businessCenterName ||
+                    bcHoursById.get(item.propertyId)?.name ||
+                    'Бизнес-центр';
+                  return (
+                    <button
+                      key={item.id}
+                      type="button"
+                      role="radio"
+                      aria-checked={selected}
+                      onClick={() => {
+                        handleOfficeSelect(item.id);
+                        clearFieldError('officeId');
+                      }}
+                      className={[
+                        'min-w-0 rounded-xl border px-3 py-2.5 text-left transition-colors',
+                        selected
+                          ? 'border-[var(--status-approved-border)] bg-[var(--status-approved-soft)]'
+                          : 'border-[var(--border)] bg-[var(--surface)] hover:bg-[var(--surface-muted)]',
+                        fieldErrors.officeId && !selected
+                          ? 'border-[var(--status-rejected-border)]'
+                          : '',
+                      ]
+                        .filter(Boolean)
+                        .join(' ')}
+                    >
+                      <div className="text-xs text-[var(--muted)]">ОФИС</div>
+                      <div className="text-2xl font-semibold leading-tight tabular-nums truncate">
+                        {item.number}
+                      </div>
+                      <div className="text-xs text-[var(--muted)] truncate">
+                        {item.floor ? `${item.floor} эт. · ` : ''}
+                        {centerName}
+                      </div>
+                    </button>
+                  );
+                })}
+              </div>
               {selectedOfficeHours && (
                 <p className="text-xs text-[var(--muted)] mt-2">
                   Рабочие часы {selectedOfficeHours.name}:{' '}
@@ -511,7 +521,11 @@ function NewPassForm() {
             </FormField>
           )}
 
-          <FormField id="comment" label="Комментарий для ресепшн">
+          <FormField
+            id="comment"
+            label="Комментарий для ресепшн"
+            className="lg:col-span-2"
+          >
             <FormTextarea
               id="comment"
               value={comment}
@@ -520,7 +534,7 @@ function NewPassForm() {
             />
           </FormField>
 
-          <div className="border border-[var(--border)] rounded-lg p-4 bg-[var(--surface-muted)] space-y-3">
+          <div className="lg:col-span-2 border border-[var(--border)] rounded-lg p-4 bg-[var(--surface-muted)] space-y-3">
             <label className="flex items-center gap-2 cursor-pointer">
               <input
                 type="checkbox"
@@ -555,9 +569,11 @@ function NewPassForm() {
             )}
           </div>
 
-          <FormErrorBanner message={formError} />
+          <div className="lg:col-span-2">
+            <FormErrorBanner message={formError} />
+          </div>
 
-          <div className="flex gap-3">
+          <div className="lg:col-span-2 flex gap-3">
             <button
               type="submit"
               className="btn btn-primary"

@@ -24,7 +24,7 @@ type Props = {
 const codeSizeClass: Record<Size, string> = {
   sm: 'text-2xl',
   md: 'text-2xl',
-  lg: 'text-3xl',
+  lg: 'text-4xl',
 };
 
 const nameSizeClass: Record<Size, string> = {
