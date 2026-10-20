@@ -502,7 +502,7 @@ function AdminUsersPageContent() {
     // Сотрудник компании: роль не меняем на tenant/staff в форме — только профиль
     const formRole = u.parentTenantId ? (u.role as UserRole) : u.role;
     setForm({
-      email: u.email,
+      email: u.email || '',
       password: '',
       username: u.username || '',
       displayName: u.displayName || '',
@@ -801,8 +801,8 @@ function AdminUsersPageContent() {
       if (editId) {
         // Сотрудник компании: роль не отправляем (бэкенд её не меняет)
         await api.admin.updateUser(editId, {
-          ...(form.email.trim()
-            ? { email: form.email.trim().toLowerCase() }
+          ...((form.email || '').trim()
+            ? { email: (form.email || '').trim().toLowerCase() }
             : {}),
           ...base,
           ...(isCompanyEmployee ? {} : { role: form.role }),
