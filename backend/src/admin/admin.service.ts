@@ -898,8 +898,9 @@ export class AdminService {
     if (dto.email !== undefined) {
       const next = dto.email.trim().toLowerCase();
       const current = (user.email || '').trim().toLowerCase();
-      if (!next) throw new BadRequestException('Укажите email');
-      if (next !== current) {
+      // У аккаунта с входом по телефону email может отсутствовать. Пустое
+      // значение оставляет текущий email без изменений.
+      if (next && next !== current) {
         const clash = await this.userModel.findOne({
           _id: { $ne: new Types.ObjectId(id) },
           email: next,

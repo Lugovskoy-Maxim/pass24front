@@ -801,7 +801,9 @@ function AdminUsersPageContent() {
       if (editId) {
         // Сотрудник компании: роль не отправляем (бэкенд её не меняет)
         await api.admin.updateUser(editId, {
-          email: form.email.trim().toLowerCase(),
+          ...(form.email.trim()
+            ? { email: form.email.trim().toLowerCase() }
+            : {}),
           ...base,
           ...(isCompanyEmployee ? {} : { role: form.role }),
           isActive,
@@ -1300,7 +1302,7 @@ function AdminUsersPageContent() {
               <div className="admin-user-form__grid grid sm:grid-cols-2 lg:grid-cols-3 gap-3">
                 <div>
                   <label className="label" htmlFor="admin-user-email">
-                    Email *
+                    Email{editId ? '' : ' *'}
                   </label>
                   <input
                     id="admin-user-email"
@@ -1310,7 +1312,7 @@ function AdminUsersPageContent() {
                     onChange={(e) =>
                       setForm({ ...form, email: e.target.value })
                     }
-                    required
+                    required={!editId}
                     autoComplete="off"
                   />
                 </div>
