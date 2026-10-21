@@ -1,4 +1,9 @@
-import { ForbiddenException, Injectable, Optional } from '@nestjs/common';
+import {
+  ForbiddenException,
+  HttpException,
+  Injectable,
+  Optional,
+} from '@nestjs/common';
 import { OfficeServicesService } from '../office-services/office-services.service';
 import { SiteSettingsService } from '../site-settings/site-settings.service';
 import { GridFSBucket, ObjectId, ClientSession } from 'mongodb';
@@ -100,7 +105,11 @@ export class OperationsSupport {
       bucketName: 'mstyle_ops_files',
     });
   }
-  async assertAccess(actor: OperationsActor, row: any) {
+  async assertAccess(
+    actor: OperationsActor,
+    row: any,
+    session?: ClientSession,
+  ) {
     await this.assertResidentRequestsEnabled(actor);
     if (!row) fail('not_found', 'Обращение не найдено.', 404);
     if (actor.kind === 'admin') {
@@ -117,20 +126,41 @@ export class OperationsSupport {
       }
       return;
     }
-    if (
-      actor.kind !== 'resident' ||
-      !actor.subject ||
-      row.owner_subject !== actor.subject
-    )
+    if (actor.kind !== 'resident' || !actor.subject)
       fail('not_found', 'Обращение не найдено.', 404);
+    if (row.owner_subject === actor.subject) return;
+    if (!row.profile_id)
+      fail('not_found', 'Обращение не найдено.', 404);
+    try {
+      await this.identities.profile(actor, String(row.profile_id), session);
+    } catch (error) {
+      if (error instanceof HttpException)
+        fail('not_found', 'Обращение не найдено.', 404);
+      throw error;
+    }
   }
   async list(actor: OperationsActor, query: any = {}) {
     await this.assertResidentRequestsEnabled(actor);
     const filter: any = {};
     if (actor.kind === 'admin') requirePermission(actor, 'support.manage');
-    else if (actor.kind === 'resident' && actor.subject)
-      filter.owner_subject = actor.subject;
-    else fail('unauthorized', 'Необходима авторизация.', 401);
+    else if (actor.kind === 'resident' && actor.subject) {
+      const profileIds = await this.identities.profileIds(actor);
+      const activeProfiles = profileIds.length
+        ? await this.store
+            .canonical('profiles')
+            .find(
+              { profileId: { $in: profileIds }, status: 'active' },
+              { projection: { profileId: 1 } },
+            )
+            .toArray()
+        : [];
+      filter.$or = [
+        { owner_subject: actor.subject },
+        ...(activeProfiles.length
+          ? [{ profile_id: { $in: activeProfiles.map((p) => p.profileId) } }]
+          : []),
+      ];
+    } else fail('unauthorized', 'Необходима авторизация.', 401);
     if (query.status) filter.status = textValue(query.status, 32);
     if (query.topic)
       filter.topic_key = {
@@ -334,7 +364,7 @@ export class OperationsSupport {
     const row = await this.store
       .collection('tickets')
       .findOne({ id }, { session });
-    await this.assertAccess(actor, row);
+    await this.assertAccess(actor, row, session);
     const messages = await this.store
       .collection('messages')
       .find({ request_id: id }, { session, projection: { _id: 0 } })
@@ -482,40 +512,60 @@ export class OperationsSupport {
       'support.create',
       input,
       async (session) => {
-        let profileId =
-          input.profile_id ||
-          (await this.identities.profileIds(actor, session))[0] ||
-          null;
-        if (input.office_id && !input.profile_id && this.officeServices) {
-          for (const id of await this.identities.profileIds(actor, session)) {
-            const candidate = await this.identities.profile(actor, id, session);
-            try {
-              if (
-                await this.officeServices.officeForProfile(
-                  {
-                    ...candidate.profile,
-                    officeIds: [
-                      ...new Set([
-                        ...(candidate.profile.officeIds || []),
-                        ...(candidate.resource.officeIds || []),
-                      ]),
-                    ],
-                  },
-                  input.office_id,
-                  session,
-                )
-              ) {
-                profileId = id;
-                break;
-              }
-            } catch (error) {
-              if (!(error instanceof ForbiddenException)) throw error;
-            }
-          }
-        }
-        const context = profileId
+        let profileId: string | null = input.profile_id || null;
+        let context = profileId
           ? await this.identities.profile(actor, profileId, session)
           : null;
+        if (!profileId) {
+          const profileIds = await this.identities.profileIds(actor, session);
+          const candidates =
+            input.office_id && this.officeServices
+              ? profileIds
+              : profileIds.slice(0, 1);
+          for (const id of candidates) {
+            try {
+              const candidate = await this.identities.profile(
+                actor,
+                id,
+                session,
+              );
+              const candidateProfile = {
+                ...candidate.profile,
+                officeIds: [
+                  ...new Set([
+                    ...(candidate.profile.officeIds || []),
+                    ...(candidate.resource.officeIds || []),
+                  ]),
+                ],
+              };
+              if (input.office_id && this.officeServices) {
+                await this.officeServices.officeForProfile(
+                  candidateProfile,
+                  input.office_id,
+                  session,
+                );
+              }
+              profileId = id;
+              context = candidate;
+              break;
+            } catch (error) {
+              if (
+                error instanceof HttpException &&
+                [403, 404].includes(error.getStatus())
+              )
+                continue;
+              throw error;
+            }
+          }
+          if (profileIds.length && !context)
+            fail(
+              'profile_unavailable',
+              input.office_id
+                ? 'Выбранный офис не относится ни к одному активному профилю.'
+                : 'Нет доступного активного профиля.',
+              403,
+            );
+        }
         const profile = context
           ? {
               ...context.profile,
@@ -684,7 +734,7 @@ export class OperationsSupport {
         const row = await this.store
           .collection('tickets')
           .findOne({ id }, { session });
-        await this.assertAccess(actor, row);
+        await this.assertAccess(actor, row, session);
         if (['completed', 'cancelled'].includes(row.status))
           fail('ticket_closed', 'Обращение закрыто.');
         if (input.revision != null) checkVersion(row, input.revision);
@@ -735,7 +785,7 @@ export class OperationsSupport {
         const row = await this.store
           .collection('tickets')
           .findOne({ id }, { session });
-        await this.assertAccess(actor, row);
+        await this.assertAccess(actor, row, session);
         if (row.bitrix?.managed)
           fail(
             'crm_managed_status',
@@ -790,7 +840,7 @@ export class OperationsSupport {
         const row = await this.store
           .collection('tickets')
           .findOne({ id }, { session });
-        await this.assertAccess(actor, row);
+        await this.assertAccess(actor, row, session);
         checkVersion(row, input.revision);
         if (!row.bitrix?.managed)
           fail('validation_error', 'Заявка не связана с CRM.', 400);
@@ -832,7 +882,7 @@ export class OperationsSupport {
         const row = await this.store
           .collection('tickets')
           .findOne({ id }, { session });
-        await this.assertAccess(actor, row);
+        await this.assertAccess(actor, row, session);
         // Reading does not change the last sender or action-required state.
         const seq = Math.min(
           row.message_seq,

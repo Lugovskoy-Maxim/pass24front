@@ -1,4 +1,4 @@
-import { request, downloadFileResponse, getToken } from './api';
+import { ApiError, request, downloadFileResponse, getToken } from './api';
 import type { OfficeCategory, OfficeService } from './office-services';
 
 export type Segment = {
@@ -204,14 +204,23 @@ export async function command<T>(
   const fingerprint = method + path + JSON.stringify(body);
   const key = pending.get(fingerprint) || crypto.randomUUID();
   pending.set(fingerprint, key);
-  const result = await request<T>(path, {
-    method,
-    body: JSON.stringify(body),
-    headers: { 'Idempotency-Key': key },
-  });
-  pending.delete(fingerprint);
-  window.dispatchEvent(new Event('pass-work-queue-refresh'));
-  return result;
+  try {
+    const result = await request<T>(path, {
+      method,
+      body: JSON.stringify(body),
+      headers: { 'Idempotency-Key': key },
+    });
+    pending.delete(fingerprint);
+    window.dispatchEvent(new Event('pass-work-queue-refresh'));
+    return result;
+  } catch (error) {
+    // A definitive client error cannot have committed the operation. Drop its
+    // key so a corrected submission becomes a new command. Keep it for network
+    // and server errors, where the commit result may be unknown.
+    if (error instanceof ApiError && error.status && error.status < 500)
+      pending.delete(fingerprint);
+    throw error;
+  }
 }
 export function params(values: Record<string, string | number | undefined>) {
   const query = new URLSearchParams();
