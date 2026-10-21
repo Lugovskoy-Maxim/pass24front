@@ -36,16 +36,7 @@ export class ResidentBookingsController {
       )
     )
       fail('forbidden', 'Бронирование недоступно.', 403);
-    const person = await this.identity.store
-      .canonical('identities')
-      .findOne({ userId: user.userId, identityStatus: 'active' });
-    if (!person) fail('forbidden', 'Профиль недоступен.', 403);
-    const actor: OperationsActor = {
-      kind: 'resident',
-      ref: 'resident:' + person.subject,
-      subject: person.subject,
-      name: person.displayName,
-    };
+    const actor = await this.identity.residentActor(user);
     const ids = await this.identity.profileIds(actor);
     for (const id of ids) {
       const { profile, resource } = await this.identity.profile(actor, id);

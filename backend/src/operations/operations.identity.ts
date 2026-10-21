@@ -1,4 +1,4 @@
-import { Injectable } from '@nestjs/common';
+import { Injectable, Optional } from '@nestjs/common';
 import { ClientSession, ObjectId } from 'mongodb';
 import { OperationsStore } from './operations.store';
 import {
@@ -9,6 +9,7 @@ import {
 } from './operations.rules';
 import { membershipIsEffective } from '../integrations/mstyle-v2/mstyle-v2.membership-policy';
 import { MstyleDirectoryService } from '../integrations/mstyle-v2/mstyle-v2.directory.service';
+import { MstyleIdentityService } from '../integrations/mstyle-v2/mstyle-v2.identities';
 import { MstylePrivateDataService } from '../integrations/mstyle-v2/mstyle-v2.private-data.service';
 import { MstyleV2Config } from '../integrations/mstyle-v2/mstyle-v2.config';
 import {
@@ -29,7 +30,28 @@ export class OperationsIdentity {
     private readonly directory: MstyleDirectoryService,
     private readonly privateData: MstylePrivateDataService,
     private readonly config: MstyleV2Config,
+    @Optional() private readonly nativeIdentities?: MstyleIdentityService,
   ) {}
+
+  async residentActor(user: any): Promise<OperationsActor> {
+    let identity = await this.store
+      .canonical('identities')
+      .findOne({ userId: String(user.userId), identityStatus: 'active' });
+    if (!identity && this.nativeIdentities) {
+      const ensured = await this.nativeIdentities.ensureFromUserId(
+        String(user.userId),
+      );
+      if (ensured.identityStatus === 'active') identity = ensured;
+    }
+    if (!identity)
+      fail('forbidden', 'Профиль пользователя недоступен.', 403);
+    return {
+      kind: 'resident',
+      ref: 'resident:' + identity.subject,
+      subject: identity.subject,
+      name: identity.displayName,
+    };
+  }
 
   async nativeActor(user: any): Promise<OperationsActor> {
     const identity = await this.store

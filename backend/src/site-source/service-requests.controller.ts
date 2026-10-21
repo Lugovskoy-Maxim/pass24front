@@ -51,16 +51,7 @@ export class ServiceRequestsController {
       )
     )
       fail('forbidden', 'Нет доступа.', 403);
-    const person = await this.identity.store
-      .canonical('identities')
-      .findOne({ userId: String(user.userId), identityStatus: 'active' });
-    if (!person) fail('forbidden', 'Профиль пользователя недоступен.', 403);
-    return {
-      kind: 'resident',
-      ref: 'resident:' + person.subject,
-      subject: person.subject,
-      name: person.displayName,
-    };
+    return this.identity.residentActor(user);
   }
   private ticket(row: any) {
     return {

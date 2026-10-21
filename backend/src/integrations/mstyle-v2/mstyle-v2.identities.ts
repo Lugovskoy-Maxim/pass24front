@@ -188,6 +188,15 @@ export class MstyleIdentityService {
     problem(409, 'CONFLICT');
   }
 
+  async ensureFromUserId(userId: string): Promise<MstyleIdentityDocument> {
+    const user = await this.users
+      .findById(userId)
+      .select('+password')
+      .session(null);
+    if (!user) problem(401, 'INVALID_CREDENTIALS');
+    return this.ensureFromUser(user);
+  }
+
   private async inTransaction<T>(run: () => Promise<T>): Promise<T> {
     this.identities.db.base.set('transactionAsyncLocalStorage', true);
     if (
