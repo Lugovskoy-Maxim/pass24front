@@ -11,6 +11,7 @@ import { AuditActor, AuditService } from '../audit/audit.service';
 import { MailService } from '../mail/mail.service';
 import { InjectModel } from '@nestjs/mongoose';
 import { Model, Types } from 'mongoose';
+import { randomInt } from 'node:crypto';
 import { AUTH_CONNECTION } from '../database/auth-database.constants';
 import {
   Office,
@@ -81,8 +82,33 @@ export class PassesService implements OnModuleInit {
 
   private generatePassNumber() {
     const year = new Date().getFullYear();
-    const random = Math.floor(1000 + Math.random() * 9000);
+    const random = randomInt(100_000_000_000, 1_000_000_000_000);
     return `Pass-${year}-${random}`;
+  }
+
+  private async createWithUniquePassNumber(data: Record<string, unknown>) {
+    for (let attempt = 0; ; attempt++) {
+      try {
+        return await this.passModel.create({
+          ...data,
+          passNumber: this.generatePassNumber(),
+        });
+      } catch (error) {
+        const duplicate = error as {
+          code?: number;
+          keyPattern?: Record<string, unknown>;
+        };
+        // Retry only a number collision, and only before any side effects.
+        if (
+          duplicate?.code !== 11000 ||
+          Object.keys(duplicate.keyPattern || {}).length !== 1 ||
+          !duplicate.keyPattern?.passNumber ||
+          attempt >= 4
+        ) {
+          throw error;
+        }
+      }
+    }
   }
 
   async onModuleInit() {
@@ -663,13 +689,11 @@ export class PassesService implements OnModuleInit {
           .lean()
       : null;
 
-    const passNumber = this.generatePassNumber();
     const approvedAt = new Date().toISOString();
-    const doc = await this.passModel.create({
+    const doc = await this.createWithUniquePassNumber({
       ...passDto,
       visitPurpose: deriveVisitPurpose(passDto.passType),
       ...resolved,
-      passNumber,
       status: 'approved',
       approvedAt,
       createdBy: user?.userId ? new Types.ObjectId(user.userId) : undefined,
