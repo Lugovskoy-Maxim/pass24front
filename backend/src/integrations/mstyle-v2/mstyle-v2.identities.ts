@@ -252,7 +252,15 @@ export class MstyleIdentityService {
       .select('+password')
       .session(null);
     const security = this.userSecurity(user);
-    if (identity.userSecurityStamp === security.stamp) return identity;
+    const recoverApprovedIdentity =
+      security.status === 'active' &&
+      identity.identityStatus === 'invited' &&
+      identity.userSecurityStatus === 'active';
+    if (
+      identity.userSecurityStamp === security.stamp &&
+      !recoverApprovedIdentity
+    )
+      return identity;
     return this.inTransaction(async () => {
       const current = await this.identities.findOne({
         subject: identity.subject,
@@ -263,7 +271,15 @@ export class MstyleIdentityService {
           .select('+password')
           .session(null),
       );
-      if (!current || current.userSecurityStamp === security.stamp)
+      const recoverApprovedIdentity =
+        security.status === 'active' &&
+        current?.identityStatus === 'invited' &&
+        current?.userSecurityStatus === 'active';
+      if (
+        !current ||
+        (current.userSecurityStamp === security.stamp &&
+          !recoverApprovedIdentity)
+      )
         return current;
       let previous = current.userRestrictionPreviousStatus || null;
       if (!this.usableForAuth(security.status)) {
@@ -271,7 +287,10 @@ export class MstyleIdentityService {
           previous = current.identityStatus;
         if (current.identityStatus !== 'deleted')
           current.identityStatus = security.status;
-      } else if (current.identityStatus === current.userSecurityStatus) {
+      } else if (
+        current.identityStatus === current.userSecurityStatus ||
+        recoverApprovedIdentity
+      ) {
         // The native account is the source of truth for access restrictions.
         // Older imported identities may not have userRestrictionPreviousStatus,
         // so restore to the newly derived account status when no prior value was
