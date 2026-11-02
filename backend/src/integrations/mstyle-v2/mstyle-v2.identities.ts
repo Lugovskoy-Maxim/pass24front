@@ -271,11 +271,12 @@ export class MstyleIdentityService {
           previous = current.identityStatus;
         if (current.identityStatus !== 'deleted')
           current.identityStatus = security.status;
-      } else if (
-        previous &&
-        current.identityStatus === current.userSecurityStatus
-      ) {
-        current.identityStatus = previous;
+      } else if (current.identityStatus === current.userSecurityStatus) {
+        // The native account is the source of truth for access restrictions.
+        // Older imported identities may not have userRestrictionPreviousStatus,
+        // so restore to the newly derived account status when no prior value was
+        // recorded (for example, an approved tenant whose identity stayed invited).
+        current.identityStatus = previous || security.status;
         previous = null;
       }
       current.userSecurityStamp = security.stamp;
