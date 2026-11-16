@@ -1,7 +1,13 @@
 import type { CrmStage } from './bitrix24.client';
 
-export function crmTicketStatus(deal: any, stages: CrmStage[]) {
+export function crmTicketStatus(
+  deal: any,
+  stages: CrmStage[],
+  hasUnreadMessages: boolean,
+) {
   const stage = stages.find((item) => item.id === String(deal.STAGE_ID));
+  if (stage?.name.trim().toLowerCase() === 'можно закрывать')
+    return hasUnreadMessages ? 'in_progress' : 'completed';
   const semantic = deal.STAGE_SEMANTIC_ID || stage?.semantic;
   if (['S', 'success'].includes(semantic)) return 'completed';
   if (['F', 'failure'].includes(semantic)) return 'cancelled';

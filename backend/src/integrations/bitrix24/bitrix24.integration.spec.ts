@@ -1058,6 +1058,34 @@ describe('Daily MySQL and Bitrix24 with transactional Mongo storage', () => {
       false,
     );
   });
+  it('waits for unread messages on both sides before closing a ready CRM request', async () => {
+    const created = await create();
+    await worker.tick();
+    const id = created.ticket.id;
+    const ticket = await store.collection('tickets').findOne({ id });
+    const readyStage = {
+      id: 'C7:READY',
+      name: 'Можно закрывать',
+      semantic: 'process',
+      sort: 30,
+    };
+    const readyFunnel = { ...funnel, stages: [...funnel.stages, readyStage] };
+    deals[0].STAGE_ID = readyStage.id;
+    await worker.syncTicket(ticket, readyFunnel);
+    expect((await support.detail(resident, id)).can_reply).toBe(true);
+
+    await support.read(admin, id, {}, 'read-customer-request');
+    operatorComment();
+    await worker.syncTicket(ticket, readyFunnel);
+    expect((await support.detail(resident, id)).can_reply).toBe(true);
+
+    await support.read(resident, id, {}, 'read-operator-reply');
+    await worker.syncTicket(ticket, readyFunnel);
+    expect(await support.detail(resident, id)).toMatchObject({
+      ticket: { status: 'completed' },
+      can_reply: false,
+    });
+  });
   it('takes completion, cancellation and reopening from CRM and prevents local overrides', async () => {
     const result = await create();
     await worker.tick();

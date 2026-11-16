@@ -955,7 +955,6 @@ export class Bitrix24Service implements OnModuleInit, OnModuleDestroy {
           [],
           true,
         );
-    const status = crmTicketStatus(deal, funnel.stages);
     const stageName =
       funnel.stages.find((stage) => stage.id === String(deal.STAGE_ID))?.name ||
       String(deal.STAGE_ID);
@@ -964,6 +963,11 @@ export class Bitrix24Service implements OnModuleInit, OnModuleDestroy {
       const row = await this.store
         .collection('tickets')
         .findOne({ id: ticket.id }, { session });
+      if (!row) return;
+      const hasUnreadMessages =
+        (row.last_customer_seq || 0) > (row.support_read_seq || 0) ||
+        (row.last_support_seq || 0) > (row.customer_read_seq || 0);
+      const status = crmTicketStatus(deal, funnel.stages, hasUnreadMessages);
       await this.store.collection('tickets').updateOne(
         { id: ticket.id },
         {
@@ -977,19 +981,19 @@ export class Bitrix24Service implements OnModuleInit, OnModuleDestroy {
             'bitrix.assignment_error_code': assignmentError,
             'bitrix.file_error_code': fileError,
             ...(assignee ? { 'bitrix.assignee': assignee } : {}),
-            ...(row!.status !== status ? { updated_at: sqlNow() } : {}),
+            ...(row.status !== status ? { updated_at: sqlNow() } : {}),
           },
-          ...(row!.status !== status ? { $inc: { revision: 1 } } : {}),
+          ...(row.status !== status ? { $inc: { revision: 1 } } : {}),
         },
         { session },
       );
-      if (row!.status !== status)
+      if (row.status !== status)
         await this.store.event(
           'ticket',
           ticket.id,
           'support.crm_status_changed',
           SYSTEM,
-          { from: row!.status, to: status, stage_id: deal.STAGE_ID },
+          { from: row.status, to: status, stage_id: deal.STAGE_ID },
           session,
         );
     });
