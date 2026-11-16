@@ -49,12 +49,32 @@ const HELP_VIDEOS = [
 
 const HELP_VIDEO_CAPTIONS = {
   registration: [
-    [0, 7, 'Добро пожаловать в PASS. Откройте страницу входа и выберите «Регистрация».'],
+    [
+      0,
+      7,
+      'Добро пожаловать в PASS. Откройте страницу входа и выберите «Регистрация».',
+    ],
     [7, 17, 'Заполните фамилию, имя и название компании.'],
-    [17, 28, 'Укажите корпоративную почту, телефон при необходимости и задайте пароль.'],
-    [28, 39, 'Выберите подтверждение по электронной почте или SMS и запросите код.'],
-    [39, 50, 'Введите код из письма или сообщения. Проверьте папку «Спам», если письма нет.'],
-    [50, 63, 'Дождитесь одобрения регистрации и привязки офиса администратором.'],
+    [
+      17,
+      28,
+      'Укажите корпоративную почту, телефон при необходимости и задайте пароль.',
+    ],
+    [
+      28,
+      39,
+      'Выберите подтверждение по электронной почте или SMS и запросите код.',
+    ],
+    [
+      39,
+      50,
+      'Введите код из письма или сообщения. Проверьте папку «Спам», если письма нет.',
+    ],
+    [
+      50,
+      63,
+      'Дождитесь одобрения регистрации и привязки офиса администратором.',
+    ],
     [63, 77, 'После этого войдите в PASS и заказывайте пропуска.'],
   ],
   'pass-order': [
@@ -88,18 +108,19 @@ const QUICK_GUIDES = [
   },
 ] as const;
 
-const QUICK_GUIDE_STEPS: Record<(typeof QUICK_GUIDES)[number]['id'], string[]> = {
-  login: [
-    'Откройте «Регистрация» и заполните данные компании и владельца.',
-    'Подтвердите email или телефон кодом из сообщения.',
-    'Дождитесь одобрения аккаунта администратором.',
-  ],
-  'order-pass': [
-    'Откройте «Пропуска» → «Заказать пропуск».',
-    'Укажите посетителя, дату визита и офис.',
-    'Проверьте заявку и отправьте её.',
-  ],
-};
+const QUICK_GUIDE_STEPS: Record<(typeof QUICK_GUIDES)[number]['id'], string[]> =
+  {
+    login: [
+      'Откройте «Регистрация» и заполните данные компании и владельца.',
+      'Подтвердите email или телефон кодом из сообщения.',
+      'Дождитесь одобрения аккаунта администратором.',
+    ],
+    'order-pass': [
+      'Откройте «Пропуска» → «Заказать пропуск».',
+      'Укажите посетителя, дату визита и офис.',
+      'Проверьте заявку и отправьте её.',
+    ],
+  };
 
 const QUICK_GUIDE_ICONS = {
   login: UserRoundPlus,
@@ -113,7 +134,9 @@ export function HelpFaq() {
   const [tab, setTab] = useState<TabId>('faq');
   const [expandedGuide, setExpandedGuide] = useState<string | null>(null);
   const [expandedFaq, setExpandedFaq] = useState<string | null>(null);
-  const [expandedHelpVideo, setExpandedHelpVideo] = useState<string | null>(null);
+  const [expandedHelpVideo, setExpandedHelpVideo] = useState<string | null>(
+    null,
+  );
   const panelRef = useRef<HTMLDivElement>(null);
   const triggerRef = useRef<HTMLButtonElement>(null);
   const titleId = useId();
@@ -261,7 +284,10 @@ export function HelpFaq() {
 
         <div className="help-faq__body" role="tabpanel">
           {tab === 'guide' && (
-            <section className="help-faq__quick" aria-labelledby={`${titleId}-quick`}>
+            <section
+              className="help-faq__quick"
+              aria-labelledby={`${titleId}-quick`}
+            >
               <div className="help-faq__quick-heading">
                 <span className="help-faq__quick-kicker">ИНСТРУКЦИИ</span>
                 <h3 id={`${titleId}-quick`}>Выберите задачу</h3>
@@ -269,7 +295,9 @@ export function HelpFaq() {
               <div className="help-faq__quick-actions">
                 {QUICK_GUIDES.map((guide, index) => {
                   const isOpen = expandedGuide === guide.id;
-                  const video = HELP_VIDEOS.find((item) => item.id === guide.videoId)!;
+                  const video = HELP_VIDEOS.find(
+                    (item) => item.id === guide.videoId,
+                  )!;
                   const GuideIcon = QUICK_GUIDE_ICONS[guide.id];
                   return (
                     <article
@@ -284,12 +312,17 @@ export function HelpFaq() {
                           setExpandedGuide(isOpen ? null : guide.id)
                         }
                       >
-                        <span className="help-faq__quick-icon"><GuideIcon aria-hidden /></span>
+                        <span className="help-faq__quick-icon">
+                          <GuideIcon aria-hidden />
+                        </span>
                         <span className="help-faq__quick-copy">
                           <strong>{guide.title}</strong>
                           <span>{guide.description}</span>
                         </span>
-                        <ChevronDown className={`help-faq__quick-arrow ${isOpen ? 'help-faq__quick-arrow--open' : ''}`} aria-hidden />
+                        <ChevronDown
+                          className={`help-faq__quick-arrow ${isOpen ? 'help-faq__quick-arrow--open' : ''}`}
+                          aria-hidden
+                        />
                       </button>
                       {isOpen && (
                         <div className="help-faq__quick-details">
@@ -301,18 +334,31 @@ export function HelpFaq() {
                           <button
                             className="help-faq__video-link"
                             type="button"
-                            onClick={() => setExpandedHelpVideo((prev) => prev === guide.videoId ? null : guide.videoId)}
+                            onClick={() =>
+                              setExpandedHelpVideo((prev) =>
+                                prev === guide.videoId ? null : guide.videoId,
+                              )
+                            }
                             aria-expanded={expandedHelpVideo === guide.videoId}
                           >
                             <Film className="w-4 h-4" aria-hidden />
-                            {expandedHelpVideo === guide.videoId ? 'Скрыть видео' : `Смотреть видео · ${guide.videoTitle}`}
+                            {expandedHelpVideo === guide.videoId
+                              ? 'Скрыть видео'
+                              : `Смотреть видео · ${guide.videoTitle}`}
                           </button>
                           {expandedHelpVideo === guide.videoId && (
                             <div className="help-faq__inline-video">
                               <p>{video.description}</p>
-                              <video className="help-faq__video-player" controls playsInline preload="metadata" aria-label={video.title}>
+                              <video
+                                className="help-faq__video-player"
+                                controls
+                                playsInline
+                                preload="metadata"
+                                aria-label={video.title}
+                              >
                                 <source src={video.src} type="video/mp4" />
-                                Ваш браузер не поддерживает воспроизведение видео.
+                                Ваш браузер не поддерживает воспроизведение
+                                видео.
                               </video>
                               <details className="help-faq__video-script">
                                 <summary>Текст видео</summary>
@@ -370,7 +416,7 @@ export function HelpFaq() {
             </ul>
           )}
 
-          {tab === 'guide' && (
+          {tab === 'guide' &&
             guideSections.some((section) => {
               const title = section.title.toLocaleLowerCase('ru');
               return !(
@@ -379,7 +425,10 @@ export function HelpFaq() {
                 title.includes('заказ пропуска')
               );
             }) && (
-              <section className="help-faq__more-guides" aria-label="Другие инструкции">
+              <section
+                className="help-faq__more-guides"
+                aria-label="Другие инструкции"
+              >
                 <h3>Другие инструкции</h3>
                 <ul className="help-faq__list">
                   {guideSections.map((section) => {
@@ -407,10 +456,14 @@ export function HelpFaq() {
                         </button>
                         {isOpen && (
                           <div className="help-faq__item-body">
-                            {section.paragraphs?.map((p) => <p key={p}>{p}</p>)}
+                            {section.paragraphs?.map((p) => (
+                              <p key={p}>{p}</p>
+                            ))}
                             {section.steps && section.steps.length > 0 && (
                               <ol className="help-faq__steps">
-                                {section.steps.map((step) => <li key={step}>{step}</li>)}
+                                {section.steps.map((step) => (
+                                  <li key={step}>{step}</li>
+                                ))}
                               </ol>
                             )}
                           </div>
@@ -420,8 +473,7 @@ export function HelpFaq() {
                   })}
                 </ul>
               </section>
-            )
-          )}
+            )}
         </div>
 
         {(config?.sitePhone || config?.siteEmail) && (

@@ -43,8 +43,7 @@ export class OperationsIdentity {
       );
       if (ensured.identityStatus === 'active') identity = ensured;
     }
-    if (!identity)
-      fail('forbidden', 'Профиль пользователя недоступен.', 403);
+    if (!identity) fail('forbidden', 'Профиль пользователя недоступен.', 403);
     return {
       kind: 'resident',
       ref: 'resident:' + identity.subject,

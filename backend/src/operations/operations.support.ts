@@ -129,8 +129,7 @@ export class OperationsSupport {
     if (actor.kind !== 'resident' || !actor.subject)
       fail('not_found', 'Обращение не найдено.', 404);
     if (row.owner_subject === actor.subject) return;
-    if (!row.profile_id)
-      fail('not_found', 'Обращение не найдено.', 404);
+    if (!row.profile_id) fail('not_found', 'Обращение не найдено.', 404);
     try {
       await this.identities.profile(actor, String(row.profile_id), session);
     } catch (error) {

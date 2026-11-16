@@ -707,7 +707,10 @@ describe('Operations with real replica-set transactions', () => {
         { ...order, office_id: String(new Types.ObjectId()) },
         'other-office',
       ),
-    ).rejects.toThrow('Офис');
+    ).rejects.toMatchObject({
+      status: 403,
+      response: { error: { code: 'profile_unavailable' } },
+    });
     await connection
       .db!.collection('offices')
       .updateOne(

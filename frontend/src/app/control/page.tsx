@@ -483,137 +483,148 @@ function ControlPageContent() {
     <ProtectedLayout
       anyPermissions={['passes.reception', 'passes.lookup', 'admin.panel']}
     >
-      {!(selected && isMobile) && <div className="flex flex-col sm:flex-row sm:items-start justify-between gap-3 mb-5">
-        <div className="min-w-0">
-          <h1 className="page-title">{labels.pages.receptionTitle}</h1>
-          <p className="text-[var(--muted)] text-sm mt-0.5">
-            {labels.pages.receptionSubtitle}
-          </p>
-          {canScopeByProperty && (
-            <p className="text-xs text-[var(--muted)] mt-1.5">
-              {showAllProperties
-                ? labels.reception.allPropertiesHint
-                : labels.reception.scopedHint}
+      {!(selected && isMobile) && (
+        <div className="flex flex-col sm:flex-row sm:items-start justify-between gap-3 mb-5">
+          <div className="min-w-0">
+            <h1 className="page-title">{labels.pages.receptionTitle}</h1>
+            <p className="text-[var(--muted)] text-sm mt-0.5">
+              {labels.pages.receptionSubtitle}
             </p>
-          )}
-        </div>
-        <div className="flex flex-wrap items-center gap-2 shrink-0">
-          {canScopeByProperty && (
-            <button
-              type="button"
-              className={`btn btn-sm ${showAllProperties ? 'btn-primary' : 'btn-secondary'}`}
-              onClick={() => setShowAllProperties((v) => !v)}
-              title={
-                showAllProperties
+            {canScopeByProperty && (
+              <p className="text-xs text-[var(--muted)] mt-1.5">
+                {showAllProperties
+                  ? labels.reception.allPropertiesHint
+                  : labels.reception.scopedHint}
+              </p>
+            )}
+          </div>
+          <div className="flex flex-wrap items-center gap-2 shrink-0">
+            {canScopeByProperty && (
+              <button
+                type="button"
+                className={`btn btn-sm ${showAllProperties ? 'btn-primary' : 'btn-secondary'}`}
+                onClick={() => setShowAllProperties((v) => !v)}
+                title={
+                  showAllProperties
+                    ? labels.reception.showMyProperties
+                    : labels.reception.showAllProperties
+                }
+              >
+                <Building2 className="w-3.5 h-3.5" />
+                {showAllProperties
                   ? labels.reception.showMyProperties
-                  : labels.reception.showAllProperties
-              }
-            >
-              <Building2 className="w-3.5 h-3.5" />
-              {showAllProperties
-                ? labels.reception.showMyProperties
-                : labels.reception.showAllProperties}
-            </button>
-          )}
-          <input
-            className="input input--auto"
-            type="date"
-            value={date}
-            onChange={(e) => setDate(e.target.value)}
-            aria-label="Дата журнала"
-          />
+                  : labels.reception.showAllProperties}
+              </button>
+            )}
+            <input
+              className="input input--auto"
+              type="date"
+              value={date}
+              onChange={(e) => setDate(e.target.value)}
+              aria-label="Дата журнала"
+            />
+          </div>
         </div>
-      </div>}
-
-      {!(selected && isMobile) && <div className="card p-3 sm:p-4 mb-5 flex flex-col sm:flex-row gap-2.5 sm:gap-3 sm:items-center">
-        <div className="relative flex-1 min-w-0">
-          <Search className="absolute left-3 top-1/2 -translate-y-1/2 w-4 h-4 text-[var(--muted)] pointer-events-none" />
-          <input
-            className="input input--icon-left font-mono"
-            placeholder={labels.reception.lookupPlaceholder}
-            value={lookupQuery}
-            onChange={(e) => setLookupQuery(e.target.value)}
-          />
-        </div>
-        <div className="flex gap-2 shrink-0">
-          {lookupQuery.trim() && (
-            <button
-              type="button"
-              className="btn btn-secondary"
-              onClick={() => {
-                setLookupQuery('');
-                journalSearchRef.current = '';
-                setJournalSearch('');
-                setSelected(null);
-              }}
-              aria-label="Очистить поиск"
-            >
-              <X className="w-4 h-4" />
-            </button>
-          )}
-          {lookupLoading && (
-            <span className="text-sm text-[var(--muted)] px-2">...</span>
-          )}
-        </div>
-      </div>}
-
-      {!(selected && isMobile) && showOverdueAlerts && overdueCount > 0 && !overdueSectionInView && (
-        <OverdueGuestsAlert
-          passes={overduePasses}
-          labels={labels}
-          onActionClick={scrollToOverdueSection}
-          className="mb-5"
-        />
       )}
 
-      {!(selected && isMobile) && <div className="mb-5">
-        <button
-          type="button"
-          className="btn btn-secondary btn-sm"
-          onClick={() => setStatsOpen((open) => !open)}
-          aria-expanded={statsOpen}
-        >
-          <BarChart3 className="w-4 h-4" />
-          {statsOpen ? labels.reception.hideStats : labels.reception.showStats}
-        </button>
-
-        {statsOpen && (
-          <div className="grid grid-cols-2 sm:grid-cols-3 lg:grid-cols-5 gap-2.5 mt-3">
-            {statCards.map(({ key, label, value, icon: Icon, onClick }) => {
-              const clickable = !!onClick && value > 0;
-              const Tag = clickable ? 'button' : 'div';
-              return (
-                <Tag
-                  key={key}
-                  type={clickable ? 'button' : undefined}
-                  onClick={clickable ? onClick : undefined}
-                  className={[
-                    'card p-2.5 text-center transition-transform',
-                    getAccentStatClass(key),
-                    clickable
-                      ? 'cursor-pointer accent-stat--interactive hover:-translate-y-0.5'
-                      : '',
-                  ]
-                    .filter(Boolean)
-                    .join(' ')}
-                >
-                  <Icon
-                    className={`w-4 h-4 mx-auto mb-1 accent-stat__icon--${key}`}
-                  />
-                  <div
-                    className={`text-lg font-bold leading-none accent-stat__value--${key}`}
-                  >
-                    {value}
-                  </div>
-                  <div className="text-[11px] text-[var(--muted)] mt-0.5">
-                    {label}
-                  </div>
-                </Tag>
-              );
-            })}
+      {!(selected && isMobile) && (
+        <div className="card p-3 sm:p-4 mb-5 flex flex-col sm:flex-row gap-2.5 sm:gap-3 sm:items-center">
+          <div className="relative flex-1 min-w-0">
+            <Search className="absolute left-3 top-1/2 -translate-y-1/2 w-4 h-4 text-[var(--muted)] pointer-events-none" />
+            <input
+              className="input input--icon-left font-mono"
+              placeholder={labels.reception.lookupPlaceholder}
+              value={lookupQuery}
+              onChange={(e) => setLookupQuery(e.target.value)}
+            />
           </div>
+          <div className="flex gap-2 shrink-0">
+            {lookupQuery.trim() && (
+              <button
+                type="button"
+                className="btn btn-secondary"
+                onClick={() => {
+                  setLookupQuery('');
+                  journalSearchRef.current = '';
+                  setJournalSearch('');
+                  setSelected(null);
+                }}
+                aria-label="Очистить поиск"
+              >
+                <X className="w-4 h-4" />
+              </button>
+            )}
+            {lookupLoading && (
+              <span className="text-sm text-[var(--muted)] px-2">...</span>
+            )}
+          </div>
+        </div>
+      )}
+
+      {!(selected && isMobile) &&
+        showOverdueAlerts &&
+        overdueCount > 0 &&
+        !overdueSectionInView && (
+          <OverdueGuestsAlert
+            passes={overduePasses}
+            labels={labels}
+            onActionClick={scrollToOverdueSection}
+            className="mb-5"
+          />
         )}
-      </div>}
+
+      {!(selected && isMobile) && (
+        <div className="mb-5">
+          <button
+            type="button"
+            className="btn btn-secondary btn-sm"
+            onClick={() => setStatsOpen((open) => !open)}
+            aria-expanded={statsOpen}
+          >
+            <BarChart3 className="w-4 h-4" />
+            {statsOpen
+              ? labels.reception.hideStats
+              : labels.reception.showStats}
+          </button>
+
+          {statsOpen && (
+            <div className="grid grid-cols-2 sm:grid-cols-3 lg:grid-cols-5 gap-2.5 mt-3">
+              {statCards.map(({ key, label, value, icon: Icon, onClick }) => {
+                const clickable = !!onClick && value > 0;
+                const Tag = clickable ? 'button' : 'div';
+                return (
+                  <Tag
+                    key={key}
+                    type={clickable ? 'button' : undefined}
+                    onClick={clickable ? onClick : undefined}
+                    className={[
+                      'card p-2.5 text-center transition-transform',
+                      getAccentStatClass(key),
+                      clickable
+                        ? 'cursor-pointer accent-stat--interactive hover:-translate-y-0.5'
+                        : '',
+                    ]
+                      .filter(Boolean)
+                      .join(' ')}
+                  >
+                    <Icon
+                      className={`w-4 h-4 mx-auto mb-1 accent-stat__icon--${key}`}
+                    />
+                    <div
+                      className={`text-lg font-bold leading-none accent-stat__value--${key}`}
+                    >
+                      {value}
+                    </div>
+                    <div className="text-[11px] text-[var(--muted)] mt-0.5">
+                      {label}
+                    </div>
+                  </Tag>
+                );
+              })}
+            </div>
+          )}
+        </div>
+      )}
 
       {!(selected && isMobile) && loadError && (
         <PageError
@@ -626,78 +637,37 @@ function ControlPageContent() {
       )}
 
       <div className="grid lg:grid-cols-[minmax(0,1fr)_minmax(300px,380px)] gap-4 lg:gap-5 items-start">
-        {!(selected && isMobile) && <div className="min-w-0">
-          {loading ? (
-            <ListSkeleton rows={4} />
-          ) : passes.length === 0 && overdueCount === 0 ? (
-            <div className="card">
-              <EmptyState
-                icon={Users}
-                title={labels.reception.journalEmpty}
-                description="Выберите другую дату или найдите пропуск по номеру / ФИО"
-              />
-            </div>
-          ) : (
-            <div className="space-y-4">
-              {showOverdueAlerts && overduePasses.length > 0 && (
-                <section
-                  id="reception-section-overdue"
-                  ref={setOverdueSectionEl}
-                  className="scroll-mt-4"
-                >
-                  <h2
-                    className={`text-xs font-semibold mb-2 flex items-center gap-2 uppercase tracking-wide ${getSectionHeadingClass('overdue')}`}
-                  >
-                    <AlertCircle className="w-3.5 h-3.5" />
-                    {labels.reception.sectionOverdue}
-                    <span className="font-normal normal-case opacity-80">
-                      ({overduePasses.length})
-                    </span>
-                  </h2>
-                  <div className="flex flex-col gap-2 rounded-lg border theme-alert-subtle p-2">
-                    {overduePasses.map((pass) => (
-                      <PassListCard
-                        key={pass.id}
-                        pass={pass}
-                        labels={labels}
-                        selected={selected?.id === pass.id}
-                        prominent
-                        onClick={() => {
-                          setSelected(pass);
-                          if (isMobile) {
-                            requestAnimationFrame(() => {
-                              window.scrollTo({ top: 0, behavior: 'smooth' });
-                            });
-                          }
-                        }}
-                        actions={renderCardActions(pass)}
-                      />
-                    ))}
-                  </div>
-                </section>
-              )}
-
-              {receptionSections.map(({ key, title, icon: Icon }) => {
-                const sectionPasses = passesByStatus(key);
-                if (sectionPasses.length === 0) return null;
-
-                return (
+        {!(selected && isMobile) && (
+          <div className="min-w-0">
+            {loading ? (
+              <ListSkeleton rows={4} />
+            ) : passes.length === 0 && overdueCount === 0 ? (
+              <div className="card">
+                <EmptyState
+                  icon={Users}
+                  title={labels.reception.journalEmpty}
+                  description="Выберите другую дату или найдите пропуск по номеру / ФИО"
+                />
+              </div>
+            ) : (
+              <div className="space-y-4">
+                {showOverdueAlerts && overduePasses.length > 0 && (
                   <section
-                    key={key}
-                    id={`reception-section-${key}`}
+                    id="reception-section-overdue"
+                    ref={setOverdueSectionEl}
                     className="scroll-mt-4"
                   >
                     <h2
-                      className={`text-xs font-semibold mb-2 flex items-center gap-2 uppercase tracking-wide ${getSectionHeadingClass(key)}`}
+                      className={`text-xs font-semibold mb-2 flex items-center gap-2 uppercase tracking-wide ${getSectionHeadingClass('overdue')}`}
                     >
-                      <Icon className="w-3.5 h-3.5 shrink-0" />
-                      {title}
-                      <span className="font-normal normal-case opacity-70">
-                        ({sectionPasses.length})
+                      <AlertCircle className="w-3.5 h-3.5" />
+                      {labels.reception.sectionOverdue}
+                      <span className="font-normal normal-case opacity-80">
+                        ({overduePasses.length})
                       </span>
                     </h2>
-                    <div className="flex flex-col gap-2">
-                      {sectionPasses.map((pass) => (
+                    <div className="flex flex-col gap-2 rounded-lg border theme-alert-subtle p-2">
+                      {overduePasses.map((pass) => (
                         <PassListCard
                           key={pass.id}
                           pass={pass}
@@ -717,11 +687,57 @@ function ControlPageContent() {
                       ))}
                     </div>
                   </section>
-                );
-              })}
-            </div>
-          )}
-        </div>}
+                )}
+
+                {receptionSections.map(({ key, title, icon: Icon }) => {
+                  const sectionPasses = passesByStatus(key);
+                  if (sectionPasses.length === 0) return null;
+
+                  return (
+                    <section
+                      key={key}
+                      id={`reception-section-${key}`}
+                      className="scroll-mt-4"
+                    >
+                      <h2
+                        className={`text-xs font-semibold mb-2 flex items-center gap-2 uppercase tracking-wide ${getSectionHeadingClass(key)}`}
+                      >
+                        <Icon className="w-3.5 h-3.5 shrink-0" />
+                        {title}
+                        <span className="font-normal normal-case opacity-70">
+                          ({sectionPasses.length})
+                        </span>
+                      </h2>
+                      <div className="flex flex-col gap-2">
+                        {sectionPasses.map((pass) => (
+                          <PassListCard
+                            key={pass.id}
+                            pass={pass}
+                            labels={labels}
+                            selected={selected?.id === pass.id}
+                            prominent
+                            onClick={() => {
+                              setSelected(pass);
+                              if (isMobile) {
+                                requestAnimationFrame(() => {
+                                  window.scrollTo({
+                                    top: 0,
+                                    behavior: 'smooth',
+                                  });
+                                });
+                              }
+                            }}
+                            actions={renderCardActions(pass)}
+                          />
+                        ))}
+                      </div>
+                    </section>
+                  );
+                })}
+              </div>
+            )}
+          </div>
+        )}
 
         {/* Desktop: sticky side panel */}
         {selected && !isMobile && (

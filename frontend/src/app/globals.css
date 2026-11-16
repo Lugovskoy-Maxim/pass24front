@@ -853,7 +853,11 @@ input[type='checkbox']:not(.checkbox) {
 }
 
 .pass-card__quick-actions .reception-action--entry:hover:not(:disabled) {
-  background: color-mix(in srgb, var(--status-active-soft) 72%, var(--status-active));
+  background: color-mix(
+    in srgb,
+    var(--status-active-soft) 72%,
+    var(--status-active)
+  );
   border-color: var(--status-active);
 }
 
@@ -864,7 +868,11 @@ input[type='checkbox']:not(.checkbox) {
 }
 
 .pass-card__quick-actions .reception-action--reject:hover:not(:disabled) {
-  background: color-mix(in srgb, var(--status-rejected-soft) 72%, var(--status-rejected));
+  background: color-mix(
+    in srgb,
+    var(--status-rejected-soft) 72%,
+    var(--status-rejected)
+  );
   border-color: var(--status-rejected);
 }
 
@@ -2984,8 +2992,7 @@ a.pass-detail__chip:hover,
     margin-top: 0;
   }
 
-  .pass-ticket-page__layout:not(.pass-ticket-page__layout--staff)
-    .pass-ticket {
+  .pass-ticket-page__layout:not(.pass-ticket-page__layout--staff) .pass-ticket {
     max-width: 34rem;
   }
 
@@ -3531,7 +3538,10 @@ a.pass-detail__chip:hover,
   }
 
   body:has(.mobile-nav) .help-faq__panel {
-    max-height: min(48rem, calc(100dvh - 6rem - env(safe-area-inset-bottom, 0px)));
+    max-height: min(
+      48rem,
+      calc(100dvh - 6rem - env(safe-area-inset-bottom, 0px))
+    );
   }
 
   .help-faq__panel {
