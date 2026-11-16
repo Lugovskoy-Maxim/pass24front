@@ -16,7 +16,7 @@ import { OperationsIdentity } from '../operations/operations.identity';
 import { OperationsBookings } from '../operations/operations.bookings';
 import { OperationsPayments } from '../operations/operations.payments';
 import { OperationsExceptionFilter } from '../operations/operations.controller';
-import { fail, integer, OperationsActor } from '../operations/operations.rules';
+import { fail, integer } from '../operations/operations.rules';
 import { OfficeServicesService } from '../office-services/office-services.service';
 
 @Controller('office-services/bookings')
