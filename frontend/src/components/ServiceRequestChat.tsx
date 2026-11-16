@@ -1,4 +1,5 @@
 'use client';
+import { RatingForm } from '@/app/quality-rating/[token]/rating-form';
 
 import { Fragment, useEffect, useRef, useState, type ReactNode } from 'react';
 import {
@@ -230,12 +231,14 @@ export function RequestMessages({
   perspective,
   onDownload,
   followLatest = 0,
+  ratingRequests,
 }: {
   conversationId: string | number;
   messages: ChatMessage[];
   perspective: 'support' | 'client';
   onDownload: (attachment: Attachment) => void;
   followLatest?: number;
+  ratingRequests?: { token: string; createdAt: string }[];
 }) {
   const scrollRef = useRef<HTMLDivElement>(null);
   const pinned = useRef(true);
@@ -243,7 +246,29 @@ export function RequestMessages({
   const previousConversation = useRef<string | number | null>(null);
   const previousFollow = useRef(followLatest);
   const [hasNewMessages, setHasNewMessages] = useState(false);
-  const latest = messages.at(-1)?.id;
+  const entries = messages.map((message) => ({
+    ...message,
+    key: String(message.id),
+    ratingToken: '',
+  }));
+  for (const { token, createdAt } of ratingRequests ?? []) {
+    entries.push({
+      id: 0,
+      key: token,
+      ratingToken: token,
+      created_at: createdAt,
+      author_type: 'support',
+      author_label: 'Служба сервиса',
+    });
+  }
+  if (ratingRequests?.length) {
+    entries.sort(
+      (a, b) =>
+        (messageDate(a.created_at)?.getTime() ?? 0) -
+        (messageDate(b.created_at)?.getTime() ?? 0),
+    );
+  }
+  const latest = entries.at(-1)?.key;
   useEffect(() => {
     const panel = scrollRef.current;
     if (!panel) return;
@@ -299,7 +324,7 @@ export function RequestMessages({
         }}
       >
         <div className="request-messages__content">
-          {messages.map((item, index) => {
+          {entries.map((item, index) => {
             const date = messageDate(item.created_at);
             const day = date
               ? new Intl.DateTimeFormat('ru-RU', {
@@ -310,7 +335,7 @@ export function RequestMessages({
                 }).format(date)
               : item.created_at;
             const previous = index
-              ? messageDate(messages[index - 1].created_at)
+              ? messageDate(entries[index - 1].created_at)
               : null;
             const previousDay = previous
               ? new Intl.DateTimeFormat('ru-RU', {
@@ -325,70 +350,74 @@ export function RequestMessages({
                 ? ['client', 'customer'].includes(item.author_type)
                 : item.author_type === 'support';
             return (
-              <Fragment key={item.id}>
+              <Fragment key={item.key}>
                 {day !== previousDay && (
                   <div className="request-day">
                     <span>{day}</span>
                   </div>
                 )}
-                <article
-                  className={`request-message ${outgoing ? 'request-message--outgoing' : ''}`}
-                >
-                  <div className="request-message__meta">
-                    <span>
-                      {item.author_label ||
-                        (item.author_type === 'support'
-                          ? 'Сервисная служба'
-                          : 'Арендатор')}
-                    </span>
-                    <time
-                      dateTime={date?.toISOString()}
-                      title={operationDate(item.created_at)}
-                    >
-                      {date
-                        ? new Intl.DateTimeFormat('ru-RU', {
-                            timeZone: 'Europe/Moscow',
-                            hour: '2-digit',
-                            minute: '2-digit',
-                          }).format(date)
-                        : ''}
-                    </time>
-                  </div>
-                  {(item.body || item.message_text) && (
-                    <p className="request-message__body">
-                      {item.body || item.message_text}
-                    </p>
-                  )}
-                  {item.edited_at && (
-                    <small className="text-[var(--muted)]">
-                      {item.deleted
-                        ? 'Удалён или скрыт в CRM'
-                        : 'Изменён в CRM'}
-                    </small>
-                  )}
-                  {item.attachments?.map((attachment) => (
-                    <button
-                      key={attachment.attachment_id}
-                      type="button"
-                      className="request-attachment"
-                      aria-label={attachment.original_name}
-                      onClick={() => onDownload(attachment)}
-                    >
-                      <FileText size={20} aria-hidden="true" />
+                {item.ratingToken ? (
+                  <RatingForm token={item.ratingToken} inline />
+                ) : (
+                  <article
+                    className={`request-message ${outgoing ? 'request-message--outgoing' : ''}`}
+                  >
+                    <div className="request-message__meta">
                       <span>
-                        <span className="request-attachment__name">
-                          {attachment.original_name}
-                        </span>
-                        <span className="request-attachment__size">
-                          {attachment.size >= 1048576
-                            ? `${(attachment.size / 1048576).toFixed(1)} МБ`
-                            : `${Math.max(1, Math.round(attachment.size / 1024))} КБ`}
-                        </span>
+                        {item.author_label ||
+                          (item.author_type === 'support'
+                            ? 'Сервисная служба'
+                            : 'Арендатор')}
                       </span>
-                      <Download size={15} aria-hidden="true" />
-                    </button>
-                  ))}
-                </article>
+                      <time
+                        dateTime={date?.toISOString()}
+                        title={operationDate(item.created_at)}
+                      >
+                        {date
+                          ? new Intl.DateTimeFormat('ru-RU', {
+                              timeZone: 'Europe/Moscow',
+                              hour: '2-digit',
+                              minute: '2-digit',
+                            }).format(date)
+                          : ''}
+                      </time>
+                    </div>
+                    {(item.body || item.message_text) && (
+                      <p className="request-message__body">
+                        {item.body || item.message_text}
+                      </p>
+                    )}
+                    {item.edited_at && (
+                      <small className="text-[var(--muted)]">
+                        {item.deleted
+                          ? 'Удалён или скрыт в CRM'
+                          : 'Изменён в CRM'}
+                      </small>
+                    )}
+                    {item.attachments?.map((attachment) => (
+                      <button
+                        key={attachment.attachment_id}
+                        type="button"
+                        className="request-attachment"
+                        aria-label={attachment.original_name}
+                        onClick={() => onDownload(attachment)}
+                      >
+                        <FileText size={20} aria-hidden="true" />
+                        <span>
+                          <span className="request-attachment__name">
+                            {attachment.original_name}
+                          </span>
+                          <span className="request-attachment__size">
+                            {attachment.size >= 1048576
+                              ? `${(attachment.size / 1048576).toFixed(1)} МБ`
+                              : `${Math.max(1, Math.round(attachment.size / 1024))} КБ`}
+                          </span>
+                        </span>
+                        <Download size={15} aria-hidden="true" />
+                      </button>
+                    ))}
+                  </article>
+                )}
               </Fragment>
             );
           })}

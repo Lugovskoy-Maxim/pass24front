@@ -1,15 +1,15 @@
 import { Injectable, OnModuleInit } from '@nestjs/common';
 import { InjectConnection } from '@nestjs/mongoose';
 import { Connection } from 'mongoose';
-import { ClientSession } from 'mongodb';
+import { ClientSession, Document } from 'mongodb';
 import { fail, fingerprint, OperationsActor, sqlNow } from './operations.rules';
 
 /** All operational writes use one Mongo session, including the command receipt. */
 @Injectable()
 export class OperationsStore implements OnModuleInit {
   constructor(@InjectConnection() readonly connection: Connection) {}
-  collection(name: string) {
-    return this.connection.db!.collection<any>('mstyle_ops_' + name);
+  collection<T extends Document = any>(name: string) {
+    return this.connection.db!.collection<T>('mstyle_ops_' + name);
   }
   canonical(name: string) {
     return this.connection.db!.collection<any>('mstyle_v2_' + name);

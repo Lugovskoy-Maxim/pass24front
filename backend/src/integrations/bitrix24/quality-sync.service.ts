@@ -1,0 +1,206 @@
+import {
+  Injectable,
+  Logger,
+  OnModuleDestroy,
+  OnModuleInit,
+} from '@nestjs/common';
+import { OperationsStore } from '../../operations/operations.store';
+import { Bitrix24Client, Bitrix24Error } from './bitrix24.client';
+
+interface QualityDeal {
+  ID: string;
+  TITLE: string;
+  DATE_CREATE: string;
+  STAGE_ID: string;
+  CREATED_BY_ID: string;
+  COMPANY_ID: string;
+  SOURCE_ID: string;
+  ORIGINATOR_ID: string;
+  ORIGIN_ID: string;
+}
+
+@Injectable()
+export class QualitySyncService implements OnModuleInit, OnModuleDestroy {
+  private readonly logger = new Logger(QualitySyncService.name);
+  private timer?: ReturnType<typeof setInterval>;
+  private running = false;
+
+  constructor(
+    private readonly store: OperationsStore,
+    private readonly client: Bitrix24Client,
+  ) {}
+
+  async onModuleInit() {
+    await this.store
+      .collection('quality_tickets')
+      .createIndex({ 'requests.token': 1 }, { unique: true, sparse: true });
+    if (!this.client.enabled()) return;
+    this.timer = setInterval(() => void this.sync(), 60000);
+    this.timer.unref();
+    void this.sync();
+  }
+
+  onModuleDestroy() {
+    clearInterval(this.timer);
+  }
+
+  async sync() {
+    if (this.running) return;
+    this.running = true;
+    try {
+      const startedAt = new Date();
+      const state = this.store.collection('quality_sync');
+      const checkpoint = await state.findOne({ _id: 'deals' });
+      const funnel = await this.client.funnel();
+      const stages = new Map(funnel.stages.map(({ id, name }) => [id, name]));
+      const tickets = this.store.collection('quality_tickets');
+      const offices = await this.store.connection
+        .db!.collection('offices')
+        .find({}, { projection: { number: 1, company: 1 } })
+        .toArray();
+      const normalize = (value: unknown) =>
+        String(value ?? '')
+          .trim()
+          .toLocaleLowerCase('ru');
+      const companies = new Map<number, string>();
+      let afterId = 0;
+      while (true) {
+        const { result } = await this.client.call<QualityDeal[]>(
+          'crm.deal.list',
+          {
+            order: { ID: 'ASC' },
+            start: -1,
+            filter: {
+              CATEGORY_ID: funnel.id,
+              '>ID': afterId,
+              ...(checkpoint?.categoryId === funnel.id && checkpoint.scannedAt
+                ? {
+                    '>=DATE_MODIFY': new Date(
+                      checkpoint.scannedAt.getTime() - 60000,
+                    ).toISOString(),
+                  }
+                : {}),
+            },
+            select: [
+              'ID',
+              'TITLE',
+              'DATE_CREATE',
+              'STAGE_ID',
+              'CREATED_BY_ID',
+              'COMPANY_ID',
+              'SOURCE_ID',
+              'ORIGINATOR_ID',
+              'ORIGIN_ID',
+            ],
+          },
+        );
+        if (!Array.isArray(result)) throw new Error('Invalid deal list');
+        if (!result.length) break;
+        for (const deal of result) {
+          const dealId = Number(deal.ID);
+          const createdAt = new Date(deal.DATE_CREATE);
+          if (
+            !Number.isSafeInteger(dealId) ||
+            dealId <= afterId ||
+            !Number.isFinite(createdAt.getTime())
+          ) {
+            throw new Error('Invalid deal record');
+          }
+          const passTicketId =
+            deal.ORIGINATOR_ID === this.client.originator()
+              ? String(deal.ORIGIN_ID || '')
+              : '';
+          const passTicket = passTicketId
+            ? await this.store
+                .collection('tickets')
+                .findOne(
+                  { id: Number(passTicketId), 'bitrix.deal_id': dealId },
+                  { projection: { requester_name: 1 } },
+                )
+            : null;
+          // The Pass CRM worker writes the resolved tenant company to the deal.
+          const companyId = Number(deal.COMPANY_ID) || null;
+          if (companyId && !companies.has(companyId)) {
+            try {
+              const { result } = await this.client.call<{ TITLE?: string }>(
+                'crm.company.get',
+                { id: companyId },
+              );
+              companies.set(companyId, normalize(result?.TITLE));
+            } catch (error) {
+              if (
+                !(error instanceof Bitrix24Error) ||
+                ![
+                  'not_found',
+                  'error_not_found',
+                  'access_denied',
+                  'http_403',
+                  'http_404',
+                ].includes(error.code.toLowerCase())
+              )
+                throw error;
+              companies.set(companyId, '');
+            }
+          }
+          const company = companyId ? companies.get(companyId) : '';
+          const companyOffices = company
+            ? offices.filter((office) => normalize(office.company) === company)
+            : [];
+          const words = (value: unknown) =>
+            normalize(value)
+              .replace(/[^\p{L}\p{N}-]+/gu, ' ')
+              .trim();
+          const title = ` ${words(deal.TITLE)} `;
+          const titleOffices = offices.filter((office) => {
+            const label = words(office.number);
+            return label && title.includes(` ${label} `);
+          });
+          const office =
+            companyOffices.length === 1
+              ? companyOffices[0]
+              : titleOffices.length === 1
+                ? titleOffices[0]
+                : undefined;
+          const creatorId = String(deal.CREATED_BY_ID || '');
+          const creatorName =
+            passTicket?.requester_name ||
+            (creatorId ? await this.client.author(creatorId) : '');
+          await tickets.updateOne(
+            { _id: String(dealId) },
+            {
+              $set: {
+                title: deal.TITLE,
+                createdAt,
+                stageId: deal.STAGE_ID,
+                stageName: stages.get(deal.STAGE_ID) ?? deal.STAGE_ID,
+                source: passTicketId ? 'Pass' : deal.SOURCE_ID || 'Битрикс24',
+                creatorId,
+                creatorName,
+                companyId,
+                autoOfficeId: office ? String(office.number) : '',
+                passTicketId,
+              },
+            },
+            { upsert: true },
+          );
+          afterId = dealId;
+        }
+      }
+      await state.updateOne(
+        { _id: 'deals' },
+        {
+          $set: { categoryId: funnel.id },
+          $max: { scannedAt: startedAt, completedAt: new Date() },
+        },
+        { upsert: true },
+      );
+    } catch (error) {
+      const code = error instanceof Bitrix24Error ? error.code : 'sync_failed';
+      this.logger.warn(
+        `Не удалось синхронизировать заявки для контроля качества (${code})`,
+      );
+    } finally {
+      this.running = false;
+    }
+  }
+}

@@ -50,6 +50,7 @@ type TenantTicket = {
 };
 type Detail = {
   ticket: TenantTicket;
+  ratingRequests?: { token: string; createdAt: string }[];
   messages: {
     id: number;
     author_label: string;
@@ -407,6 +408,7 @@ export default function RequestsPage() {
                 <RequestMessages
                   conversationId={detail.ticket.id}
                   messages={detail.messages}
+                  ratingRequests={detail.ratingRequests}
                   perspective="client"
                   onDownload={(attachment) => void download(attachment)}
                 />

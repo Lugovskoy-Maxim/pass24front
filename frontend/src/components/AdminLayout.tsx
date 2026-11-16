@@ -11,6 +11,7 @@ import {
   LayoutDashboard,
   CalendarDays,
   MessagesSquare,
+  ClipboardCheck,
   Users,
   ScrollText,
   ArrowLeft,
@@ -45,6 +46,12 @@ const NAV = [
     permission: 'support.manage',
   },
   { href: '/admin', label: 'Обзор', icon: LayoutDashboard, exact: true },
+  {
+    href: '/admin/quality',
+    label: 'Контроль качества',
+    icon: ClipboardCheck,
+    permission: 'support.manage',
+  },
   {
     href: '/admin/users',
     label: 'Пользователи',

@@ -105,14 +105,36 @@ export class ServiceRequestsController {
       .send(file.bytes);
   }
   @Get(':id')
+  @Header('Cache-Control', 'no-store')
   async get(@Param('id') id: string, @Req() req: any) {
     const result = await this.support.detail(
       await this.actor(req.user),
       integer(id, 'id', 1),
     );
+    const linked = await this.support.store
+      .collection('tickets')
+      .findOne(
+        { id: Number(result.ticket.id) },
+        { projection: { 'bitrix.deal_id': 1 } },
+      );
+    const quality = linked?.bitrix?.deal_id
+      ? await this.support.store.collection('quality_tickets').findOne(
+          {
+            passTicketId: String(result.ticket.id),
+            _id: String(linked.bitrix.deal_id),
+          },
+          { projection: { requests: 1 } },
+        )
+      : null;
     return {
       stub: false,
       ticket: this.ticket(result.ticket),
+      ratingRequests: (quality?.requests ?? [])
+        .filter((request) => request.chat === true)
+        .map(({ token, createdAt, chatAt }) => ({
+          token,
+          createdAt: chatAt ?? createdAt,
+        })),
       messages: result.messages.map((row) => ({
         ...row,
         body: row.message_text,

@@ -22,6 +22,11 @@ import { MstyleAuthService } from './mstyle-v2.auth.service';
 import { MstyleV2Config } from './mstyle-v2.config';
 import { Bitrix24Client } from '../bitrix24/bitrix24.client';
 import { Bitrix24Service } from '../bitrix24/bitrix24.service';
+import { QualitySyncService } from '../bitrix24/quality-sync.service';
+import {
+  QualityAdminController,
+  QualityRatingController,
+} from '../bitrix24/quality.controller';
 import { MstyleDirectoryService } from './mstyle-v2.directory.service';
 import { MstyleEventsService } from './mstyle-v2.events';
 import { MstyleGuestsService } from './mstyle-v2.guests.service';
@@ -71,12 +76,15 @@ import { MstyleManualTestingService } from './mstyle-v2.manual-testing.service';
     MstyleManualTestingService,
   ],
   controllers: [
+    QualityAdminController,
+    QualityRatingController,
     MstyleOauthController,
     MstylePrivateController,
     OperationsAdminController,
     OperationsPrivateController,
   ],
   providers: [
+    QualitySyncService,
     Bitrix24Client,
     Bitrix24Service,
     OperationsStore,

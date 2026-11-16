@@ -581,6 +581,32 @@ describe('Operations with real replica-set transactions', () => {
     const user = (userId: string) => ({
       user: { userId, permissions: ['requests.view_own'] },
     });
+    await store
+      .collection('tickets')
+      .updateOne(
+        { id: created.ticket.id },
+        { $set: { 'bitrix.deal_id': 9981 } },
+      );
+    const createdAt = new Date();
+    const chatAt = new Date(createdAt.getTime() + 1000);
+    await store.collection('quality_tickets').insertOne({
+      _id: '9981',
+      passTicketId: String(created.ticket.id),
+      requests: [
+        { token: 'private-link', createdAt },
+        { token: 'shared-in-chat', createdAt, chatAt, chat: true },
+      ],
+    });
+    const detail = await controller.get(
+      String(created.ticket.id),
+      user('owner-user'),
+    );
+    expect(detail.ratingRequests).toEqual([
+      { token: 'shared-in-chat', createdAt: chatAt },
+    ]);
+    await expect(
+      controller.get(String(created.ticket.id), user('other-user')),
+    ).rejects.toMatchObject({ status: 404 });
     await controller.download(
       user('owner-user'),
       String(file.attachment_id),

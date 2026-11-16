@@ -1,0 +1,429 @@
+'use client';
+
+import { useCallback, useEffect, useRef, useState } from 'react';
+import { useAutoRefresh } from '@/hooks/useAutoRefresh';
+import { AdminLayout } from '@/components/AdminLayout';
+import { request } from '@/lib/api';
+
+interface Answer {
+  score: number;
+  comment: string;
+  receivedAt: string;
+}
+
+interface RatingRequest {
+  token: string;
+  createdAt: string;
+  answer?: Answer;
+}
+
+interface Ticket {
+  _id: string;
+  title: string;
+  createdAt: string;
+  source: string;
+  stageId: string;
+  stageName?: string;
+  creatorId?: string;
+  chatAvailable?: boolean;
+  creatorName?: string;
+  officeId?: string;
+  important?: boolean;
+  excluded?: boolean;
+  requests?: RatingRequest[];
+}
+
+interface QualityData {
+  lastSyncedAt: string | null;
+  tickets: Ticket[];
+  report: {
+    created: number;
+    requested: number;
+    answered: number;
+    excluded: number;
+    average: number | null;
+    distribution: number[];
+  } | null;
+}
+
+const formatter = new Intl.DateTimeFormat('ru-RU', {
+  dateStyle: 'short',
+  timeStyle: 'short',
+  timeZone: 'Europe/Moscow',
+});
+
+function mondayOf(date: string) {
+  const day = new Date(date + 'T00:00:00Z');
+  day.setUTCDate(day.getUTCDate() - ((day.getUTCDay() + 6) % 7));
+  return day.toISOString().slice(0, 10);
+}
+
+export default function QualityPage() {
+  const [week, setWeek] = useState(() =>
+    mondayOf(new Date(Date.now() + 10800000).toISOString().slice(0, 10)),
+  );
+  const [officeId, setOfficeId] = useState('');
+  const [importantOnly, setImportantOnly] = useState(false);
+  const [data, setData] = useState<QualityData>();
+  const [notice, setNotice] = useState('');
+  const [error, setError] = useState('');
+  const [busy, setBusy] = useState(false);
+  const [link, setLink] = useState('');
+  const loadSequence = useRef(0);
+
+  const load = useCallback(
+    async (signal?: AbortSignal) => {
+      const sequence = ++loadSequence.current;
+      const query = new URLSearchParams({
+        week,
+        officeId,
+        importantOnly: String(importantOnly),
+      });
+      const result = await request<QualityData>('/admin/quality?' + query, {
+        signal,
+      });
+      if (!signal?.aborted && sequence === loadSequence.current)
+        setData(result);
+    },
+    [week, officeId, importantOnly],
+  );
+
+  useAutoRefresh(() => load().catch(() => undefined), { enabled: !busy });
+
+  useEffect(() => {
+    const controller = new AbortController();
+    void load(controller.signal).catch(() => {
+      if (!controller.signal.aborted) setError('Не удалось загрузить заявки.');
+    });
+    return () => controller.abort();
+  }, [load]);
+
+  async function change(action: () => Promise<unknown>) {
+    setBusy(true);
+    setError('');
+    setNotice('');
+    try {
+      await action();
+      await load();
+    } catch {
+      setError(
+        'Не удалось выполнить действие. Обновите страницу и попробуйте ещё раз.',
+      );
+    } finally {
+      setBusy(false);
+    }
+  }
+
+  function patch(
+    id: string,
+    fields: Partial<Pick<Ticket, 'officeId' | 'important' | 'excluded'>>,
+  ) {
+    return change(() =>
+      request('/admin/quality/' + id, {
+        method: 'PATCH',
+        body: JSON.stringify(fields),
+      }),
+    );
+  }
+
+  function copyLink(id: string, repeat: boolean, chat = false) {
+    return change(async () => {
+      const rating = await request<RatingRequest>(
+        '/admin/quality/' + id + '/requests',
+        {
+          method: 'POST',
+          body: JSON.stringify({ repeat, chat }),
+        },
+      );
+      const url = new URL(
+        '/quality-rating/' + rating.token,
+        window.location.origin,
+      ).href;
+      setLink(url);
+      if (chat) {
+        setNotice('Запрос оценки появился в чате.');
+        return;
+      }
+      try {
+        await navigator.clipboard.writeText(url);
+        setNotice('Ссылка скопирована.');
+      } catch {
+        setNotice('Скопируйте ссылку из поля ниже.');
+      }
+    });
+  }
+
+  const report = data?.report;
+  return (
+    <AdminLayout title="Контроль качества">
+      <fieldset disabled={busy} className="my-4 flex flex-wrap items-end gap-4">
+        <label className="grid gap-1">
+          Неделя с понедельника
+          <input
+            type="date"
+            value={week}
+            onChange={(event) => {
+              if (event.target.value) setWeek(mondayOf(event.target.value));
+            }}
+          />
+        </label>
+        <form
+          className="flex items-end gap-2"
+          onSubmit={(event) => {
+            event.preventDefault();
+            setOfficeId(
+              String(
+                new FormData(event.currentTarget).get('office') ?? '',
+              ).trim(),
+            );
+          }}
+        >
+          <label className="grid gap-1">
+            Офис
+            <input name="office" defaultValue={officeId} />
+          </label>
+          <button className="btn-secondary">Применить</button>
+        </form>
+        <label className="flex items-center gap-2">
+          <input
+            type="checkbox"
+            checked={importantOnly}
+            onChange={(event) => setImportantOnly(event.target.checked)}
+          />
+          Только важные
+        </label>
+      </fieldset>
+      {error && <p role="alert">{error}</p>}
+      {!data && !error && <p role="status">Загрузка…</p>}
+      {notice && <p role="status">{notice}</p>}
+      {link && (
+        <input
+          className="my-2 w-full"
+          aria-label="Ссылка на оценку"
+          readOnly
+          value={link}
+          onFocus={(event) => event.currentTarget.select()}
+        />
+      )}
+      {report && (
+        <section className="my-4" aria-labelledby="quality-weekly">
+          <h2 id="quality-weekly" className="font-semibold">
+            Недельный срез
+          </h2>
+          <dl className="flex flex-wrap gap-4">
+            {Object.entries({
+              Заявки: report.created,
+              Запросы: report.requested,
+              Ответы: report.answered,
+              'Средний балл':
+                report.average?.toLocaleString('ru-RU', {
+                  maximumFractionDigits: 2,
+                }) ?? '—',
+              Исключено: report.excluded,
+            }).map(([label, value]) => (
+              <div key={label}>
+                <dt>{label}</dt>
+                <dd>{value}</dd>
+              </div>
+            ))}
+          </dl>
+          <ul
+            aria-label="Распределение оценок"
+            className="mt-2 flex flex-wrap gap-4"
+          >
+            {report.distribution.map((count, index) => (
+              <li key={index}>
+                Оценка {index + 1}: {count}
+              </li>
+            ))}
+          </ul>
+        </section>
+      )}
+      {data && (
+        <p className="my-2 text-sm">
+          {data.lastSyncedAt
+            ? `Последний успешный импорт: ${formatter.format(new Date(data.lastSyncedAt))}`
+            : 'Первый импорт из Битрикс24 ещё не завершён.'}
+        </p>
+      )}
+      {data?.tickets.length === 0 && data.lastSyncedAt && (
+        <p>Заявок по выбранным фильтрам нет.</p>
+      )}
+      {!!data?.tickets.length && (
+        <div className="overflow-x-auto">
+          <table className="w-full text-left [&_td]:p-2 [&_th]:p-2">
+            <thead>
+              <tr>
+                {[
+                  'Заявка',
+                  'Источник',
+                  'Создана',
+                  'Статус',
+                  'Автор',
+                  'Офис',
+                  'Последний запрос',
+                  'Последняя оценка',
+                  'Отметки',
+                  'Действия',
+                ].map((label) => (
+                  <th key={label} scope="col">
+                    {label}
+                  </th>
+                ))}
+              </tr>
+            </thead>
+            <tbody>
+              {data.tickets.map((ticket) => {
+                const latest = ticket.requests?.at(-1);
+                const answers = (ticket.requests ?? [])
+                  .flatMap(({ answer }) => (answer ? [answer] : []))
+                  .sort((a, b) => b.receivedAt.localeCompare(a.receivedAt));
+                const answer = answers[0];
+                return (
+                  <tr key={ticket._id} className="border-t align-top">
+                    <th scope="row">
+                      №{ticket._id} {ticket.title}
+                    </th>
+                    <td>{ticket.source}</td>
+                    <td>{formatter.format(new Date(ticket.createdAt))}</td>
+                    <td>{ticket.stageName || ticket.stageId}</td>
+                    <td>{ticket.creatorName || ticket.creatorId || '—'}</td>
+                    <td>
+                      <form
+                        className="grid gap-1"
+                        onSubmit={(event) => {
+                          event.preventDefault();
+                          void patch(ticket._id, {
+                            officeId: String(
+                              new FormData(event.currentTarget).get('office') ??
+                                '',
+                            ),
+                          });
+                        }}
+                      >
+                        <input
+                          key={ticket.officeId}
+                          name="office"
+                          aria-label={`Офис заявки №${ticket._id}`}
+                          defaultValue={ticket.officeId}
+                          disabled={busy}
+                        />
+                        <button disabled={busy}>Сохранить офис</button>
+                      </form>
+                    </td>
+                    <td>
+                      {latest ? (
+                        <>
+                          {formatter.format(new Date(latest.createdAt))}
+                          <br />
+                          {latest.answer ? 'Получен ответ' : 'Ожидает ответа'}
+                        </>
+                      ) : (
+                        '—'
+                      )}
+                    </td>
+                    <td>
+                      {answer ? (
+                        <>
+                          {answer.score} из 5 ·{' '}
+                          {formatter.format(new Date(answer.receivedAt))}
+                          <br />
+                          {answer.comment}
+                        </>
+                      ) : (
+                        '—'
+                      )}
+                      {answers.length > 1 && (
+                        <details>
+                          <summary>История оценок</summary>
+                          <ol>
+                            {answers.map((item, index) => (
+                              <li key={index}>
+                                {formatter.format(new Date(item.receivedAt))} ·{' '}
+                                {item.score} из 5 {item.comment}
+                              </li>
+                            ))}
+                          </ol>
+                        </details>
+                      )}
+                    </td>
+                    <td>
+                      <label className="block">
+                        <input
+                          type="checkbox"
+                          checked={!!ticket.important}
+                          disabled={busy}
+                          onChange={(event) =>
+                            void patch(ticket._id, {
+                              important: event.target.checked,
+                            })
+                          }
+                        />{' '}
+                        Важная
+                      </label>
+                      <label className="block">
+                        <input
+                          type="checkbox"
+                          checked={!!ticket.excluded}
+                          disabled={busy}
+                          onChange={(event) =>
+                            void patch(ticket._id, {
+                              excluded: event.target.checked,
+                            })
+                          }
+                        />{' '}
+                        Не учитывать
+                      </label>
+                    </td>
+                    <td className="min-w-48">
+                      <button
+                        className="btn-secondary"
+                        disabled={busy}
+                        onClick={() => void copyLink(ticket._id, false)}
+                      >
+                        Скопировать ссылку на оценку
+                      </button>
+                      {latest && (
+                        <button
+                          className="btn-secondary mt-2"
+                          disabled={busy}
+                          onClick={() => void copyLink(ticket._id, true)}
+                        >
+                          Запросить повторную оценку
+                        </button>
+                      )}
+                      {ticket.chatAvailable && (
+                        <>
+                          <button
+                            className="btn-secondary mt-2"
+                            disabled={busy}
+                            onClick={() =>
+                              void copyLink(ticket._id, false, true)
+                            }
+                          >
+                            Запросить оценку в чате
+                          </button>
+                          {latest && (
+                            <button
+                              className="btn-secondary mt-2"
+                              disabled={busy}
+                              onClick={() =>
+                                void copyLink(ticket._id, true, true)
+                              }
+                            >
+                              Запросить повторную оценку в чате
+                            </button>
+                          )}
+                        </>
+                      )}
+                    </td>
+                  </tr>
+                );
+              })}
+            </tbody>
+          </table>
+        </div>
+      )}
+    </AdminLayout>
+  );
+}
