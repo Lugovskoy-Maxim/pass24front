@@ -50,7 +50,11 @@ type TenantTicket = {
 };
 type Detail = {
   ticket: TenantTicket;
-  ratingRequests?: { token: string; createdAt: string }[];
+  ratingRequests?: {
+    token: string;
+    createdAt: string;
+    answer?: { score: number; comment: string };
+  }[];
   messages: {
     id: number;
     author_label: string;

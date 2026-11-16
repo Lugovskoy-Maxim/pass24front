@@ -1,5 +1,8 @@
 'use client';
-import { RatingForm } from '@/app/quality-rating/[token]/rating-form';
+import {
+  RatingForm,
+  type RatingAnswer,
+} from '@/app/quality-rating/[token]/rating-form';
 
 import { Fragment, useEffect, useRef, useState, type ReactNode } from 'react';
 import {
@@ -238,7 +241,11 @@ export function RequestMessages({
   perspective: 'support' | 'client';
   onDownload: (attachment: Attachment) => void;
   followLatest?: number;
-  ratingRequests?: { token: string; createdAt: string }[];
+  ratingRequests?: {
+    token: string;
+    createdAt: string;
+    answer?: RatingAnswer;
+  }[];
 }) {
   const scrollRef = useRef<HTMLDivElement>(null);
   const pinned = useRef(true);
@@ -250,12 +257,14 @@ export function RequestMessages({
     ...message,
     key: String(message.id),
     ratingToken: '',
+    ratingAnswer: undefined as RatingAnswer | undefined,
   }));
-  for (const { token, createdAt } of ratingRequests ?? []) {
+  for (const { token, createdAt, answer } of ratingRequests ?? []) {
     entries.push({
       id: 0,
       key: token,
       ratingToken: token,
+      ratingAnswer: answer,
       created_at: createdAt,
       author_type: 'support',
       author_label: 'Служба сервиса',
@@ -357,7 +366,11 @@ export function RequestMessages({
                   </div>
                 )}
                 {item.ratingToken ? (
-                  <RatingForm token={item.ratingToken} inline />
+                  <RatingForm
+                    token={item.ratingToken}
+                    inline
+                    chatAnswer={item.ratingAnswer}
+                  />
                 ) : (
                   <article
                     className={`request-message ${outgoing ? 'request-message--outgoing' : ''}`}

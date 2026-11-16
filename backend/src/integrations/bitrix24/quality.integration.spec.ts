@@ -105,7 +105,7 @@ describe('quality rating persistence', () => {
       const path = '/api/quality-rating/' + token;
       await http
         .get(path)
-        .expect(200, { title: 'Публичная оценка', answer: null });
+        .expect(200, { title: 'Публичная оценка', closed: false });
       await http.post(path).send({ score: 2.5 }).expect(400);
       await http
         .post(path)
@@ -116,7 +116,7 @@ describe('quality rating persistence', () => {
         .get(path)
         .expect('Cache-Control', 'no-store')
         .expect(200);
-      expect(response.body.answer).toMatchObject({ score: 5, comment: '' });
+      expect(response.body).toEqual({ closed: true });
     } finally {
       await app.close();
     }
@@ -299,29 +299,39 @@ describe('quality rating persistence', () => {
     await expect(
       rating.answer(chat.token, 4, 'Спасибо'),
     ).resolves.toMatchObject({
-      answer: { score: 4, comment: 'Спасибо' },
+      closed: true,
     });
     await expect(
       rating.answer(link.token, 1, 'Другой ответ'),
     ).resolves.toMatchObject({
-      answer: { score: 4, comment: 'Спасибо' },
+      closed: true,
     });
 
     const repeat = await manager.create('42', true, true);
     expect(repeat.token).not.toBe(link.token);
     await expect(rating.get(repeat.token)).resolves.toMatchObject({
-      answer: null,
+      closed: false,
     });
     const [fromChat, fromLink] = await Promise.all([
       rating.answer(repeat.token, 5, 'Из чата'),
       rating.answer(repeat.token, 3, 'По ссылке'),
     ]);
-    expect(fromChat.answer).toEqual(fromLink.answer);
-    expect([3, 5]).toContain(fromChat.answer.score);
+    expect(fromChat).toEqual({ closed: true });
+    expect(fromLink).toEqual({ closed: true });
     await expect(rating.get(link.token)).resolves.toMatchObject({
-      answer: { score: 4 },
+      closed: true,
     });
     const result = await manager.list();
+    const found = await manager.list(
+      undefined,
+      undefined,
+      undefined,
+      '1',
+      '25',
+      'false',
+      '№42',
+    );
+    expect(found.tickets.map(({ _id }) => _id)).toEqual(['42']);
     expect(
       result.tickets.find((ticket) => ticket._id === '42')?.chatAvailable,
     ).toBe(true);

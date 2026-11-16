@@ -2,17 +2,20 @@
 
 import { useEffect, useState, type FormEvent } from 'react';
 
-interface Rating {
-  title: string;
-  answer: { score: number; comment: string } | null;
+export interface RatingAnswer {
+  score: number;
+  comment: string;
 }
+type Rating = { title: string; closed: false } | { closed: true };
 
 export function RatingForm({
   token,
   inline = false,
+  chatAnswer,
 }: {
   token: string;
   inline?: boolean;
+  chatAnswer?: RatingAnswer;
 }) {
   const base = process.env.NEXT_PUBLIC_API_URL || 'http://127.0.0.1:4000/api';
   const url = base + '/quality-rating/' + encodeURIComponent(token);
@@ -21,7 +24,7 @@ export function RatingForm({
   const [comment, setComment] = useState('');
   const [pending, setPending] = useState(false);
   const [error, setError] = useState('');
-  const answered = !!rating?.answer;
+  const answered = !!rating?.closed || !!chatAnswer;
   const loaded = !!rating;
 
   useEffect(() => {
@@ -36,8 +39,8 @@ export function RatingForm({
           if (!response.ok) throw new Error(String(response.status));
           const next: Rating = await response.json();
           if (!controller.signal.aborted) {
-            setRating((previous) => (previous?.answer ? previous : next));
-            if (!loaded || next.answer) setError('');
+            setRating((previous) => (previous?.closed ? previous : next));
+            if (!loaded || next.closed) setError('');
           }
         })
         .catch((failure: Error) => {
@@ -91,22 +94,27 @@ export function RatingForm({
       }
     >
       <Heading className="text-2xl font-semibold">Оценка заявки</Heading>
-      {rating && !inline && <p className="my-4">{rating.title}</p>}
+      {rating && !rating.closed && !inline && (
+        <p className="my-4">{rating.title}</p>
+      )}
       {error && (
         <p role="alert" className="my-4">
           {error}
         </p>
       )}
-      {!rating && !error && <p role="status">Загрузка…</p>}
-      {rating?.answer && (
+      {!rating && !chatAnswer && !error && <p role="status">Загрузка…</p>}
+      {chatAnswer && (
         <section aria-label="Ваш ответ">
-          <p>Ваша оценка: {rating.answer.score} из 5</p>
-          {rating.answer.comment && (
-            <p className="whitespace-pre-wrap">{rating.answer.comment}</p>
+          <p>Ваша оценка: {chatAnswer.score} из 5</p>
+          {chatAnswer.comment && (
+            <p className="whitespace-pre-wrap">{chatAnswer.comment}</p>
           )}
         </section>
       )}
-      {rating && !rating.answer && (
+      {rating?.closed && !chatAnswer && (
+        <p role="status">Опрос закрыт. Ответ уже получен.</p>
+      )}
+      {rating && !answered && (
         <form onSubmit={submit} className="grid gap-4">
           <fieldset disabled={pending}>
             <legend>Выберите оценку</legend>

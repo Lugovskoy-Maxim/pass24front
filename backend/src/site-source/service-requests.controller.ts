@@ -131,9 +131,12 @@ export class ServiceRequestsController {
       ticket: this.ticket(result.ticket),
       ratingRequests: (quality?.requests ?? [])
         .filter((request) => request.chat === true)
-        .map(({ token, createdAt, chatAt }) => ({
+        .map(({ token, createdAt, chatAt, answer }) => ({
           token,
           createdAt: chatAt ?? createdAt,
+          ...(answer
+            ? { answer: { score: answer.score, comment: answer.comment } }
+            : {}),
         })),
       messages: result.messages.map((row) => ({
         ...row,

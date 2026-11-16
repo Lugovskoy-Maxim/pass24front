@@ -57,6 +57,12 @@ const formatter = new Intl.DateTimeFormat('ru-RU', {
   timeStyle: 'short',
   timeZone: 'Europe/Moscow',
 });
+const dateFormatter = new Intl.DateTimeFormat('ru-RU', {
+  day: '2-digit',
+  month: '2-digit',
+  year: '2-digit',
+  timeZone: 'Europe/Moscow',
+});
 
 function mondayOf(date: string) {
   const day = new Date(date + 'T00:00:00Z');
@@ -69,6 +75,7 @@ export default function QualityPage() {
     mondayOf(new Date(Date.now() + 10800000).toISOString().slice(0, 10)),
   );
   const [officeId, setOfficeId] = useState('');
+  const [search, setSearch] = useState('');
   const [importantOnly, setImportantOnly] = useState(false);
   const [hideOpen, setHideOpen] = useState(false);
   const [page, setPage] = useState(1);
@@ -89,6 +96,7 @@ export default function QualityPage() {
       const query = new URLSearchParams({
         week,
         officeId,
+        q: search,
         importantOnly: String(importantOnly),
         hideOpen: String(hideOpen),
         page: String(page),
@@ -100,7 +108,7 @@ export default function QualityPage() {
       if (!signal?.aborted && sequence === loadSequence.current)
         setData(result);
     },
-    [week, officeId, importantOnly, hideOpen, page, pageSize],
+    [week, officeId, search, importantOnly, hideOpen, page, pageSize],
   );
 
   useAutoRefresh(() => load().catch(() => undefined), { enabled: !busy });
@@ -189,6 +197,7 @@ export default function QualityPage() {
         from: String(fields.get('from')),
         to: String(fields.get('to')),
         officeId,
+        q: search,
         importantOnly: String(importantOnly),
         hideOpen: String(hideOpen),
       });
@@ -252,6 +261,27 @@ export default function QualityPage() {
             />
             Только важные
           </label>
+          <form
+            className="flex items-end gap-2"
+            onSubmit={(event) => {
+              event.preventDefault();
+              setPage(1);
+              setSearch(
+                String(new FormData(event.currentTarget).get('q') ?? '').trim(),
+              );
+            }}
+          >
+            <label>
+              Поиск заявок
+              <input
+                type="search"
+                name="q"
+                placeholder="Офис или № заявки"
+                maxLength={100}
+              />
+            </label>
+            <button>Найти</button>
+          </form>
           <label className="flex items-center gap-2">
             <input
               type="checkbox"
@@ -370,8 +400,7 @@ export default function QualityPage() {
                     {[
                       'Заявка',
                       'Источник',
-                      'Создана',
-                      'Закрыта',
+                      'Создана / закрыта',
                       'Статус',
                       'Автор',
                       'Офис',
@@ -417,11 +446,17 @@ export default function QualityPage() {
                           )}
                         </th>
                         <td>{ticket.source}</td>
-                        <td>{formatter.format(new Date(ticket.createdAt))}</td>
-                        <td>
-                          {ticket.closedAt
-                            ? formatter.format(new Date(ticket.closedAt))
-                            : '—'}
+                        <td className="quality-dates">
+                          <span>
+                            <span className="sr-only">Создана </span>
+                            {dateFormatter.format(new Date(ticket.createdAt))}
+                          </span>
+                          {ticket.closedAt && (
+                            <span>
+                              <span className="sr-only">Закрыта </span>
+                              {dateFormatter.format(new Date(ticket.closedAt))}
+                            </span>
+                          )}
                         </td>
                         <td>{ticket.stageName || ticket.stageId}</td>
                         <td>{ticket.creatorName || ticket.creatorId || '—'}</td>
@@ -491,17 +526,9 @@ export default function QualityPage() {
                           )}
                         </td>
                         <td>
-                          {latest ? (
-                            <>
-                              {formatter.format(new Date(latest.createdAt))}
-                              <br />
-                              {latest.answer
-                                ? 'Получен ответ'
-                                : 'Ожидает ответа'}
-                            </>
-                          ) : (
-                            '—'
-                          )}
+                          {latest
+                            ? dateFormatter.format(new Date(latest.createdAt))
+                            : '—'}
                         </td>
                         <td>
                           {answer ? (
@@ -531,6 +558,16 @@ export default function QualityPage() {
                           )}
                         </td>
                         <td className="min-w-48">
+                          {ticket.ratingAvailable && !latest?.answer && (
+                            <button
+                              type="button"
+                              className="btn-secondary"
+                              disabled={busy}
+                              onClick={() => void copyLink(ticket._id, false)}
+                            >
+                              Скопировать ссылку на оценку
+                            </button>
+                          )}
                           <details className="quality-row-settings">
                             <summary
                               aria-label={`Настройки заявки №${ticket._id}`}
@@ -565,15 +602,6 @@ export default function QualityPage() {
                             </label>
                             {ticket.ratingAvailable && (
                               <>
-                                <button
-                                  className="btn-secondary"
-                                  disabled={busy}
-                                  onClick={() =>
-                                    void copyLink(ticket._id, false)
-                                  }
-                                >
-                                  Скопировать ссылку на оценку
-                                </button>
                                 {latest && (
                                   <button
                                     className="btn-secondary mt-2"

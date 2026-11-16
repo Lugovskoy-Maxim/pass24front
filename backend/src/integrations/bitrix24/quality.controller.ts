@@ -49,6 +49,25 @@ interface QualityTicket {
 
 const ratingStage = /^\s*(Можно закрывать|Сделка успешна)\s*$/i;
 
+function qualitySearch(value: string) {
+  if (typeof value !== 'string' || value.length > 100)
+    throw new BadRequestException('Неверный поисковый запрос');
+  const term = value.trim().replace(/^№\s*/, '');
+  if (!term) return {};
+  const pattern = new RegExp(term.replace(/[.*+?^${}()|[\]\\]/g, '\\$&'), 'i');
+  return {
+    $and: [
+      {
+        $or: [
+          ...(/^\d+$/.test(term) ? [{ _id: term }] : []),
+          { officeId: pattern },
+          { officeId: { $in: ['', null] }, autoOfficeId: pattern },
+        ],
+      },
+    ],
+  };
+}
+
 function csvCell(value: unknown) {
   const text = String(value ?? '');
   return (
@@ -111,6 +130,7 @@ export class QualityAdminController {
     @Query('officeId') officeId?: string,
     @Query('importantOnly') importantOnly?: string,
     @Query('hideOpen') hideOpen?: string,
+    @Query('q') q = '',
   ) {
     const parseDay = (value: string) => {
       if (typeof value !== 'string' || !/^\d{4}-\d{2}-\d{2}$/.test(value))
@@ -147,6 +167,7 @@ export class QualityAdminController {
           : {}),
         ...(importantOnly === 'true' ? { important: true } : {}),
         ...(hideOpen === 'true' ? { stageName: ratingStage } : {}),
+        ...qualitySearch(q),
       })
       .sort({ createdAt: -1, _id: -1 });
     const format = new Intl.DateTimeFormat('ru-RU', {
@@ -228,6 +249,7 @@ export class QualityAdminController {
     @Query('page') pageParam = '1',
     @Query('pageSize') sizeParam = '25',
     @Query('hideOpen') hideOpen = 'false',
+    @Query('q') q = '',
   ) {
     if (
       (week !== undefined && typeof week !== 'string') ||
@@ -261,8 +283,11 @@ export class QualityAdminController {
         : {}),
       ...(importantOnly === 'true' ? { important: true } : {}),
     };
-    const tableFilter =
-      hideOpen === 'true' ? { ...filter, stageName: ratingStage } : filter;
+    const tableFilter = {
+      ...filter,
+      ...(hideOpen === 'true' ? { stageName: ratingStage } : {}),
+      ...qualitySearch(q),
+    };
     const total = await collection.countDocuments(tableFilter);
     const pages = Math.max(1, Math.ceil(total / pageSize));
     const page = Math.min(requestedPage, pages);
@@ -544,7 +569,8 @@ export class QualityRatingController {
         { projection: { title: 1, requests: { $elemMatch: { token } } } },
       );
     if (!ticket) throw new NotFoundException();
-    return { title: ticket.title, answer: ticket.requests[0].answer ?? null };
+    if (ticket.requests[0].answer) return { closed: true };
+    return { title: ticket.title, closed: false };
   }
 
   @Post(':token')

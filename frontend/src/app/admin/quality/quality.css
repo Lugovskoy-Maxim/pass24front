@@ -138,6 +138,15 @@
   background: var(--surface-muted);
 }
 
+.quality-dates > span {
+  display: block;
+  white-space: nowrap;
+}
+
+.quality-dates > span + span {
+  color: var(--muted);
+}
+
 .quality-table-scroll {
   overflow-x: auto;
   min-width: 0;
