@@ -1,0 +1,145 @@
+.quality-workspace {
+  display: grid;
+  gap: 1rem;
+  padding-block: 0.75rem;
+}
+
+.quality-workspace > fieldset,
+.quality-workspace > section,
+.quality-sync,
+.quality-workspace > div:has(> table) {
+  margin: 0;
+  border: 1px solid var(--border);
+  border-radius: 0.85rem;
+  background: var(--surface);
+}
+
+.quality-workspace > fieldset {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: flex-end;
+  gap: 1rem;
+  padding: 1rem;
+}
+
+.quality-workspace label:has(input:not([type='checkbox'])) {
+  display: grid;
+  gap: 0.35rem;
+}
+
+.quality-workspace input:not([type='checkbox']) {
+  min-height: 2.5rem;
+  padding: 0.4rem 0.65rem;
+  border: 1px solid var(--border-strong);
+  border-radius: 0.5rem;
+  background: var(--surface-muted);
+  color: inherit;
+}
+
+.quality-workspace button {
+  min-height: 2.5rem;
+  padding: 0.45rem 0.75rem;
+  border: 1px solid var(--border-strong);
+  border-radius: 0.5rem;
+  background: var(--surface-elevated);
+  cursor: pointer;
+}
+
+.quality-workspace button:hover:not(:disabled) {
+  border-color: var(--accent);
+}
+
+.quality-workspace > section,
+.quality-sync {
+  padding: 1rem;
+}
+
+.quality-sync {
+  color: var(--muted);
+  border-inline-start: 3px solid var(--accent);
+}
+
+.quality-workspace dl {
+  display: grid;
+  grid-template-columns: repeat(auto-fit, minmax(8rem, 1fr));
+  gap: 0.75rem;
+  margin-block: 0.75rem;
+}
+
+.quality-workspace dl > div {
+  padding: 0.75rem;
+  border-radius: 0.6rem;
+  background: var(--surface-muted);
+}
+
+.quality-workspace dt {
+  color: var(--muted);
+}
+
+.quality-workspace dd {
+  margin: 0.25rem 0 0;
+  font-size: 1.5rem;
+  font-weight: 650;
+}
+
+.quality-workspace table th,
+.quality-workspace table td {
+  padding: 0.75rem;
+  border-bottom: 1px solid var(--border);
+  vertical-align: top;
+}
+
+.quality-workspace thead {
+  background: var(--surface-muted);
+}
+
+.quality-workspace > div:has(> table) {
+  overflow-x: auto;
+  min-width: 0;
+}
+
+.quality-workspace table {
+  width: 100%;
+  min-width: 64rem;
+  text-align: left;
+}
+
+.quality-workspace tbody tr:hover {
+  background: var(--surface-elevated);
+}
+
+.quality-workspace td:last-child button {
+  display: block;
+  width: 100%;
+  margin-bottom: 0.4rem;
+}
+
+.quality-distribution {
+  display: grid;
+  gap: 0.45rem;
+  max-width: 30rem;
+  margin: 0;
+  padding: 0;
+  list-style: none;
+}
+
+.quality-distribution li {
+  display: grid;
+  grid-template-columns: 1.5rem minmax(0, 1fr) 3rem;
+  gap: 0.65rem;
+  align-items: center;
+}
+
+.quality-distribution meter {
+  width: 100%;
+  height: 0.75rem;
+}
+
+.quality-distribution meter::-webkit-meter-bar {
+  border: 0;
+  background: var(--surface-muted);
+}
+
+.quality-distribution meter::-webkit-meter-optimum-value {
+  background: var(--accent);
+}

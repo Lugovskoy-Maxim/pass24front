@@ -2,6 +2,7 @@
 
 import { useCallback, useEffect, useRef, useState } from 'react';
 import { useAutoRefresh } from '@/hooks/useAutoRefresh';
+import './quality.css';
 import { AdminLayout } from '@/components/AdminLayout';
 import { request } from '@/lib/api';
 
@@ -154,276 +155,290 @@ export default function QualityPage() {
   }
 
   const report = data?.report;
+  const largestRatingGroup = Math.max(1, ...(report?.distribution ?? []));
   return (
     <AdminLayout title="Контроль качества">
-      <fieldset disabled={busy} className="my-4 flex flex-wrap items-end gap-4">
-        <label className="grid gap-1">
-          Неделя с понедельника
-          <input
-            type="date"
-            value={week}
-            onChange={(event) => {
-              if (event.target.value) setWeek(mondayOf(event.target.value));
-            }}
-          />
-        </label>
-        <form
-          className="flex items-end gap-2"
-          onSubmit={(event) => {
-            event.preventDefault();
-            setOfficeId(
-              String(
-                new FormData(event.currentTarget).get('office') ?? '',
-              ).trim(),
-            );
-          }}
+      <div className="quality-workspace">
+        <fieldset
+          disabled={busy}
+          className="my-4 flex flex-wrap items-end gap-4"
         >
           <label className="grid gap-1">
-            Офис
-            <input name="office" defaultValue={officeId} />
+            Неделя с понедельника
+            <input
+              type="date"
+              value={week}
+              onChange={(event) => {
+                if (event.target.value) setWeek(mondayOf(event.target.value));
+              }}
+            />
           </label>
-          <button className="btn-secondary">Применить</button>
-        </form>
-        <label className="flex items-center gap-2">
-          <input
-            type="checkbox"
-            checked={importantOnly}
-            onChange={(event) => setImportantOnly(event.target.checked)}
-          />
-          Только важные
-        </label>
-      </fieldset>
-      {error && <p role="alert">{error}</p>}
-      {!data && !error && <p role="status">Загрузка…</p>}
-      {notice && <p role="status">{notice}</p>}
-      {link && (
-        <input
-          className="my-2 w-full"
-          aria-label="Ссылка на оценку"
-          readOnly
-          value={link}
-          onFocus={(event) => event.currentTarget.select()}
-        />
-      )}
-      {report && (
-        <section className="my-4" aria-labelledby="quality-weekly">
-          <h2 id="quality-weekly" className="font-semibold">
-            Недельный срез
-          </h2>
-          <dl className="flex flex-wrap gap-4">
-            {Object.entries({
-              Заявки: report.created,
-              Запросы: report.requested,
-              Ответы: report.answered,
-              'Средний балл':
-                report.average?.toLocaleString('ru-RU', {
-                  maximumFractionDigits: 2,
-                }) ?? '—',
-              Исключено: report.excluded,
-            }).map(([label, value]) => (
-              <div key={label}>
-                <dt>{label}</dt>
-                <dd>{value}</dd>
-              </div>
-            ))}
-          </dl>
-          <ul
-            aria-label="Распределение оценок"
-            className="mt-2 flex flex-wrap gap-4"
+          <form
+            className="flex items-end gap-2"
+            onSubmit={(event) => {
+              event.preventDefault();
+              setOfficeId(
+                String(
+                  new FormData(event.currentTarget).get('office') ?? '',
+                ).trim(),
+              );
+            }}
           >
-            {report.distribution.map((count, index) => (
-              <li key={index}>
-                Оценка {index + 1}: {count}
-              </li>
-            ))}
-          </ul>
-        </section>
-      )}
-      {data && (
-        <p className="my-2 text-sm">
-          {data.lastSyncedAt
-            ? `Последний успешный импорт: ${formatter.format(new Date(data.lastSyncedAt))}`
-            : 'Первый импорт из Битрикс24 ещё не завершён.'}
-        </p>
-      )}
-      {data?.tickets.length === 0 && data.lastSyncedAt && (
-        <p>Заявок по выбранным фильтрам нет.</p>
-      )}
-      {!!data?.tickets.length && (
-        <div className="overflow-x-auto">
-          <table className="w-full text-left [&_td]:p-2 [&_th]:p-2">
-            <thead>
-              <tr>
-                {[
-                  'Заявка',
-                  'Источник',
-                  'Создана',
-                  'Статус',
-                  'Автор',
-                  'Офис',
-                  'Последний запрос',
-                  'Последняя оценка',
-                  'Отметки',
-                  'Действия',
-                ].map((label) => (
-                  <th key={label} scope="col">
-                    {label}
-                  </th>
-                ))}
-              </tr>
-            </thead>
-            <tbody>
-              {data.tickets.map((ticket) => {
-                const latest = ticket.requests?.at(-1);
-                const answers = (ticket.requests ?? [])
-                  .flatMap(({ answer }) => (answer ? [answer] : []))
-                  .sort((a, b) => b.receivedAt.localeCompare(a.receivedAt));
-                const answer = answers[0];
-                return (
-                  <tr key={ticket._id} className="border-t align-top">
-                    <th scope="row">
-                      №{ticket._id} {ticket.title}
+            <label className="grid gap-1">
+              Офис
+              <input name="office" defaultValue={officeId} />
+            </label>
+            <button className="btn-secondary">Применить</button>
+          </form>
+          <label className="flex items-center gap-2">
+            <input
+              type="checkbox"
+              checked={importantOnly}
+              onChange={(event) => setImportantOnly(event.target.checked)}
+            />
+            Только важные
+          </label>
+        </fieldset>
+        {error && <p role="alert">{error}</p>}
+        {!data && !error && <p role="status">Загрузка…</p>}
+        {notice && <p role="status">{notice}</p>}
+        {link && (
+          <input
+            className="my-2 w-full"
+            aria-label="Ссылка на оценку"
+            readOnly
+            value={link}
+            onFocus={(event) => event.currentTarget.select()}
+          />
+        )}
+        {report && data?.lastSyncedAt && (
+          <section className="my-4" aria-labelledby="quality-weekly">
+            <h2 id="quality-weekly" className="font-semibold">
+              Недельный срез
+            </h2>
+            <dl className="flex flex-wrap gap-4">
+              {Object.entries({
+                Заявки: report.created,
+                Запросы: report.requested,
+                Ответы: report.answered,
+                'Средний балл':
+                  report.average?.toLocaleString('ru-RU', {
+                    maximumFractionDigits: 2,
+                  }) ?? '—',
+                Исключено: report.excluded,
+              }).map(([label, value]) => (
+                <div key={label}>
+                  <dt>{label}</dt>
+                  <dd>{value}</dd>
+                </div>
+              ))}
+            </dl>
+            <ul
+              aria-label="Распределение оценок"
+              className="quality-distribution"
+            >
+              {report.distribution.map((count, index) => (
+                <li key={index}>
+                  <span aria-label={`Оценка ${index + 1}`}>{index + 1}</span>
+                  <meter
+                    min={0}
+                    max={largestRatingGroup}
+                    value={count}
+                    aria-label={`Количество оценок ${index + 1}`}
+                  />
+                  <strong>{count}</strong>
+                </li>
+              ))}
+            </ul>
+          </section>
+        )}
+        {data && (
+          <p className="quality-sync" role="status">
+            {data.lastSyncedAt
+              ? `Последний успешный импорт: ${formatter.format(new Date(data.lastSyncedAt))}`
+              : 'Данные из Битрикс24 ещё не загружены. Недельный срез появится после первого успешного импорта.'}
+          </p>
+        )}
+        {data?.tickets.length === 0 && data.lastSyncedAt && (
+          <p className="quality-sync">Заявок по выбранным фильтрам нет.</p>
+        )}
+        {!!data?.tickets.length && (
+          <div className="overflow-x-auto">
+            <table className="w-full text-left [&_td]:p-2 [&_th]:p-2">
+              <thead>
+                <tr>
+                  {[
+                    'Заявка',
+                    'Источник',
+                    'Создана',
+                    'Статус',
+                    'Автор',
+                    'Офис',
+                    'Последний запрос',
+                    'Последняя оценка',
+                    'Отметки',
+                    'Действия',
+                  ].map((label) => (
+                    <th key={label} scope="col">
+                      {label}
                     </th>
-                    <td>{ticket.source}</td>
-                    <td>{formatter.format(new Date(ticket.createdAt))}</td>
-                    <td>{ticket.stageName || ticket.stageId}</td>
-                    <td>{ticket.creatorName || ticket.creatorId || '—'}</td>
-                    <td>
-                      <form
-                        className="grid gap-1"
-                        onSubmit={(event) => {
-                          event.preventDefault();
-                          void patch(ticket._id, {
-                            officeId: String(
-                              new FormData(event.currentTarget).get('office') ??
-                                '',
-                            ),
-                          });
-                        }}
-                      >
-                        <input
-                          key={ticket.officeId}
-                          name="office"
-                          aria-label={`Офис заявки №${ticket._id}`}
-                          defaultValue={ticket.officeId}
-                          disabled={busy}
-                        />
-                        <button disabled={busy}>Сохранить офис</button>
-                      </form>
-                    </td>
-                    <td>
-                      {latest ? (
-                        <>
-                          {formatter.format(new Date(latest.createdAt))}
-                          <br />
-                          {latest.answer ? 'Получен ответ' : 'Ожидает ответа'}
-                        </>
-                      ) : (
-                        '—'
-                      )}
-                    </td>
-                    <td>
-                      {answer ? (
-                        <>
-                          {answer.score} из 5 ·{' '}
-                          {formatter.format(new Date(answer.receivedAt))}
-                          <br />
-                          {answer.comment}
-                        </>
-                      ) : (
-                        '—'
-                      )}
-                      {answers.length > 1 && (
-                        <details>
-                          <summary>История оценок</summary>
-                          <ol>
-                            {answers.map((item, index) => (
-                              <li key={index}>
-                                {formatter.format(new Date(item.receivedAt))} ·{' '}
-                                {item.score} из 5 {item.comment}
-                              </li>
-                            ))}
-                          </ol>
-                        </details>
-                      )}
-                    </td>
-                    <td>
-                      <label className="block">
-                        <input
-                          type="checkbox"
-                          checked={!!ticket.important}
-                          disabled={busy}
-                          onChange={(event) =>
+                  ))}
+                </tr>
+              </thead>
+              <tbody>
+                {data.tickets.map((ticket) => {
+                  const latest = ticket.requests?.at(-1);
+                  const answers = (ticket.requests ?? [])
+                    .flatMap(({ answer }) => (answer ? [answer] : []))
+                    .sort((a, b) => b.receivedAt.localeCompare(a.receivedAt));
+                  const answer = answers[0];
+                  return (
+                    <tr key={ticket._id} className="border-t align-top">
+                      <th scope="row">
+                        №{ticket._id} {ticket.title}
+                      </th>
+                      <td>{ticket.source}</td>
+                      <td>{formatter.format(new Date(ticket.createdAt))}</td>
+                      <td>{ticket.stageName || ticket.stageId}</td>
+                      <td>{ticket.creatorName || ticket.creatorId || '—'}</td>
+                      <td>
+                        <form
+                          className="grid gap-1"
+                          onSubmit={(event) => {
+                            event.preventDefault();
                             void patch(ticket._id, {
-                              important: event.target.checked,
-                            })
-                          }
-                        />{' '}
-                        Важная
-                      </label>
-                      <label className="block">
-                        <input
-                          type="checkbox"
-                          checked={!!ticket.excluded}
-                          disabled={busy}
-                          onChange={(event) =>
-                            void patch(ticket._id, {
-                              excluded: event.target.checked,
-                            })
-                          }
-                        />{' '}
-                        Не учитывать
-                      </label>
-                    </td>
-                    <td className="min-w-48">
-                      <button
-                        className="btn-secondary"
-                        disabled={busy}
-                        onClick={() => void copyLink(ticket._id, false)}
-                      >
-                        Скопировать ссылку на оценку
-                      </button>
-                      {latest && (
-                        <button
-                          className="btn-secondary mt-2"
-                          disabled={busy}
-                          onClick={() => void copyLink(ticket._id, true)}
+                              officeId: String(
+                                new FormData(event.currentTarget).get(
+                                  'office',
+                                ) ?? '',
+                              ),
+                            });
+                          }}
                         >
-                          Запросить повторную оценку
+                          <input
+                            key={ticket.officeId}
+                            name="office"
+                            aria-label={`Офис заявки №${ticket._id}`}
+                            defaultValue={ticket.officeId}
+                            disabled={busy}
+                          />
+                          <button disabled={busy}>Сохранить офис</button>
+                        </form>
+                      </td>
+                      <td>
+                        {latest ? (
+                          <>
+                            {formatter.format(new Date(latest.createdAt))}
+                            <br />
+                            {latest.answer ? 'Получен ответ' : 'Ожидает ответа'}
+                          </>
+                        ) : (
+                          '—'
+                        )}
+                      </td>
+                      <td>
+                        {answer ? (
+                          <>
+                            {answer.score} из 5 ·{' '}
+                            {formatter.format(new Date(answer.receivedAt))}
+                            <br />
+                            {answer.comment}
+                          </>
+                        ) : (
+                          '—'
+                        )}
+                        {answers.length > 1 && (
+                          <details>
+                            <summary>История оценок</summary>
+                            <ol>
+                              {answers.map((item, index) => (
+                                <li key={index}>
+                                  {formatter.format(new Date(item.receivedAt))}{' '}
+                                  · {item.score} из 5 {item.comment}
+                                </li>
+                              ))}
+                            </ol>
+                          </details>
+                        )}
+                      </td>
+                      <td>
+                        <label className="block">
+                          <input
+                            type="checkbox"
+                            checked={!!ticket.important}
+                            disabled={busy}
+                            onChange={(event) =>
+                              void patch(ticket._id, {
+                                important: event.target.checked,
+                              })
+                            }
+                          />{' '}
+                          Важная
+                        </label>
+                        <label className="block">
+                          <input
+                            type="checkbox"
+                            checked={!!ticket.excluded}
+                            disabled={busy}
+                            onChange={(event) =>
+                              void patch(ticket._id, {
+                                excluded: event.target.checked,
+                              })
+                            }
+                          />{' '}
+                          Не учитывать
+                        </label>
+                      </td>
+                      <td className="min-w-48">
+                        <button
+                          className="btn-secondary"
+                          disabled={busy}
+                          onClick={() => void copyLink(ticket._id, false)}
+                        >
+                          Скопировать ссылку на оценку
                         </button>
-                      )}
-                      {ticket.chatAvailable && (
-                        <>
+                        {latest && (
                           <button
                             className="btn-secondary mt-2"
                             disabled={busy}
-                            onClick={() =>
-                              void copyLink(ticket._id, false, true)
-                            }
+                            onClick={() => void copyLink(ticket._id, true)}
                           >
-                            Запросить оценку в чате
+                            Запросить повторную оценку
                           </button>
-                          {latest && (
+                        )}
+                        {ticket.chatAvailable && (
+                          <>
                             <button
                               className="btn-secondary mt-2"
                               disabled={busy}
                               onClick={() =>
-                                void copyLink(ticket._id, true, true)
+                                void copyLink(ticket._id, false, true)
                               }
                             >
-                              Запросить повторную оценку в чате
+                              Запросить оценку в чате
                             </button>
-                          )}
-                        </>
-                      )}
-                    </td>
-                  </tr>
-                );
-              })}
-            </tbody>
-          </table>
-        </div>
-      )}
+                            {latest && (
+                              <button
+                                className="btn-secondary mt-2"
+                                disabled={busy}
+                                onClick={() =>
+                                  void copyLink(ticket._id, true, true)
+                                }
+                              >
+                                Запросить повторную оценку в чате
+                              </button>
+                            )}
+                          </>
+                        )}
+                      </td>
+                    </tr>
+                  );
+                })}
+              </tbody>
+            </table>
+          </div>
+        )}
+      </div>
     </AdminLayout>
   );
 }
