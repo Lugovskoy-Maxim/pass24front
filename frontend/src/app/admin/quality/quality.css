@@ -7,7 +7,7 @@
 .quality-workspace > fieldset,
 .quality-workspace > section,
 .quality-sync,
-.quality-workspace > div:has(> table) {
+.quality-table {
   margin: 0;
   border: 1px solid var(--border);
   border-radius: 0.85rem;
@@ -93,9 +93,58 @@
   background: var(--surface-muted);
 }
 
-.quality-workspace > div:has(> table) {
+.quality-table-scroll {
   overflow-x: auto;
   min-width: 0;
+}
+
+.quality-table {
+  min-width: 0;
+  overflow: hidden;
+}
+
+.quality-table-heading,
+.quality-pager {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  flex-wrap: wrap;
+  gap: 0.75rem;
+  padding: 0.85rem 1rem;
+}
+
+.quality-table-heading h2 {
+  font-size: 1.1rem;
+  font-weight: 650;
+}
+
+.quality-table-heading span,
+.quality-pager span {
+  color: var(--muted);
+}
+
+.quality-pager {
+  border-top: 1px solid var(--border);
+}
+
+.quality-pager label,
+.quality-pager > div {
+  display: flex;
+  align-items: center;
+  gap: 0.5rem;
+}
+
+.quality-pager select {
+  padding: 0.45rem;
+  border: 1px solid var(--border-strong);
+  border-radius: 0.5rem;
+  color: inherit;
+  background: var(--surface-muted);
+}
+
+.quality-pager button:disabled {
+  opacity: 0.5;
+  cursor: default;
 }
 
 .quality-workspace table {

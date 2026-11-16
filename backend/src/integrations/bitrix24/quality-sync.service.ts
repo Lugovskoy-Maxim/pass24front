@@ -33,6 +33,13 @@ export class QualitySyncService implements OnModuleInit, OnModuleDestroy {
   async onModuleInit() {
     await this.store
       .collection('quality_tickets')
+      .createIndexes([
+        { key: { createdAt: -1, _id: -1 } },
+        { key: { 'requests.createdAt': 1 } },
+        { key: { 'requests.answer.receivedAt': 1 } },
+      ]);
+    await this.store
+      .collection('quality_tickets')
       .createIndex({ 'requests.token': 1 }, { unique: true, sparse: true });
     if (!this.client.enabled()) return;
     this.timer = setInterval(() => void this.sync(), 60000);
@@ -56,12 +63,22 @@ export class QualitySyncService implements OnModuleInit, OnModuleDestroy {
       const tickets = this.store.collection('quality_tickets');
       const offices = await this.store.connection
         .db!.collection('offices')
-        .find({}, { projection: { number: 1, company: 1 } })
+        .find({}, { projection: { number: 1, company: 1, property: 1 } })
         .toArray();
       const normalize = (value: unknown) =>
         String(value ?? '')
           .trim()
           .toLocaleLowerCase('ru');
+      const properties = await this.store.connection
+        .db!.collection('properties')
+        .find({}, { projection: { name: 1 } })
+        .toArray();
+      const propertyNames = new Map(
+        properties.map(({ _id, name }) => [
+          String(_id),
+          String(name ?? '').replace(/^БЦ\s+/i, ''),
+        ]),
+      );
       const companies = new Map<number, string>();
       let afterId = 0;
       while (true) {
@@ -73,7 +90,9 @@ export class QualitySyncService implements OnModuleInit, OnModuleDestroy {
             filter: {
               CATEGORY_ID: funnel.id,
               '>ID': afterId,
-              ...(checkpoint?.categoryId === funnel.id && checkpoint.scannedAt
+              ...(checkpoint?.officeFormat === 2 &&
+              checkpoint.categoryId === funnel.id &&
+              checkpoint.scannedAt
                 ? {
                     '>=DATE_MODIFY': new Date(
                       checkpoint.scannedAt.getTime() - 60000,
@@ -151,8 +170,24 @@ export class QualitySyncService implements OnModuleInit, OnModuleDestroy {
               .replace(/[^\p{L}\p{N}-]+/gu, ' ')
               .trim();
           const title = ` ${words(deal.TITLE)} `;
+          const qualified = [
+            ...String(deal.TITLE ?? '').matchAll(
+              /(?:^|[^\p{L}\p{N}])д\s*[-–—]?\s*([12])\s*[\\/]\s*([\p{L}\p{N}-]+)(?![\p{L}\p{N}-])/giu,
+            ),
+          ];
           const titleOffices = offices.filter((office) => {
             const label = words(office.number);
+            if (qualified.length) {
+              const property = normalize(
+                propertyNames.get(String(office.property)),
+              ).replace(/[\s–—-]+/g, '');
+              return qualified.some(
+                ([, building, number]) =>
+                  property ===
+                    (building === '2' ? 'добрынинский2' : 'добрынинский') &&
+                  label === words(number),
+              );
+            }
             return label && title.includes(` ${label} `);
           });
           const office =
@@ -177,7 +212,11 @@ export class QualitySyncService implements OnModuleInit, OnModuleDestroy {
                 creatorId,
                 creatorName,
                 companyId,
-                autoOfficeId: office ? String(office.number) : '',
+                autoOfficeId: office
+                  ? [propertyNames.get(String(office.property)), office.number]
+                      .filter(Boolean)
+                      .join(' · ')
+                  : '',
                 passTicketId,
               },
             },
@@ -189,7 +228,7 @@ export class QualitySyncService implements OnModuleInit, OnModuleDestroy {
       await state.updateOne(
         { _id: 'deals' },
         {
-          $set: { categoryId: funnel.id },
+          $set: { categoryId: funnel.id, officeFormat: 2 },
           $max: { scannedAt: startedAt, completedAt: new Date() },
         },
         { upsert: true },

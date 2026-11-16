@@ -11,11 +11,7 @@ interface QualityTicket {
   requests: QualityRequest[];
 }
 
-export function buildWeeklyQualityReport(
-  tickets: QualityTicket[],
-  monday: string,
-  filters: { officeId?: string; importantOnly?: boolean } = {},
-) {
+export function qualityWeekBounds(monday: string) {
   if (!/^\d{4}-\d{2}-\d{2}$/.test(monday)) {
     throw new RangeError('Expected a Monday in YYYY-MM-DD format');
   }
@@ -27,7 +23,15 @@ export function buildWeeklyQualityReport(
     throw new RangeError('Expected a Monday in YYYY-MM-DD format');
   }
   const start = midnight.getTime() - 3 * 60 * 60 * 1000;
-  const end = start + 7 * 24 * 60 * 60 * 1000;
+  return [start, start + 7 * 24 * 60 * 60 * 1000] as const;
+}
+
+export function buildWeeklyQualityReport(
+  tickets: QualityTicket[],
+  monday: string,
+  filters: { officeId?: string; importantOnly?: boolean } = {},
+) {
+  const [start, end] = qualityWeekBounds(monday);
   const inWeek = (date: Date) =>
     date.getTime() >= start && date.getTime() < end;
   const distribution = [0, 0, 0, 0, 0];

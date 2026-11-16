@@ -16,7 +16,7 @@ import { AuthGuard } from '@nestjs/passport';
 import { PermissionsGuard } from '../../auth/permissions.guard';
 import { RequireAllPermissions } from '../../auth/permissions.decorator';
 import { OperationsStore } from '../../operations/operations.store';
-import { buildWeeklyQualityReport } from './quality-report';
+import { buildWeeklyQualityReport, qualityWeekBounds } from './quality-report';
 
 interface QualityTicket {
   _id: string;
@@ -46,6 +46,8 @@ export class QualityAdminController {
     @Query('week') week?: string,
     @Query('officeId') officeId?: string,
     @Query('importantOnly') importantOnly?: string,
+    @Query('page') pageParam = '1',
+    @Query('pageSize') sizeParam = '25',
   ) {
     if (
       (week !== undefined && typeof week !== 'string') ||
@@ -55,20 +57,37 @@ export class QualityAdminController {
     ) {
       throw new BadRequestException('Неверный формат фильтров');
     }
-    const rows = await this.store
-      .collection<QualityTicket>('quality_tickets')
-      .find({
-        ...(officeId
-          ? {
-              $or: [
-                { officeId },
-                { officeId: { $in: ['', null] }, autoOfficeId: officeId },
-              ],
-            }
-          : {}),
-        ...(importantOnly === 'true' ? { important: true } : {}),
-      })
+    const requestedPage = Number(pageParam);
+    const pageSize = Number(sizeParam);
+    if (
+      typeof pageParam !== 'string' ||
+      typeof sizeParam !== 'string' ||
+      !Number.isSafeInteger(requestedPage) ||
+      requestedPage < 1 ||
+      ![25, 50, 100].includes(pageSize)
+    ) {
+      throw new BadRequestException('Неверные параметры страницы');
+    }
+    const collection = this.store.collection<QualityTicket>('quality_tickets');
+    const filter = {
+      ...(officeId
+        ? {
+            $or: [
+              { officeId },
+              { officeId: { $in: ['', null] }, autoOfficeId: officeId },
+            ],
+          }
+        : {}),
+      ...(importantOnly === 'true' ? { important: true } : {}),
+    };
+    const total = await collection.countDocuments(filter);
+    const pages = Math.max(1, Math.ceil(total / pageSize));
+    const page = Math.min(requestedPage, pages);
+    const rows = await collection
+      .find(filter)
       .sort({ createdAt: -1, _id: -1 })
+      .skip((page - 1) * pageSize)
+      .limit(pageSize)
       .toArray();
     const passIds = [
       ...new Set(
@@ -102,9 +121,29 @@ export class QualityAdminController {
     let report: ReturnType<typeof buildWeeklyQualityReport> | null = null;
     if (week !== undefined) {
       try {
+        const [start, end] = qualityWeekBounds(week);
+        const range = { $gte: new Date(start), $lt: new Date(end) };
+        const reportRows = await collection
+          .find(
+            {
+              $and: [
+                filter,
+                {
+                  $or: [
+                    { createdAt: range },
+                    { 'requests.createdAt': range },
+                    { 'requests.answer.receivedAt': range },
+                  ],
+                },
+              ],
+            },
+            { projection: { createdAt: 1, excluded: 1, requests: 1 } },
+          )
+          .toArray();
         report = buildWeeklyQualityReport(
-          tickets.map((ticket) => ({
-            ...ticket,
+          reportRows.map((ticket) => ({
+            createdAt: ticket.createdAt,
+            excluded: ticket.excluded,
             requests: ticket.requests ?? [],
           })),
           week,
@@ -124,6 +163,7 @@ export class QualityAdminController {
       );
     return {
       tickets,
+      pagination: { page, pageSize, pages, total },
       report,
       lastSyncedAt: sync?.completedAt ?? sync?.scannedAt ?? null,
     };

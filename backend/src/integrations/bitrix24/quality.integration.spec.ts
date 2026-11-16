@@ -30,6 +30,35 @@ describe('quality rating persistence', () => {
     await mongo?.stop();
   });
 
+  it('paginates filtered tickets without restricting the weekly report to the page', async () => {
+    const officeId = 'pagination-test';
+    await store.collection('quality_tickets').insertMany(
+      Array.from({ length: 26 }, (_, index) => ({
+        _id: `pagination-${index}`,
+        title: 'Заявка',
+        officeId,
+        createdAt: new Date('2026-11-16T08:00:00Z'),
+      })),
+    );
+    const manager = new QualityAdminController(store);
+    const first = await manager.list('2026-11-16', officeId);
+    const second = await manager.list('2026-11-16', officeId, undefined, '2');
+    expect(first.tickets).toHaveLength(25);
+    expect(second.tickets).toHaveLength(1);
+    expect(first.tickets.map(({ _id }) => _id)).not.toContain(
+      second.tickets[0]._id,
+    );
+    expect(second.pagination).toEqual({
+      page: 2,
+      pageSize: 25,
+      pages: 2,
+      total: 26,
+    });
+    expect(second.report).toEqual(first.report);
+    expect(second.report?.created).toBe(26);
+    await store.collection('quality_tickets').deleteMany({ officeId });
+  });
+
   it('accepts a valid public response via HTTP without authentication', async () => {
     await store.collection('quality_tickets').insertOne({
       _id: 'public-test',
@@ -178,6 +207,19 @@ describe('quality rating persistence', () => {
     expect(client.call.mock.calls[0][1].filter).toEqual({
       CATEGORY_ID: 10,
       '>ID': 0,
+    });
+    const buildings = await connection
+      .db!.collection('properties')
+      .insertMany([{ name: 'БЦ Добрынинский' }, { name: 'БЦ Добрынинский-2' }]);
+    await connection.db!.collection('offices').insertMany([
+      { number: '405', property: buildings.insertedIds[0] },
+      { number: '405', property: buildings.insertedIds[1] },
+    ]);
+    deal.TITLE = 'Д-2\\405 — заменить светильник';
+    await sync.sync();
+    expect((await manager.list(undefined, '777')).tickets[0]).toMatchObject({
+      officeId: '777',
+      autoOfficeId: 'Добрынинский-2 · 405',
     });
   });
 
