@@ -80,7 +80,6 @@ export default function QualityPage() {
   const [link, setLink] = useState('');
   const [officeOptions, setOfficeOptions] = useState<string[]>();
   const [editingOffice, setEditingOffice] = useState<string>();
-  const [officeSearch, setOfficeSearch] = useState('');
   const [exporting, setExporting] = useState(false);
   const loadSequence = useRef(0);
 
@@ -172,7 +171,6 @@ export default function QualityPage() {
   const report = data?.report;
   async function editOffice(id: string) {
     setEditingOffice(id);
-    setOfficeSearch('');
     if (officeOptions) return;
     try {
       setOfficeOptions(await request<string[]>('/admin/quality/offices'));
@@ -366,7 +364,7 @@ export default function QualityPage() {
               </span>
             </div>
             <div className="quality-table-scroll">
-              <table className="w-full text-left [&_td]:p-2 [&_th]:p-2">
+              <table className="w-full text-left text-sm">
                 <thead>
                   <tr>
                     {[
@@ -444,15 +442,6 @@ export default function QualityPage() {
                           </button>
                           {editingOffice === ticket._id && (
                             <div className="quality-office-editor">
-                              <input
-                                type="search"
-                                aria-label="Поиск офиса"
-                                placeholder="Номер или корпус"
-                                value={officeSearch}
-                                onChange={(event) =>
-                                  setOfficeSearch(event.target.value)
-                                }
-                              />
                               <select
                                 aria-label="Выбрать офис"
                                 value=""
@@ -470,19 +459,9 @@ export default function QualityPage() {
                                     ? 'Выберите офис'
                                     : 'Загрузка…'}
                                 </option>
-                                {officeOptions
-                                  ?.filter((label) =>
-                                    label
-                                      .toLocaleLowerCase('ru')
-                                      .includes(
-                                        officeSearch
-                                          .trim()
-                                          .toLocaleLowerCase('ru'),
-                                      ),
-                                  )
-                                  .map((label) => (
-                                    <option key={label}>{label}</option>
-                                  ))}
+                                {officeOptions?.map((label) => (
+                                  <option key={label}>{label}</option>
+                                ))}
                               </select>
                               <button
                                 type="button"

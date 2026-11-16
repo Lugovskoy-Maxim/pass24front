@@ -254,6 +254,12 @@
   text-align: left;
 }
 
+.quality-workspace tbody th,
+.quality-workspace table button,
+.quality-workspace table select {
+  font: inherit;
+}
+
 .quality-workspace tbody tr:hover {
   background: var(--surface-elevated);
 }
