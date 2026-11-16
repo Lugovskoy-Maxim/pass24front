@@ -4,7 +4,7 @@ import { useCallback, useEffect, useRef, useState } from 'react';
 import { useAutoRefresh } from '@/hooks/useAutoRefresh';
 import './quality.css';
 import { AdminLayout } from '@/components/AdminLayout';
-import { request } from '@/lib/api';
+import { downloadFileResponse, getToken, request } from '@/lib/api';
 
 interface Answer {
   score: number;
@@ -22,6 +22,7 @@ interface Ticket {
   _id: string;
   title: string;
   createdAt: string;
+  closedAt?: string | null;
   source: string;
   stageId: string;
   stageName?: string;
@@ -77,6 +78,10 @@ export default function QualityPage() {
   const [error, setError] = useState('');
   const [busy, setBusy] = useState(false);
   const [link, setLink] = useState('');
+  const [officeOptions, setOfficeOptions] = useState<string[]>();
+  const [editingOffice, setEditingOffice] = useState<string>();
+  const [officeSearch, setOfficeSearch] = useState('');
+  const [exporting, setExporting] = useState(false);
   const loadSequence = useRef(0);
 
   const load = useCallback(
@@ -165,6 +170,43 @@ export default function QualityPage() {
   }
 
   const report = data?.report;
+  async function editOffice(id: string) {
+    setEditingOffice(id);
+    setOfficeSearch('');
+    if (officeOptions) return;
+    try {
+      setOfficeOptions(await request<string[]>('/admin/quality/offices'));
+    } catch {
+      setEditingOffice(undefined);
+      setError('Не удалось загрузить справочник офисов.');
+    }
+  }
+
+  async function exportPeriod(form: HTMLFormElement) {
+    setExporting(true);
+    setError('');
+    try {
+      const fields = new FormData(form);
+      const query = new URLSearchParams({
+        from: String(fields.get('from')),
+        to: String(fields.get('to')),
+        officeId,
+        importantOnly: String(importantOnly),
+        hideOpen: String(hideOpen),
+      });
+      const base =
+        process.env.NEXT_PUBLIC_API_URL || 'http://127.0.0.1:4000/api';
+      const response = await fetch(base + '/admin/quality/export?' + query, {
+        headers: { Authorization: 'Bearer ' + getToken() },
+        cache: 'no-store',
+      });
+      await downloadFileResponse(response, 'quality.csv');
+    } catch {
+      setError('Не удалось выгрузить заявки. Проверьте период.');
+    } finally {
+      setExporting(false);
+    }
+  }
   const largestRatingGroup = Math.max(1, ...(report?.distribution ?? []));
   return (
     <AdminLayout title="Контроль качества">
@@ -236,6 +278,34 @@ export default function QualityPage() {
             onFocus={(event) => event.currentTarget.select()}
           />
         )}
+        <details className="quality-export">
+          <summary>Выгрузка заявок</summary>
+          <form
+            onSubmit={(event) => {
+              event.preventDefault();
+              void exportPeriod(event.currentTarget);
+            }}
+          >
+            <label>
+              Созданы с{' '}
+              <input type="date" name="from" defaultValue={week} required />
+            </label>
+            <label>
+              По{' '}
+              <input
+                type="date"
+                name="to"
+                defaultValue={new Date(Date.now() + 10800000)
+                  .toISOString()
+                  .slice(0, 10)}
+                required
+              />
+            </label>
+            <button disabled={exporting}>
+              {exporting ? 'Подготовка…' : 'Скачать CSV для Excel'}
+            </button>
+          </form>
+        </details>
         {report && data?.lastSyncedAt && (
           <section className="my-4" aria-labelledby="quality-weekly">
             <h2 id="quality-weekly" className="font-semibold">
@@ -303,6 +373,7 @@ export default function QualityPage() {
                       'Заявка',
                       'Источник',
                       'Создана',
+                      'Закрыта',
                       'Статус',
                       'Автор',
                       'Офис',
@@ -349,31 +420,82 @@ export default function QualityPage() {
                         </th>
                         <td>{ticket.source}</td>
                         <td>{formatter.format(new Date(ticket.createdAt))}</td>
+                        <td>
+                          {ticket.closedAt
+                            ? formatter.format(new Date(ticket.closedAt))
+                            : '—'}
+                        </td>
                         <td>{ticket.stageName || ticket.stageId}</td>
                         <td>{ticket.creatorName || ticket.creatorId || '—'}</td>
                         <td>
-                          <form
-                            className="grid gap-1"
-                            onSubmit={(event) => {
-                              event.preventDefault();
-                              void patch(ticket._id, {
-                                officeId: String(
-                                  new FormData(event.currentTarget).get(
-                                    'office',
-                                  ) ?? '',
-                                ),
-                              });
-                            }}
+                          <button
+                            type="button"
+                            className="quality-office-trigger"
+                            disabled={busy}
+                            aria-expanded={editingOffice === ticket._id}
+                            onClick={() =>
+                              editingOffice === ticket._id
+                                ? setEditingOffice(undefined)
+                                : void editOffice(ticket._id)
+                            }
                           >
-                            <input
-                              key={ticket.officeId}
-                              name="office"
-                              aria-label={`Офис заявки №${ticket._id}`}
-                              defaultValue={ticket.officeId}
-                              disabled={busy}
-                            />
-                            <button disabled={busy}>Сохранить офис</button>
-                          </form>
+                            {ticket.officeId || 'Выбрать офис'}{' '}
+                            <span aria-hidden="true">▾</span>
+                          </button>
+                          {editingOffice === ticket._id && (
+                            <div className="quality-office-editor">
+                              <input
+                                type="search"
+                                aria-label="Поиск офиса"
+                                placeholder="Номер или корпус"
+                                value={officeSearch}
+                                onChange={(event) =>
+                                  setOfficeSearch(event.target.value)
+                                }
+                              />
+                              <select
+                                aria-label="Выбрать офис"
+                                value=""
+                                disabled={busy || !officeOptions}
+                                onChange={(event) => {
+                                  const selection = event.target.value;
+                                  setEditingOffice(undefined);
+                                  void patch(ticket._id, {
+                                    officeId: selection,
+                                  });
+                                }}
+                              >
+                                <option value="" disabled>
+                                  {officeOptions
+                                    ? 'Выберите офис'
+                                    : 'Загрузка…'}
+                                </option>
+                                {officeOptions
+                                  ?.filter((label) =>
+                                    label
+                                      .toLocaleLowerCase('ru')
+                                      .includes(
+                                        officeSearch
+                                          .trim()
+                                          .toLocaleLowerCase('ru'),
+                                      ),
+                                  )
+                                  .map((label) => (
+                                    <option key={label}>{label}</option>
+                                  ))}
+                              </select>
+                              <button
+                                type="button"
+                                disabled={busy}
+                                onClick={() => {
+                                  setEditingOffice(undefined);
+                                  void patch(ticket._id, { officeId: '' });
+                                }}
+                              >
+                                Определять автоматически
+                              </button>
+                            </div>
+                          )}
                           {ticket.officeCategory && (
                             <span
                               className="quality-office-category"
@@ -434,7 +556,7 @@ export default function QualityPage() {
                             <summary
                               aria-label={`Настройки заявки №${ticket._id}`}
                             >
-                              Настройки заявки
+                              Действия
                             </summary>
                             <label className="block">
                               <input
@@ -462,53 +584,55 @@ export default function QualityPage() {
                               />{' '}
                               Исключить из отчёта
                             </label>
-                          </details>
-                          {ticket.ratingAvailable && (
-                            <>
-                              <button
-                                className="btn-secondary"
-                                disabled={busy}
-                                onClick={() => void copyLink(ticket._id, false)}
-                              >
-                                Скопировать ссылку на оценку
-                              </button>
-                              {latest && (
+                            {ticket.ratingAvailable && (
+                              <>
                                 <button
-                                  className="btn-secondary mt-2"
+                                  className="btn-secondary"
                                   disabled={busy}
                                   onClick={() =>
-                                    void copyLink(ticket._id, true)
+                                    void copyLink(ticket._id, false)
                                   }
                                 >
-                                  Запросить повторную оценку
+                                  Скопировать ссылку на оценку
                                 </button>
-                              )}
-                              {ticket.chatAvailable && (
-                                <>
+                                {latest && (
                                   <button
                                     className="btn-secondary mt-2"
                                     disabled={busy}
                                     onClick={() =>
-                                      void copyLink(ticket._id, false, true)
+                                      void copyLink(ticket._id, true)
                                     }
                                   >
-                                    Запросить оценку в чате
+                                    Запросить повторную оценку
                                   </button>
-                                  {latest && (
+                                )}
+                                {ticket.chatAvailable && (
+                                  <>
                                     <button
                                       className="btn-secondary mt-2"
                                       disabled={busy}
                                       onClick={() =>
-                                        void copyLink(ticket._id, true, true)
+                                        void copyLink(ticket._id, false, true)
                                       }
                                     >
-                                      Запросить повторную оценку в чате
+                                      Запросить оценку в чате
                                     </button>
-                                  )}
-                                </>
-                              )}
-                            </>
-                          )}
+                                    {latest && (
+                                      <button
+                                        className="btn-secondary mt-2"
+                                        disabled={busy}
+                                        onClick={() =>
+                                          void copyLink(ticket._id, true, true)
+                                        }
+                                      >
+                                        Запросить повторную оценку в чате
+                                      </button>
+                                    )}
+                                  </>
+                                )}
+                              </>
+                            )}
+                          </details>
                         </td>
                       </tr>
                     );

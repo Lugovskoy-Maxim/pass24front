@@ -250,12 +250,26 @@ describe('quality rating persistence', () => {
       officeId: '777',
       autoOfficeId: 'Добрынинский-2 · 405',
     });
-    deal.TITLE = 'Д/405-58м Жалюзи';
+    deal.TITLE = 'Д/405-74 м², вынос тмц';
+    Object.assign(deal, {
+      CLOSED: 'Y',
+      MOVED_TIME: '2026-11-16T12:00:00+03:00',
+    });
     await sync.sync();
     expect((await manager.list(undefined, '777')).tickets[0]).toMatchObject({
       officeId: '777',
       autoOfficeId: 'Добрынинский · 405',
+      closedAt: new Date('2026-11-16T09:00:00Z'),
     });
+    expect(await manager.offices()).toEqual(
+      expect.arrayContaining(['Добрынинский · 405', 'Добрынинский-2 · 405']),
+    );
+    const file = manager.exportCsv('2026-11-16', '2026-11-16', '777');
+    let csv = '';
+    for await (const chunk of file.getStream()) csv += String(chunk);
+    expect(csv).toContain('"Закрыта (МСК)"');
+    expect(csv).toContain('"Д/405-74 м², вынос тмц"');
+    expect(csv).toContain('12:00');
   });
 
   it('shares one saved answer across chat and link, and keeps earlier answers after a repeat', async () => {

@@ -1,4 +1,5 @@
 import { randomBytes } from 'node:crypto';
+import { Readable } from 'node:stream';
 import {
   BadRequestException,
   Body,
@@ -12,6 +13,7 @@ import {
   Patch,
   Post,
   Query,
+  StreamableFile,
   UseGuards,
 } from '@nestjs/common';
 import { AuthGuard } from '@nestjs/passport';
@@ -29,7 +31,10 @@ interface QualityTicket {
   _id: string;
   title: string;
   stageName?: string;
+  source?: string;
+  creatorName?: string;
   createdAt: Date;
+  closedAt?: Date | null;
   officeId?: string | null;
   autoOfficeId?: string;
   passTicketId?: string;
@@ -44,6 +49,16 @@ interface QualityTicket {
 
 const ratingStage = /^\s*(Можно закрывать|Сделка успешна)\s*$/i;
 
+function csvCell(value: unknown) {
+  const text = String(value ?? '');
+  return (
+    '"' +
+    (/^[\s\uFEFF]*[=+@-]|^[\t\r\n]/u.test(text) ? "'" : '') +
+    text.replace(/"/g, '""') +
+    '"'
+  );
+}
+
 @Controller('admin/quality')
 @UseGuards(AuthGuard('jwt'), PermissionsGuard)
 @RequireAllPermissions('admin.panel', 'support.manage')
@@ -52,6 +67,157 @@ export class QualityAdminController {
     private readonly store: OperationsStore,
     @Optional() private readonly bitrix?: Bitrix24Client,
   ) {}
+
+  @Get('offices')
+  @Header('Cache-Control', 'no-store')
+  async offices() {
+    const db = this.store.connection.db!;
+    const [offices, properties] = await Promise.all([
+      db
+        .collection('offices')
+        .find({}, { projection: { number: 1, property: 1 } })
+        .toArray(),
+      db
+        .collection('properties')
+        .find({}, { projection: { name: 1 } })
+        .toArray(),
+    ]);
+    const names = new Map(
+      properties.map(({ _id, name }) => [
+        String(_id),
+        String(name ?? '').replace(/^БЦ\s+/i, ''),
+      ]),
+    );
+    return [
+      ...new Set(
+        offices.flatMap(({ number, property }) =>
+          typeof number === 'string' && number
+            ? [
+                [names.get(String(property)), number]
+                  .filter(Boolean)
+                  .join(' · '),
+              ]
+            : [],
+        ),
+      ),
+    ].sort((a, b) => a.localeCompare(b, 'ru', { numeric: true }));
+  }
+
+  @Get('export')
+  @Header('Cache-Control', 'no-store')
+  exportCsv(
+    @Query('from') from: string,
+    @Query('to') to: string,
+    @Query('officeId') officeId?: string,
+    @Query('importantOnly') importantOnly?: string,
+    @Query('hideOpen') hideOpen?: string,
+  ) {
+    const parseDay = (value: string) => {
+      if (typeof value !== 'string' || !/^\d{4}-\d{2}-\d{2}$/.test(value))
+        return NaN;
+      const date = new Date(value + 'T00:00:00Z');
+      return Number.isFinite(date.getTime()) &&
+        date.toISOString().slice(0, 10) === value
+        ? date.getTime() - 10800000
+        : NaN;
+    };
+    const start = parseDay(from);
+    const end = parseDay(to);
+    if (
+      !Number.isFinite(start) ||
+      !Number.isFinite(end) ||
+      end < start ||
+      (officeId !== undefined && typeof officeId !== 'string')
+    ) {
+      throw new BadRequestException(
+        'Укажите корректный период создания заявок',
+      );
+    }
+    const cursor = this.store
+      .collection<QualityTicket>('quality_tickets')
+      .find({
+        createdAt: { $gte: new Date(start), $lt: new Date(end + 86400000) },
+        ...(officeId
+          ? {
+              $or: [
+                { officeId },
+                { officeId: { $in: ['', null] }, autoOfficeId: officeId },
+              ],
+            }
+          : {}),
+        ...(importantOnly === 'true' ? { important: true } : {}),
+        ...(hideOpen === 'true' ? { stageName: ratingStage } : {}),
+      })
+      .sort({ createdAt: -1, _id: -1 });
+    const format = new Intl.DateTimeFormat('ru-RU', {
+      timeZone: 'Europe/Moscow',
+      dateStyle: 'short',
+      timeStyle: 'short',
+    });
+    async function* rows() {
+      try {
+        yield '\uFEFF' +
+          [
+            'Номер',
+            'Тема',
+            'Источник',
+            'Создана (МСК)',
+            'Закрыта (МСК)',
+            'Статус',
+            'Автор',
+            'Офис',
+            'Последний запрос (МСК)',
+            'Состояние запроса',
+            'Последняя оценка',
+            'Комментарий',
+            'Дата оценки (МСК)',
+            'Важная',
+            'Исключена из отчёта',
+          ]
+            .map(csvCell)
+            .join(';') +
+          '\r\n';
+        for await (const ticket of cursor) {
+          const latest = ticket.requests?.at(-1);
+          let answer:
+            | NonNullable<QualityTicket['requests'][number]['answer']>
+            | undefined;
+          for (const item of ticket.requests ?? []) {
+            if (
+              item.answer &&
+              (!answer || item.answer.receivedAt >= answer.receivedAt)
+            )
+              answer = item.answer;
+          }
+          yield [
+            ticket._id,
+            ticket.title,
+            ticket.source,
+            format.format(ticket.createdAt),
+            ticket.closedAt && format.format(ticket.closedAt),
+            ticket.stageName,
+            ticket.creatorName,
+            ticket.officeId || ticket.autoOfficeId,
+            latest && format.format(latest.createdAt),
+            latest && (latest.answer ? 'Получен ответ' : 'Ожидает ответа'),
+            answer?.score,
+            answer?.comment,
+            answer && format.format(answer.receivedAt),
+            ticket.important ? 'Да' : 'Нет',
+            ticket.excluded ? 'Да' : 'Нет',
+          ]
+            .map(csvCell)
+            .join(';') + '\r\n';
+        }
+      } finally {
+        await cursor.close();
+      }
+    }
+    return new StreamableFile(Readable.from(rows()), {
+      type: 'text/csv; charset=utf-8',
+      disposition: `attachment; filename="quality-${from}-${to}.csv"`,
+    });
+  }
 
   @Get()
   @Header('Cache-Control', 'no-store')
