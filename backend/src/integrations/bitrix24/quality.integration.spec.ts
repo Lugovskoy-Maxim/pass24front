@@ -56,6 +56,28 @@ describe('quality rating persistence', () => {
     });
     expect(second.report).toEqual(first.report);
     expect(second.report?.created).toBe(26);
+    await store
+      .collection('quality_tickets')
+      .updateOne(
+        { _id: 'pagination-0' },
+        { $set: { stageName: 'Сделка успешна' } },
+      );
+    const closed = await manager.list(
+      '2026-11-16',
+      officeId,
+      undefined,
+      '2',
+      '25',
+      'true',
+    );
+    expect(closed.pagination).toEqual({
+      page: 1,
+      pageSize: 25,
+      pages: 1,
+      total: 1,
+    });
+    expect(closed.tickets.map(({ _id }) => _id)).toEqual(['pagination-0']);
+    expect(closed.report?.created).toBe(26);
     await store.collection('quality_tickets').deleteMany({ officeId });
   });
 
@@ -63,6 +85,7 @@ describe('quality rating persistence', () => {
     await store.collection('quality_tickets').insertOne({
       _id: 'public-test',
       title: 'Публичная оценка',
+      stageName: 'Можно закрывать',
       createdAt: new Date(),
     });
     const { token } = await new QualityAdminController(store).create(
@@ -150,14 +173,20 @@ describe('quality rating persistence', () => {
         source: 'EMAIL',
       }),
     ]);
-    await expect(manager.create('88', true, true)).rejects.toMatchObject({
-      status: 404,
+    await expect(manager.create('88', false, false)).rejects.toMatchObject({
+      status: 409,
     });
     expect(
       (await store.collection('quality_tickets').findOne({ _id: '88' }))
         ?.requests,
     ).toBeUndefined();
     await manager.update('88', true, true, '777');
+    await store
+      .collection('quality_tickets')
+      .updateOne({ _id: '88' }, { $set: { stageName: 'Можно закрывать' } });
+    await expect(manager.create('88', true, true)).rejects.toMatchObject({
+      status: 404,
+    });
     const request = await manager.create('88', false, false);
     deal.STAGE_ID = 'DONE';
     deal.COMPANY_ID = '0';
@@ -215,11 +244,17 @@ describe('quality rating persistence', () => {
       { number: '405', property: buildings.insertedIds[0] },
       { number: '405', property: buildings.insertedIds[1] },
     ]);
-    deal.TITLE = 'Д-2\\405 — заменить светильник';
+    deal.TITLE = 'Д-2/405-84м Проводка';
     await sync.sync();
     expect((await manager.list(undefined, '777')).tickets[0]).toMatchObject({
       officeId: '777',
       autoOfficeId: 'Добрынинский-2 · 405',
+    });
+    deal.TITLE = 'Д/405-58м Жалюзи';
+    await sync.sync();
+    expect((await manager.list(undefined, '777')).tickets[0]).toMatchObject({
+      officeId: '777',
+      autoOfficeId: 'Добрынинский · 405',
     });
   });
 
@@ -229,6 +264,7 @@ describe('quality rating persistence', () => {
     await tickets.insertOne({
       _id: '42',
       title: 'Тестовая заявка',
+      stageName: 'Сделка успешна',
       passTicketId: '7',
       createdAt,
     });

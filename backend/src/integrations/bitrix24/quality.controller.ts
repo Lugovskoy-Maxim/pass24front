@@ -3,9 +3,11 @@ import {
   BadRequestException,
   Body,
   Controller,
+  ConflictException,
   Get,
   Header,
   NotFoundException,
+  Optional,
   Param,
   Patch,
   Post,
@@ -16,11 +18,17 @@ import { AuthGuard } from '@nestjs/passport';
 import { PermissionsGuard } from '../../auth/permissions.guard';
 import { RequireAllPermissions } from '../../auth/permissions.decorator';
 import { OperationsStore } from '../../operations/operations.store';
+import {
+  DEFAULT_OFFICE_CATEGORIES,
+  normalizeOfficeCategory,
+} from '../../office-services/office-services.rules';
 import { buildWeeklyQualityReport, qualityWeekBounds } from './quality-report';
+import { Bitrix24Client } from './bitrix24.client';
 
 interface QualityTicket {
   _id: string;
   title: string;
+  stageName?: string;
   createdAt: Date;
   officeId?: string | null;
   autoOfficeId?: string;
@@ -34,11 +42,16 @@ interface QualityTicket {
   }[];
 }
 
+const ratingStage = /^\s*(Можно закрывать|Сделка успешна)\s*$/i;
+
 @Controller('admin/quality')
 @UseGuards(AuthGuard('jwt'), PermissionsGuard)
 @RequireAllPermissions('admin.panel', 'support.manage')
 export class QualityAdminController {
-  constructor(private readonly store: OperationsStore) {}
+  constructor(
+    private readonly store: OperationsStore,
+    @Optional() private readonly bitrix?: Bitrix24Client,
+  ) {}
 
   @Get()
   @Header('Cache-Control', 'no-store')
@@ -48,10 +61,12 @@ export class QualityAdminController {
     @Query('importantOnly') importantOnly?: string,
     @Query('page') pageParam = '1',
     @Query('pageSize') sizeParam = '25',
+    @Query('hideOpen') hideOpen = 'false',
   ) {
     if (
       (week !== undefined && typeof week !== 'string') ||
       (officeId !== undefined && typeof officeId !== 'string') ||
+      !['true', 'false'].includes(hideOpen) ||
       (importantOnly !== undefined &&
         !['true', 'false'].includes(importantOnly))
     ) {
@@ -80,11 +95,13 @@ export class QualityAdminController {
         : {}),
       ...(importantOnly === 'true' ? { important: true } : {}),
     };
-    const total = await collection.countDocuments(filter);
+    const tableFilter =
+      hideOpen === 'true' ? { ...filter, stageName: ratingStage } : filter;
+    const total = await collection.countDocuments(tableFilter);
     const pages = Math.max(1, Math.ceil(total / pageSize));
     const page = Math.min(requestedPage, pages);
     const rows = await collection
-      .find(filter)
+      .find(tableFilter)
       .sort({ createdAt: -1, _id: -1 })
       .skip((page - 1) * pageSize)
       .limit(pageSize)
@@ -112,12 +129,82 @@ export class QualityAdminController {
         String(ticket.bitrix.deal_id),
       ]),
     );
+    const crmOrigin = this.bitrix?.configured()
+      ? this.bitrix.webhook().origin
+      : '';
     const tickets = rows.map((row) => ({
       ...row,
       officeId: row.officeId || row.autoOfficeId || '',
+      ratingAvailable: ratingStage.test(row.stageName ?? ''),
+      crmUrl:
+        crmOrigin && /^\d+$/.test(row._id)
+          ? crmOrigin + '/crm/deal/details/' + row._id + '/'
+          : null,
       chatAvailable:
         !!row.passTicketId && dealByTicket.get(row.passTicketId) === row._id,
     }));
+    const labels = [
+      ...new Set(tickets.map(({ officeId }) => officeId).filter(Boolean)),
+    ];
+    const officeCategories = new Map<string, { name: string; color: string }>();
+    if (labels.length) {
+      const db = this.store.connection.db!;
+      const officeNumbers = labels.map((label) => label.split(' · ').at(-1)!);
+      const offices = await db
+        .collection('offices')
+        .find(
+          { number: { $in: officeNumbers } },
+          { projection: { number: 1, property: 1, officeFormat: 1 } },
+        )
+        .toArray();
+      const [properties, categories] = await Promise.all([
+        db
+          .collection('properties')
+          .find(
+            {
+              _id: {
+                $in: offices.flatMap(({ property }) =>
+                  property ? [property] : [],
+                ),
+              },
+            },
+            { projection: { name: 1 } },
+          )
+          .toArray(),
+        db
+          .collection('office_categories')
+          .find({}, { projection: { code: 1, name: 1, color: 1 } })
+          .toArray(),
+      ]);
+      const propertyNames = new Map(
+        properties.map(({ _id, name }) => [
+          String(_id),
+          String(name ?? '').replace(/^БЦ\s+/i, ''),
+        ]),
+      );
+      const byCode = new Map(
+        [
+          ...DEFAULT_OFFICE_CATEGORIES,
+          ...categories.map(({ code, name, color }) => ({ code, name, color })),
+        ].map((category) => [category.code, category]),
+      );
+      for (const label of labels) {
+        const matches = offices.filter(
+          ({ number, property }) =>
+            number === label ||
+            `${propertyNames.get(String(property))} · ${number}` === label,
+        );
+        if (matches.length !== 1) continue;
+        const format = matches[0].officeFormat;
+        const code = normalizeOfficeCategory(format);
+        if (!code) continue;
+        const category = byCode.get(code);
+        officeCategories.set(label, {
+          name: category?.name || code,
+          color: category?.color || '#64748b',
+        });
+      }
+    }
     let report: ReturnType<typeof buildWeeklyQualityReport> | null = null;
     if (week !== undefined) {
       try {
@@ -162,7 +249,10 @@ export class QualityAdminController {
         { projection: { scannedAt: 1, completedAt: 1 } },
       );
     return {
-      tickets,
+      tickets: tickets.map((ticket) => ({
+        ...ticket,
+        officeCategory: officeCategories.get(ticket.officeId) ?? null,
+      })),
       pagination: { page, pageSize, pages, total },
       report,
       lastSyncedAt: sync?.completedAt ?? sync?.scannedAt ?? null,
@@ -215,6 +305,14 @@ export class QualityAdminController {
       throw new BadRequestException('Неверный формат запроса оценки');
     }
     const tickets = this.store.collection<QualityTicket>('quality_tickets');
+    const current = await tickets.findOne(
+      { _id: id },
+      { projection: { stageName: 1, passTicketId: 1 } },
+    );
+    if (!current) throw new NotFoundException();
+    if (!ratingStage.test(current.stageName ?? '')) {
+      throw new ConflictException('На текущей стадии запрос оценки недоступен');
+    }
     const linked =
       chat === true ? { passTicketId: { $regex: /^[1-9]\d*$/ } } : {};
     if (chat === true) {
@@ -236,12 +334,18 @@ export class QualityAdminController {
       (await tickets.findOneAndUpdate(
         {
           _id: id,
+          stageName: current.stageName,
           ...linked,
           ...(repeat === true ? {} : { 'requests.0': { $exists: false } }),
         },
         { $push: { requests: request } },
         { returnDocument: 'after' },
-      )) ?? (await tickets.findOne({ _id: id, ...linked }));
+      )) ??
+      (await tickets.findOne({
+        _id: id,
+        stageName: current.stageName,
+        ...linked,
+      }));
     if (!ticket) throw new NotFoundException();
     const latest = ticket.requests?.at(-1);
     if (!latest) throw new NotFoundException();

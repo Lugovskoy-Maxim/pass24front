@@ -90,7 +90,7 @@ export class QualitySyncService implements OnModuleInit, OnModuleDestroy {
             filter: {
               CATEGORY_ID: funnel.id,
               '>ID': afterId,
-              ...(checkpoint?.officeFormat === 2 &&
+              ...(checkpoint?.officeFormat === 3 &&
               checkpoint.categoryId === funnel.id &&
               checkpoint.scannedAt
                 ? {
@@ -172,7 +172,7 @@ export class QualitySyncService implements OnModuleInit, OnModuleDestroy {
           const title = ` ${words(deal.TITLE)} `;
           const qualified = [
             ...String(deal.TITLE ?? '').matchAll(
-              /(?:^|[^\p{L}\p{N}])д\s*[-–—]?\s*([12])\s*[\\/]\s*([\p{L}\p{N}-]+)(?![\p{L}\p{N}-])/giu,
+              /(?:^|[^\p{L}\p{N}])д(?:\s*[-–—]?\s*([12]))?\s*[\\/]\s*([\p{L}\p{N}-]+)/giu,
             ),
           ];
           const titleOffices = offices.filter((office) => {
@@ -185,7 +185,7 @@ export class QualitySyncService implements OnModuleInit, OnModuleDestroy {
                 ([, building, number]) =>
                   property ===
                     (building === '2' ? 'добрынинский2' : 'добрынинский') &&
-                  label === words(number),
+                  label === words(number.replace(/-\d+м$/iu, '')),
               );
             }
             return label && title.includes(` ${label} `);
@@ -228,7 +228,7 @@ export class QualitySyncService implements OnModuleInit, OnModuleDestroy {
       await state.updateOne(
         { _id: 'deals' },
         {
-          $set: { categoryId: funnel.id, officeFormat: 2 },
+          $set: { categoryId: funnel.id, officeFormat: 3 },
           $max: { scannedAt: startedAt, completedAt: new Date() },
         },
         { upsert: true },

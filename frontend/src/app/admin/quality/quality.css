@@ -147,6 +147,62 @@
   cursor: default;
 }
 
+.quality-flags {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 0.3rem;
+  margin-top: 0.4rem;
+}
+
+.quality-crm-link {
+  color: var(--accent);
+  text-decoration: underline;
+  text-underline-offset: 0.15em;
+}
+
+.quality-flags span {
+  border: 1px solid var(--border-strong);
+  border-radius: 0.35rem;
+  padding-inline: 0.35rem;
+  color: var(--muted);
+  font-size: 0.75rem;
+  font-weight: 500;
+}
+
+.quality-row-settings {
+  margin-bottom: 0.5rem;
+}
+
+.quality-row-settings summary {
+  cursor: pointer;
+  color: var(--muted);
+}
+
+.quality-row-settings label {
+  display: flex;
+  align-items: flex-start;
+  gap: 0.35rem;
+  margin-top: 0.35rem;
+}
+
+.quality-office-category {
+  display: inline-flex;
+  align-items: center;
+  gap: 0.4rem;
+  margin-top: 0.4rem;
+  padding: 0.2rem 0.45rem;
+  border-radius: 0.35rem;
+  background: var(--surface-muted);
+  color: var(--muted);
+}
+
+.quality-office-category i {
+  width: 0.55rem;
+  height: 0.55rem;
+  flex: 0 0 auto;
+  border-radius: 50%;
+}
+
 .quality-workspace table {
   width: 100%;
   min-width: 64rem;

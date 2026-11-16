@@ -29,6 +29,9 @@ interface Ticket {
   chatAvailable?: boolean;
   creatorName?: string;
   officeId?: string;
+  officeCategory?: { name: string; color: string } | null;
+  ratingAvailable: boolean;
+  crmUrl?: string | null;
   important?: boolean;
   excluded?: boolean;
   requests?: RatingRequest[];
@@ -66,6 +69,7 @@ export default function QualityPage() {
   );
   const [officeId, setOfficeId] = useState('');
   const [importantOnly, setImportantOnly] = useState(false);
+  const [hideOpen, setHideOpen] = useState(false);
   const [page, setPage] = useState(1);
   const [pageSize, setPageSize] = useState(25);
   const [data, setData] = useState<QualityData>();
@@ -82,6 +86,7 @@ export default function QualityPage() {
         week,
         officeId,
         importantOnly: String(importantOnly),
+        hideOpen: String(hideOpen),
         page: String(page),
         pageSize: String(pageSize),
       });
@@ -91,7 +96,7 @@ export default function QualityPage() {
       if (!signal?.aborted && sequence === loadSequence.current)
         setData(result);
     },
-    [week, officeId, importantOnly, page, pageSize],
+    [week, officeId, importantOnly, hideOpen, page, pageSize],
   );
 
   useAutoRefresh(() => load().catch(() => undefined), { enabled: !busy });
@@ -207,6 +212,17 @@ export default function QualityPage() {
             />
             Только важные
           </label>
+          <label className="flex items-center gap-2">
+            <input
+              type="checkbox"
+              checked={hideOpen}
+              onChange={(event) => {
+                setPage(1);
+                setHideOpen(event.target.checked);
+              }}
+            />
+            Скрыть незакрытые
+          </label>
         </fieldset>
         {error && <p role="alert">{error}</p>}
         {!data && !error && <p role="status">Загрузка…</p>}
@@ -292,7 +308,6 @@ export default function QualityPage() {
                       'Офис',
                       'Последний запрос',
                       'Последняя оценка',
-                      'Отметки',
                       'Действия',
                     ].map((label) => (
                       <th key={label} scope="col">
@@ -311,7 +326,26 @@ export default function QualityPage() {
                     return (
                       <tr key={ticket._id} className="border-t align-top">
                         <th scope="row">
-                          №{ticket._id} {ticket.title}
+                          {ticket.crmUrl ? (
+                            <a
+                              className="quality-crm-link"
+                              href={ticket.crmUrl}
+                              target="_blank"
+                              rel="noopener noreferrer"
+                              aria-label={`Открыть заявку №${ticket._id} в Битрикс24`}
+                            >
+                              №{ticket._id}
+                            </a>
+                          ) : (
+                            `№${ticket._id}`
+                          )}{' '}
+                          {ticket.title}
+                          {(ticket.important || ticket.excluded) && (
+                            <div className="quality-flags">
+                              {ticket.important && <span>Важная</span>}
+                              {ticket.excluded && <span>Вне отчёта</span>}
+                            </div>
+                          )}
                         </th>
                         <td>{ticket.source}</td>
                         <td>{formatter.format(new Date(ticket.createdAt))}</td>
@@ -340,6 +374,20 @@ export default function QualityPage() {
                             />
                             <button disabled={busy}>Сохранить офис</button>
                           </form>
+                          {ticket.officeCategory && (
+                            <span
+                              className="quality-office-category"
+                              title={ticket.officeCategory.name}
+                            >
+                              <i
+                                aria-hidden="true"
+                                style={{
+                                  backgroundColor: ticket.officeCategory.color,
+                                }}
+                              />
+                              {ticket.officeCategory.name}
+                            </span>
+                          )}
                         </td>
                         <td>
                           {latest ? (
@@ -381,72 +429,83 @@ export default function QualityPage() {
                             </details>
                           )}
                         </td>
-                        <td>
-                          <label className="block">
-                            <input
-                              type="checkbox"
-                              checked={!!ticket.important}
-                              disabled={busy}
-                              onChange={(event) =>
-                                void patch(ticket._id, {
-                                  important: event.target.checked,
-                                })
-                              }
-                            />{' '}
-                            Важная
-                          </label>
-                          <label className="block">
-                            <input
-                              type="checkbox"
-                              checked={!!ticket.excluded}
-                              disabled={busy}
-                              onChange={(event) =>
-                                void patch(ticket._id, {
-                                  excluded: event.target.checked,
-                                })
-                              }
-                            />{' '}
-                            Не учитывать
-                          </label>
-                        </td>
                         <td className="min-w-48">
-                          <button
-                            className="btn-secondary"
-                            disabled={busy}
-                            onClick={() => void copyLink(ticket._id, false)}
-                          >
-                            Скопировать ссылку на оценку
-                          </button>
-                          {latest && (
-                            <button
-                              className="btn-secondary mt-2"
-                              disabled={busy}
-                              onClick={() => void copyLink(ticket._id, true)}
+                          <details className="quality-row-settings">
+                            <summary
+                              aria-label={`Настройки заявки №${ticket._id}`}
                             >
-                              Запросить повторную оценку
-                            </button>
-                          )}
-                          {ticket.chatAvailable && (
+                              Настройки заявки
+                            </summary>
+                            <label className="block">
+                              <input
+                                type="checkbox"
+                                checked={!!ticket.important}
+                                disabled={busy}
+                                onChange={(event) =>
+                                  void patch(ticket._id, {
+                                    important: event.target.checked,
+                                  })
+                                }
+                              />{' '}
+                              Важная
+                            </label>
+                            <label className="block">
+                              <input
+                                type="checkbox"
+                                checked={!!ticket.excluded}
+                                disabled={busy}
+                                onChange={(event) =>
+                                  void patch(ticket._id, {
+                                    excluded: event.target.checked,
+                                  })
+                                }
+                              />{' '}
+                              Исключить из отчёта
+                            </label>
+                          </details>
+                          {ticket.ratingAvailable && (
                             <>
                               <button
-                                className="btn-secondary mt-2"
+                                className="btn-secondary"
                                 disabled={busy}
-                                onClick={() =>
-                                  void copyLink(ticket._id, false, true)
-                                }
+                                onClick={() => void copyLink(ticket._id, false)}
                               >
-                                Запросить оценку в чате
+                                Скопировать ссылку на оценку
                               </button>
                               {latest && (
                                 <button
                                   className="btn-secondary mt-2"
                                   disabled={busy}
                                   onClick={() =>
-                                    void copyLink(ticket._id, true, true)
+                                    void copyLink(ticket._id, true)
                                   }
                                 >
-                                  Запросить повторную оценку в чате
+                                  Запросить повторную оценку
                                 </button>
+                              )}
+                              {ticket.chatAvailable && (
+                                <>
+                                  <button
+                                    className="btn-secondary mt-2"
+                                    disabled={busy}
+                                    onClick={() =>
+                                      void copyLink(ticket._id, false, true)
+                                    }
+                                  >
+                                    Запросить оценку в чате
+                                  </button>
+                                  {latest && (
+                                    <button
+                                      className="btn-secondary mt-2"
+                                      disabled={busy}
+                                      onClick={() =>
+                                        void copyLink(ticket._id, true, true)
+                                      }
+                                    >
+                                      Запросить повторную оценку в чате
+                                    </button>
+                                  )}
+                                </>
                               )}
                             </>
                           )}
