@@ -160,10 +160,7 @@ export default function QualityPage() {
           body: JSON.stringify({ repeat, chat }),
         },
       );
-      const url = new URL(
-        '/q/' + rating.token,
-        window.location.origin,
-      ).href;
+      const url = new URL('/q/' + rating.token, window.location.origin).href;
       setLink(url);
       if (chat) {
         setNotice('Запрос оценки появился в чате.');
