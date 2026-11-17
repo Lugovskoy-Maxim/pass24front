@@ -26,6 +26,9 @@ import {
 } from '../../office-services/office-services.rules';
 import { buildWeeklyQualityReport, qualityWeekBounds } from './quality-report';
 import { Bitrix24Client } from './bitrix24.client';
+import { SmsService } from '../../sms/sms.service';
+import { MailService } from '../../mail/mail.service';
+import { isEmail } from 'class-validator';
 
 interface QualityTicket {
   _id: string;
@@ -85,7 +88,75 @@ export class QualityAdminController {
   constructor(
     private readonly store: OperationsStore,
     @Optional() private readonly bitrix?: Bitrix24Client,
+    @Optional() private readonly sms?: SmsService,
+    @Optional() private readonly mail?: MailService,
   ) {}
+
+  @Post(':id/email')
+  async sendEmail(
+    @Param('id') id: string,
+    @Body('email') email: unknown,
+    @Body('subject') subject: unknown,
+    @Body('text') text: unknown,
+  ) {
+    if (
+      typeof email !== 'string' ||
+      email.length > 254 ||
+      !isEmail(email.trim()) ||
+      typeof subject !== 'string' ||
+      !subject.trim() ||
+      subject.length > 160 ||
+      /[\r\n]/.test(subject) ||
+      typeof text !== 'string' ||
+      !text.trim() ||
+      text.length > 4000
+    ) {
+      throw new BadRequestException('Укажите адрес, тему и текст письма');
+    }
+    const ticket = await this.store
+      .collection<QualityTicket>('quality_tickets')
+      .findOne({ _id: id }, { projection: { stageName: 1 } });
+    if (!ticket) throw new NotFoundException();
+    if (!ratingStage.test(ticket.stageName ?? ''))
+      throw new ConflictException(
+        'На текущей стадии отправка письма недоступна',
+      );
+    if (!this.mail?.isConfigured())
+      throw new BadRequestException('Почтовый сервер не настроен');
+    await this.mail.sendServiceRequestEmail(
+      email.trim(),
+      subject.trim(),
+      text.trim(),
+    );
+    return { accepted: true };
+  }
+
+  @Post(':id/sms')
+  async sendSms(
+    @Param('id') id: string,
+    @Body('phone') phone: unknown,
+    @Body('text') text: unknown,
+  ) {
+    if (
+      typeof phone !== 'string' ||
+      phone.length > 30 ||
+      typeof text !== 'string' ||
+      !text.trim() ||
+      text.trim().length > 160
+    ) {
+      throw new BadRequestException('Укажите телефон и текст до 160 символов');
+    }
+    const ticket = await this.store
+      .collection<QualityTicket>('quality_tickets')
+      .findOne({ _id: id }, { projection: { stageName: 1 } });
+    if (!ticket) throw new NotFoundException();
+    if (!ratingStage.test(ticket.stageName ?? ''))
+      throw new ConflictException('На текущей стадии отправка СМС недоступна');
+    if (!this.sms?.textEnabled())
+      throw new BadRequestException('Обычные СМС не настроены');
+    await this.sms.sendText(phone.trim(), text.trim());
+    return { accepted: true };
+  }
 
   @Get('offices')
   @Header('Cache-Control', 'no-store')
@@ -444,6 +515,8 @@ export class QualityAdminController {
         ...ticket,
         officeCategory: officeCategories.get(ticket.officeId) ?? null,
       })),
+      smsAvailable: this.sms?.textEnabled() ?? false,
+      emailAvailable: this.mail?.isConfigured() ?? false,
       pagination: { page, pageSize, pages, total },
       report,
       lastSyncedAt: sync?.completedAt ?? sync?.scannedAt ?? null,

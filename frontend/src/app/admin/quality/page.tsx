@@ -39,6 +39,8 @@ interface Ticket {
 }
 
 interface QualityData {
+  smsAvailable?: boolean;
+  emailAvailable?: boolean;
   pagination: { page: number; pageSize: number; pages: number; total: number };
   lastSyncedAt: string | null;
   tickets: Ticket[];
@@ -574,6 +576,124 @@ export default function QualityPage() {
                             >
                               Действия
                             </summary>
+                            {ticket.ratingAvailable && data.emailAvailable && (
+                              <details className="quality-row-settings">
+                                <summary>Отправить на почту</summary>
+                                <form
+                                  className="quality-office-editor"
+                                  onSubmit={(event) => {
+                                    event.preventDefault();
+                                    const form = event.currentTarget;
+                                    const fields = new FormData(form);
+                                    void change(async () => {
+                                      await request(
+                                        '/admin/quality/' +
+                                          ticket._id +
+                                          '/email',
+                                        {
+                                          method: 'POST',
+                                          body: JSON.stringify({
+                                            email: fields.get('email'),
+                                            subject: fields.get('subject'),
+                                            text: fields.get('text'),
+                                          }),
+                                        },
+                                      );
+                                      form.reset();
+                                      setNotice(
+                                        'Письмо принято почтовым сервером.',
+                                      );
+                                    });
+                                  }}
+                                >
+                                  <label>
+                                    Почта
+                                    <input
+                                      type="email"
+                                      name="email"
+                                      maxLength={254}
+                                      required
+                                      disabled={busy}
+                                    />
+                                  </label>
+                                  <label>
+                                    Тема
+                                    <input
+                                      name="subject"
+                                      defaultValue={`Заявка №${ticket._id}`}
+                                      maxLength={160}
+                                      required
+                                      disabled={busy}
+                                    />
+                                  </label>
+                                  <label>
+                                    Сообщение
+                                    <textarea
+                                      name="text"
+                                      maxLength={4000}
+                                      rows={4}
+                                      required
+                                      disabled={busy}
+                                    />
+                                  </label>
+                                  <button type="submit" disabled={busy}>
+                                    Отправить письмо
+                                  </button>
+                                </form>
+                              </details>
+                            )}
+                            {ticket.ratingAvailable && data.smsAvailable && (
+                              <details className="quality-row-settings">
+                                <summary>Отправить СМС</summary>
+                                <form
+                                  className="quality-office-editor"
+                                  onSubmit={(event) => {
+                                    event.preventDefault();
+                                    const form = event.currentTarget;
+                                    const fields = new FormData(form);
+                                    void change(async () => {
+                                      await request(
+                                        '/admin/quality/' + ticket._id + '/sms',
+                                        {
+                                          method: 'POST',
+                                          body: JSON.stringify({
+                                            phone: fields.get('phone'),
+                                            text: fields.get('text'),
+                                          }),
+                                        },
+                                      );
+                                      form.reset();
+                                      setNotice('СМС принято оператором.');
+                                    });
+                                  }}
+                                >
+                                  <label>
+                                    Телефон
+                                    <input
+                                      type="tel"
+                                      name="phone"
+                                      placeholder="+7"
+                                      maxLength={30}
+                                      required
+                                      disabled={busy}
+                                    />
+                                  </label>
+                                  <label>
+                                    Сообщение
+                                    <textarea
+                                      name="text"
+                                      maxLength={160}
+                                      rows={3}
+                                      required
+                                      disabled={busy}
+                                    />
+                                  </label>
+                                  <button type="submit" disabled={busy}>
+                                    Отправить СМС
+                                  </button>
+                                </form>
+                              </details>
+                            )}
                             <label className="block">
                               <input
                                 type="checkbox"

@@ -7,7 +7,7 @@
  * Env: SMS_ENABLED=true, SMSAERO_EMAIL, SMSAERO_API_KEY, SMSAERO_SIGN (имя Mobile Auth, напр. mts_mstyle).
  * Опционально: SMSAERO_CALLBACK_URL или PUBLIC_APP_URL (+ /api/sms/mobile-id/callback).
  *
- * Обычный sms/send здесь не используется: у аккаунта Mobile Auth имя ≠ SMS-подпись sign/list.
+ * Для обычных SMS используется отдельная подпись SMSAERO_TEXT_SIGN.
  */
 import {
   BadRequestException,
@@ -288,7 +288,32 @@ export class SmsService {
     return 'Не удалось запустить мобильную авторизацию (SMS Aero)';
   }
 
-  /** POST в формате формы — так параметры Mobile ID передают официальные SDK SMS Aero. */
+  textEnabled() {
+    return (
+      !!this.configService.get<string>('SMSAERO_TEXT_SIGN')?.trim() &&
+      !!this.configService.get<string>('SMSAERO_EMAIL')?.trim() &&
+      !!this.configService.get<string>('SMSAERO_API_KEY')?.trim()
+    );
+  }
+
+  async sendText(phone: string, text: string) {
+    if (!this.textEnabled())
+      throw new BadRequestException('Обычные СМС не настроены');
+    if (!/^\+?[\d ()-]+$/.test(phone))
+      throw new BadRequestException('Укажите корректный телефон');
+    const number = phone.replace(/\D/g, '').replace(/^8(?=\d{10}$)/, '7');
+    if (!/^7\d{10}$/.test(number))
+      throw new BadRequestException('Укажите телефон в формате +7');
+    const response = await this.requestForm('sms/send', {
+      number,
+      text,
+      sign: this.configService.get<string>('SMSAERO_TEXT_SIGN')!.trim(),
+    });
+    if (response.success !== true)
+      throw new BadRequestException('SMS Aero не принял сообщение');
+  }
+
+  /** POST в формате формы для методов SMS Aero. */
   protected async requestForm(
     path: string,
     body: Record<string, string | number>,
@@ -323,7 +348,8 @@ export class SmsService {
         signal: AbortSignal.timeout(15_000),
       });
       const data = (await res.json()) as SmsAeroResponse;
-      if (!res.ok) {
+      if (!res.ok && path === 'sms/send') return { ...data, success: false };
+      if (!res.ok && path !== 'sms/send') {
         this.logger.error(
           `SMS Aero HTTP ${res.status} ${path}: ${JSON.stringify(data)}`,
         );

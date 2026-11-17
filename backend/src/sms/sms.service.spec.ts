@@ -9,6 +9,7 @@ describe('SMS Aero Mobile ID authentication', () => {
         SMSAERO_EMAIL: 'test@example.com',
         SMSAERO_API_KEY: 'test-key',
         SMSAERO_SIGN: 'test-sign',
+        SMSAERO_TEXT_SIGN: 'text-sign',
       }),
     );
   const response = (status: unknown, success = true) =>
@@ -17,6 +18,22 @@ describe('SMS Aero Mobile ID authentication', () => {
       json: async () => ({ success, data: { id: 123, status } }),
     }) as Response;
   afterEach(() => jest.restoreAllMocks());
+
+  it('sends ordinary SMS using the separate text sender signature', async () => {
+    const fetchMock = jest
+      .spyOn(globalThis, 'fetch')
+      .mockResolvedValue(response(0));
+    await service().sendText('8 (999) 000-00-00', 'Проверка');
+    const [url, init] = fetchMock.mock.calls[0];
+    expect(url).toBe('https://gate.smsaero.ru/v2/sms/send');
+    expect(Object.fromEntries(new URLSearchParams(String(init?.body)))).toEqual(
+      {
+        number: '79990000000',
+        text: 'Проверка',
+        sign: 'text-sign',
+      },
+    );
+  });
 
   it.each([0, 2, 3, 8, 16, undefined, null])(
     'does not authenticate provider status %s',

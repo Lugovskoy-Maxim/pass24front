@@ -47,6 +47,10 @@ export class MailService {
     return !!this.transporter;
   }
 
+  async sendServiceRequestEmail(to: string, subject: string, text: string) {
+    await this.sendMail({ to, subject, text });
+  }
+
   async sendBookingInvoice(data: {
     to: string;
     number: string;
