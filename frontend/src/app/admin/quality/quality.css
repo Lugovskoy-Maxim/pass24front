@@ -273,10 +273,40 @@
   background: var(--surface-elevated);
 }
 
-.quality-workspace td:last-child button {
+.quality-actions > button {
+  display: inline-block;
+  margin: 0 0.25rem 0.2rem 0;
+}
+
+.quality-actions-popover {
+  position: fixed;
+  inset: 0;
+  width: min(22rem, calc(100vw - 2rem));
+  max-height: calc(100dvh - 2rem);
+  margin: auto;
+  padding: 0.9rem;
+  overflow: auto;
+  border: 1px solid var(--border-strong);
+  border-radius: 0.65rem;
+  color: var(--foreground);
+  background: var(--surface);
+  box-shadow: 0 12px 40px #0006;
+}
+
+.quality-actions-popover header {
+  display: flex;
+  justify-content: space-between;
+  align-items: center;
+  margin-bottom: 0.6rem;
+}
+
+.quality-actions-popover > label {
   display: block;
-  width: 100%;
-  margin-bottom: 0.4rem;
+  margin-block: 0.35rem;
+}
+
+.quality-actions-popover > button {
+  margin: 0.2rem;
 }
 
 .quality-distribution {

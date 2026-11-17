@@ -556,23 +556,41 @@ export default function QualityPage() {
                             </details>
                           )}
                         </td>
-                        <td className="min-w-48">
+                        <td className="quality-actions">
                           {ticket.ratingAvailable && !latest?.answer && (
                             <button
                               type="button"
                               className="btn-secondary"
                               disabled={busy}
+                              aria-label={`Скопировать ссылку на оценку заявки №${ticket._id}`}
                               onClick={() => void copyLink(ticket._id, false)}
                             >
-                              Скопировать ссылку на оценку
+                              Скопировать ссылку
                             </button>
                           )}
-                          <details className="quality-row-settings">
-                            <summary
-                              aria-label={`Настройки заявки №${ticket._id}`}
-                            >
-                              Действия
-                            </summary>
+                          <button
+                            type="button"
+                            popoverTarget={`quality-actions-${ticket._id}`}
+                            aria-label={`Действия по заявке №${ticket._id}`}
+                          >
+                            Действия
+                          </button>
+                          <div
+                            className="quality-actions-popover"
+                            popover="auto"
+                            id={`quality-actions-${ticket._id}`}
+                          >
+                            <header>
+                              <strong>Заявка №{ticket._id}</strong>
+                              <button
+                                type="button"
+                                popoverTarget={`quality-actions-${ticket._id}`}
+                                popoverTargetAction="hide"
+                                aria-label="Закрыть действия"
+                              >
+                                ×
+                              </button>
+                            </header>
                             {ticket.ratingAvailable && data.emailAvailable && (
                               <details className="quality-row-settings">
                                 <summary>Отправить на почту</summary>
@@ -756,7 +774,7 @@ export default function QualityPage() {
                                 )}
                               </>
                             )}
-                          </details>
+                          </div>
                         </td>
                       </tr>
                     );

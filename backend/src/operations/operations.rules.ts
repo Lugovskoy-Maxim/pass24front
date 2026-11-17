@@ -220,9 +220,19 @@ export function bookingNeedsAction(row: any): boolean {
 }
 export function supportNeedsAction(row: any): boolean {
   if (['completed', 'cancelled'].includes(row.status)) return false;
+  if (supportReadyToClose(row)) return false;
   return (
     row.status === 'new' ||
     Number(row.last_customer_seq || 0) > Number(row.last_support_seq || 0)
+  );
+}
+
+export function supportReadyToClose(row: any): boolean {
+  return (
+    row.bitrix?.managed === true &&
+    String(row.bitrix.stage_name ?? '')
+      .trim()
+      .toLocaleLowerCase('ru') === 'можно закрывать'
   );
 }
 export function fingerprint(value: unknown): string {

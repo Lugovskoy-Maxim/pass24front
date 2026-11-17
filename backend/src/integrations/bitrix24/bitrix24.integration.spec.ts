@@ -1073,6 +1073,11 @@ describe('Daily MySQL and Bitrix24 with transactional Mongo storage', () => {
     deals[0].STAGE_ID = readyStage.id;
     await worker.syncTicket(ticket, readyFunnel);
     expect((await support.detail(resident, id)).can_reply).toBe(true);
+    expect((await support.detail(admin, id)).ticket).toMatchObject({
+      status_label: 'Можно закрывать',
+      needs_action: false,
+    });
+    expect((await support.list(admin, { needs_action: '1' })).total).toBe(0);
 
     await support.read(admin, id, {}, 'read-customer-request');
     operatorComment();

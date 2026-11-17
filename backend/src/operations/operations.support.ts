@@ -16,6 +16,7 @@ import {
   supportTopic,
   supportTopicFilter,
   supportNeedsAction,
+  supportReadyToClose,
   textValue,
 } from './operations.rules';
 import { createHash, randomUUID } from 'crypto';
@@ -289,7 +290,10 @@ export class OperationsSupport {
       office_label: safe.office_label || officeLabels.join(', ') || null,
       office_labels: officeLabels,
       needs_action: supportNeedsAction(row),
-      status_label: SUPPORT_STATUSES[row.status],
+      status_label:
+        actor?.kind === 'admin' && supportReadyToClose(row)
+          ? 'Можно закрывать'
+          : SUPPORT_STATUSES[row.status],
       unread_for_customer:
         (row.last_support_seq || 0) > (row.customer_read_seq || 0),
       unread_for_support:
