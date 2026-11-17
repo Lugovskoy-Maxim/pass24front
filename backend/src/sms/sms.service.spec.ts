@@ -19,6 +19,21 @@ describe('SMS Aero Mobile ID authentication', () => {
     }) as Response;
   afterEach(() => jest.restoreAllMocks());
 
+  it('asks SMS Aero to shorten links in ordinary messages', async () => {
+    const fetchMock = jest
+      .spyOn(globalThis, 'fetch')
+      .mockResolvedValue(response(0));
+    await service().sendText(
+      '+79990000000',
+      'Оцените заявку: https://pass.mstyle.ru/quality-rating/test',
+    );
+    expect(
+      new URLSearchParams(String(fetchMock.mock.calls[0][1]?.body)).get(
+        'shortLink',
+      ),
+    ).toBe('1');
+  });
+
   it('sends ordinary SMS using the separate text sender signature', async () => {
     const fetchMock = jest
       .spyOn(globalThis, 'fetch')

@@ -308,6 +308,7 @@ export class SmsService {
       number,
       text,
       sign: this.configService.get<string>('SMSAERO_TEXT_SIGN')!.trim(),
+      ...(/https?:\/\/\S+/i.test(text) ? { shortLink: 1 } : {}),
     });
     if (response.success !== true)
       throw new BadRequestException('SMS Aero не принял сообщение');

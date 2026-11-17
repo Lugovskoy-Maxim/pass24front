@@ -590,7 +590,7 @@ export class QualityAdminController {
       if (!linkedTicket) throw new NotFoundException('Чат заявки не найден');
     }
     const request = {
-      token: randomBytes(32).toString('base64url'),
+      token: randomBytes(16).toString('base64url'),
       createdAt: new Date(),
       ...(chat === true ? { chat: true, chatAt: new Date() } : {}),
     };

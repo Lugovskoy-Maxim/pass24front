@@ -161,7 +161,7 @@ export default function QualityPage() {
         },
       );
       const url = new URL(
-        '/quality-rating/' + rating.token,
+        '/q/' + rating.token,
         window.location.origin,
       ).href;
       setLink(url);
