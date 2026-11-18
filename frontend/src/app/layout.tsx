@@ -8,10 +8,7 @@ import { ThemeProvider } from '@/components/ThemeProvider';
 import { ThemeColorsApplier } from '@/components/ThemeColorsApplier';
 import { ToastProvider } from '@/components/Toast';
 import { PwaRegistrar } from '@/components/PwaRegistrar';
-import { PwaInstallPrompt } from '@/components/PwaInstallPrompt';
-import { PushNotificationPrompt } from '@/components/PushNotificationPrompt';
-import { HelpFaq } from '@/components/HelpFaq';
-import { SiteFooter } from '@/components/SiteFooter';
+import { SiteChrome } from '@/components/SiteChrome';
 import './globals.css';
 
 export const metadata: Metadata = {
@@ -71,11 +68,8 @@ export default function RootLayout({
           <AuthProvider>
             <ToastProvider>
               {children}
-              <SiteFooter />
               <PwaRegistrar />
-              <PwaInstallPrompt />
-              <PushNotificationPrompt />
-              <HelpFaq />
+              <SiteChrome />
             </ToastProvider>
           </AuthProvider>
         </ThemeProvider>

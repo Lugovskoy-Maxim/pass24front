@@ -52,6 +52,11 @@ export function AuthProvider({ children }: { children: ReactNode }) {
   const [loading, setLoading] = useState(true);
 
   useEffect(() => {
+    // Shared kiosks authenticate visitors in memory, independently of the site session.
+    if (window.location.pathname === '/kiosk') {
+      setLoading(false);
+      return;
+    }
     const token = localStorage.getItem('pass24_token');
     if (!token) {
       setLoading(false);

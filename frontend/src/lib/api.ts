@@ -322,8 +322,9 @@ export async function downloadFileResponse(
 export async function request<T>(
   path: string,
   options: RequestInit = {},
+  session?: { token: string | null },
 ): Promise<T> {
-  const token = getToken();
+  const token = session ? session.token : getToken();
   const headers: Record<string, string> = {
     'Content-Type': 'application/json',
     ...(options.headers as Record<string, string>),
@@ -368,7 +369,7 @@ export async function request<T>(
 
   const contentType = res.headers.get('content-type') || '';
   if (!res.ok) {
-    if (res.status === 401 && typeof window !== 'undefined') {
+    if (res.status === 401 && !session && typeof window !== 'undefined') {
       localStorage.removeItem('pass24_token');
       const path = window.location.pathname;
       if (!path.startsWith('/login') && !path.startsWith('/invite')) {

@@ -1,0 +1,285 @@
+.kiosk {
+  min-height: 100dvh;
+  width: 100%;
+  display: flex;
+  flex-direction: column;
+  background: var(--bg);
+  color: var(--foreground);
+  font-size: clamp(16px, 2.2vw, 21px);
+}
+.kiosk-header {
+  background: var(--header-bg);
+  border-bottom: 1px solid var(--border);
+  padding: 24px clamp(20px, 4vw, 48px);
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 18px;
+}
+.kiosk-room-title {
+  margin-top: 12px;
+  font-size: clamp(22px, 4vw, 36px);
+  font-weight: 650;
+  line-height: 1.2;
+}
+.kiosk-clock {
+  display: flex;
+  flex-direction: column;
+  text-align: right;
+  white-space: nowrap;
+  gap: 6px;
+}
+.kiosk-clock strong {
+  font-size: clamp(28px, 5vw, 44px);
+  line-height: 1;
+  font-variant-numeric: tabular-nums;
+}
+.kiosk-clock span {
+  font-size: 0.7em;
+  color: var(--muted);
+}
+.kiosk-content {
+  flex: 1;
+  width: min(100%, 960px);
+  margin-inline: auto;
+  padding: clamp(20px, 4vw, 40px);
+  display: flex;
+  flex-direction: column;
+  gap: 24px;
+}
+.kiosk h1 {
+  font-size: clamp(28px, 4.5vw, 40px);
+  font-weight: 650;
+  line-height: 1.2;
+}
+.kiosk h2 {
+  display: flex;
+  align-items: center;
+  gap: 12px;
+  font-size: 1.35em;
+  font-weight: 600;
+}
+.kiosk-panel {
+  background: var(--surface);
+  border: 1px solid var(--border);
+  border-radius: var(--radius);
+  padding: clamp(20px, 3vw, 32px);
+  box-shadow: var(--card-shadow);
+}
+.kiosk-stack {
+  display: flex;
+  flex-direction: column;
+  gap: 20px;
+}
+.kiosk .btn {
+  min-height: 60px;
+  font-size: 1em;
+  touch-action: manipulation;
+}
+.kiosk .btn:disabled {
+  opacity: 0.35;
+  cursor: not-allowed;
+}
+.kiosk .input {
+  display: block;
+  margin-top: 10px;
+  min-height: 58px;
+  font-size: 1em;
+  width: 100%;
+}
+.kiosk-muted {
+  color: var(--muted);
+}
+.kiosk-small {
+  font-size: 0.8em;
+  line-height: 1.5;
+}
+.kiosk-back {
+  display: inline-flex;
+  gap: 8px;
+  align-items: center;
+  color: var(--accent);
+  min-height: 48px;
+  align-self: flex-start;
+  cursor: pointer;
+}
+.kiosk-login {
+  margin-block: auto;
+}
+.kiosk-login form {
+  margin-block: 12px;
+}
+.kiosk-availability {
+  display: flex;
+  flex-direction: column;
+  gap: 24px;
+  padding-block: 24px;
+}
+.kiosk-availability > .btn {
+  margin-top: 12px;
+  min-height: 76px;
+  font-size: 1.25em;
+}
+.kiosk-state {
+  display: flex;
+  align-items: center;
+  gap: 20px;
+  font-size: clamp(30px, 7vw, 64px);
+  line-height: 1.15;
+  font-weight: 650;
+}
+.kiosk-state > span {
+  width: 0.65em;
+  height: 0.65em;
+  background: var(--muted);
+  border-radius: 50%;
+  flex-shrink: 0;
+}
+.kiosk-state.is-free > span {
+  background: var(--success);
+}
+.kiosk-state.is-busy > span {
+  background: var(--accent);
+}
+.kiosk-until {
+  color: var(--muted);
+  font-size: 1.25em;
+}
+.kiosk-schedule {
+  display: flex;
+  flex-direction: column;
+  gap: 10px;
+  max-height: 46dvh;
+  overflow-y: auto;
+}
+.kiosk-schedule-row {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 16px;
+  padding: 18px;
+  background: var(--surface-muted);
+  border: 1px solid var(--border);
+  border-radius: var(--radius-sm);
+  font-variant-numeric: tabular-nums;
+}
+.kiosk-schedule-row.is-free strong {
+  color: var(--success);
+}
+.is-stale {
+  opacity: 0.5;
+}
+.kiosk-error {
+  display: flex;
+  gap: 10px;
+  align-items: center;
+  flex-wrap: wrap;
+  border: 1px solid var(--alert-border);
+  color: var(--alert-text);
+  background: var(--alert-surface);
+  padding: 16px;
+  border-radius: var(--radius);
+  font-size: 0.9em;
+}
+.kiosk-error svg {
+  flex-shrink: 0;
+}
+.kiosk-user {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 12px;
+  font-size: 0.85em;
+}
+.kiosk-user > span {
+  overflow-wrap: anywhere;
+}
+.kiosk-slots {
+  display: grid;
+  grid-template-columns: repeat(3, minmax(0, 1fr));
+  gap: 10px;
+  max-height: 34dvh;
+  overflow-y: auto;
+}
+.kiosk-slots .btn {
+  font-size: 0.75em;
+  padding: 10px 4px;
+  font-variant-numeric: tabular-nums;
+}
+.kiosk-check {
+  display: flex;
+  align-items: center;
+  gap: 14px;
+  min-height: 48px;
+}
+.kiosk-check input {
+  width: 24px;
+  height: 24px;
+  accent-color: var(--accent);
+  flex-shrink: 0;
+}
+.kiosk-selection {
+  display: flex;
+  align-items: center;
+  gap: 10px;
+  font-size: 1.2em;
+  font-weight: 600;
+}
+.kiosk-price {
+  display: flex;
+  flex-direction: column;
+  gap: 8px;
+  font-size: 1.25em;
+  font-weight: 600;
+}
+.kiosk-receipt {
+  display: flex;
+  gap: 16px;
+  align-items: center;
+  padding: 24px;
+  border: 1px solid var(--toast-success-border);
+  background: var(--toast-success-bg);
+  color: var(--toast-success-text);
+  border-radius: var(--radius);
+}
+.kiosk-receipt svg {
+  flex-shrink: 0;
+}
+.kiosk-idle {
+  text-align: center;
+  font-size: 0.8em;
+  color: var(--muted);
+}
+.kiosk-idle.is-warning {
+  color: var(--accent);
+}
+.kiosk-footer {
+  display: flex;
+  justify-content: space-between;
+  align-items: center;
+  gap: 16px;
+  margin: 0 clamp(20px, 4vw, 48px);
+  border-top: 1px solid var(--border);
+  padding-block: 12px;
+  color: var(--muted);
+  font-size: 0.75em;
+}
+.kiosk-footer button {
+  min-width: 48px;
+  min-height: 48px;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  cursor: pointer;
+}
+@media (max-width: 480px) {
+  .kiosk-slots {
+    grid-template-columns: repeat(2, minmax(0, 1fr));
+  }
+  .kiosk-header {
+    align-items: flex-start;
+  }
+  .kiosk-clock span {
+    white-space: normal;
+  }
+}

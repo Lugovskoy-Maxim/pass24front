@@ -15,6 +15,10 @@ export class OperationsStore implements OnModuleInit {
     return this.connection.db!.collection<any>('mstyle_v2_' + name);
   }
   async onModuleInit() {
+    await this.collection('kiosk_devices').createIndex(
+      { tokenHash: 1 },
+      { unique: true },
+    );
     for (const name of [
       'bookings',
       'tickets',
