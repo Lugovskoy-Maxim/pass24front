@@ -35,7 +35,11 @@ jobs:
           script: |
             set -euo pipefail
             cd /opt/pass24front
-            sudo -n bash ./scripts/mongo-backup.sh
+            if sudo -n true 2>/dev/null; then
+              sudo -n bash ./scripts/mongo-backup.sh
+            else
+              bash ./scripts/mongo-backup.sh
+            fi
             git fetch origin main
             UPDATE_SCRIPT=$(mktemp /tmp/pass24-update.XXXXXX)
             trap 'rm -f "$UPDATE_SCRIPT"' EXIT
