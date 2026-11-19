@@ -35,6 +35,11 @@ jobs:
           script: |
             set -euo pipefail
             cd /opt/pass24front
+            COMPOSE=(docker compose -f docker-compose.yml -f docker-compose.prod.yml --env-file .env)
+            if [ "$(docker inspect --format '{{.State.Running}}' pass24-mongo)" = "false" ]; then
+              "${COMPOSE[@]}" start --wait --wait-timeout 120 mongo
+              "${COMPOSE[@]}" start backend frontend
+            fi
             if sudo -n true 2>/dev/null; then
               sudo -n bash ./scripts/mongo-backup.sh
             else
@@ -45,9 +50,10 @@ jobs:
             trap 'rm -f "$UPDATE_SCRIPT"' EXIT
             git show origin/main:scripts/update.sh > "$UPDATE_SCRIPT"
             chmod +x "$UPDATE_SCRIPT"
+            export COMPOSE_PARALLEL_LIMIT=1
             if [ "${{ github.event.inputs.no_cache }}" = "true" ]; then
               APP_DIR="$PWD" BRANCH=main NO_CACHE=1 "$UPDATE_SCRIPT"
             else
               APP_DIR="$PWD" BRANCH=main "$UPDATE_SCRIPT"
             fi
-            docker compose -f docker-compose.yml -f docker-compose.prod.yml --env-file .env exec -T backend node scripts/check-integrations.cjs
+            "${COMPOSE[@]}" exec -T backend node scripts/check-integrations.cjs
