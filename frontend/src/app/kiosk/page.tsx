@@ -47,7 +47,11 @@ const DEVICE_KEY = 'pass24_kiosk_device';
 const IDLE_MS = 60_000;
 const SCHEDULE_REFRESH_MS = 15_000;
 type Screen = 'status' | 'login' | 'booking' | 'payment' | 'admin';
-type BookingReceipt = { statusLabel: string; bookingNumber?: string };
+type BookingReceipt = {
+  statusLabel: string;
+  bookingNumber?: string;
+  cashDue: boolean;
+};
 function shiftBookingDate(date: string, days: number) {
   const next = new Date(`${date}T00:00:00Z`);
   next.setUTCDate(next.getUTCDate() + days);
@@ -781,20 +785,24 @@ function Booking({
     context?.mode === 'pass';
   async function submit() {
     if ((!valid && !retry) || working.current) return;
-    const command =
-      retry ??
-      (currentQuote && {
-        draft: {
-          ...draft,
-          pricingFingerprint: currentQuote.pricing_fingerprint,
-        },
-        key: crypto.randomUUID(),
-      });
+    let command = retry;
     working.current = true;
     setBusy(true);
     setSubmissionError(null);
     const submittedKey = key;
     try {
+      if (!command && currentQuote) {
+        const nonce = crypto.getRandomValues(new Uint8Array(16));
+        command = {
+          draft: {
+            ...draft,
+            pricingFingerprint: currentQuote.pricing_fingerprint,
+          },
+          key: Array.from(nonce, (byte) =>
+            byte.toString(16).padStart(2, '0'),
+          ).join(''),
+        };
+      }
       if (!command) {
         const value = await kioskApi.quote(session.token, draft);
         if (alive.current && currentKey.current === submittedKey)
@@ -817,6 +825,9 @@ function Booking({
           onSuccess({
             statusLabel: result.booking.status_label,
             bookingNumber: result.booking.number,
+            cashDue:
+              command.draft.paymentMethod === 'cash' &&
+              result.booking.status === 'awaiting_payment',
           });
         }
       }
@@ -1597,6 +1608,12 @@ export default function KioskPage() {
                   {receipt.bookingNumber && (
                     <p className="kiosk-booking-reference">
                       Бронь {receipt.bookingNumber}
+                    </p>
+                  )}
+                  {receipt.cashDue && (
+                    <p>
+                      Оплатите наличными у администратора. Он отметит получение
+                      оплаты.
                     </p>
                   )}
                   <p>Вы вышли из аккаунта.</p>
