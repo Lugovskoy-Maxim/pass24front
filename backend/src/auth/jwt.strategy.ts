@@ -4,6 +4,7 @@ import { ExtractJwt, Strategy } from 'passport-jwt';
 import { ConfigService } from '@nestjs/config';
 import { InjectModel } from '@nestjs/mongoose';
 import { Model } from 'mongoose';
+import type { Request } from 'express';
 import { AccessConfigService } from '../access/access-config.service';
 import { AUTH_CONNECTION } from '../database/auth-database.constants';
 import { User, UserDocument } from '../schemas';
@@ -24,11 +25,25 @@ export class JwtStrategy extends PassportStrategy(Strategy) {
     super({
       jwtFromRequest: ExtractJwt.fromAuthHeaderAsBearerToken(),
       ignoreExpiration: false,
+      passReqToCallback: true,
       secretOrKey: configService.get<string>('JWT_SECRET') || 'dev-secret',
     });
   }
 
-  async validate(payload: any) {
+  async validate(request: Request, payload: any) {
+    if (payload.kioskRoomId !== undefined) {
+      const path = request.originalUrl.split('?')[0];
+      const bookingRead =
+        request.method === 'GET' &&
+        (path === '/api/office-services/bookings/context' ||
+          path ===
+            `/api/office-services/bookings/rooms/${payload.kioskRoomId}/slots`);
+      const bookingWrite =
+        request.method === 'POST' &&
+        (path === '/api/office-services/bookings/quote' ||
+          path === '/api/office-services/bookings/kiosk');
+      if (!bookingRead && !bookingWrite) throw new UnauthorizedException();
+    }
     const user = await this.userModel.findById(payload.sub);
     if (!user) {
       throw new UnauthorizedException();
@@ -52,6 +67,7 @@ export class JwtStrategy extends PassportStrategy(Strategy) {
     // Форма req.user, которую ждут controllers (userId, не sub)
     return {
       userId: payload.sub,
+      kioskRoomId: payload.kioskRoomId,
       email: payload.email,
       role: user.role || payload.role,
       fullName: user.fullName,

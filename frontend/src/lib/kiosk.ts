@@ -17,6 +17,21 @@ export type KioskStatus = {
   slots: KioskSlot[];
 };
 export type KioskSession = { token: string; user: User };
+export type KioskLoginChallenge = {
+  approvalCode: string;
+  claimCode: string;
+  displayCode: string;
+};
+export type KioskPayment = {
+  bookingId: number;
+  token: string;
+  amount: number;
+};
+export type KioskPaymentStatus = {
+  state: 'pending' | 'paid' | 'canceled';
+  statusLabel: string;
+  confirmationUrl: string | null;
+};
 export const kioskTime = (minute: number) =>
   `${String(Math.floor(minute / 60)).padStart(2, '0')}:${String(minute % 60).padStart(2, '0')}`;
 
@@ -57,8 +72,24 @@ const call = <T>(
   );
 
 export const kioskApi = {
+  startLogin: (deviceToken: string) =>
+    call<KioskLoginChallenge>('/kiosk/login/start', deviceToken, {}),
+  claimLogin: (deviceToken: string, code: string) =>
+    call<{ state: 'pending' } | { state: 'approved'; session: KioskSession }>(
+      '/kiosk/login/claim',
+      deviceToken,
+      { code },
+    ),
+  previewLogin: (token: string, code: string) =>
+    call<{ roomTitle: string; displayCode: string }>(
+      '/kiosk/login/preview',
+      token,
+      { code },
+    ),
+  approveLogin: (token: string, code: string) =>
+    call<{ ok: true }>('/kiosk/login/approve', token, { code }),
   login: (login: string, password: string) =>
-    call<KioskSession>('/auth/login', null, { login, email: login, password }),
+    call<KioskSession>('/auth/login', null, { login, password }),
   rooms: (token: string) =>
     call<{ rooms: { id: number; title: string }[] }>('/kiosk/rooms', token),
   bind: (token: string, roomId: number, previousToken?: string) =>
@@ -78,11 +109,22 @@ export const kioskApi = {
     ),
   quote: (token: string, draft: BookingDraft) =>
     call<BookingQuote>('/office-services/bookings/quote', token, draft),
+  paymentStatus: ({ bookingId, token }: KioskPayment) =>
+    call<KioskPaymentStatus>('/kiosk/payment-status', null, {
+      bookingId,
+      token,
+    }),
   create: (token: string, draft: BookingDraft, key: string) =>
     request<{
-      booking: { id: number; number: string; status_label: string };
+      booking: {
+        id: number;
+        status: string;
+        status_label: string;
+        total_amount_minor: number;
+      };
+      payment: { payment_token: string };
     }>(
-      '/office-services/bookings',
+      '/office-services/bookings/kiosk',
       {
         method: 'POST',
         body: JSON.stringify(draft),

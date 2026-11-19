@@ -19,6 +19,14 @@ export class OperationsStore implements OnModuleInit {
       { tokenHash: 1 },
       { unique: true },
     );
+    await this.collection('kiosk_logins').createIndex(
+      { expiresAt: 1 },
+      { expireAfterSeconds: 0 },
+    );
+    await this.collection('kiosk_logins').createIndex(
+      { approvalHash: 1 },
+      { unique: true },
+    );
     for (const name of [
       'bookings',
       'tickets',

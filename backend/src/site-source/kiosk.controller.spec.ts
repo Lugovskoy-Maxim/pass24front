@@ -1,5 +1,8 @@
 import { createHash } from 'node:crypto';
 import { KioskController } from './kiosk.controller';
+import { OperationsPayments } from '../operations/operations.payments';
+import { AuthService } from '../auth/auth.service';
+import { JwtService } from '@nestjs/jwt';
 import type { OperationsBookings } from '../operations/operations.bookings';
 import type { OperationsIdentity } from '../operations/operations.identity';
 
@@ -52,6 +55,9 @@ describe('meeting room kiosk access', () => {
     controller = new KioskController(
       bookings as OperationsBookings,
       identity as OperationsIdentity,
+      { kioskStatus: jest.fn() } as unknown as OperationsPayments,
+      {} as AuthService,
+      {} as JwtService,
     );
   });
 

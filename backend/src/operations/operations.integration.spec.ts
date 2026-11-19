@@ -1,6 +1,11 @@
 import { MongoMemoryReplSet } from 'mongodb-memory-server';
 import { createConnection, Connection } from 'mongoose';
 import { ConfigService } from '@nestjs/config';
+import { JwtService } from '@nestjs/jwt';
+import { createHash } from 'node:crypto';
+import { AuthService } from '../auth/auth.service';
+import { JwtStrategy } from '../auth/jwt.strategy';
+import { KioskController } from '../site-source/kiosk.controller';
 import { OperationsStore } from './operations.store';
 import { OperationsIdentity } from './operations.identity';
 import { OperationsHours } from './operations.hours';
@@ -1542,6 +1547,142 @@ describe('Operations with real replica-set transactions', () => {
     expect(
       await store.collection('hours_ledger').countDocuments({ type: 'debit' }),
     ).toBe(1);
+  });
+  it('starts kiosk checkout in the worker and reports only verified payment status', async () => {
+    const draft = { ...input, payment_method: 'card_online' };
+    const created = await bookings.create(resident, draft, 'kiosk-checkout');
+    const id = created.booking.id;
+    const token = created.payment.payment_token;
+    const url = 'https://yookassa.ru/checkout/test';
+    jest.spyOn(payments, 'paymentConfig').mockResolvedValue({ capture: true });
+    const gateway = jest.spyOn(payments as any, 'gateway').mockResolvedValue({
+      id: 'kiosk-provider-payment',
+      status: 'pending',
+      amount: { value: '1000.00', currency: 'RUB' },
+      confirmation: { confirmation_url: url },
+    });
+    gateway.mockClear();
+    const result = await payments.finishCreate(resident, created, true);
+    expect(result.payment).toMatchObject({
+      pending: true,
+      payment_token: token,
+    });
+    const retry = await bookings.create(resident, draft, 'kiosk-checkout');
+    expect(retry.booking.id).toBe(id);
+    expect(gateway).not.toHaveBeenCalled();
+    await expect(payments.kioskStatus(id, 'wrong-token')).rejects.toMatchObject(
+      { status: 403 },
+    );
+    await expect(payments.kioskStatus(id, token)).resolves.toMatchObject({
+      state: 'pending',
+      confirmationUrl: null,
+    });
+    await payments.tick();
+    await expect(payments.kioskStatus(id, token)).resolves.toMatchObject({
+      state: 'pending',
+      confirmationUrl: url,
+    });
+    gateway.mockResolvedValue({
+      id: 'kiosk-provider-payment',
+      status: 'succeeded',
+      amount: { value: '1000.00', currency: 'RUB' },
+    });
+    await expect(payments.kioskStatus(id, token)).resolves.toMatchObject({
+      state: 'paid',
+      confirmationUrl: null,
+    });
+    expect(await store.collection('payments').countDocuments()).toBe(1);
+  });
+  it('exchanges an approved kiosk QR once for a room-scoped token', async () => {
+    const deviceToken = 'a'.repeat(64);
+    const deviceHeader = 'Bearer ' + deviceToken;
+    const tokenHash = createHash('sha256').update(deviceToken).digest('hex');
+    await store.collection('kiosk_devices').insertOne({
+      tokenHash,
+      roomId: 1,
+      revoked: false,
+    });
+    const user = { email: 'resident@example.ru', full_name: 'Резидент' };
+    const jwt = new JwtService({ secret });
+    const kiosk = new KioskController(
+      bookings,
+      identity,
+      payments,
+      { me: jest.fn().mockResolvedValue({ user }) } as unknown as AuthService,
+      jwt,
+    );
+    const phone = {
+      user: { userId: 'resident-id', permissions: ['requests.create'] },
+    };
+    const first = await kiosk.startLogin(deviceHeader);
+    const next = await kiosk.startLogin(deviceHeader);
+    await expect(
+      kiosk.approveLogin(phone, { code: first.approvalCode }),
+    ).rejects.toMatchObject({ status: 404 });
+    await expect(
+      kiosk.previewLogin({ code: next.approvalCode }),
+    ).resolves.toEqual({
+      roomTitle: 'Переговорная',
+      displayCode: next.displayCode,
+    });
+    await expect(
+      kiosk.claimLogin(deviceHeader, { code: next.approvalCode }),
+    ).rejects.toMatchObject({ status: 404 });
+    await expect(
+      kiosk.claimLogin(deviceHeader, { code: next.claimCode }),
+    ).resolves.toEqual({ state: 'pending' });
+    await expect(
+      kiosk.approveLogin(phone, { code: next.approvalCode }),
+    ).resolves.toEqual({ ok: true });
+    await expect(
+      kiosk.approveLogin(phone, { code: next.approvalCode }),
+    ).rejects.toMatchObject({ status: 404 });
+    const claims = await Promise.allSettled([
+      kiosk.claimLogin(deviceHeader, { code: next.claimCode }),
+      kiosk.claimLogin(deviceHeader, { code: next.claimCode }),
+    ]);
+    const [claim] = claims.flatMap((entry) =>
+      entry.status === 'fulfilled' ? [entry.value] : [],
+    );
+    expect(claims.filter((entry) => entry.status === 'fulfilled')).toHaveLength(
+      1,
+    );
+    expect(claim).toMatchObject({ state: 'approved', session: { user } });
+    const payload = jwt.verify(claim.session!.token);
+    expect(payload).toMatchObject({ sub: 'resident-id', kioskRoomId: 1 });
+    expect(payload.exp - payload.iat).toBe(300);
+    const strategy = new JwtStrategy(
+      new ConfigService({ JWT_SECRET: secret }),
+      { findById: jest.fn().mockResolvedValue({ role: 'tenant' }) } as any,
+      {
+        getPermissionsForRole: jest.fn().mockResolvedValue(['requests.create']),
+      } as any,
+    );
+    await expect(
+      strategy.validate(
+        { method: 'GET', originalUrl: '/api/auth/me' } as any,
+        payload,
+      ),
+    ).rejects.toMatchObject({ status: 401 });
+    await expect(
+      strategy.validate(
+        {
+          method: 'GET',
+          originalUrl: '/api/office-services/bookings/rooms/2/slots',
+        } as any,
+        payload,
+      ),
+    ).rejects.toMatchObject({ status: 401 });
+    await expect(
+      strategy.validate(
+        {
+          method: 'GET',
+          originalUrl:
+            '/api/office-services/bookings/rooms/1/slots?date=2099-10-20',
+        } as any,
+        payload,
+      ),
+    ).resolves.toMatchObject({ kioskRoomId: 1 });
   });
   it('never re-creates an uncertain provider payment beyond its idempotency window', async () => {
     const a = await bookings.create(

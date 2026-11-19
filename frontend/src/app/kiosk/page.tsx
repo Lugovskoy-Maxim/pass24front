@@ -6,15 +6,24 @@ import {
   CalendarDays,
   CheckCircle2,
   Clock3,
+  CreditCard,
+  KeyRound,
   LogOut,
+  Mail,
+  QrCode,
   Settings,
+  Smartphone,
   WifiOff,
 } from 'lucide-react';
-import { getErrorMessage, getErrorStatus } from '@/lib/api';
+import QRCode from 'react-qr-code';
+import { getErrorMessage, getErrorStatus, isNetworkError } from '@/lib/api';
 import {
   kioskApi,
   kioskRangeFree,
   kioskTime,
+  KioskLoginChallenge,
+  KioskPayment,
+  KioskPaymentStatus,
   KioskSession,
   KioskSlot,
   KioskStatus,
@@ -31,21 +40,50 @@ import './kiosk.css';
 
 const DEVICE_KEY = 'pass24_kiosk_device';
 const IDLE_MS = 60_000;
-type Screen = 'status' | 'login' | 'booking' | 'admin';
+type Screen = 'status' | 'login' | 'booking' | 'payment' | 'admin';
+const LOGIN_METHODS = [
+  {
+    id: 'login',
+    label: 'Логин',
+    icon: KeyRound,
+    hint: 'Ваш логин в Pass',
+    type: 'text',
+  },
+  {
+    id: 'phone',
+    label: 'Телефон',
+    icon: Smartphone,
+    hint: '+7 (900) 000-00-00',
+    type: 'tel',
+  },
+  {
+    id: 'email',
+    label: 'Почта',
+    icon: Mail,
+    hint: 'name@example.ru',
+    type: 'email',
+  },
+] as const;
 
 function LoginForm({
   admin,
+  deviceToken,
   onLogin,
   onCancel,
 }: {
   admin: boolean;
+  deviceToken: string;
   onLogin: (session: KioskSession) => void;
   onCancel: () => void;
 }) {
+  const [method, setMethod] = useState<(typeof LOGIN_METHODS)[number]>(
+    LOGIN_METHODS[0],
+  );
   const [login, setLogin] = useState('');
   const [password, setPassword] = useState('');
   const [busy, setBusy] = useState(false);
   const [error, setError] = useState('');
+  const [qr, setQr] = useState<KioskLoginChallenge | null>(null);
   const active = useRef(true);
   useEffect(() => {
     active.current = true;
@@ -53,6 +91,20 @@ function LoginForm({
       active.current = false;
     };
   }, []);
+  async function startQr() {
+    if (busy) return;
+    setBusy(true);
+    setPassword('');
+    setError('');
+    try {
+      const challenge = await kioskApi.startLogin(deviceToken);
+      if (active.current) setQr(challenge);
+    } catch (e) {
+      if (active.current) setError(getErrorMessage(e));
+    } finally {
+      if (active.current) setBusy(false);
+    }
+  }
   async function submit(e: FormEvent) {
     e.preventDefault();
     if (busy) return;
@@ -70,24 +122,65 @@ function LoginForm({
       }
     }
   }
+  if (qr)
+    return (
+      <QrLogin
+        challenge={qr}
+        deviceToken={deviceToken}
+        onBack={() => setQr(null)}
+        onLogin={onLogin}
+      />
+    );
   return (
-    <section className="kiosk-panel kiosk-login">
+    <section className="kiosk-panel kiosk-login kiosk-stack">
       <button className="kiosk-back" onClick={onCancel}>
         <ArrowLeft size={20} />
         Назад
       </button>
       <h1>{admin ? 'Настройка планшета' : 'Войдите для бронирования'}</h1>
-      <p className="kiosk-muted">
-        {admin
-          ? 'Войдите как администратор с правом управления бронированиями.'
-          : 'Используйте свой аккаунт Pass. Бронь будет оформлена для вашего офиса.'}
-      </p>
+      {!admin && deviceToken && (
+        <button
+          className="btn btn-secondary kiosk-qr-button"
+          disabled={busy}
+          onClick={() => void startQr()}
+        >
+          <QrCode size={22} aria-hidden="true" />
+          Войти по QR-коду
+        </button>
+      )}
+      {admin && (
+        <p className="kiosk-muted">
+          Войдите как администратор с правом управления бронированиями.
+        </p>
+      )}
       <form onSubmit={submit} autoComplete="off" className="kiosk-stack">
+        <fieldset className="kiosk-methods" disabled={busy}>
+          <legend className="sr-only">Способ входа</legend>
+          {LOGIN_METHODS.map((option) => (
+            <label key={option.id} className="kiosk-method">
+              <input
+                type="radio"
+                name="login-method"
+                checked={method.id === option.id}
+                onChange={() => {
+                  setMethod(option);
+                  setLogin('');
+                  setError('');
+                }}
+              />
+              <option.icon size={19} aria-hidden="true" />
+              {option.label}
+            </label>
+          ))}
+        </fieldset>
         <label>
-          Логин
+          {method.id === 'email' ? 'Электронная почта' : method.label}
           <input
+            key={method.id}
             className="input"
-            name="kiosk-login"
+            name={`kiosk-${method.id}`}
+            type={method.type}
+            placeholder={method.hint}
             required
             autoComplete="off"
             autoCapitalize="none"
@@ -124,6 +217,70 @@ function LoginForm({
       </form>
       <p className="kiosk-muted kiosk-small">
         После бронирования или минуты бездействия аккаунт выйдет автоматически.
+      </p>
+    </section>
+  );
+}
+
+function QrLogin({
+  challenge,
+  deviceToken,
+  onBack,
+  onLogin,
+}: {
+  challenge: KioskLoginChallenge;
+  deviceToken: string;
+  onBack: () => void;
+  onLogin: (session: KioskSession) => void;
+}) {
+  const [error, setError] = useState('');
+  useEffect(() => {
+    let active = true;
+    let timer = window.setTimeout(poll, 0);
+    async function poll() {
+      try {
+        const result = await kioskApi.claimLogin(
+          deviceToken,
+          challenge.claimCode,
+        );
+        if (!active) return;
+        if (result.state === 'approved') {
+          onLogin(result.session);
+          return;
+        }
+        setError('');
+      } catch (e) {
+        if (!active) return;
+        setError(getErrorMessage(e));
+        if ([401, 404].includes(getErrorStatus(e) ?? 0)) return;
+      }
+      timer = window.setTimeout(poll, 1800);
+    }
+    return () => {
+      active = false;
+      window.clearTimeout(timer);
+    };
+  }, [challenge, deviceToken, onLogin]);
+  return (
+    <section className="kiosk-panel kiosk-checkout kiosk-stack">
+      <button className="kiosk-back" onClick={onBack}>
+        <ArrowLeft size={20} /> Назад
+      </button>
+      <h1>Вход по QR-коду</h1>
+      <div className="kiosk-qr">
+        <QRCode
+          value={`${window.location.origin}/kiosk/approve#${challenge.approvalCode}`}
+          size={224}
+          title="QR-код для входа в Pass"
+        />
+      </div>
+      <p>
+        Отсканируйте QR камерой телефона и подтвердите вход. Сверьте код на
+        обоих экранах.
+      </p>
+      <strong className="kiosk-pair-code">{challenge.displayCode}</strong>
+      <p role="status" className="kiosk-muted">
+        {error || 'Ожидаем подтверждение с телефона'}
       </p>
     </section>
   );
@@ -242,12 +399,14 @@ function Booking({
   connected,
   onExit,
   onSuccess,
+  onPayment,
 }: {
   session: KioskSession;
   status: KioskStatus;
   connected: boolean;
   onExit: () => void;
   onSuccess: (message: string) => void;
+  onPayment: (payment: KioskPayment) => void;
 }) {
   const offices = session.user.offices || [];
   const [officeId, setOfficeId] = useState(offices[0]?.id || '');
@@ -256,17 +415,21 @@ function Booking({
   const [start, setStart] = useState(-1);
   const [end, setEnd] = useState(-1);
   const [useHours, setUseHours] = useState(false);
+  const [paymentMethod, setPaymentMethod] = useState('card_online');
   const [quote, setQuote] = useState<{
     value: BookingQuote;
     key: string;
   } | null>(null);
   const [busy, setBusy] = useState(false);
   const [loading, setLoading] = useState(true);
+  const [retry, setRetry] = useState<{
+    draft: BookingDraft;
+    key: string;
+  } | null>(null);
   const [error, setError] = useState('');
   const [revision, setRevision] = useState(0);
   const alive = useRef(true);
   const working = useRef(false);
-  const command = useRef({ draft: '', key: '' });
   useEffect(() => {
     alive.current = true;
     return () => {
@@ -328,69 +491,85 @@ function Booking({
               step,
           ) * step
         : 0,
-    paymentMethod: 'cash',
+    paymentMethod,
     comment: '',
   };
   const key = JSON.stringify(draft);
   const currentKey = useRef(key);
   currentKey.current = key;
   const currentQuote = quote?.key === key ? quote.value : null;
-  const serverMinute =
-    Number(
-      new Intl.DateTimeFormat('en-GB', {
-        timeZone: 'Europe/Moscow',
-        hour: '2-digit',
-        minute: '2-digit',
-        hourCycle: 'h23',
-      })
-        .format(new Date(status.serverTime))
-        .split(':')[0],
-    ) *
-      60 +
-    new Date(status.serverTime).getUTCMinutes();
+  const [hour, minute] = new Intl.DateTimeFormat('en-GB', {
+    timeZone: 'Europe/Moscow',
+    hour: '2-digit',
+    minute: '2-digit',
+    hourCycle: 'h23',
+  })
+    .format(new Date(status.serverTime))
+    .split(':')
+    .map(Number);
+  const serverMinute = hour * 60 + minute;
   const free =
     kioskRangeFree(slots, start, end) &&
     kioskRangeFree(status.slots, start, end);
   const valid =
     !!room &&
     free &&
-    start >= serverMinute &&
+    start > serverMinute &&
     connected &&
     context?.mode === 'pass';
   async function submit() {
-    if (!valid || working.current) return;
+    if ((!valid && !retry) || working.current) return;
+    const command =
+      retry ??
+      (currentQuote && {
+        draft: {
+          ...draft,
+          pricingFingerprint: currentQuote.pricing_fingerprint,
+        },
+        key: crypto.randomUUID(),
+      });
     working.current = true;
     setBusy(true);
     setError('');
     const submittedKey = key;
     try {
-      if (!currentQuote) {
+      if (!command) {
         const value = await kioskApi.quote(session.token, draft);
         if (alive.current && currentKey.current === submittedKey)
           setQuote({ value, key: submittedKey });
       } else {
-        const commandDraft = JSON.stringify({
-          ...draft,
-          pricingFingerprint: currentQuote.pricing_fingerprint,
-        });
-        if (command.current.draft !== commandDraft)
-          command.current = { draft: commandDraft, key: crypto.randomUUID() };
         const result = await kioskApi.create(
           session.token,
-          { ...draft, pricingFingerprint: currentQuote.pricing_fingerprint },
-          command.current.key,
+          command.draft,
+          command.key,
         );
-        if (alive.current)
+        if (!alive.current) return;
+        if (result.booking.status === 'hold') {
+          onPayment({
+            bookingId: result.booking.id,
+            token: result.payment.payment_token,
+            amount: result.booking.total_amount_minor,
+          });
+        } else {
           onSuccess(`Бронирование создано · ${result.booking.status_label}`);
+        }
       }
     } catch (e) {
       if (alive.current) {
-        if (getErrorStatus(e) === 401) onExit();
+        const status = getErrorStatus(e);
+        if (status === 401) onExit();
         else {
-          setError(getErrorMessage(e));
-          if (getErrorStatus(e) === 409) {
+          if (command && (isNetworkError(e) || (status ?? 0) >= 500)) {
+            setRetry(command);
+            setError(
+              'Статус бронирования пока неизвестен. Проверьте его повторно.',
+            );
+          } else {
+            setRetry(null);
+            setError(getErrorMessage(e));
+          }
+          if (status === 409) {
             setQuote(null);
-            setRevision((r) => r + 1);
           }
         }
       }
@@ -415,7 +594,7 @@ function Booking({
           <select
             className="input"
             value={officeId}
-            disabled={busy}
+            disabled={busy || !!retry}
             onChange={(e) => setOfficeId(e.target.value)}
           >
             {offices.map((o) => (
@@ -451,7 +630,7 @@ function Booking({
             <div className="kiosk-slots">
               {slots.map((s) => {
                 const enabled =
-                  s.start_minute >= serverMinute &&
+                  s.start_minute > serverMinute &&
                   s.state === 'free' &&
                   kioskRangeFree(status.slots, s.start_minute, s.end_minute);
                 const selected = s.start_minute >= start && s.end_minute <= end;
@@ -459,7 +638,7 @@ function Booking({
                   <button
                     key={s.start_minute}
                     className={`btn ${selected ? 'btn-primary' : 'btn-secondary'}`}
-                    disabled={!enabled || busy || !connected}
+                    disabled={!enabled || busy || !!retry || !connected}
                     aria-pressed={selected}
                     aria-label={`${kioskTime(s.start_minute)}–${kioskTime(s.end_minute)}${enabled ? '' : ', недоступно'}`}
                     onClick={() => {
@@ -479,7 +658,7 @@ function Booking({
               })}
             </div>
             {!slots.some(
-              (s) => s.state === 'free' && s.start_minute >= serverMinute,
+              (s) => s.state === 'free' && s.start_minute > serverMinute,
             ) && <p>На сегодня свободных интервалов нет.</p>}
             <p className="kiosk-small kiosk-muted">
               Недоступные интервалы затемнены. Время московское.
@@ -489,7 +668,7 @@ function Booking({
                 <input
                   type="checkbox"
                   checked={useHours}
-                  disabled={busy}
+                  disabled={busy || !!retry}
                   onChange={(e) => setUseHours(e.target.checked)}
                 />
                 Использовать бесплатные минуты · остаток{' '}
@@ -499,15 +678,15 @@ function Booking({
           </>
         )}
       </div>
-      {error && (
+      {(error || retry) && (
         <div className="kiosk-error" role="alert">
-          {error}{' '}
+          {error || 'Статус бронирования пока неизвестен.'}{' '}
           <button
             className="kiosk-back"
             disabled={busy}
-            onClick={() => setRevision((r) => r + 1)}
+            onClick={() => (retry ? void submit() : setRevision((r) => r + 1))}
           >
-            Обновить интервалы
+            {retry ? 'Проверить бронирование' : 'Обновить интервалы'}
           </button>
         </div>
       )}
@@ -519,6 +698,22 @@ function Booking({
             <Clock3 size={22} />
             {kioskTime(start)}–{kioskTime(end)} · {end - start} мин
           </p>
+          <label>
+            Способ оплаты
+            <select
+              className="input"
+              value={paymentMethod}
+              disabled={busy || !!retry}
+              onChange={(e) => {
+                setPaymentMethod(e.target.value);
+                setQuote(null);
+                setError('');
+              }}
+            >
+              <option value="card_online">Картой на телефоне · ЮKassa</option>
+              <option value="cash">Наличными</option>
+            </select>
+          </label>
           {!free && (
             <p role="alert" className="kiosk-error">
               Выберите непрерывный свободный промежуток.
@@ -534,13 +729,16 @@ function Booking({
           )}
           <button
             className="btn btn-primary"
-            disabled={!valid || busy}
+            disabled={!valid || busy || !!retry}
             onClick={() => void submit()}
           >
             {busy
               ? 'Подождите…'
               : currentQuote
-                ? 'Подтвердить бронирование'
+                ? paymentMethod === 'card_online' &&
+                  currentQuote.total_amount_minor > 0
+                  ? 'Перейти к оплате'
+                  : 'Подтвердить бронирование'
                 : 'Рассчитать стоимость'}
           </button>
         </div>
@@ -554,6 +752,77 @@ function Booking({
   );
 }
 
+function Payment({
+  payment,
+  onExit,
+}: {
+  payment: KioskPayment;
+  onExit: () => void;
+}) {
+  const [status, setStatus] = useState<KioskPaymentStatus | null>(null);
+  const [connectionError, setConnectionError] = useState(false);
+  useEffect(() => {
+    let active = true;
+    let timer = window.setTimeout(refresh, 0);
+    async function refresh() {
+      try {
+        const next = await kioskApi.paymentStatus(payment);
+        if (!active) return;
+        setStatus(next);
+        setConnectionError(false);
+        if (next.state !== 'pending') return;
+      } catch {
+        if (!active) return;
+        setConnectionError(true);
+      }
+      timer = window.setTimeout(refresh, 5000);
+    }
+    return () => {
+      active = false;
+      window.clearTimeout(timer);
+    };
+  }, [payment]);
+  const pending = !status || status.state === 'pending';
+  const checkout = status?.confirmationUrl;
+  return (
+    <section className="kiosk-panel kiosk-checkout kiosk-stack">
+      <CreditCard size={30} aria-hidden="true" />
+      <h1>
+        {pending
+          ? 'Оплата бронирования'
+          : status.state === 'paid'
+            ? 'Оплата получена'
+            : 'Платёж не состоялся'}
+      </h1>
+      <p className="kiosk-price">{officeMoney(payment.amount)}</p>
+      {pending && checkout?.startsWith('https://') && (
+        <>
+          <div className="kiosk-qr">
+            <QRCode
+              value={checkout}
+              size={224}
+              title="QR-код для оплаты в ЮKassa"
+            />
+          </div>
+          <p>Наведите камеру телефона на QR-код и оплатите бронь в ЮKassa.</p>
+        </>
+      )}
+      <p role="status" className="kiosk-muted">
+        {connectionError
+          ? 'Не удалось проверить статус. Повторяем запрос…'
+          : pending
+            ? checkout
+              ? 'Ожидаем подтверждение оплаты'
+              : 'Подготавливаем оплату…'
+            : status.statusLabel}
+      </p>
+      <button className="btn btn-secondary" onClick={onExit}>
+        К расписанию
+      </button>
+    </section>
+  );
+}
+
 export default function KioskPage() {
   const config = useConfig();
   const [ready, setReady] = useState(false);
@@ -561,6 +830,7 @@ export default function KioskPage() {
   const [status, setStatus] = useState<KioskStatus | null>(null);
   const [screen, setScreen] = useState<Screen>('status');
   const [session, setSession] = useState<KioskSession | null>(null);
+  const [payment, setPayment] = useState<KioskPayment | null>(null);
   const [error, setError] = useState('');
   const [lastUpdate, setLastUpdate] = useState(0);
   const [now, setNow] = useState(Date.now());
@@ -571,13 +841,23 @@ export default function KioskPage() {
   const deadline = useRef(Date.now() + IDLE_MS);
   const finish = useCallback(() => {
     setSession(null);
+    setPayment(null);
     setScreen('status');
     setFormKey((n) => n + 1);
   }, []);
   const touch = useCallback(() => {
-    deadline.current = Date.now() + IDLE_MS;
-    setRemaining(60);
-  }, []);
+    const duration = screen === 'payment' ? 3 * IDLE_MS : IDLE_MS;
+    deadline.current = Date.now() + duration;
+    setRemaining(duration / 1000);
+  }, [screen]);
+  const completeLogin = useCallback(
+    (value: KioskSession) => {
+      touch();
+      setSession(value);
+      if (screen === 'login') setScreen('booking');
+    },
+    [screen, touch],
+  );
   useEffect(() => {
     try {
       setDeviceToken(localStorage.getItem(DEVICE_KEY) || '');
@@ -674,8 +954,10 @@ export default function KioskPage() {
     finish();
   }
   function open(next: Screen) {
-    touch();
+    deadline.current = Date.now() + IDLE_MS;
+    setRemaining(60);
     setSession(null);
+    setPayment(null);
     setReceipt('');
     setScreen(next);
   }
@@ -781,7 +1063,7 @@ export default function KioskPage() {
                   </button>
                 </section>
               ) : (
-                <>
+                <div className="kiosk-dashboard">
                   <section className="kiosk-availability">
                     <p
                       className={`kiosk-state ${connected && currentSlot ? (available ? 'is-free' : 'is-busy') : ''}`}
@@ -800,7 +1082,7 @@ export default function KioskPage() {
                         !connected ||
                         status?.date !== today ||
                         !status?.slots.some(
-                          (s) => s.state === 'free' && s.start_minute >= minute,
+                          (s) => s.state === 'free' && s.start_minute > minute,
                         )
                       }
                       onClick={() => open('login')}
@@ -844,18 +1126,15 @@ export default function KioskPage() {
                       </p>
                     )}
                   </section>
-                </>
+                </div>
               ))}
             {(screen === 'login' || screen === 'admin') && !session && (
               <LoginForm
                 key={`${screen}-${formKey}`}
                 admin={screen === 'admin'}
+                deviceToken={deviceToken}
                 onCancel={finish}
-                onLogin={(s) => {
-                  touch();
-                  setSession(s);
-                  if (screen === 'login') setScreen('booking');
-                }}
+                onLogin={completeLogin}
               />
             )}
             {screen === 'admin' && session && (
@@ -873,13 +1152,23 @@ export default function KioskPage() {
                 status={{ ...status, serverTime: current.toISOString() }}
                 connected={connected && status.date === today}
                 onExit={finish}
+                onPayment={(value) => {
+                  deadline.current = Date.now() + 3 * IDLE_MS;
+                  setRemaining(180);
+                  setSession(null);
+                  setPayment(value);
+                  setScreen('payment');
+                }}
                 onSuccess={(message) => {
                   finish();
                   setReceipt(message);
                 }}
               />
             )}
-            {screen !== 'status' && (
+            {screen === 'payment' && payment && (
+              <Payment payment={payment} onExit={finish} />
+            )}
+            {screen !== 'status' && screen !== 'payment' && (
               <p
                 className={`kiosk-idle ${remaining <= 15 ? 'is-warning' : ''}`}
                 role={remaining <= 15 ? 'status' : undefined}

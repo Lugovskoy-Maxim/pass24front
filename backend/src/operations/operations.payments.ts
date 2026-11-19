@@ -10,6 +10,7 @@ import {
   encryptJson,
 } from '../integrations/mstyle-v2/mstyle-v2.crypto';
 import {
+  BOOKING_STATUSES,
   checkVersion,
   fail,
   OperationsActor,
@@ -42,9 +43,14 @@ export class OperationsPayments implements OnModuleInit, OnModuleDestroy {
   onModuleDestroy() {
     if (this.timer) clearInterval(this.timer);
   }
-  async finishCreate(actor: OperationsActor, result: any) {
+  async finishCreate(
+    actor: OperationsActor,
+    result: any,
+    deferGateway = false,
+  ) {
     const id = result.booking.id;
-    if (result.booking.status === 'hold') await this.createPayment(id);
+    if (result.booking.status === 'hold' && !deferGateway)
+      await this.createPayment(id);
     if (
       result.booking.payment_method === 'invoice' &&
       !result.booking.invoice_id &&
@@ -84,7 +90,7 @@ export class OperationsPayments implements OnModuleInit, OnModuleDestroy {
     }
     return this.bookings.detail(actor, result.booking.id);
   }
-  async publicStatus(id: number, token: string) {
+  private async readPayment(id: number, token: string) {
     let row = await this.store.collection('bookings').findOne({ id });
     const expected = Buffer.from(row?.payment_token || '');
     const actual = Buffer.from(String(token || ''));
@@ -102,6 +108,25 @@ export class OperationsPayments implements OnModuleInit, OnModuleDestroy {
       await this.checkPayment(row.provider_payment_id);
       row = await this.store.collection('bookings').findOne({ id });
     }
+    return row;
+  }
+  async kioskStatus(id: number, token: string) {
+    const row = await this.readPayment(id, token);
+    const payable =
+      row.status === 'hold' && parseMoscow(row.expires_at || '') > Date.now();
+    return {
+      state:
+        row.payment_status === 'paid'
+          ? 'paid'
+          : row.status === 'hold'
+            ? 'pending'
+            : 'canceled',
+      statusLabel: BOOKING_STATUSES[row.status] || row.status,
+      confirmationUrl: payable ? row.payment_url || null : null,
+    };
+  }
+  async publicStatus(id: number, token: string) {
+    const row = await this.readPayment(id, token);
     const state =
       row.payment_status === 'paid'
         ? 'paid'
@@ -154,15 +179,19 @@ export class OperationsPayments implements OnModuleInit, OnModuleDestroy {
       fail('payment_unavailable', 'Платёжный сервис не настроен.', 503);
     return decryptJson<any>(this.config.piiSecret(), row.encrypted);
   }
+  async requireGateway() {
+    const cfg = await this.paymentConfig();
+    if (!cfg.enabled || !cfg.shop_id || !cfg.secret_key)
+      fail('payment_unavailable', 'Онлайн-оплата временно недоступна.', 503);
+    return cfg;
+  }
   private async gateway(
     path: string,
     method: 'GET' | 'POST',
     body?: any,
     key?: string,
   ) {
-    const cfg = await this.paymentConfig();
-    if (!cfg.enabled || !cfg.shop_id || !cfg.secret_key)
-      fail('payment_unavailable', 'Онлайн-оплата временно недоступна.', 503);
+    const cfg = await this.requireGateway();
     const response = await fetch('https://api.yookassa.ru/v3/' + path, {
       method,
       redirect: 'error',

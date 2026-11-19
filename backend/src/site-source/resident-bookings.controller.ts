@@ -85,7 +85,12 @@ export class ResidentBookingsController {
       canSpendHours = false;
     }
     return {
-      rooms: catalog.rooms,
+      rooms:
+        req.user.kioskRoomId === undefined
+          ? catalog.rooms
+          : catalog.rooms.filter(
+              (room: any) => room.id === req.user.kioskRoomId,
+            ),
       officeId: String(office._id),
       profileId: profile.profileId,
       availableMinutes: available,
@@ -108,12 +113,15 @@ export class ResidentBookingsController {
     return this.bookings.availability(roomId, date);
   }
   private async input(user: any, body: any) {
+    const roomId = integer(body.roomId, 'roomId', 1);
+    if (user.kioskRoomId !== undefined && roomId !== user.kioskRoomId)
+      fail('forbidden', 'Сессия действует только для этой переговорной.', 403);
     const { actor, profile } = await this.context(user, body.officeId);
     const input = {
-      room_id: integer(body.roomId, 'roomId', 1),
+      room_id: roomId,
       office_id: body.officeId,
       profile_id: profile.profileId,
-      payment_method: ['cash', 'invoice', 'balance'].includes(
+      payment_method: ['cash', 'invoice', 'balance', 'card_online'].includes(
         body.paymentMethod,
       )
         ? body.paymentMethod
@@ -136,7 +144,20 @@ export class ResidentBookingsController {
   @Post('quote')
   async quote(@Req() req: any, @Body() body: any) {
     const { actor, input } = await this.input(req.user, body);
-    return this.bookings.quote(actor, input);
+    const quote = await this.bookings.quote(actor, input);
+    if (
+      input.payment_method === 'card_online' &&
+      quote.total_amount_minor > 0
+    ) {
+      const config = await this.payments.requireGateway();
+      if (config.capture === false)
+        fail(
+          'payment_unavailable',
+          'Для оплаты в киоске требуется автоматическое списание в ЮKassa.',
+          503,
+        );
+    }
+    return quote;
   }
   @Post()
   async create(
@@ -144,10 +165,27 @@ export class ResidentBookingsController {
     @Body() body: any,
     @Headers('idempotency-key') key: string,
   ) {
-    const { actor, input } = await this.input(req.user, body);
+    return this.createBooking(req.user, body, key, false);
+  }
+  @Post('kiosk')
+  async createKiosk(
+    @Req() req: any,
+    @Body() body: any,
+    @Headers('idempotency-key') key: string,
+  ) {
+    return this.createBooking(req.user, body, key, true);
+  }
+  private async createBooking(
+    user: any,
+    body: any,
+    key: string,
+    deferGateway: boolean,
+  ) {
+    const { actor, input } = await this.input(user, body);
     return this.payments.finishCreate(
       actor,
       await this.bookings.create(actor, input, key || randomUUID()),
+      deferGateway,
     );
   }
 }
