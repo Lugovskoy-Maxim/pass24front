@@ -12,6 +12,7 @@ describe('meeting room kiosk access', () => {
   let devices: any;
   let bookings: any;
   let identity: any;
+  let paymentSetup: jest.Mock;
   beforeEach(() => {
     devices = {
       findOne: jest.fn(),
@@ -52,13 +53,29 @@ describe('meeting room kiosk access', () => {
         permissions: ['admin.panel', 'bookings.manage'],
       }),
     };
+    paymentSetup = jest.fn().mockResolvedValue('capture_required');
     controller = new KioskController(
       bookings as OperationsBookings,
       identity as OperationsIdentity,
-      { kioskStatus: jest.fn() } as unknown as OperationsPayments,
+      { kioskSetupStatus: paymentSetup } as unknown as OperationsPayments,
       {} as AuthService,
       {} as JwtService,
     );
+  });
+
+  it('reports only a payment setup state to administrators with room access', async () => {
+    identity.nativeActor.mockResolvedValueOnce({
+      kind: 'resident',
+      permissions: [],
+    });
+    await expect(controller.rooms({ user: {} })).rejects.toMatchObject({
+      status: 403,
+    });
+    expect(paymentSetup).not.toHaveBeenCalled();
+    await expect(controller.rooms({ user: {} })).resolves.toEqual({
+      rooms: [{ id: 301, title: 'Переговорная 301' }],
+      onlinePayment: 'capture_required',
+    });
   });
 
   it('rejects missing, malformed and revoked device credentials without reading bookings', async () => {

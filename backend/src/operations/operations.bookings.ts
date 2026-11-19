@@ -397,7 +397,15 @@ export class OperationsBookings {
       expires_at: null,
     };
   }
-  async create(actor: OperationsActor, input: any, key: string) {
+  async create(
+    actor: OperationsActor,
+    input: any,
+    key: string,
+    validateHold?: (contact: {
+      email?: string;
+      phone?: string;
+    }) => Promise<void>,
+  ) {
     if (actor.kind === 'admin') requirePermission(actor, 'bookings.manage');
     const receipt = await this.store.receipt(
       actor,
@@ -465,7 +473,6 @@ export class OperationsBookings {
           actor.kind === 'admin' && input.guest && !input.guest_party_id
             ? await this.identities.declaredGuest(actor, input.guest, session)
             : await (partyPromise ||= this.identities.party(actor, input));
-        void requester; // Contacts are read from the immutable snapshot.
         if (quote.writeoff_min && !party.resource_profile_id)
           fail(
             'insufficient_balance',
@@ -478,12 +485,14 @@ export class OperationsBookings {
             party.profile_id!,
             session,
           );
-        const id = await this.store.nextId('bookings', session);
         const payment = this.initialPayment(
           input.payment_method,
           quote.total_amount_minor,
           party.pass_party_type === 'guest_party',
         );
+        if (payment.status === 'hold' && validateHold)
+          await validateHold(requester);
+        const id = await this.store.nextId('bookings', session);
         if (payment.status !== 'guest_request')
           await this.assertAvailable(quote.room_id, quote.segments, 0, session);
         const operationRef = {

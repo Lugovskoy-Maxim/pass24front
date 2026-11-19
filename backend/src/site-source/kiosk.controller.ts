@@ -182,11 +182,13 @@ export class KioskController {
   @UseGuards(AuthGuard('jwt'))
   @Header('Cache-Control', 'no-store')
   async rooms(@Req() req: any) {
+    const rooms = await this.adminRooms(req.user);
     return {
-      rooms: (await this.adminRooms(req.user)).map((room: any) => ({
+      rooms: rooms.map((room: any) => ({
         id: room.id,
         title: room.title,
       })),
+      onlinePayment: await this.payments.kioskSetupStatus(),
     };
   }
 

@@ -1,6 +1,8 @@
 import { MongoMemoryReplSet } from 'mongodb-memory-server';
 import { createConnection, Connection } from 'mongoose';
 import { ConfigService } from '@nestjs/config';
+import { Test } from '@nestjs/testing';
+import request from 'supertest';
 import { JwtService } from '@nestjs/jwt';
 import { createHash } from 'node:crypto';
 import { AuthService } from '../auth/auth.service';
@@ -1550,11 +1552,37 @@ describe('Operations with real replica-set transactions', () => {
   });
   it('starts kiosk checkout in the worker and reports only verified payment status', async () => {
     const draft = { ...input, payment_method: 'card_online' };
+    const config = jest.spyOn(payments, 'paymentConfig').mockResolvedValue({
+      enabled: true,
+      shop_id: 'test-shop',
+      secret_key: 'test-key',
+      capture: true,
+      receipt_enabled: true,
+    });
+    config.mockResolvedValueOnce({ enabled: true, shop_id: 'test-shop' });
+    await expect(payments.kioskSetupStatus()).resolves.toBe('incomplete');
+    config.mockResolvedValueOnce({
+      enabled: true,
+      shop_id: 'test-shop',
+      secret_key: 'test-key',
+      capture: false,
+    });
+    await expect(payments.kioskSetupStatus()).resolves.toBe('capture_required');
+    await expect(payments.kioskSetupStatus()).resolves.toBe('configured');
+    await expect(
+      bookings.create(
+        resident,
+        draft,
+        'kiosk-missing-receipt-contact',
+        (contact) => payments.validateKioskPayment(contact),
+      ),
+    ).rejects.toMatchObject({ status: 422 });
+    expect(await store.collection('bookings').countDocuments()).toBe(0);
+    expect(await store.collection('outbox').countDocuments()).toBe(0);
     const created = await bookings.create(resident, draft, 'kiosk-checkout');
     const id = created.booking.id;
     const token = created.payment.payment_token;
     const url = 'https://yookassa.ru/checkout/test';
-    jest.spyOn(payments, 'paymentConfig').mockResolvedValue({ capture: true });
     const gateway = jest.spyOn(payments as any, 'gateway').mockResolvedValue({
       id: 'kiosk-provider-payment',
       status: 'pending',
@@ -1576,11 +1604,27 @@ describe('Operations with real replica-set transactions', () => {
     await expect(payments.kioskStatus(id, token)).resolves.toMatchObject({
       state: 'pending',
       confirmationUrl: null,
+      preparation: null,
     });
     await payments.tick();
     await expect(payments.kioskStatus(id, token)).resolves.toMatchObject({
       state: 'pending',
+      confirmationUrl: null,
+      preparation: 'contact_required',
+    });
+    expect(gateway).not.toHaveBeenCalled();
+    config.mockResolvedValue({ capture: true });
+    await store
+      .collection('outbox')
+      .updateOne(
+        { key: 'payment-create:' + id },
+        { $set: { retry_at: new Date(0) } },
+      );
+    await payments.tick();
+    await expect(payments.kioskStatus(id, token)).resolves.toMatchObject({
+      state: 'pending',
       confirmationUrl: url,
+      preparation: null,
     });
     gateway.mockResolvedValue({
       id: 'kiosk-provider-payment',
@@ -1592,6 +1636,38 @@ describe('Operations with real replica-set transactions', () => {
       confirmationUrl: null,
     });
     expect(await store.collection('payments').countDocuments()).toBe(1);
+    const kioskModule = await Test.createTestingModule({
+      controllers: [KioskController],
+      providers: [
+        { provide: OperationsBookings, useValue: bookings },
+        { provide: OperationsIdentity, useValue: identity },
+        { provide: OperationsPayments, useValue: payments },
+        { provide: AuthService, useValue: {} },
+        { provide: JwtService, useValue: {} },
+      ],
+    }).compile();
+    const app = kioskModule.createNestApplication();
+    app.setGlobalPrefix('api');
+    try {
+      await app.init();
+      await request(app.getHttpServer())
+        .post('/api/kiosk/payment-status')
+        .send({ bookingId: id, token: 'wrong-token' })
+        .expect(403);
+      const response = await request(app.getHttpServer())
+        .post('/api/kiosk/payment-status')
+        .send({ bookingId: id, token })
+        .expect('Cache-Control', 'no-store')
+        .expect(200);
+      expect(response.body).toEqual({
+        state: 'paid',
+        statusLabel: expect.any(String),
+        confirmationUrl: null,
+        preparation: null,
+      });
+    } finally {
+      await app.close();
+    }
   });
   it('exchanges an approved kiosk QR once for a room-scoped token', async () => {
     const deviceToken = 'a'.repeat(64);

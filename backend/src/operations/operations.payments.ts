@@ -114,6 +114,16 @@ export class OperationsPayments implements OnModuleInit, OnModuleDestroy {
     const row = await this.readPayment(id, token);
     const payable =
       row.status === 'hold' && parseMoscow(row.expires_at || '') > Date.now();
+    const confirmationUrl = payable ? row.payment_url || null : null;
+    const job =
+      payable && !confirmationUrl
+        ? await this.store
+            .collection('outbox')
+            .findOne(
+              { key: 'payment-create:' + id, state: { $ne: 'done' } },
+              { projection: { last_error_code: 1 } },
+            )
+        : null;
     return {
       state:
         row.payment_status === 'paid'
@@ -122,7 +132,15 @@ export class OperationsPayments implements OnModuleInit, OnModuleDestroy {
             ? 'pending'
             : 'canceled',
       statusLabel: BOOKING_STATUSES[row.status] || row.status,
-      confirmationUrl: payable ? row.payment_url || null : null,
+      confirmationUrl,
+      preparation:
+        row.status === 'hold' && !payable
+          ? 'expired'
+          : job?.last_error_code === 'contact_required'
+            ? 'contact_required'
+            : job?.last_error_code
+              ? 'retrying'
+              : null,
     };
   }
   async publicStatus(id: number, token: string) {
@@ -179,11 +197,44 @@ export class OperationsPayments implements OnModuleInit, OnModuleDestroy {
       fail('payment_unavailable', 'Платёжный сервис не настроен.', 503);
     return decryptJson<any>(this.config.piiSecret(), row.encrypted);
   }
-  async requireGateway() {
+  private async requireGateway() {
     const cfg = await this.paymentConfig();
     if (!cfg.enabled || !cfg.shop_id || !cfg.secret_key)
       fail('payment_unavailable', 'Онлайн-оплата временно недоступна.', 503);
     return cfg;
+  }
+  async validateKioskPayment(contact?: { email?: string; phone?: string }) {
+    const config = await this.requireGateway();
+    if (config.capture === false)
+      fail(
+        'payment_unavailable',
+        'Для оплаты в киоске требуется автоматическое списание в ЮKassa.',
+        503,
+      );
+    if (config.receipt_enabled && contact)
+      this.requireReceiptContact(contact, 422);
+  }
+  async kioskSetupStatus() {
+    try {
+      const config = await this.paymentConfig();
+      if (!config.enabled || !config.shop_id || !config.secret_key)
+        return 'incomplete';
+      if (config.capture === false) return 'capture_required';
+      return 'configured';
+    } catch {
+      return 'unavailable';
+    }
+  }
+  private requireReceiptContact(
+    contact: { email?: string; phone?: string },
+    status = 409,
+  ) {
+    if (!contact.email && !contact.phone)
+      fail(
+        'contact_required',
+        'Для чека нужен подтверждённый телефон или почта в профиле Pass.',
+        status,
+      );
   }
   private async gateway(
     path: string,
@@ -248,8 +299,7 @@ export class OperationsPayments implements OnModuleInit, OnModuleDestroy {
       },
     };
     if (cfg.receipt_enabled) {
-      if (!contact.email && !contact.phone)
-        fail('contact_required', 'Для чека нужен подтверждённый контакт.');
+      this.requireReceiptContact(contact);
       payload.receipt = {
         customer: {
           ...(contact.email

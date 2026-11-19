@@ -24,6 +24,7 @@ export type KioskLoginChallenge = {
 };
 export type KioskPayment = {
   bookingId: number;
+  bookingNumber?: string;
   token: string;
   amount: number;
 };
@@ -31,7 +32,10 @@ export type KioskPaymentStatus = {
   state: 'pending' | 'paid' | 'canceled';
   statusLabel: string;
   confirmationUrl: string | null;
+  preparation: 'expired' | 'contact_required' | 'retrying' | null;
 };
+export type KioskPaymentSetup =
+  'incomplete' | 'capture_required' | 'configured' | 'unavailable';
 export const kioskTime = (minute: number) =>
   `${String(Math.floor(minute / 60)).padStart(2, '0')}:${String(minute % 60).padStart(2, '0')}`;
 
@@ -91,7 +95,10 @@ export const kioskApi = {
   login: (login: string, password: string) =>
     call<KioskSession>('/auth/login', null, { login, password }),
   rooms: (token: string) =>
-    call<{ rooms: { id: number; title: string }[] }>('/kiosk/rooms', token),
+    call<{
+      rooms: { id: number; title: string }[];
+      onlinePayment?: KioskPaymentSetup;
+    }>('/kiosk/rooms', token),
   bind: (token: string, roomId: number, previousToken?: string) =>
     call<{ token: string }>('/kiosk/device', token, { roomId, previousToken }),
   revoke: (token: string, deviceToken: string) =>
@@ -118,6 +125,7 @@ export const kioskApi = {
     request<{
       booking: {
         id: number;
+        number?: string;
         status: string;
         status_label: string;
         total_amount_minor: number;

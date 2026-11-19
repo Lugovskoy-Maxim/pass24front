@@ -145,18 +145,8 @@ export class ResidentBookingsController {
   async quote(@Req() req: any, @Body() body: any) {
     const { actor, input } = await this.input(req.user, body);
     const quote = await this.bookings.quote(actor, input);
-    if (
-      input.payment_method === 'card_online' &&
-      quote.total_amount_minor > 0
-    ) {
-      const config = await this.payments.requireGateway();
-      if (config.capture === false)
-        fail(
-          'payment_unavailable',
-          'Для оплаты в киоске требуется автоматическое списание в ЮKassa.',
-          503,
-        );
-    }
+    if (input.payment_method === 'card_online' && quote.total_amount_minor > 0)
+      await this.payments.validateKioskPayment();
     return quote;
   }
   @Post()
@@ -184,7 +174,14 @@ export class ResidentBookingsController {
     const { actor, input } = await this.input(user, body);
     return this.payments.finishCreate(
       actor,
-      await this.bookings.create(actor, input, key || randomUUID()),
+      await this.bookings.create(
+        actor,
+        input,
+        key || randomUUID(),
+        deferGateway
+          ? (contact) => this.payments.validateKioskPayment(contact)
+          : undefined,
+      ),
       deferGateway,
     );
   }

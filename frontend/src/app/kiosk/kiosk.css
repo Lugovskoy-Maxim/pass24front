@@ -1,4 +1,7 @@
 .kiosk {
+  --kiosk-muted: #bababa;
+  --kiosk-action-text: #ffad70;
+  --kiosk-success-text: #a1db9c;
   --kiosk-gutter: clamp(12px, 3vw, 36px);
   --kiosk-gap: clamp(12px, 2.25vmin, 24px);
   --kiosk-control: 48px;
@@ -18,6 +21,11 @@
   font-size: clamp(16px, 2.2vmin, 20px);
   line-height: 1.4;
   scroll-margin: 12px;
+}
+[data-theme='light'] .kiosk {
+  --kiosk-muted: #595754;
+  --kiosk-action-text: #8c3500;
+  --kiosk-success-text: #2c6633;
 }
 .kiosk,
 .kiosk *,
@@ -93,7 +101,7 @@
 }
 .kiosk-clock span {
   font-size: 0.7em;
-  color: var(--muted);
+  color: var(--kiosk-muted);
 }
 .kiosk-content {
   flex: 1;
@@ -147,6 +155,13 @@
   opacity: 0.35;
   cursor: not-allowed;
 }
+.kiosk .btn-primary {
+  color: #170d06;
+}
+.kiosk .btn-primary:hover:not(:disabled) {
+  background: var(--accent);
+  background: color-mix(in srgb, var(--accent) 85%, #fff);
+}
 .kiosk .input {
   display: block;
   margin-top: 5px;
@@ -157,12 +172,26 @@
   border-radius: 14px;
   scroll-margin-block: 16px;
 }
+.kiosk select.input {
+  appearance: auto;
+  padding-inline-end: 12px;
+}
+.kiosk :is(select, input[type='date']).input:not(:disabled) {
+  background-color: var(--surface);
+  color: var(--foreground);
+  opacity: 1;
+  cursor: pointer;
+}
+.kiosk select.input:disabled {
+  color: var(--kiosk-muted);
+  opacity: 1;
+}
 .kiosk :is(button, select, input):focus-visible {
   outline: 3px solid var(--focus-border);
   outline-offset: 3px;
 }
 .kiosk-muted {
-  color: var(--muted);
+  color: var(--kiosk-muted);
 }
 .kiosk-small {
   font-size: 0.8em;
@@ -172,7 +201,7 @@
   display: inline-flex;
   gap: 8px;
   align-items: center;
-  color: var(--accent);
+  color: var(--kiosk-action-text);
   min-height: 48px;
   align-self: flex-start;
   cursor: pointer;
@@ -269,6 +298,52 @@
   width: 100%;
   height: auto;
 }
+.kiosk-scan-layout,
+.kiosk-scan-instructions {
+  display: grid;
+  justify-items: center;
+  align-items: center;
+  gap: var(--kiosk-gap);
+  width: 100%;
+}
+.kiosk-scan-instructions {
+  max-width: 25rem;
+}
+.kiosk-payment-success {
+  color: var(--kiosk-success-text);
+}
+.kiosk-booking-reference {
+  font-variant-numeric: tabular-nums;
+  font-size: 0.9em;
+  font-weight: 650;
+  overflow-wrap: anywhere;
+}
+.kiosk-payment-diagnostic {
+  border-top: 1px solid var(--border);
+  font-size: 0.9em;
+}
+.kiosk-payment-diagnostic summary {
+  min-height: 48px;
+  padding-block: 12px;
+  cursor: pointer;
+  font-weight: 650;
+}
+.kiosk-payment-diagnostic p {
+  color: var(--kiosk-muted);
+}
+@media (min-width: 560px) and (orientation: landscape) {
+  .kiosk-qr-login,
+  .kiosk-scan-panel {
+    max-width: 48rem;
+  }
+  .kiosk-scan-layout {
+    grid-template-columns: minmax(0, 0.95fr) minmax(0, 1.05fr);
+  }
+  .kiosk-scan-instructions {
+    justify-items: start;
+    text-align: start;
+  }
+}
 .kiosk-dashboard {
   display: grid;
   align-items: start;
@@ -282,6 +357,28 @@
 }
 .kiosk-booking-grid > .kiosk-error {
   grid-column: 1 / -1;
+}
+.kiosk-booking-summary h2 {
+  scroll-margin-top: 16px;
+}
+.kiosk-booking-jump {
+  position: sticky;
+  z-index: 2;
+  bottom: var(--kiosk-inset-bottom);
+}
+.kiosk-booking-jump .btn {
+  display: flex;
+  width: 100%;
+  align-items: center;
+  justify-content: space-between;
+  padding-inline: clamp(8px, 3vw, 20px);
+  gap: 8px;
+  background: var(--surface-elevated);
+  box-shadow: var(--card-shadow);
+}
+.kiosk-booking-jump span {
+  font-variant-numeric: tabular-nums;
+  font-size: 0.85em;
 }
 .kiosk-booking-fields {
   display: grid;
@@ -304,21 +401,55 @@
 .kiosk-date-controls .btn {
   padding: 0;
 }
+.kiosk-quick-dates {
+  display: grid;
+  grid-template-columns: repeat(2, minmax(0, 1fr));
+  gap: 6px;
+  margin-top: 6px;
+}
+.kiosk-quick-dates .btn[aria-pressed='true'] {
+  border-color: var(--accent-border);
+  background: var(--accent-soft);
+}
 .kiosk-availability {
+  --room-state: var(--muted);
   display: flex;
   flex-direction: column;
   gap: var(--kiosk-gap);
   padding: clamp(16px, 3.5vmin, 40px);
   border-radius: 24px;
   border: 1px solid var(--border);
-  background: linear-gradient(145deg, var(--surface-elevated), var(--surface));
+  border-color: color-mix(in srgb, var(--room-state) 40%, var(--border));
+  background: var(--surface);
+  background: linear-gradient(
+    145deg,
+    color-mix(in srgb, var(--room-state) 12%, var(--surface-elevated)),
+    var(--surface)
+  );
   box-shadow: var(--card-shadow);
 }
-.kiosk-availability > .btn {
-  min-height: clamp(52px, 9vmin, 72px);
-  font-size: 1.25em;
+.kiosk-dashboard-actions {
+  display: grid;
+  grid-template-columns: minmax(0, 1fr) auto;
+  gap: 8px;
 }
-.kiosk-state {
+.kiosk-dashboard-actions > .btn-primary {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 10px;
+  min-height: clamp(52px, 9vmin, 72px);
+  font-size: 1.1em;
+}
+.kiosk-dashboard-actions > .btn-secondary {
+  padding-inline: 12px;
+}
+@media (max-width: 390px) {
+  .kiosk-dashboard-actions {
+    grid-template-columns: minmax(0, 1fr);
+  }
+}
+.kiosk .kiosk-state {
   display: flex;
   align-items: center;
   gap: 12px;
@@ -330,21 +461,65 @@
 .kiosk-state > span {
   width: 0.3em;
   height: 0.3em;
-  background: var(--muted);
+  background: var(--room-state);
+  box-shadow: 0 0 0 6px color-mix(in srgb, var(--room-state) 22%, transparent);
   border-radius: 50%;
   flex-shrink: 0;
 }
-.kiosk-state.is-free > span {
-  background: var(--success);
-  box-shadow: 0 0 0 8px color-mix(in srgb, var(--success) 16%, transparent);
+.kiosk-availability.is-free {
+  --room-state: var(--success);
 }
-.kiosk-state.is-busy > span {
-  background: var(--accent);
-  box-shadow: 0 0 0 8px var(--accent-soft);
+.kiosk-availability.is-busy {
+  --room-state: var(--accent);
 }
 .kiosk-until {
-  color: var(--muted);
+  color: var(--kiosk-muted);
   font-size: 1.25em;
+}
+.kiosk-next-free {
+  font-size: 0.95em;
+}
+.kiosk-timeline {
+  display: grid;
+  gap: 7px;
+}
+.kiosk-timeline-track {
+  position: relative;
+  height: 12px;
+  border-radius: 8px;
+  background: var(--surface-muted);
+}
+.kiosk-timeline-segment,
+.kiosk-timeline-now {
+  position: absolute;
+}
+.kiosk-timeline-segment {
+  top: 0;
+  height: 100%;
+  border-inline: 1px solid var(--surface);
+  border-radius: 5px;
+}
+.kiosk-timeline-segment.is-free {
+  background: var(--success);
+}
+.kiosk-timeline-segment.is-busy {
+  background: var(--accent);
+}
+.kiosk-timeline-now {
+  top: -4px;
+  bottom: -4px;
+  width: 3px;
+  border-radius: 3px;
+  background: var(--foreground);
+  box-shadow: 0 0 0 1px var(--surface);
+  transform: translateX(-50%);
+}
+.kiosk-timeline-labels {
+  display: flex;
+  justify-content: space-between;
+  color: var(--kiosk-muted);
+  font-size: 0.75em;
+  font-variant-numeric: tabular-nums;
 }
 .kiosk-schedule {
   display: flex;
@@ -364,7 +539,11 @@
   font-variant-numeric: tabular-nums;
 }
 .kiosk-schedule-row.is-free strong {
-  color: var(--success);
+  color: var(--kiosk-success-text);
+}
+.kiosk-schedule-row[aria-current='time'] {
+  border-color: var(--border-strong);
+  background: var(--surface-elevated);
 }
 .is-stale {
   opacity: 0.5;
@@ -395,15 +574,22 @@
 .kiosk-user > span {
   overflow-wrap: anywhere;
 }
+.kiosk-slot-group h3 {
+  margin: 0 0 8px;
+  color: var(--kiosk-muted);
+  font-size: 0.86em;
+  font-weight: 650;
+}
 .kiosk-slots {
   display: grid;
-  grid-template-columns: repeat(auto-fit, minmax(112px, 1fr));
+  grid-template-columns: repeat(auto-fill, minmax(112px, 1fr));
   gap: 6px;
 }
 .kiosk-slots .btn {
   font-size: 0.75em;
   padding: 10px 4px;
   font-variant-numeric: tabular-nums;
+  transition: none;
 }
 .kiosk-check {
   display: flex;
@@ -431,6 +617,36 @@
   font-size: 1.25em;
   font-weight: 600;
 }
+.kiosk-quote {
+  padding: clamp(12px, 2.4vmin, 20px);
+  border: 1px solid var(--border);
+  border-radius: 14px;
+  background: var(--surface-muted);
+}
+.kiosk-quote dl {
+  display: grid;
+  gap: 8px;
+  margin: 0;
+}
+.kiosk-quote dl > div {
+  display: grid;
+  grid-template-columns: minmax(0, 1fr) auto;
+  align-items: baseline;
+  gap: 10px;
+}
+.kiosk-quote dd {
+  margin: 0;
+  font-variant-numeric: tabular-nums;
+  white-space: nowrap;
+}
+.kiosk-quote-total {
+  font-size: 1.08em;
+  font-weight: 650;
+}
+.kiosk-quote-total:not(:first-child) {
+  padding-top: 8px;
+  border-top: 1px solid var(--border);
+}
 .kiosk-receipt {
   display: flex;
   gap: 16px;
@@ -445,9 +661,21 @@
   flex-shrink: 0;
 }
 .kiosk-idle {
-  text-align: center;
-  font-size: 0.8em;
-  color: var(--accent);
+  position: sticky;
+  bottom: calc(8px + var(--kiosk-inset-bottom));
+  z-index: 3;
+  display: flex;
+  flex-wrap: wrap;
+  align-items: center;
+  justify-content: space-between;
+  gap: 8px 16px;
+  padding: 8px 12px;
+  background: var(--alert-surface);
+  color: var(--alert-text);
+  border: 1px solid var(--alert-border);
+  border-radius: 14px;
+  box-shadow: var(--card-shadow);
+  font-size: 0.9em;
 }
 .kiosk-footer {
   display: flex;
@@ -459,7 +687,7 @@
   margin-right: var(--kiosk-right);
   border-top: 1px solid var(--border);
   padding-block: 8px calc(8px + var(--kiosk-inset-bottom));
-  color: var(--muted);
+  color: var(--kiosk-muted);
   font-size: 0.75em;
 }
 .kiosk-footer button {
@@ -489,6 +717,15 @@
   .kiosk-booking-summary {
     grid-column: 2;
     grid-row: 1;
+  }
+  .kiosk-booking-jump {
+    display: none;
+  }
+}
+@media (min-width: 780px) and (min-height: 560px) and (orientation: landscape) {
+  .kiosk-booking-summary {
+    position: sticky;
+    top: var(--kiosk-gap);
   }
 }
 @media (max-height: 640px) and (orientation: landscape) {
