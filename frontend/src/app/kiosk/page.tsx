@@ -4,6 +4,8 @@ import { FormEvent, useCallback, useEffect, useRef, useState } from 'react';
 import {
   ArrowLeft,
   CalendarDays,
+  ChevronLeft,
+  ChevronRight,
   CheckCircle2,
   Clock3,
   CreditCard,
@@ -154,13 +156,17 @@ function LoginForm({
         </p>
       )}
       <form onSubmit={submit} autoComplete="off" className="kiosk-stack">
-        <fieldset className="kiosk-methods" disabled={busy}>
-          <legend className="sr-only">Способ входа</legend>
+        <div
+          className="kiosk-methods"
+          role="radiogroup"
+          aria-label="Способ входа"
+        >
           {LOGIN_METHODS.map((option) => (
             <label key={option.id} className="kiosk-method">
               <input
                 type="radio"
                 name="login-method"
+                disabled={busy}
                 checked={method.id === option.id}
                 onChange={() => {
                   setMethod(option);
@@ -168,11 +174,13 @@ function LoginForm({
                   setError('');
                 }}
               />
-              <option.icon size={19} aria-hidden="true" />
-              {option.label}
+              <span className="kiosk-method-option">
+                <option.icon size={19} aria-hidden="true" />
+                {option.label}
+              </span>
             </label>
           ))}
-        </fieldset>
+        </div>
         <label>
           {method.id === 'email' ? 'Электронная почта' : method.label}
           <input
@@ -215,9 +223,6 @@ function LoginForm({
           {busy ? 'Вход…' : 'Войти'}
         </button>
       </form>
-      <p className="kiosk-muted kiosk-small">
-        После бронирования или минуты бездействия аккаунт выйдет автоматически.
-      </p>
     </section>
   );
 }
@@ -410,6 +415,9 @@ function Booking({
 }) {
   const offices = session.user.offices || [];
   const [officeId, setOfficeId] = useState(offices[0]?.id || '');
+  const [selectedDate, setSelectedDate] = useState(status.date);
+  const date = selectedDate < status.date ? status.date : selectedDate;
+  const isToday = date === status.date;
   const [context, setContext] = useState<BookingContext | null>(null);
   const [slots, setSlots] = useState<KioskSlot[]>([]);
   const [start, setStart] = useState(-1);
@@ -422,12 +430,19 @@ function Booking({
   } | null>(null);
   const [busy, setBusy] = useState(false);
   const [loading, setLoading] = useState(true);
+  const [loadedKey, setLoadedKey] = useState('');
+  const [revision, setRevision] = useState(0);
+  const availabilityKey = JSON.stringify([
+    officeId,
+    status.room.id,
+    date,
+    revision,
+  ]);
   const [retry, setRetry] = useState<{
     draft: BookingDraft;
     key: string;
   } | null>(null);
   const [error, setError] = useState('');
-  const [revision, setRevision] = useState(0);
   const alive = useRef(true);
   const working = useRef(false);
   useEffect(() => {
@@ -452,12 +467,13 @@ function Booking({
     }
     void Promise.all([
       kioskApi.context(session.token, officeId),
-      kioskApi.slots(session.token, officeId, status.room.id, status.date),
+      kioskApi.slots(session.token, officeId, status.room.id, date),
     ])
       .then(([c, s]) => {
         if (active) {
           setContext(c);
           setSlots(s.slots);
+          setLoadedKey(availabilityKey);
         }
       })
       .catch((e) => {
@@ -472,8 +488,11 @@ function Booking({
     return () => {
       active = false;
     };
-  }, [session.token, officeId, status.room.id, status.date, revision, onExit]);
-  const room = context?.rooms.find((r) => r.id === status.room.id);
+  }, [session.token, officeId, status.room.id, date, availabilityKey, onExit]);
+  const loaded = loadedKey === availabilityKey;
+  const room = loaded
+    ? context?.rooms.find((r) => r.id === status.room.id)
+    : undefined;
   const step = room?.config.slot_step_min || 30;
   const hoursAllowed =
     context?.canSpendHours &&
@@ -481,7 +500,7 @@ function Booking({
   const draft: BookingDraft = {
     officeId,
     roomId: status.room.id,
-    date: status.date,
+    date,
     startMinute: start,
     endMinute: end,
     writeoffMinutes:
@@ -507,10 +526,20 @@ function Booking({
     .format(new Date(status.serverTime))
     .split(':')
     .map(Number);
-  const serverMinute = hour * 60 + minute;
+  const serverMinute = isToday ? hour * 60 + minute : -1;
+  const availableSlots = isToday ? status.slots : slots;
   const free =
     kioskRangeFree(slots, start, end) &&
-    kioskRangeFree(status.slots, start, end);
+    kioskRangeFree(availableSlots, start, end);
+  const dateLabel = new Date(`${date}T12:00:00+03:00`).toLocaleDateString(
+    'ru-RU',
+    { day: 'numeric', month: 'long', timeZone: 'Europe/Moscow' },
+  );
+  function shiftDate(days: number) {
+    const next = new Date(`${date}T00:00:00Z`);
+    next.setUTCDate(next.getUTCDate() + days);
+    setSelectedDate(next.toISOString().slice(0, 10));
+  }
   const valid =
     !!room &&
     free &&
@@ -588,161 +617,216 @@ function Booking({
         </button>
       </div>
       <h1>Бронирование</h1>
-      <div className="kiosk-panel kiosk-stack">
-        <label>
-          Ваш офис
-          <select
-            className="input"
-            value={officeId}
-            disabled={busy || !!retry}
-            onChange={(e) => setOfficeId(e.target.value)}
-          >
-            {offices.map((o) => (
-              <option key={o.id} value={o.id}>
-                {o.number} · {o.businessCenterName}
-              </option>
-            ))}
-          </select>
-        </label>
-        {!offices.length && (
-          <p role="alert">
-            Для бронирования нужен назначенный офис. Обратитесь к
-            администратору.
-          </p>
-        )}
-        {loading && <p role="status">Загрузка свободного времени…</p>}
-        {!loading && context && !room && (
-          <p role="alert">Эта переговорная недоступна вашему офису.</p>
-        )}
-        {room && (
-          <>
-            <h2>
-              <CalendarDays size={22} />
-              Сегодня ·{' '}
-              {new Date(`${status.date}T12:00:00+03:00`).toLocaleDateString(
-                'ru-RU',
-                { day: 'numeric', month: 'long', timeZone: 'Europe/Moscow' },
-              )}
-            </h2>
-            <p className="kiosk-muted">
-              Нажмите первый, затем последний интервал бронирования.
-            </p>
-            <div className="kiosk-slots">
-              {slots.map((s) => {
-                const enabled =
-                  s.start_minute > serverMinute &&
-                  s.state === 'free' &&
-                  kioskRangeFree(status.slots, s.start_minute, s.end_minute);
-                const selected = s.start_minute >= start && s.end_minute <= end;
-                return (
-                  <button
-                    key={s.start_minute}
-                    className={`btn ${selected ? 'btn-primary' : 'btn-secondary'}`}
-                    disabled={!enabled || busy || !!retry || !connected}
-                    aria-pressed={selected}
-                    aria-label={`${kioskTime(s.start_minute)}–${kioskTime(s.end_minute)}${enabled ? '' : ', недоступно'}`}
-                    onClick={() => {
-                      if (
-                        start < 0 ||
-                        s.start_minute < start ||
-                        end - start > step
-                      ) {
-                        setStart(s.start_minute);
-                        setEnd(s.end_minute);
-                      } else setEnd(s.end_minute);
-                    }}
-                  >
-                    {kioskTime(s.start_minute)}–{kioskTime(s.end_minute)}
-                  </button>
-                );
-              })}
-            </div>
-            {!slots.some(
-              (s) => s.state === 'free' && s.start_minute > serverMinute,
-            ) && <p>На сегодня свободных интервалов нет.</p>}
-            <p className="kiosk-small kiosk-muted">
-              Недоступные интервалы затемнены. Время московское.
-            </p>
-            {hoursAllowed && context && context.availableMinutes > 0 && (
-              <label className="kiosk-check">
+      <div
+        className={`kiosk-booking-grid${loaded && start >= 0 ? ' has-summary' : ''}`}
+      >
+        <div className="kiosk-panel kiosk-stack">
+          <div className="kiosk-booking-fields">
+            <label>
+              Ваш офис
+              <select
+                className="input"
+                value={officeId}
+                disabled={busy || !!retry}
+                onChange={(e) => setOfficeId(e.target.value)}
+              >
+                {offices.map((o) => (
+                  <option key={o.id} value={o.id}>
+                    {o.number} · {o.businessCenterName}
+                  </option>
+                ))}
+              </select>
+            </label>
+            <div>
+              <label htmlFor="kiosk-booking-date">Дата бронирования</label>
+              <div className="kiosk-date-controls">
+                <button
+                  type="button"
+                  className="btn btn-secondary"
+                  aria-label="Предыдущий день"
+                  disabled={isToday || busy || !!retry}
+                  onClick={() => shiftDate(-1)}
+                >
+                  <ChevronLeft size={20} aria-hidden="true" />
+                </button>
                 <input
-                  type="checkbox"
-                  checked={useHours}
+                  id="kiosk-booking-date"
+                  className="input"
+                  type="date"
+                  value={date}
+                  min={status.date}
+                  max="9999-12-31"
                   disabled={busy || !!retry}
-                  onChange={(e) => setUseHours(e.target.checked)}
+                  onChange={(event) => {
+                    const value = event.target.value;
+                    if (
+                      /^\d{4}-\d{2}-\d{2}$/.test(value) &&
+                      value >= status.date &&
+                      Number.isFinite(Date.parse(`${value}T00:00:00Z`))
+                    )
+                      setSelectedDate(value);
+                  }}
                 />
-                Использовать бесплатные минуты · остаток{' '}
-                {context.availableMinutes} мин
-              </label>
+                <button
+                  type="button"
+                  className="btn btn-secondary"
+                  aria-label="Следующий день"
+                  disabled={busy || !!retry || date === '9999-12-31'}
+                  onClick={() => shiftDate(1)}
+                >
+                  <ChevronRight size={20} aria-hidden="true" />
+                </button>
+              </div>
+            </div>
+          </div>
+          {!offices.length && (
+            <p role="alert">
+              Для бронирования нужен назначенный офис. Обратитесь к
+              администратору.
+            </p>
+          )}
+          {loading && <p role="status">Загрузка свободного времени…</p>}
+          {loaded && !loading && context && !room && (
+            <p role="alert">Эта переговорная недоступна вашему офису.</p>
+          )}
+          {room && (
+            <>
+              <h2>
+                <CalendarDays size={22} />
+                {isToday ? `Сегодня · ${dateLabel}` : dateLabel}
+              </h2>
+              <p className="kiosk-muted">
+                Нажмите первый, затем последний интервал бронирования.
+              </p>
+              <div className="kiosk-slots">
+                {slots.map((s) => {
+                  const enabled =
+                    s.start_minute > serverMinute &&
+                    s.state === 'free' &&
+                    kioskRangeFree(
+                      availableSlots,
+                      s.start_minute,
+                      s.end_minute,
+                    );
+                  const selected =
+                    s.start_minute >= start && s.end_minute <= end;
+                  return (
+                    <button
+                      key={s.start_minute}
+                      className={`btn ${selected ? 'btn-primary' : 'btn-secondary'}`}
+                      disabled={!enabled || busy || !!retry || !connected}
+                      aria-pressed={selected}
+                      aria-label={`${kioskTime(s.start_minute)}–${kioskTime(s.end_minute)}${enabled ? '' : ', недоступно'}`}
+                      onClick={() => {
+                        if (
+                          start < 0 ||
+                          s.start_minute < start ||
+                          end - start > step
+                        ) {
+                          setStart(s.start_minute);
+                          setEnd(s.end_minute);
+                        } else setEnd(s.end_minute);
+                      }}
+                    >
+                      {kioskTime(s.start_minute)}–{kioskTime(s.end_minute)}
+                    </button>
+                  );
+                })}
+              </div>
+              {!slots.some(
+                (s) =>
+                  s.state === 'free' &&
+                  s.start_minute > serverMinute &&
+                  kioskRangeFree(availableSlots, s.start_minute, s.end_minute),
+              ) && <p>На выбранный день свободных интервалов нет.</p>}
+              <p className="kiosk-small kiosk-muted">
+                Недоступные интервалы затемнены. Время московское.
+              </p>
+              {hoursAllowed && context && context.availableMinutes > 0 && (
+                <label className="kiosk-check">
+                  <input
+                    type="checkbox"
+                    checked={useHours}
+                    disabled={busy || !!retry}
+                    onChange={(e) => setUseHours(e.target.checked)}
+                  />
+                  Использовать бесплатные минуты · остаток{' '}
+                  {context.availableMinutes} мин
+                </label>
+              )}
+            </>
+          )}
+        </div>
+        {(error || retry) && (
+          <div className="kiosk-error" role="alert">
+            {error || 'Статус бронирования пока неизвестен.'}{' '}
+            <button
+              className="kiosk-back"
+              disabled={busy}
+              onClick={() =>
+                retry ? void submit() : setRevision((r) => r + 1)
+              }
+            >
+              {retry ? 'Проверить бронирование' : 'Обновить интервалы'}
+            </button>
+          </div>
+        )}
+        {loaded && start >= 0 && (
+          <div className="kiosk-panel kiosk-stack kiosk-booking-summary">
+            <h2>Ваша бронь</h2>
+            <p>
+              {status.room.title} · {dateLabel}
+            </p>
+            <p className="kiosk-selection">
+              <Clock3 size={22} />
+              {kioskTime(start)}–{kioskTime(end)} · {end - start} мин
+            </p>
+            <label>
+              Способ оплаты
+              <select
+                className="input"
+                value={paymentMethod}
+                disabled={busy || !!retry}
+                onChange={(e) => {
+                  setPaymentMethod(e.target.value);
+                  setQuote(null);
+                  setError('');
+                }}
+              >
+                <option value="card_online">Картой на телефоне · ЮKassa</option>
+                <option value="cash">Наличными</option>
+              </select>
+            </label>
+            {!free && (
+              <p role="alert" className="kiosk-error">
+                Выберите непрерывный свободный промежуток.
+              </p>
             )}
-          </>
+            {currentQuote && (
+              <p className="kiosk-price">
+                К оплате: {officeMoney(currentQuote.total_amount_minor)}
+                <span className="kiosk-muted kiosk-small">
+                  Бесплатные минуты: {currentQuote.writeoff_min}
+                </span>
+              </p>
+            )}
+            <button
+              className="btn btn-primary"
+              disabled={!valid || busy || !!retry}
+              onClick={() => void submit()}
+            >
+              {busy
+                ? 'Подождите…'
+                : currentQuote
+                  ? paymentMethod === 'card_online' &&
+                    currentQuote.total_amount_minor > 0
+                    ? 'Перейти к оплате'
+                    : 'Подтвердить бронирование'
+                  : 'Рассчитать стоимость'}
+            </button>
+          </div>
         )}
       </div>
-      {(error || retry) && (
-        <div className="kiosk-error" role="alert">
-          {error || 'Статус бронирования пока неизвестен.'}{' '}
-          <button
-            className="kiosk-back"
-            disabled={busy}
-            onClick={() => (retry ? void submit() : setRevision((r) => r + 1))}
-          >
-            {retry ? 'Проверить бронирование' : 'Обновить интервалы'}
-          </button>
-        </div>
-      )}
-      {start >= 0 && (
-        <div className="kiosk-panel kiosk-stack">
-          <h2>Ваша бронь</h2>
-          <p>{status.room.title}</p>
-          <p className="kiosk-selection">
-            <Clock3 size={22} />
-            {kioskTime(start)}–{kioskTime(end)} · {end - start} мин
-          </p>
-          <label>
-            Способ оплаты
-            <select
-              className="input"
-              value={paymentMethod}
-              disabled={busy || !!retry}
-              onChange={(e) => {
-                setPaymentMethod(e.target.value);
-                setQuote(null);
-                setError('');
-              }}
-            >
-              <option value="card_online">Картой на телефоне · ЮKassa</option>
-              <option value="cash">Наличными</option>
-            </select>
-          </label>
-          {!free && (
-            <p role="alert" className="kiosk-error">
-              Выберите непрерывный свободный промежуток.
-            </p>
-          )}
-          {currentQuote && (
-            <p className="kiosk-price">
-              К оплате: {officeMoney(currentQuote.total_amount_minor)}
-              <span className="kiosk-muted kiosk-small">
-                Бесплатные минуты: {currentQuote.writeoff_min}
-              </span>
-            </p>
-          )}
-          <button
-            className="btn btn-primary"
-            disabled={!valid || busy || !!retry}
-            onClick={() => void submit()}
-          >
-            {busy
-              ? 'Подождите…'
-              : currentQuote
-                ? paymentMethod === 'card_online' &&
-                  currentQuote.total_amount_minor > 0
-                  ? 'Перейти к оплате'
-                  : 'Подтвердить бронирование'
-                : 'Рассчитать стоимость'}
-          </button>
-        </div>
-      )}
       {context && context.mode !== 'pass' && (
         <p role="alert" className="kiosk-error">
           Приём бронирований выключен администратором.
@@ -858,6 +942,9 @@ export default function KioskPage() {
     },
     [screen, touch],
   );
+  useEffect(() => {
+    window.scrollTo(0, 0);
+  }, [screen]);
   useEffect(() => {
     try {
       setDeviceToken(localStorage.getItem(DEVICE_KEY) || '');
@@ -1001,13 +1088,18 @@ export default function KioskPage() {
   )?.end_minute;
   return (
     <main
-      className="kiosk"
+      className={`kiosk kiosk-screen-${screen}`}
       onPointerDownCapture={touch}
       onKeyDownCapture={touch}
     >
       <header className="kiosk-header">
         <div>
-          <SiteBrand config={config} variant="dark" size="sm" />
+          <SiteBrand
+            config={config}
+            variant="dark"
+            size="sm"
+            className="kiosk-brand"
+          />
           <p className="kiosk-room-title">
             {status?.room.title || 'Планшет переговорной'}
           </p>
@@ -1038,7 +1130,7 @@ export default function KioskPage() {
                 </div>
               </div>
             )}
-            {error && (
+            {error && (screen === 'status' || screen === 'booking') && (
               <div className="kiosk-error" role="alert">
                 <WifiOff size={20} />
                 <span>
@@ -1078,13 +1170,7 @@ export default function KioskPage() {
                     )}
                     <button
                       className="btn btn-primary"
-                      disabled={
-                        !connected ||
-                        status?.date !== today ||
-                        !status?.slots.some(
-                          (s) => s.state === 'free' && s.start_minute > minute,
-                        )
-                      }
+                      disabled={!connected || status?.date !== today}
                       onClick={() => open('login')}
                     >
                       Забронировать
@@ -1168,33 +1254,31 @@ export default function KioskPage() {
             {screen === 'payment' && payment && (
               <Payment payment={payment} onExit={finish} />
             )}
-            {screen !== 'status' && screen !== 'payment' && (
-              <p
-                className={`kiosk-idle ${remaining <= 15 ? 'is-warning' : ''}`}
-                role={remaining <= 15 ? 'status' : undefined}
-              >
-                {remaining <= 15
-                  ? `Аккаунт выйдет через ${remaining} сек. Коснитесь экрана, чтобы продолжить.`
-                  : 'Автоматический выход после минуты бездействия'}
+            {screen !== 'status' && screen !== 'payment' && remaining <= 15 && (
+              <p className="kiosk-idle">
+                <span role="status">Сессия скоро завершится.</span>{' '}
+                <span aria-hidden="true">{remaining} сек.</span>
               </p>
             )}
           </>
         )}
       </div>
-      <footer className="kiosk-footer">
-        <span>
-          {connected
-            ? 'Расписание обновляется автоматически'
-            : 'Pass · Переговорные'}
-        </span>
-        <button
-          aria-label="Настройки планшета"
-          title="Настройки планшета"
-          onClick={() => open('admin')}
-        >
-          <Settings size={22} />
-        </button>
-      </footer>
+      {screen === 'status' && (
+        <footer className="kiosk-footer">
+          <span>
+            {connected
+              ? 'Расписание обновляется автоматически'
+              : 'Pass · Переговорные'}
+          </span>
+          <button
+            aria-label="Настройки планшета"
+            title="Настройки планшета"
+            onClick={() => open('admin')}
+          >
+            <Settings size={22} />
+          </button>
+        </footer>
+      )}
     </main>
   );
 }

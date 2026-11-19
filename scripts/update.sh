@@ -61,14 +61,16 @@ if [[ ! -f .env ]]; then
   exit 1
 fi
 
-echo "==> Сборка и принудительный перезапуск контейнеров"
+echo "==> Последовательная сборка образов"
 if [[ "$NO_CACHE" == "1" ]]; then
   echo "    Режим: без Docker cache (NO_CACHE=1)"
-  $COMPOSE build --no-cache
-  $COMPOSE up -d --force-recreate --remove-orphans --wait --wait-timeout 180
+  $COMPOSE --parallel 1 build --no-cache
 else
-  $COMPOSE up -d --build --force-recreate --remove-orphans --wait --wait-timeout 180
+  $COMPOSE --parallel 1 build
 fi
+
+echo "==> Применение обновления и проверка здоровья контейнеров"
+$COMPOSE up -d --no-build --remove-orphans --wait --wait-timeout 180
 
 echo "==> Очистка старых образов"
 docker image prune -f >/dev/null 2>&1 || true
