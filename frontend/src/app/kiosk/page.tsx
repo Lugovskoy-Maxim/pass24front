@@ -1121,6 +1121,7 @@ function Booking({
   const [start, setStart] = useState(-1);
   const [end, setEnd] = useState(-1);
   const [useHours, setUseHours] = useState(false);
+  const [chosenMinutes, setChosenMinutes] = useState<number | null>(null);
   const [preferredPayment, setPaymentMethod] = useState('qr_code');
   const qrPaymentAvailable = context?.onlinePayment === 'configured';
   const paymentMethod = qrPaymentAvailable ? preferredPayment : 'cash';
@@ -1167,6 +1168,7 @@ function Booking({
     setEnd(-1);
     setQuote(null);
     setUseHours(false);
+    setChosenMinutes(null);
     setError('');
     if (!officeId) {
       setLoading(false);
@@ -1272,19 +1274,21 @@ function Booking({
   const hoursAllowed =
     context?.canSpendHours &&
     (!room?.office_service || room.office_service.mode === 'quota');
+  const maxWriteoff =
+    Math.floor(
+      Math.min(context?.availableMinutes || 0, Math.max(0, end - start)) / step,
+    ) * step;
+  const writeoffMinutes =
+    useHours && hoursAllowed
+      ? Math.min(chosenMinutes ?? maxWriteoff, maxWriteoff)
+      : 0;
   const draft: BookingDraft = {
     officeId,
     roomId: status.room.id,
     date,
     startMinute: start,
     endMinute: end,
-    writeoffMinutes:
-      useHours && hoursAllowed
-        ? Math.floor(
-            Math.min(context?.availableMinutes || 0, Math.max(0, end - start)) /
-              step,
-          ) * step
-        : 0,
+    writeoffMinutes,
     paymentMethod,
     comment: '',
   };
@@ -1576,6 +1580,28 @@ function Booking({
                   {durationLabel(context.availableMinutes)}
                 </label>
               )}
+              {useHours && hoursAllowed && maxWriteoff > 0 && (
+                <label>
+                  Сколько бесплатных минут использовать
+                  <select
+                    className="input"
+                    value={writeoffMinutes}
+                    disabled={busy || !!retry}
+                    onChange={(event) =>
+                      setChosenMinutes(Number(event.target.value))
+                    }
+                  >
+                    {Array.from(
+                      { length: maxWriteoff / step },
+                      (_, index) => (index + 1) * step,
+                    ).map((minutes) => (
+                      <option key={minutes} value={minutes}>
+                        {durationLabel(minutes)}
+                      </option>
+                    ))}
+                  </select>
+                </label>
+              )}
             </>
           )}
         </div>
@@ -1623,6 +1649,13 @@ function Booking({
                   )}
                   <option value="cash">Наличными</option>
                 </select>
+                {paymentMethod === 'cash' && (
+                  <p className="kiosk-muted">
+                    При оплате наличными обязательно подтверждение у
+                    администратора бизнес-центра. До подтверждения оплаты время
+                    остаётся доступным.
+                  </p>
+                )}
                 {!qrPaymentAvailable && (
                   <p className="kiosk-muted">
                     Оплата по QR-коду временно недоступна.
@@ -1660,7 +1693,9 @@ function Booking({
                     <dt>
                       {currentQuote.total_amount_minor === 0
                         ? 'Оплата не требуется'
-                        : 'К оплате'}
+                        : paymentMethod === 'cash'
+                          ? 'К оплате наличными'
+                          : 'К оплате'}
                     </dt>
                     <dd>{officeMoney(currentQuote.total_amount_minor)}</dd>
                   </div>
@@ -2317,16 +2352,23 @@ export default function KioskPage() {
               <div className="kiosk-receipt" role="status">
                 <CheckCircle2 size={30} />
                 <div>
-                  <strong>Бронирование создано · {receipt.statusLabel}</strong>
+                  <strong>
+                    {receipt.cashDue
+                      ? 'Заявка принята'
+                      : 'Бронирование создано'}{' '}
+                    · {receipt.statusLabel}
+                  </strong>
                   {receipt.bookingNumber && (
                     <p className="kiosk-booking-reference">
-                      Бронь {receipt.bookingNumber}
+                      {receipt.cashDue ? 'Заявка' : 'Бронь'}{' '}
+                      {receipt.bookingNumber}
                     </p>
                   )}
                   {receipt.cashDue && (
                     <p>
-                      Оплатите наличными у администратора. Он отметит получение
-                      оплаты.
+                      При оплате наличными обязательно подтверждение у
+                      администратора бизнес-центра. До подтверждения оплаты
+                      время остаётся доступным.
                     </p>
                   )}
                   <p>Вы вышли из аккаунта.</p>

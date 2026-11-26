@@ -10,6 +10,7 @@ import { MstyleV2Config } from '../integrations/mstyle-v2/mstyle-v2.config';
 import { Ids } from '../integrations/mstyle-v2/mstyle-v2.ids';
 import {
   blocksAvailability,
+  isPendingKioskCash,
   bookingNeedsAction,
   BOOKING_STATUSES,
   checkVersion,
@@ -610,7 +611,8 @@ export class OperationsBookings {
             { session },
           );
         }
-        const deferredHours = payment.status === 'hold';
+        const deferredHours =
+          payment.status === 'hold' || isPendingKioskCash(row);
         if (quote.writeoff_min && !deferredHours) {
           await this.hours.change(
             party.resource_profile_id!,
@@ -747,6 +749,44 @@ export class OperationsBookings {
               'Онлайн-оплату подтверждает платёжный провайдер.',
             );
           if (row.payment_status !== 'paid') {
+            if (isPendingKioskCash(row)) {
+              if (
+                row.segments.some(
+                  (slot: Segment) =>
+                    parseMoscow(slot.date + ' 00:00:00') +
+                      slot.start_minute * 60_000 <=
+                    Date.now(),
+                )
+              )
+                fail(
+                  'slot_in_past',
+                  'Выбранное время уже началось. Измените заявку перед приёмом оплаты.',
+                  409,
+                );
+              await this.assertAvailable(
+                row.room_id,
+                row.segments,
+                id,
+                session,
+              );
+              const remainingHours =
+                row.writeoff_min > 0
+                  ? row.writeoff_min -
+                    (await this.hours.refundable(row, session))
+                  : 0;
+              if (remainingHours > 0) {
+                await this.hours.change(
+                  row.resource_profile_id,
+                  -remainingHours,
+                  actor,
+                  'Списание при подтверждении оплаты наличными',
+                  id,
+                  session,
+                );
+                row.hours_debited_min =
+                  (row.hours_debited_min || 0) + remainingHours;
+              }
+            }
             await this.store.collection('payments').insertOne(
               {
                 id: await this.store.nextId('payments', session),
@@ -774,6 +814,9 @@ export class OperationsBookings {
               {
                 $set: {
                   payment_status: 'paid',
+                  ...(isPendingKioskCash(row) && {
+                    hours_debited_min: row.hours_debited_min,
+                  }),
                   paid_at: sqlNow(),
                   expires_at: null,
                   status: conflict

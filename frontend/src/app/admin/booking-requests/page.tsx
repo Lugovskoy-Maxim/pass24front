@@ -915,6 +915,14 @@ export default function BookingRequestsPage() {
                       )[action]
                     }
                   </h3>
+                  {action === 'mark-paid' &&
+                    b.source === 'kiosk' &&
+                    b.payment_method === 'cash' && (
+                      <p className="text-sm text-[var(--muted)]">
+                        Заявка с киоска не удерживает время. При подтверждении
+                        оплаты Pass заново проверит доступность интервала.
+                      </p>
+                    )}
                   {action === 'issue-invoice' &&
                     b.guest &&
                     b.requisites_complete === false && (

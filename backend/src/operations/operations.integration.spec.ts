@@ -1586,6 +1586,72 @@ describe('Operations with real replica-set transactions', () => {
     });
   });
 
+  it('keeps kiosk cash requests non-blocking until an admin records payment', async () => {
+    const first = await bookings.create(
+      resident,
+      input,
+      'thin-kiosk-cash-first',
+      undefined,
+      'kiosk',
+    );
+    const second = await bookings.create(
+      resident,
+      input,
+      'thin-kiosk-cash-second',
+      undefined,
+      'kiosk',
+    );
+    const { date, start_minute } = input.segments[0];
+    const slot = async () =>
+      (await bookings.availability(input.room_id, date)).slots.find(
+        (item) => item.start_minute === start_minute,
+      );
+    await expect(slot()).resolves.toMatchObject({ state: 'free' });
+    expect(
+      await store.collection('hours_ledger').countDocuments({
+        booking_id: { $in: [first.booking.id, second.booking.id] },
+      }),
+    ).toBe(0);
+    await bookings.action(
+      admin,
+      first.booking.id,
+      'mark-paid',
+      { revision: first.booking.revision },
+      'thin-kiosk-cash-paid',
+    );
+    await expect(slot()).resolves.toMatchObject({ state: 'paid' });
+    expect(first.booking).toMatchObject({
+      writeoff_min: 30,
+      total_amount_minor: 100000,
+    });
+    await expect(
+      store.collection('payments').findOne({ booking_id: first.booking.id }),
+    ).resolves.toMatchObject({
+      amount_minor: 100000,
+      payment_method: 'cash',
+      status: 'paid',
+    });
+    expect(
+      await store
+        .collection('hours_ledger')
+        .countDocuments({ booking_id: first.booking.id }),
+    ).toBe(1);
+    await expect(
+      bookings.action(
+        admin,
+        second.booking.id,
+        'mark-paid',
+        { revision: second.booking.revision },
+        'thin-kiosk-cash-conflict',
+      ),
+    ).rejects.toMatchObject({ status: 409 });
+    expect(
+      await store
+        .collection('payments')
+        .countDocuments({ booking_id: second.booking.id }),
+    ).toBe(0);
+  });
+
   it('starts kiosk SBP checkout in the worker and reports only verified payment status', async () => {
     const draft = { ...input, payment_method: 'qr_code' };
     const config = jest.spyOn(payments, 'paymentConfig').mockResolvedValue({
