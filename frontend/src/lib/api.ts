@@ -21,7 +21,8 @@ export {
   isNetworkError,
 } from './api-errors';
 
-const API_URL = process.env.NEXT_PUBLIC_API_URL || 'http://127.0.0.1:4000/api';
+export const API_URL =
+  process.env.NEXT_PUBLIC_API_URL || 'http://127.0.0.1:4000/api';
 const REQUEST_TIMEOUT_MS = 30_000;
 
 /** Системные роли; сотрудники компании часто имеют custom key (tenant_employee). */
@@ -326,7 +327,9 @@ export async function request<T>(
 ): Promise<T> {
   const token = session ? session.token : getToken();
   const headers: Record<string, string> = {
-    'Content-Type': 'application/json',
+    ...(!(options.body instanceof FormData) && {
+      'Content-Type': 'application/json',
+    }),
     ...(options.headers as Record<string, string>),
   };
   if (token) headers.Authorization = `Bearer ${token}`;

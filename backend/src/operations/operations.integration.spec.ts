@@ -4,10 +4,13 @@ import { ConfigService } from '@nestjs/config';
 import { Test } from '@nestjs/testing';
 import request from 'supertest';
 import { JwtService } from '@nestjs/jwt';
+import { AuthGuard } from '@nestjs/passport';
 import { createHash } from 'node:crypto';
+import { AccessConfigService } from '../access/access-config.service';
 import { AuthService } from '../auth/auth.service';
 import { JwtStrategy } from '../auth/jwt.strategy';
 import { KioskController } from '../site-source/kiosk.controller';
+import { KioskStandbyController } from '../site-source/kiosk-standby.controller';
 import { OperationsStore } from './operations.store';
 import { OperationsIdentity } from './operations.identity';
 import { OperationsHours } from './operations.hours';
@@ -1669,6 +1672,68 @@ describe('Operations with real replica-set transactions', () => {
       await app.close();
     }
   });
+  it('replaces the standby video for admins and serves it with byte ranges', async () => {
+    const module = await Test.createTestingModule({
+      controllers: [KioskStandbyController],
+      providers: [
+        { provide: OperationsStore, useValue: store },
+        { provide: AccessConfigService, useValue: {} },
+      ],
+    })
+      .overrideGuard(AuthGuard('jwt'))
+      .useValue({
+        canActivate: (context: any) => {
+          const req = context.switchToHttp().getRequest();
+          req.user = {
+            role: 'admin',
+            permissions:
+              req.headers.authorization === 'Bearer settings'
+                ? ['admin.panel', 'admin.settings']
+                : ['admin.panel'],
+          };
+          return true;
+        },
+      })
+      .compile();
+    const app = module.createNestApplication();
+    await app.init();
+    const http = request(app.getHttpServer());
+    const path = '/kiosk/standby';
+    const file = Buffer.from(
+      '00000018667479706d703432000000006d70343269736f6d',
+      'hex',
+    );
+    try {
+      await http.get(path).expect(200, { version: null });
+      await http.put(path).attach('video', file, 'video.mp4').expect(403);
+      await http
+        .put(path)
+        .set('Authorization', 'Bearer settings')
+        .attach('video', Buffer.from('not a video'), 'video.mp4')
+        .expect(400);
+      const uploaded = await http
+        .put(path)
+        .set('Authorization', 'Bearer settings')
+        .attach('video', file, 'video.mp4')
+        .expect(200);
+      const version = uploaded.body.version as string;
+      await http.get(path).expect(200, { version });
+      await http
+        .get(`${path}/video/${version}`)
+        .set('Range', 'bytes=0-7')
+        .expect(206)
+        .expect('Content-Type', 'video/mp4')
+        .expect('Content-Range', `bytes 0-7/${file.length}`);
+      await http
+        .delete(path)
+        .set('Authorization', 'Bearer settings')
+        .expect(200, { version: null });
+      await http.get(`${path}/video/${version}`).expect(404);
+    } finally {
+      await app.close();
+    }
+  });
+
   it('exchanges an approved kiosk QR once for a room-scoped token', async () => {
     const deviceToken = 'a'.repeat(64);
     const deviceHeader = 'Bearer ' + deviceToken;

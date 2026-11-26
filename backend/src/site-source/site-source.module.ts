@@ -14,6 +14,7 @@ import { SiteSourceService } from './site-source.service';
 import { ServiceRequestsController } from './service-requests.controller';
 import { ResidentBookingsController } from './resident-bookings.controller';
 import { KioskController } from './kiosk.controller';
+import { KioskStandbyController } from './kiosk-standby.controller';
 
 @Module({
   imports: [
@@ -32,6 +33,7 @@ import { KioskController } from './kiosk.controller';
     ServiceRequestsController,
     ResidentBookingsController,
     KioskController,
+    KioskStandbyController,
   ],
   exports: [SiteSourceService],
 })

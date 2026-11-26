@@ -1,5 +1,7 @@
 import { createHash } from 'node:crypto';
 import { KioskController } from './kiosk.controller';
+import { ResidentBookingsController } from './resident-bookings.controller';
+import type { OfficeServicesService } from '../office-services/office-services.service';
 import { OperationsPayments } from '../operations/operations.payments';
 import { AuthService } from '../auth/auth.service';
 import { JwtService } from '@nestjs/jwt';
@@ -152,6 +154,55 @@ describe('meeting room kiosk access', () => {
     expect(JSON.stringify(result)).not.toMatch(
       /private|secret|price|busy_ranges/,
     );
+  });
+
+  it('returns tomorrow in Moscow time for the same bound room', async () => {
+    devices.findOne.mockResolvedValue({ roomId: 301 });
+    const tomorrow = new Date(Date.now() + 86_400_000).toLocaleDateString(
+      'sv-SE',
+      { timeZone: 'Europe/Moscow' },
+    );
+    await expect(
+      controller.status(`Bearer ${token}`, 'tomorrow'),
+    ).resolves.toMatchObject({ date: tomorrow });
+    expect(bookings.availability).toHaveBeenCalledWith(301, tomorrow);
+  });
+
+  it('rejects kiosk quotes and booking requests shorter than an hour', async () => {
+    const bookingIdentity = {
+      residentActor: jest.fn().mockResolvedValue({ kind: 'resident' }),
+      profileIds: jest.fn().mockResolvedValue(['profile']),
+      profile: jest
+        .fn()
+        .mockResolvedValue({ profile: { profileId: 'profile' }, resource: {} }),
+    };
+    const quote = jest.fn().mockResolvedValue({ total_amount_minor: 0 });
+    const bookingsApi = new ResidentBookingsController(
+      bookingIdentity as unknown as OperationsIdentity,
+      { quote } as unknown as OperationsBookings,
+      {} as OperationsPayments,
+      {
+        officeForProfile: jest.fn().mockResolvedValue({ _id: 'office' }),
+      } as unknown as OfficeServicesService,
+    );
+    const req = { user: { permissions: ['requests.create'] } };
+    const draft = {
+      roomId: 301,
+      officeId: 'office',
+      date: '2026-11-27',
+      startMinute: 600,
+      endMinute: 630,
+    };
+    await expect(bookingsApi.quote(req, draft, '1')).rejects.toMatchObject({
+      status: 422,
+    });
+    await expect(
+      bookingsApi.createKiosk(req, draft, 'key'),
+    ).rejects.toMatchObject({ status: 422 });
+    expect(quote).not.toHaveBeenCalled();
+    await expect(
+      bookingsApi.quote(req, { ...draft, endMinute: 660 }, '1'),
+    ).resolves.toEqual({ total_amount_minor: 0 });
   });
 
   it('requires administrator access and rejects rooms outside the scoped catalog', async () => {

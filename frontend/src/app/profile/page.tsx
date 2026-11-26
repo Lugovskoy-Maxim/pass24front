@@ -160,6 +160,12 @@ function formatCountdown(seconds: number): string {
 
 export default function ProfilePage() {
   const { user, refreshUser } = useAuth();
+  const profileReady = !!user;
+  useEffect(() => {
+    if (profileReady && window.location.hash === '#booking-contact') {
+      document.getElementById('booking-contact')?.scrollIntoView();
+    }
+  }, [profileReady]);
   const { toast } = useToast();
   const config = useConfig();
   const ph = getUiLabels(config).placeholders;
@@ -906,6 +912,7 @@ export default function ProfilePage() {
           </form>
         )}
 
+        <div id="booking-contact" />
         {needsEmailVerification && (
           <div className="card p-5 mb-6 border theme-alert-subtle space-y-4">
             <div className="flex items-start gap-3">

@@ -429,6 +429,10 @@ export class OperationsIdentity {
       legal_form: legalForm,
     };
   }
+  hasVerifiedBookingContact(profileId: string) {
+    return this.privateData.hasVerifiedBookingContact(profileId);
+  }
+
   async party(actor: OperationsActor, input: any) {
     if (actor.kind === 'guest' || input.party_type === 'guest_party') {
       const id =
