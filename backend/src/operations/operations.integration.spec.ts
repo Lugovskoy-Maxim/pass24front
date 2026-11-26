@@ -1620,6 +1620,17 @@ describe('Operations with real replica-set transactions', () => {
       'thin-kiosk-cash-paid',
     );
     await expect(slot()).resolves.toMatchObject({ state: 'paid' });
+    expect(first.booking).toMatchObject({
+      writeoff_min: 30,
+      total_amount_minor: 100000,
+    });
+    await expect(
+      store.collection('payments').findOne({ booking_id: first.booking.id }),
+    ).resolves.toMatchObject({
+      amount_minor: 100000,
+      payment_method: 'cash',
+      status: 'paid',
+    });
     expect(
       await store
         .collection('hours_ledger')
