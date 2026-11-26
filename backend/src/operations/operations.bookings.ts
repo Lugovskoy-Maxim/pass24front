@@ -147,7 +147,11 @@ export class OperationsBookings {
       statuses: BOOKING_STATUSES,
     };
   }
-  async present(row: any, session?: ClientSession) {
+  async present(
+    row: any,
+    session?: ClientSession,
+    requester?: ReturnType<OperationsIdentity['contact']>,
+  ) {
     const publicRow = { ...row };
     delete publicRow._id;
     delete publicRow.payment_token;
@@ -155,7 +159,7 @@ export class OperationsBookings {
       ...publicRow,
       needs_action: bookingNeedsAction(row),
       status_label: BOOKING_STATUSES[row.status] || row.status,
-      requester: await this.identities.requester(row, session),
+      requester: requester ?? (await this.identities.requester(row, session)),
       guest: row.pass_party_type === 'guest_party',
     };
   }
@@ -645,7 +649,8 @@ export class OperationsBookings {
           session,
         );
         return {
-          booking: await this.present(row, session),
+          // A newly issued resident snapshot can be newer than this transaction's read view.
+          booking: await this.present(row, session, requester),
           payment: {
             flow:
               row.status === 'hold'

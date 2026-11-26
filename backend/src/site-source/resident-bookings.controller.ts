@@ -131,9 +131,13 @@ export class ResidentBookingsController {
       room_id: roomId,
       office_id: body.officeId,
       profile_id: profile.profileId,
-      payment_method: ['cash', 'invoice', 'balance', 'card_online'].includes(
-        body.paymentMethod,
-      )
+      payment_method: [
+        'cash',
+        'invoice',
+        'balance',
+        'card_online',
+        'qr_code',
+      ].includes(body.paymentMethod)
         ? body.paymentMethod
         : 'cash',
       writeoff_min: integer(body.writeoffMinutes || 0, 'writeoffMinutes'),
@@ -166,7 +170,10 @@ export class ResidentBookingsController {
       kiosk === '1' || req.user.kioskRoomId !== undefined,
     );
     const quote = await this.bookings.quote(actor, input);
-    if (input.payment_method === 'card_online' && quote.total_amount_minor > 0)
+    if (
+      ['card_online', 'qr_code'].includes(input.payment_method) &&
+      quote.total_amount_minor > 0
+    )
       await this.payments.validateKioskPayment();
     return quote;
   }

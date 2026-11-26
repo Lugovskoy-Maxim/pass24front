@@ -10,7 +10,7 @@ import {
   ChevronRight,
   CheckCircle2,
   Clock3,
-  CreditCard,
+  Hand,
   KeyRound,
   LogOut,
   Mail,
@@ -38,6 +38,7 @@ import {
 } from '@/lib/kiosk';
 import { BookingDraft, BookingQuote, officeMoney } from '@/lib/office-services';
 import { SiteBrand } from '@/components/SiteBrand';
+import { useTheme } from '@/components/ThemeProvider';
 import { MSTYLE_BRAND_DEFAULTS, resolveSiteIcon } from '@/lib/brand-defaults';
 import { useConfig } from '@/hooks/useConfig';
 import './kiosk.css';
@@ -66,6 +67,11 @@ function shiftBookingDate(date: string, days: number) {
 }
 
 const weekdayLabels = ['Пн', 'Вт', 'Ср', 'Чт', 'Пт', 'Сб', 'Вс'];
+const scheduleDayLabel = new Intl.DateTimeFormat('ru-RU', {
+  day: 'numeric',
+  month: 'short',
+  timeZone: 'UTC',
+});
 const calendarDateLabel = new Intl.DateTimeFormat('ru-RU', {
   dateStyle: 'full',
   timeZone: 'UTC',
@@ -220,6 +226,16 @@ function groupSchedule(slots: KioskSlot[] = []) {
     }
     return rows;
   }, []);
+}
+
+function firstBookableSlot(slots: KioskSlot[], afterMinute = -1) {
+  return slots.find((slot) => {
+    if (slot.start_minute <= afterMinute || slot.state !== 'free') return false;
+    const end = slots.find(
+      (item) => item.end_minute >= slot.start_minute + MIN_BOOKING_MINUTES,
+    );
+    return !!end && kioskRangeFree(slots, slot.start_minute, end.end_minute);
+  });
 }
 const LOGIN_METHODS = [
   {
@@ -816,9 +832,9 @@ function Booking({
   const [start, setStart] = useState(-1);
   const [end, setEnd] = useState(-1);
   const [useHours, setUseHours] = useState(false);
-  const [preferredPayment, setPaymentMethod] = useState('card_online');
-  const cardAvailable = context?.onlinePayment === 'configured';
-  const paymentMethod = cardAvailable ? preferredPayment : 'cash';
+  const [preferredPayment, setPaymentMethod] = useState('qr_code');
+  const qrPaymentAvailable = context?.onlinePayment === 'configured';
+  const paymentMethod = qrPaymentAvailable ? preferredPayment : 'cash';
   const [quote, setQuote] = useState<{
     value: BookingQuote;
     key: string;
@@ -1026,18 +1042,6 @@ function Booking({
         selectable: canStart || canExtend || slot.start_minute === start,
       };
     });
-  const slotGroups = [
-    { label: 'Утро', from: 0, to: 720 },
-    { label: 'День', from: 720, to: 1080 },
-    { label: 'Вечер', from: 1080, to: 1440 },
-  ]
-    .map(({ label, from, to }) => ({
-      label,
-      slots: upcomingSlots.filter(
-        (slot) => slot.start_minute >= from && slot.start_minute < to,
-      ),
-    }))
-    .filter((group) => group.slots.length);
   const hasAvailableSlots = upcomingSlots.some((slot) => slot.selectable);
   const free =
     kioskRangeFree(slots, start, end) &&
@@ -1224,53 +1228,46 @@ function Booking({
                   автоматически.
                 </p>
               )}
-              {slotGroups.map(({ label, slots: group }) => (
+              {upcomingSlots.length > 0 && (
                 <div
-                  key={label}
-                  className="kiosk-slot-group"
+                  className="kiosk-slots"
                   role="group"
-                  aria-label={label}
+                  aria-label="Интервалы бронирования"
                 >
-                  {slotGroups.length > 1 && <h3>{label}</h3>}
-                  <div className="kiosk-slots">
-                    {group.map((s) => {
-                      const selected =
-                        s.start_minute >= start && s.end_minute <= end;
-                      return (
-                        <button
-                          key={s.start_minute}
-                          className={`btn ${selected ? 'btn-primary' : 'btn-secondary'}`}
-                          disabled={
-                            !s.selectable ||
-                            busy ||
-                            !!retry ||
-                            !connected ||
-                            slotRefreshFailed
+                  {upcomingSlots.map((s) => {
+                    const selected =
+                      s.start_minute >= start && s.end_minute <= end;
+                    return (
+                      <button
+                        key={s.start_minute}
+                        className={`btn ${selected ? 'btn-primary' : 'btn-secondary'}`}
+                        disabled={
+                          !s.selectable ||
+                          busy ||
+                          !!retry ||
+                          !connected ||
+                          slotRefreshFailed
+                        }
+                        aria-pressed={selected}
+                        aria-label={`${kioskTime(s.start_minute)}–${kioskTime(s.end_minute)}${s.selectable ? '' : ', недоступно'}`}
+                        onClick={() => {
+                          if (s.start_minute === start) {
+                            setStart(-1);
+                            setEnd(-1);
+                          } else if (s.canExtend) {
+                            setEnd(s.end_minute);
+                          } else if (s.canStart && s.minimumEnd !== undefined) {
+                            setStart(s.start_minute);
+                            setEnd(s.minimumEnd);
                           }
-                          aria-pressed={selected}
-                          aria-label={`${kioskTime(s.start_minute)}–${kioskTime(s.end_minute)}${s.selectable ? '' : ', недоступно'}`}
-                          onClick={() => {
-                            if (s.start_minute === start) {
-                              setStart(-1);
-                              setEnd(-1);
-                            } else if (s.canExtend) {
-                              setEnd(s.end_minute);
-                            } else if (
-                              s.canStart &&
-                              s.minimumEnd !== undefined
-                            ) {
-                              setStart(s.start_minute);
-                              setEnd(s.minimumEnd);
-                            }
-                          }}
-                        >
-                          {kioskTime(s.start_minute)}–{kioskTime(s.end_minute)}
-                        </button>
-                      );
-                    })}
-                  </div>
+                        }}
+                      >
+                        {kioskTime(s.start_minute)}–{kioskTime(s.end_minute)}
+                      </button>
+                    );
+                  })}
                 </div>
-              ))}
+              )}
               {!hasAvailableSlots && (
                 <p>На выбранный день свободных интервалов нет.</p>
               )}
@@ -1333,16 +1330,14 @@ function Booking({
                     setQuote(null);
                   }}
                 >
-                  {cardAvailable && (
-                    <option value="card_online">
-                      Картой на телефоне · ЮKassa
-                    </option>
+                  {qrPaymentAvailable && (
+                    <option value="qr_code">По QR-коду (СБП)</option>
                   )}
                   <option value="cash">Наличными</option>
                 </select>
-                {!cardAvailable && (
+                {!qrPaymentAvailable && (
                   <p className="kiosk-muted">
-                    Оплата картой временно недоступна.
+                    Оплата по QR-коду временно недоступна.
                   </p>
                 )}
               </div>
@@ -1399,7 +1394,7 @@ function Booking({
                 : retry
                   ? 'Проверить бронирование'
                   : currentQuote
-                    ? paymentMethod === 'card_online' &&
+                    ? paymentMethod === 'qr_code' &&
                       currentQuote.total_amount_minor > 0
                       ? 'Перейти к оплате'
                       : 'Подтвердить бронирование'
@@ -1497,7 +1492,7 @@ function Payment({
   return (
     <section className="kiosk-panel kiosk-checkout kiosk-stack kiosk-scan-panel">
       {pending ? (
-        <CreditCard size={30} aria-hidden="true" />
+        <QrCode size={30} aria-hidden="true" />
       ) : status.state === 'paid' ? (
         <CheckCircle2
           className="kiosk-payment-success"
@@ -1509,7 +1504,7 @@ function Payment({
       )}
       <h1 tabIndex={-1}>
         {pending
-          ? 'Оплата бронирования'
+          ? 'Оплата по QR-коду'
           : status.state === 'paid'
             ? 'Оплата получена'
             : 'Платёж не состоялся'}
@@ -1523,12 +1518,15 @@ function Payment({
             <QRCode
               value={checkout}
               size={224}
-              title="QR-код для оплаты в ЮKassa"
+              title="QR-код для оплаты через СБП"
             />
           </div>
           <div className="kiosk-scan-instructions">
             <p className="kiosk-price">{officeMoney(payment.amount)}</p>
-            <p>Отсканируйте QR камерой телефона и оплатите бронь в ЮKassa.</p>
+            <p>
+              Отсканируйте QR-код с экрана планшета и подтвердите оплату через
+              СБП.
+            </p>
             {paymentState}
           </div>
         </div>
@@ -1556,6 +1554,7 @@ function KioskStandby({
   const [videoVersion, setVideoVersion] = useState<string | null>(null);
   const [failedVersion, setFailedVersion] = useState<string>();
   const dialog = useRef<HTMLDialogElement>(null);
+  const touchStart = useRef<{ x: number; y: number } | undefined>(undefined);
   useEffect(() => {
     if (visible) return;
     let timer: number;
@@ -1633,9 +1632,34 @@ function KioskStandby({
           aria-hidden="true"
         />
       )}
-      <button type="button" className="kiosk-standby-wake" onClick={wake}>
-        <span>Коснитесь экрана</span>
-        <span>Чтобы посмотреть расписание и забронировать переговорную</span>
+      <button
+        type="button"
+        className="kiosk-standby-wake"
+        onClick={wake}
+        onPointerDown={(event) => {
+          if (event.pointerType !== 'mouse' && event.isPrimary) {
+            touchStart.current = { x: event.clientX, y: event.clientY };
+          }
+        }}
+        onPointerCancel={() => {
+          touchStart.current = undefined;
+        }}
+        onPointerUp={(event) => {
+          const start = touchStart.current;
+          touchStart.current = undefined;
+          if (
+            start &&
+            Math.hypot(event.clientX - start.x, event.clientY - start.y) >= 32
+          )
+            wake();
+        }}
+      >
+        <span className="kiosk-standby-cta">
+          <span className="kiosk-standby-gesture" aria-hidden="true">
+            <Hand />
+          </span>
+          <span>Коснитесь или смахните</span>
+        </span>
       </button>
       <div className="kiosk-standby-brand" aria-hidden="true">
         {/* eslint-disable-next-line @next/next/no-img-element */}
@@ -1647,10 +1671,12 @@ function KioskStandby({
 
 export default function KioskPage() {
   const config = useConfig();
-  const logoSrc = resolveSiteIcon(config, 'dark');
+  const { theme } = useTheme();
+  const logoSrc = resolveSiteIcon(config, theme);
   const logoIncludesName =
     config?.brandMarkType !== 'text' &&
-    logoSrc === MSTYLE_BRAND_DEFAULTS.siteIconDark;
+    (logoSrc === MSTYLE_BRAND_DEFAULTS.siteIconDark ||
+      logoSrc === MSTYLE_BRAND_DEFAULTS.siteIconLight);
   const [ready, setReady] = useState(false);
   const [deviceToken, setDeviceToken] = useState('');
   const [status, setStatus] = useState<KioskStatus | null>(null);
@@ -1716,7 +1742,7 @@ export default function KioskPage() {
     target?.focus({ preventScroll: true });
   }, [screen, settingUp]);
   useEffect(() => {
-    if (!scheduleTomorrow || !deviceToken || screen !== 'status') return;
+    if (!deviceToken || screen !== 'status') return;
     let active = true;
     void kioskApi.status(deviceToken, true).then(
       (value) => {
@@ -1732,7 +1758,7 @@ export default function KioskPage() {
     return () => {
       active = false;
     };
-  }, [scheduleTomorrow, deviceToken, screen, lastUpdate]);
+  }, [deviceToken, screen, lastUpdate]);
   useEffect(() => {
     try {
       setDeviceToken(localStorage.getItem(DEVICE_KEY) || '');
@@ -1900,27 +1926,35 @@ export default function KioskPage() {
     (s) => s.start_minute <= minute && s.end_minute > minute,
   );
   const liveSchedule = connected && status?.date === today;
-  const hasFutureSlotToday = status?.slots.some(
-    (slot) =>
-      slot.start_minute > minute &&
-      kioskRangeFree(
-        status.slots,
-        slot.start_minute,
-        status.slots.find(
-          (end) => end.end_minute >= slot.start_minute + MIN_BOOKING_MINUTES,
-        )?.end_minute ?? -1,
-      ),
-  );
-  const nextFree =
-    liveSchedule &&
-    todaySchedule.find((s) => s.state === 'free' && s.start_minute > minute);
+  const nextFree = liveSchedule
+    ? firstBookableSlot(status.slots, minute)
+    : undefined;
   const tomorrowDate = shiftBookingDate(today, 1);
-  const shownStatus = scheduleTomorrow
-    ? tomorrowStatus?.date === tomorrowDate &&
-      tomorrowStatus.room.id === status?.room.id
+  const currentTomorrowStatus =
+    tomorrowStatus?.date === tomorrowDate &&
+    tomorrowStatus.room.id === status?.room.id
       ? tomorrowStatus
-      : null
-    : status;
+      : null;
+  const shownStatus = scheduleTomorrow ? currentTomorrowStatus : status;
+  const dayOptions = [
+    {
+      label: 'Сегодня',
+      date: today,
+      status: liveSchedule ? status : null,
+      firstFree: nextFree,
+      tomorrow: false,
+    },
+    {
+      label: 'Завтра',
+      date: tomorrowDate,
+      status: tomorrowError ? null : currentTomorrowStatus,
+      firstFree:
+        !tomorrowError && currentTomorrowStatus
+          ? firstBookableSlot(currentTomorrowStatus.slots)
+          : undefined,
+      tomorrow: true,
+    },
+  ];
   const schedule = scheduleTomorrow
     ? groupSchedule(shownStatus?.slots)
     : todaySchedule;
@@ -1961,7 +1995,7 @@ export default function KioskPage() {
           <SiteBrand
             config={config}
             showName={!logoIncludesName}
-            variant="dark"
+            variant={theme}
             size="sm"
             className="kiosk-brand"
           />
@@ -2074,7 +2108,7 @@ export default function KioskPage() {
                         <strong>{kioskTime(nextFree.start_minute)}</strong>
                       </p>
                     )}
-                    {liveSchedule && !hasFutureSlotToday && (
+                    {liveSchedule && !nextFree && (
                       <p className="kiosk-muted">
                         На сегодня нет свободного интервала от 1 часа.
                       </p>
@@ -2102,20 +2136,41 @@ export default function KioskPage() {
                       role="group"
                       aria-label="День расписания"
                     >
-                      <button
-                        type="button"
-                        aria-pressed={!scheduleTomorrow}
-                        onClick={() => setScheduleTomorrow(false)}
-                      >
-                        Сегодня
-                      </button>
-                      <button
-                        type="button"
-                        aria-pressed={scheduleTomorrow}
-                        onClick={() => setScheduleTomorrow(true)}
-                      >
-                        Завтра
-                      </button>
+                      {dayOptions.map((day) => (
+                        <button
+                          key={day.label}
+                          type="button"
+                          aria-pressed={scheduleTomorrow === day.tomorrow}
+                          onClick={() => setScheduleTomorrow(day.tomorrow)}
+                        >
+                          <span className="kiosk-schedule-day-heading">
+                            {day.label}
+                            <span className="kiosk-schedule-day-date">
+                              {scheduleDayLabel.format(
+                                new Date(`${day.date}T00:00:00Z`),
+                              )}
+                            </span>
+                          </span>
+                          <span className="kiosk-schedule-day-detail">
+                            {day.status?.slots.length ? (
+                              <>
+                                <span
+                                  className={`kiosk-schedule-day-badge ${day.firstFree ? 'is-free' : 'is-busy'}`}
+                                >
+                                  {day.firstFree ? 'Свободна' : 'Занята'}
+                                </span>
+                                {day.firstFree
+                                  ? `С ${kioskTime(day.firstFree.start_minute)}`
+                                  : 'Нет интервала от 1 часа'}
+                              </>
+                            ) : day.status ? (
+                              'Нет рабочих часов'
+                            ) : (
+                              'Нет данных о времени'
+                            )}
+                          </span>
+                        </button>
+                      ))}
                     </div>
                     {scheduleTomorrow && tomorrowError && (
                       <p role="alert">{tomorrowError}</p>
@@ -2297,7 +2352,7 @@ export default function KioskPage() {
       )}
       {screen === 'status' && deviceToken && liveSchedule && !receipt && (
         <KioskStandby
-          logoSrc={logoSrc}
+          logoSrc={resolveSiteIcon(config, 'dark')}
           onWake={() =>
             window.requestAnimationFrame(() =>
               bookControl.current?.focus({ preventScroll: true }),
