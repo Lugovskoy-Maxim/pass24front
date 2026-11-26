@@ -35,10 +35,7 @@ export type KioskPaymentStatus = {
   preparation: 'expired' | 'contact_required' | 'retrying' | null;
 };
 export type KioskPaymentSetup =
-  | 'incomplete'
-  | 'capture_required'
-  | 'configured'
-  | 'unavailable';
+  'incomplete' | 'capture_required' | 'configured' | 'unavailable';
 export const kioskTime = (minute: number) =>
   `${String(Math.floor(minute / 60)).padStart(2, '0')}:${String(minute % 60).padStart(2, '0')}`;
 

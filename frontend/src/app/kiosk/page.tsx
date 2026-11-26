@@ -1654,21 +1654,17 @@ export default function KioskPage() {
       ref={kioskRoot}
       className={`kiosk kiosk-screen-${screen}`}
       onPointerDownCapture={(event) => {
-        if (
-          !(
-            event.target instanceof Element &&
-            event.target.closest('.kiosk-idle button')
-          )
-        )
+        if (!(
+          event.target instanceof Element &&
+          event.target.closest('.kiosk-idle button')
+        ))
           touch();
       }}
       onKeyDownCapture={(event) => {
-        if (
-          !(
-            event.target instanceof Element &&
-            event.target.closest('.kiosk-idle button')
-          )
-        )
+        if (!(
+          event.target instanceof Element &&
+          event.target.closest('.kiosk-idle button')
+        ))
           touch();
       }}
       onInputCapture={touch}
