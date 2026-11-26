@@ -10,6 +10,7 @@
   --kiosk-left: max(var(--kiosk-gutter), env(safe-area-inset-left, 0px));
   --kiosk-right: max(var(--kiosk-gutter), env(safe-area-inset-right, 0px));
   min-height: 100vh;
+  min-height: 100vh;
   min-height: 100dvh;
   width: 100%;
   display: flex;
@@ -503,7 +504,23 @@
   background: var(--success);
 }
 .kiosk-timeline-segment.is-busy {
-  background: var(--accent);
+  background: #dc2626;
+}
+.kiosk-timeline-segment.is-past {
+  left: 0;
+  border: 0;
+  background: #737b87;
+}
+.kiosk-timeline-tick {
+  position: absolute;
+  bottom: -3px;
+  width: 1px;
+  height: 5px;
+  background: var(--foreground);
+  pointer-events: none;
+}
+.kiosk-timeline-tick.is-hour {
+  height: 8px;
 }
 .kiosk-timeline-now {
   top: -4px;

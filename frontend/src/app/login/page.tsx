@@ -75,7 +75,9 @@ function LoginPageInner() {
     if (!authLoading && user) router.replace(nextPath || getHomePath(user));
   }, [user, authLoading, router, nextPath]);
 
-  const [mode, setMode] = useState<PageMode>('login');
+  const [mode, setMode] = useState<PageMode>(() =>
+    searchParams.get('mode') === 'forgot' ? 'forgot' : 'login',
+  );
   const [registerStep, setRegisterStep] = useState<'form' | 'verify'>('form');
   const [forgotStep, setForgotStep] = useState<ForgotStep>('request');
   const [verificationChannel, setVerificationChannel] = useState<
