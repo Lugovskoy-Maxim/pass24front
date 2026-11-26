@@ -1623,6 +1623,13 @@ function Booking({
                   )}
                   <option value="cash">Наличными</option>
                 </select>
+                {paymentMethod === 'cash' && (
+                  <p className="kiosk-muted">
+                    При оплате наличными обязательно подтверждение у
+                    администратора бизнес-центра. До подтверждения оплаты время
+                    остаётся доступным.
+                  </p>
+                )}
                 {!qrPaymentAvailable && (
                   <p className="kiosk-muted">
                     Оплата по QR-коду временно недоступна.
@@ -2317,16 +2324,23 @@ export default function KioskPage() {
               <div className="kiosk-receipt" role="status">
                 <CheckCircle2 size={30} />
                 <div>
-                  <strong>Бронирование создано · {receipt.statusLabel}</strong>
+                  <strong>
+                    {receipt.cashDue
+                      ? 'Заявка принята'
+                      : 'Бронирование создано'}{' '}
+                    · {receipt.statusLabel}
+                  </strong>
                   {receipt.bookingNumber && (
                     <p className="kiosk-booking-reference">
-                      Бронь {receipt.bookingNumber}
+                      {receipt.cashDue ? 'Заявка' : 'Бронь'}{' '}
+                      {receipt.bookingNumber}
                     </p>
                   )}
                   {receipt.cashDue && (
                     <p>
-                      Оплатите наличными у администратора. Он отметит получение
-                      оплаты.
+                      При оплате наличными обязательно подтверждение у
+                      администратора бизнес-центра. До подтверждения оплаты
+                      время остаётся доступным.
                     </p>
                   )}
                   <p>Вы вышли из аккаунта.</p>

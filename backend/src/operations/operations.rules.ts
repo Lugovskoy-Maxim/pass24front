@@ -190,7 +190,16 @@ export function normalizeSegments(raw: unknown, step = 30): Segment[] {
   });
   return segments;
 }
+export function isPendingKioskCash(row: any): boolean {
+  return (
+    row.source === 'kiosk' &&
+    row.payment_method === 'cash' &&
+    row.status === 'awaiting_payment' &&
+    row.payment_status !== 'paid'
+  );
+}
 export function blocksAvailability(row: any, now = Date.now()): boolean {
+  if (isPendingKioskCash(row)) return false;
   if (['cancelled', 'draft', 'guest_request'].includes(row.status))
     return false;
   if (
