@@ -12,7 +12,6 @@ import {
   Clock3,
   Hand,
   KeyRound,
-  LogOut,
   Mail,
   QrCode,
   Settings,
@@ -268,18 +267,273 @@ function kioskPhoneInput(value: string) {
   return `+7${national.slice(0, 10)}`;
 }
 
+function KioskPasswordRecovery({
+  initialPhone,
+  onBack,
+  onDone,
+  onWait,
+}: {
+  initialPhone: string;
+  onBack: () => void;
+  onDone: () => void;
+  onWait: (seconds: number) => void;
+}) {
+  const [method, setMethod] = useState<'phone' | 'email'>('phone');
+  const [phone, setPhone] = useState(initialPhone);
+  const [email, setEmail] = useState('');
+  const [step, setStep] = useState<'request' | 'waiting' | 'password'>(
+    'request',
+  );
+  const [token, setToken] = useState('');
+  const [code, setCode] = useState('');
+  const [password, setPassword] = useState('');
+  const [repeatPassword, setRepeatPassword] = useState('');
+  const [message, setMessage] = useState('');
+  const [error, setError] = useState('');
+  const [busy, setBusy] = useState(false);
+  const heading = useRef<HTMLHeadingElement>(null);
+
+  useEffect(() => {
+    heading.current?.focus({ preventScroll: true });
+  }, [step]);
+  useEffect(() => {
+    if (step !== 'waiting' || !token) return;
+    let active = true;
+    let timer: number;
+    async function check() {
+      try {
+        const result = await kioskApi.passwordResetStatus(token);
+        if (!active) return;
+        if (result.status === 'confirmed') {
+          setError('');
+          setMessage('');
+          setStep('password');
+          return;
+        }
+        if (result.status === 'expired') {
+          setToken('');
+          setMessage('');
+          setError('Время подтверждения истекло. Запросите его ещё раз.');
+          setStep('request');
+          return;
+        }
+        setError('');
+      } catch {
+        if (!active) return;
+        setError('Не удалось проверить подтверждение. Повторяем запрос…');
+      }
+      timer = window.setTimeout(check, 3000);
+    }
+    timer = window.setTimeout(check, 1000);
+    return () => {
+      active = false;
+      window.clearTimeout(timer);
+    };
+  }, [step, token]);
+
+  async function submit(event: FormEvent) {
+    event.preventDefault();
+    if (busy || step === 'waiting') return;
+    setError('');
+    const normalized = normalizeRuMobilePhone(phone);
+    if (step === 'request' && method === 'phone' && !normalized) {
+      setError('Введите мобильный номер полностью.');
+      return;
+    }
+    if (step === 'password' && password !== repeatPassword) {
+      setError('Пароли не совпадают.');
+      return;
+    }
+    setBusy(true);
+    try {
+      if (step === 'request') {
+        const result = await kioskApi.requestPasswordReset(
+          method === 'phone' ? { phone: normalized! } : { email: email.trim() },
+        );
+        setMessage(result.message);
+        if (result.recoveryChannel === 'phone' && result.resetToken) {
+          onWait(180);
+          setToken(result.resetToken);
+          setStep('waiting');
+        }
+        if (result.recoveryChannel === 'email') {
+          onWait(180);
+          setStep('password');
+        }
+      } else {
+        await kioskApi.confirmPasswordReset({
+          ...(token ? { resetToken: token } : { email: email.trim(), code }),
+          password,
+          passwordConfirm: repeatPassword,
+        });
+        onDone();
+      }
+    } catch (reason) {
+      setError(getErrorMessage(reason));
+    } finally {
+      setBusy(false);
+    }
+  }
+
+  return (
+    <section className="kiosk-panel kiosk-login kiosk-stack">
+      <button
+        className="kiosk-back"
+        onClick={() => {
+          if (step === 'request') onBack();
+          else {
+            setStep('request');
+            setToken('');
+            setCode('');
+            setPassword('');
+            setRepeatPassword('');
+            setMessage('');
+            setError('');
+          }
+        }}
+      >
+        <ArrowLeft size={20} aria-hidden="true" /> Назад
+      </button>
+      <h1 ref={heading} tabIndex={-1}>
+        Восстановление пароля
+      </h1>
+      {step === 'request' && (
+        <div
+          className="kiosk-recovery-methods"
+          role="group"
+          aria-label="Способ восстановления"
+        >
+          {(['phone', 'email'] as const).map((item) => (
+            <button
+              key={item}
+              type="button"
+              className="btn btn-secondary"
+              aria-pressed={method === item}
+              disabled={busy}
+              onClick={() => {
+                setMethod(item);
+                setMessage('');
+                setError('');
+              }}
+            >
+              {item === 'phone' ? 'По телефону' : 'По почте'}
+            </button>
+          ))}
+        </div>
+      )}
+      <form className="kiosk-stack" onSubmit={submit} autoComplete="off">
+        {step === 'request' &&
+          (method === 'phone' ? (
+            <label>
+              Телефон
+              <input
+                className="input"
+                type="tel"
+                placeholder="+7 (900) 000-00-00"
+                required
+                value={phone}
+                disabled={busy}
+                onChange={(event) =>
+                  setPhone(kioskPhoneInput(event.target.value))
+                }
+              />
+            </label>
+          ) : (
+            <label>
+              Почта
+              <input
+                className="input"
+                type="email"
+                required
+                value={email}
+                disabled={busy}
+                onChange={(event) => setEmail(event.target.value)}
+              />
+            </label>
+          ))}
+        {step === 'password' && (
+          <>
+            {method === 'email' && (
+              <label>
+                Код из письма
+                <input
+                  className="input"
+                  inputMode="numeric"
+                  pattern="[0-9]{4}"
+                  maxLength={4}
+                  required
+                  value={code}
+                  disabled={busy}
+                  onChange={(event) =>
+                    setCode(event.target.value.replace(/\D/g, ''))
+                  }
+                />
+              </label>
+            )}
+            <label>
+              Новый пароль
+              <input
+                className="input"
+                type="password"
+                minLength={6}
+                autoComplete="new-password"
+                required
+                value={password}
+                disabled={busy}
+                onChange={(event) => setPassword(event.target.value)}
+              />
+            </label>
+            <label>
+              Повторите пароль
+              <input
+                className="input"
+                type="password"
+                minLength={6}
+                autoComplete="new-password"
+                required
+                value={repeatPassword}
+                disabled={busy}
+                onChange={(event) => setRepeatPassword(event.target.value)}
+              />
+            </label>
+          </>
+        )}
+        {message && (
+          <p role="status" className="kiosk-muted">
+            {message}
+          </p>
+        )}
+        {error && (
+          <p role="alert" className="kiosk-error">
+            {error}
+          </p>
+        )}
+        {step !== 'waiting' && (
+          <button className="btn btn-primary" disabled={busy}>
+            {busy
+              ? 'Подождите…'
+              : step === 'request'
+                ? 'Отправить подтверждение'
+                : 'Сохранить пароль'}
+          </button>
+        )}
+      </form>
+    </section>
+  );
+}
+
 function LoginForm({
   admin,
   deviceToken,
   onLogin,
   onCancel,
-  onQrStart,
+  onWait,
 }: {
   admin: boolean;
   deviceToken: string;
   onLogin: (session: KioskSession) => void;
   onCancel: () => void;
-  onQrStart: () => void;
+  onWait: (seconds: number) => void;
 }) {
   const [method, setMethod] = useState<(typeof LOGIN_METHODS)[number]>(
     LOGIN_METHODS[0],
@@ -288,7 +542,9 @@ function LoginForm({
   const [password, setPassword] = useState('');
   const [sms, setSms] = useState(!admin && !!deviceToken);
   const [smsSent, setSmsSent] = useState(false);
+  const [mobile, setMobile] = useState(false);
   const [recover, setRecover] = useState(false);
+  const [notice, setNotice] = useState('');
   const [busy, setBusy] = useState(false);
   const [error, setError] = useState('');
   const [qr, setQr] = useState<KioskLoginChallenge | null>(null);
@@ -317,7 +573,7 @@ function LoginForm({
       const challenge = await kioskApi.startLogin(deviceToken);
       if (active.current) {
         setQr(challenge);
-        onQrStart();
+        onWait(75);
       }
     } catch (e) {
       if (active.current) setError(getErrorMessage(e));
@@ -330,18 +586,26 @@ function LoginForm({
     if (busy || !loginValue) return;
     setBusy(true);
     setError('');
+    setNotice('');
     try {
       if (sms && !smsSent) {
-        await kioskApi.requestSms(deviceToken, loginValue);
-        if (active.current) setSmsSent(true);
+        const result = await kioskApi.requestSms(deviceToken, loginValue);
+        if (active.current) {
+          setMobile(result.channel === 'mobile');
+          setSmsSent(true);
+          onWait(120);
+        }
       } else {
         const result = sms
-          ? await kioskApi.confirmSms(deviceToken, loginValue, password)
+          ? await kioskApi.confirmSms(deviceToken, loginValue, password, mobile)
           : await kioskApi.login(loginValue, password);
         if (active.current) onLogin(result);
       }
     } catch (e) {
-      if (active.current) setError(getErrorMessage(e));
+      if (active.current) {
+        if (sms && !smsSent && getErrorStatus(e) === 503) setSms(false);
+        setError(getErrorMessage(e));
+      }
     } finally {
       if (active.current) {
         setPassword('');
@@ -351,22 +615,17 @@ function LoginForm({
   }
   if (recover)
     return (
-      <section className="kiosk-panel kiosk-login kiosk-stack">
-        <button className="kiosk-back" onClick={() => setRecover(false)}>
-          <ArrowLeft size={20} /> Назад
-        </button>
-        <h1 tabIndex={-1}>Восстановление пароля</h1>
-        <div className="kiosk-qr">
-          <QRCode
-            value={new URL('/login?mode=forgot', window.location.origin).href}
-            size={224}
-            title="QR-код для восстановления пароля Pass"
-          />
-        </div>
-        <p>
-          Отсканируйте QR-код камерой телефона, чтобы восстановить пароль Pass.
-        </p>
-      </section>
+      <KioskPasswordRecovery
+        initialPhone={method.id === 'phone' ? login : ''}
+        onWait={onWait}
+        onBack={() => setRecover(false)}
+        onDone={() => {
+          setSms(false);
+          setSmsSent(false);
+          setRecover(false);
+          setNotice('Пароль обновлён. Войдите с новым паролем.');
+        }}
+      />
     );
   if (qr)
     return (
@@ -386,23 +645,22 @@ function LoginForm({
     );
   return (
     <section className="kiosk-panel kiosk-login kiosk-stack">
-      <button className="kiosk-back" onClick={onCancel}>
+      <button
+        className="kiosk-back"
+        onClick={() => {
+          if (smsSent) {
+            setSmsSent(false);
+            setPassword('');
+            setError('');
+          } else onCancel();
+        }}
+      >
         <ArrowLeft size={20} />
         Назад
       </button>
       <h1 ref={passwordHeading} tabIndex={-1}>
         {admin ? 'Настройка планшета' : 'Войдите для бронирования'}
       </h1>
-      {!admin && deviceToken && (
-        <button
-          className="btn btn-secondary kiosk-qr-button"
-          disabled={busy}
-          onClick={() => void startQr()}
-        >
-          <QrCode size={22} aria-hidden="true" />
-          Войти по QR-коду
-        </button>
-      )}
       {admin && (
         <p className="kiosk-muted">
           Войдите как администратор с правом управления бронированиями.
@@ -462,25 +720,35 @@ function LoginForm({
         </label>
         {(!sms || smsSent) && (
           <label>
-            {sms ? 'Код из СМС' : 'Пароль'}
+            {sms
+              ? mobile
+                ? 'Код подтверждения (если пришёл)'
+                : 'Код из СМС'
+              : 'Пароль'}
             <input
               className="input"
               name="kiosk-password"
               type={sms ? 'text' : 'password'}
               inputMode={sms ? 'numeric' : undefined}
-              maxLength={sms ? 6 : undefined}
-              pattern={sms ? '[0-9]{6}' : undefined}
-              required
+              maxLength={sms ? (mobile ? 8 : 6) : undefined}
+              pattern={sms ? (mobile ? '[0-9]{4,8}' : '[0-9]{6}') : undefined}
+              required={!sms || !mobile}
               autoComplete="off"
               value={password}
-              onChange={(e) => setPassword(e.target.value)}
+              onChange={(e) =>
+                setPassword(
+                  sms ? e.target.value.replace(/\D/g, '') : e.target.value,
+                )
+              }
               disabled={busy}
             />
           </label>
         )}
         {smsSent && (
           <p role="status">
-            Если для номера доступен вход, мы отправили СМС с кодом.
+            {mobile
+              ? 'Подтвердите запрос на телефоне и нажмите «Проверить подтверждение». Если пришёл код, введите его.'
+              : 'Если номер привязан к аккаунту, мы отправили код по СМС.'}
           </p>
         )}
         {error && (
@@ -488,39 +756,60 @@ function LoginForm({
             {error}
           </p>
         )}
+        {notice && <p role="status">{notice}</p>}
         <button
           className="btn btn-primary"
-          disabled={busy || !loginValue || (!password && (!sms || smsSent))}
+          disabled={
+            busy || !loginValue || (!password && (!sms || (smsSent && !mobile)))
+          }
         >
-          {busy ? 'Подождите…' : sms && !smsSent ? 'Получить код' : 'Войти'}
+          {busy
+            ? 'Подождите…'
+            : sms && !smsSent
+              ? 'Получить код'
+              : sms && mobile
+                ? 'Проверить подтверждение'
+                : 'Войти'}
         </button>
-        {!admin && deviceToken && method.id === 'phone' && (
+        <div className="kiosk-login-alternatives">
+          {!admin && deviceToken && method.id === 'phone' && (
+            <button
+              type="button"
+              className="btn btn-secondary"
+              disabled={busy}
+              onClick={() => {
+                setSms(!sms);
+                setSmsSent(false);
+                setPassword('');
+                setError('');
+              }}
+            >
+              {sms ? 'Войти с паролем' : 'Войти по СМС'}
+            </button>
+          )}
           <button
             type="button"
             className="btn btn-secondary"
             disabled={busy}
             onClick={() => {
-              setSms(!sms);
-              setSmsSent(false);
               setPassword('');
               setError('');
+              setRecover(true);
             }}
           >
-            {sms ? 'Войти с паролем' : 'Войти по СМС'}
+            Забыли пароль?
           </button>
-        )}
-        <button
-          type="button"
-          className="btn btn-secondary"
-          disabled={busy}
-          onClick={() => {
-            setPassword('');
-            setError('');
-            setRecover(true);
-          }}
-        >
-          Забыли пароль?
-        </button>
+          {!admin && deviceToken && (
+            <button
+              type="button"
+              className="btn btn-secondary kiosk-qr-button"
+              disabled={busy}
+              onClick={() => void startQr()}
+            >
+              <QrCode size={19} aria-hidden="true" /> Войти по QR-коду
+            </button>
+          )}
+        </div>
       </form>
     </section>
   );
@@ -724,6 +1013,9 @@ function Setup({
   };
   return (
     <section className="kiosk-panel kiosk-stack kiosk-login">
+      <button className="kiosk-back" disabled={busy} onClick={onExit}>
+        <ArrowLeft size={20} aria-hidden="true" /> Назад
+      </button>
       <h1 tabIndex={-1}>Привязка к переговорной</h1>
       <p className="kiosk-muted">
         Планшет показывает расписание только выбранной комнаты. Аккаунт
@@ -797,9 +1089,6 @@ function Setup({
           <p>{paymentSetupMessage[onlinePayment]}</p>
         </details>
       )}
-      <button className="kiosk-back" disabled={busy} onClick={onExit}>
-        Завершить настройку
-      </button>
     </section>
   );
 }
@@ -1133,11 +1422,10 @@ function Booking({
   return (
     <section className="kiosk-stack">
       <div className="kiosk-user">
-        <span>{session.user.full_name}</span>
         <button className="kiosk-back" onClick={onExit}>
-          <LogOut size={18} />
-          Выйти
+          <ArrowLeft size={20} aria-hidden="true" /> Назад
         </button>
+        <span>{session.user.full_name}</span>
       </div>
       <h1 tabIndex={-1}>Бронирование</h1>
       <div
@@ -1491,6 +1779,9 @@ function Payment({
   );
   return (
     <section className="kiosk-panel kiosk-checkout kiosk-stack kiosk-scan-panel">
+      <button className="kiosk-back" onClick={onExit}>
+        <ArrowLeft size={20} aria-hidden="true" /> Назад к расписанию
+      </button>
       {pending ? (
         <QrCode size={30} aria-hidden="true" />
       ) : status.state === 'paid' ? (
@@ -1536,9 +1827,6 @@ function Payment({
           {paymentState}
         </>
       )}
-      <button className="btn btn-secondary" onClick={onExit}>
-        К расписанию
-      </button>
     </section>
   );
 }
@@ -1658,7 +1946,10 @@ function KioskStandby({
           <span className="kiosk-standby-gesture" aria-hidden="true">
             <Hand />
           </span>
-          <span>Коснитесь или смахните</span>
+          <span>Забронируйте переговорную</span>
+          <span className="kiosk-standby-gesture-label">
+            Коснитесь экрана или смахните
+          </span>
         </span>
       </button>
       <div className="kiosk-standby-brand" aria-hidden="true">
@@ -2269,9 +2560,9 @@ export default function KioskPage() {
                 deviceToken={deviceToken}
                 onCancel={finish}
                 onLogin={completeLogin}
-                onQrStart={() => {
-                  deadline.current = Date.now() + IDLE_MS + 15_000;
-                  setRemaining(75);
+                onWait={(seconds) => {
+                  deadline.current = Date.now() + seconds * 1000;
+                  setRemaining(seconds);
                 }}
               />
             )}
