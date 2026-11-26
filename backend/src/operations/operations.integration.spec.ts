@@ -1553,8 +1553,41 @@ describe('Operations with real replica-set transactions', () => {
       await store.collection('hours_ledger').countDocuments({ type: 'debit' }),
     ).toBe(1);
   });
-  it('starts kiosk checkout in the worker and reports only verified payment status', async () => {
-    const draft = { ...input, payment_method: 'card_online' };
+  it('returns a booking with a resident snapshot created after the transaction started', async () => {
+    const originalParty = identity.party.bind(identity);
+    jest
+      .spyOn(identity, 'party')
+      .mockImplementationOnce(async (actor, draft) => {
+        await store.canonical('snapshots').insertOne({
+          snapshotId: 'snp_during_booking',
+          partyType: 'resident_profile',
+          partyId: 'prf_test',
+          payloadEnc: encryptJson(secret, {
+            contacts: {
+              displayName: 'Резидент',
+              email: 'resident@example.com',
+            },
+          }),
+        });
+        return originalParty(actor, {
+          ...draft,
+          snapshot_id: 'rps_during_booking',
+        });
+      });
+    const created = await bookings.create(
+      resident,
+      { ...input, payment_method: 'qr_code' },
+      'kiosk-new-snapshot',
+    );
+    expect(created.booking).toMatchObject({
+      pass_snapshot_id: 'snp_during_booking',
+      requester: { email: 'resident@example.com' },
+      status: 'hold',
+    });
+  });
+
+  it('starts kiosk SBP checkout in the worker and reports only verified payment status', async () => {
+    const draft = { ...input, payment_method: 'qr_code' };
     const config = jest.spyOn(payments, 'paymentConfig').mockResolvedValue({
       enabled: true,
       shop_id: 'test-shop',
@@ -1629,6 +1662,14 @@ describe('Operations with real replica-set transactions', () => {
       confirmationUrl: url,
       preparation: null,
     });
+    expect(gateway).toHaveBeenCalledWith(
+      'payments',
+      'POST',
+      expect.objectContaining({
+        payment_method_data: { type: 'sbp' },
+      }),
+      expect.any(String),
+    );
     gateway.mockResolvedValue({
       id: 'kiosk-provider-payment',
       status: 'succeeded',
