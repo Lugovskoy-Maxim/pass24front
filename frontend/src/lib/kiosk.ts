@@ -1,4 +1,4 @@
-import { request, User } from './api';
+import { API_URL, request, User } from './api';
 import type {
   BookingContext,
   BookingDraft,
@@ -17,6 +17,10 @@ export type KioskStatus = {
   slots: KioskSlot[];
 };
 export type KioskSession = { token: string; user: User };
+export type KioskBookingContext = BookingContext & {
+  onlinePayment?: KioskPaymentSetup;
+  bookingProfileReady?: boolean;
+};
 export type KioskLoginChallenge = {
   approvalCode: string;
   claimCode: string;
@@ -75,7 +79,23 @@ const call = <T>(
     { token },
   );
 
+export const kioskStandbyVideoUrl = (version: string | null) =>
+  version
+    ? `${API_URL}/kiosk/standby/video/${encodeURIComponent(version)}`
+    : '/kiosk-standby.mp4';
+
 export const kioskApi = {
+  standby: () => call<{ version: string | null }>('/kiosk/standby', null),
+  uploadStandby: (file: File) => {
+    const body = new FormData();
+    body.append('video', file);
+    return request<{ version: string }>('/kiosk/standby', {
+      method: 'PUT',
+      body,
+    });
+  },
+  resetStandby: () =>
+    request<{ version: null }>('/kiosk/standby', { method: 'DELETE' }),
   startLogin: (deviceToken: string) =>
     call<KioskLoginChallenge>('/kiosk/login/start', deviceToken, {}),
   claimLogin: (deviceToken: string, code: string) =>
@@ -107,9 +127,13 @@ export const kioskApi = {
     call<{ token: string }>('/kiosk/device', token, { roomId, previousToken }),
   revoke: (token: string, deviceToken: string) =>
     call('/kiosk/device', token, { token: deviceToken }, 'DELETE'),
-  status: (token: string) => call<KioskStatus>('/kiosk/status', token),
+  status: (token: string, tomorrow = false) =>
+    call<KioskStatus>(
+      tomorrow ? '/kiosk/status?day=tomorrow' : '/kiosk/status',
+      token,
+    ),
   context: (token: string, officeId: string) =>
-    call<BookingContext & { onlinePayment?: KioskPaymentSetup }>(
+    call<KioskBookingContext>(
       `/office-services/bookings/context?kiosk=1&officeId=${encodeURIComponent(officeId)}`,
       token,
     ),
@@ -119,7 +143,7 @@ export const kioskApi = {
       token,
     ),
   quote: (token: string, draft: BookingDraft) =>
-    call<BookingQuote>('/office-services/bookings/quote', token, draft),
+    call<BookingQuote>('/office-services/bookings/quote?kiosk=1', token, draft),
   paymentStatus: ({ bookingId, token }: KioskPayment) =>
     call<KioskPaymentStatus>('/kiosk/payment-status', null, {
       bookingId,

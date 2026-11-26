@@ -69,6 +69,8 @@ const MAX_ICON_BYTES = 80 * 1024;
 const MAX_FAQ_ITEMS = 50;
 const MAX_GUIDE_SECTIONS = 40;
 
+import { KioskVideoSettings } from './KioskVideoSettings';
+
 type Tab =
   | 'brand'
   | 'colors'
@@ -76,6 +78,7 @@ type Tab =
   | 'registration'
   | 'faq'
   | 'guide'
+  | 'kiosk'
   | 'tenant-access';
 
 /** Редактор: steps/paragraphs как многострочный текст, на API — string[]. */
@@ -559,9 +562,17 @@ export default function AdminSiteSettingsPage() {
           <BookOpen className="w-4 h-4" />
           Инструкции
         </button>
+        <button
+          type="button"
+          className={`btn text-sm ${tab === 'kiosk' ? 'btn-primary' : 'btn-secondary'}`}
+          onClick={() => setTab('kiosk')}
+        >
+          Киоск
+        </button>
       </div>
 
-      <form onSubmit={handleSubmit}>
+      {tab === 'kiosk' && <KioskVideoSettings />}
+      <form onSubmit={handleSubmit} hidden={tab === 'kiosk'}>
         {tab === 'tenant-access' && (
           <section className="card p-6 max-w-3xl space-y-4">
             <h2 className="text-base font-semibold">

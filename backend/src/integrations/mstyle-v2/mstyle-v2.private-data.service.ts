@@ -1095,6 +1095,11 @@ export class MstylePrivateDataService {
     };
   }
 
+  async hasVerifiedBookingContact(profileId: string) {
+    const { phone, email } = await this.revealProfileContactsValues(profileId);
+    return Boolean(phone || email);
+  }
+
   private async revealProfileContactsValues(
     profileId: string,
     purpose = 'primary',

@@ -6,6 +6,7 @@ import { resolveBrand, resolveSiteIcon } from '@/lib/brand-defaults';
 interface SiteBrandProps {
   config?: BcConfig | null;
   size?: 'sm' | 'md' | 'lg';
+  showName?: boolean;
   showTagline?: boolean;
   layout?: 'row' | 'column';
   variant?: 'light' | 'dark';
@@ -73,6 +74,7 @@ function BrandMark({
 export function SiteBrand({
   config,
   size = 'md',
+  showName = true,
   showTagline = false,
   layout = 'row',
   variant = 'light',
@@ -85,14 +87,15 @@ export function SiteBrand({
   const textColor = isDark ? 'var(--header-text)' : 'var(--foreground)';
   const mutedColor = isDark ? 'var(--header-muted)' : 'var(--muted)';
 
-  const nameEl = brand.brandShowName ? (
-    <div
-      className={`font-semibold leading-tight truncate tracking-tight ${s.title}`}
-      style={{ color: textColor }}
-    >
-      {brand.siteName}
-    </div>
-  ) : null;
+  const nameEl =
+    showName && brand.brandShowName ? (
+      <div
+        className={`font-semibold leading-tight truncate tracking-tight ${s.title}`}
+        style={{ color: textColor }}
+      >
+        {brand.siteName}
+      </div>
+    ) : null;
 
   const markEl = <BrandMark brand={brand} size={size} iconSrc={iconSrc} />;
 

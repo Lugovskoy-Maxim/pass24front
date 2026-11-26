@@ -7,6 +7,7 @@ import {
   Headers,
   HttpCode,
   Post,
+  Query,
   Req,
   UseFilters,
   UseGuards,
@@ -310,10 +311,15 @@ export class KioskController {
 
   @Get('status')
   @Header('Cache-Control', 'no-store')
-  async status(@Headers('authorization') authorization?: string) {
+  async status(
+    @Headers('authorization') authorization?: string,
+    @Query('day') day?: string,
+  ) {
     const device = await this.device(authorization);
     const now = new Date();
-    const date = now.toLocaleDateString('sv-SE', { timeZone: 'Europe/Moscow' });
+    const date = new Date(
+      +now + (day === 'tomorrow' ? 86_400_000 : 0),
+    ).toLocaleDateString('sv-SE', { timeZone: 'Europe/Moscow' });
     const data = await this.bookings.availability(
       integer(device.roomId, 'roomId', 1),
       date,

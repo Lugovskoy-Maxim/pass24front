@@ -103,6 +103,9 @@ export class ResidentBookingsController {
       mode: (await this.identity.store.ownership())?.mode || 'mstyle',
       ...(kiosk === '1' && {
         onlinePayment: await this.payments.kioskSetupStatus(),
+        bookingProfileReady: await this.identity.hasVerifiedBookingContact(
+          profile.profileId,
+        ),
       }),
     };
   }
@@ -119,7 +122,7 @@ export class ResidentBookingsController {
       fail('room_not_found', 'Переговорная недоступна.', 404);
     return this.bookings.availability(roomId, date);
   }
-  private async input(user: any, body: any) {
+  private async input(user: any, body: any, kiosk = false) {
     const roomId = integer(body.roomId, 'roomId', 1);
     if (user.kioskRoomId !== undefined && roomId !== user.kioskRoomId)
       fail('forbidden', 'Сессия действует только для этой переговорной.', 403);
@@ -144,13 +147,24 @@ export class ResidentBookingsController {
       comment_client: body.comment || '',
       pricing_fingerprint: body.pricingFingerprint,
     };
+    const [segment] = input.segments;
+    if (kiosk && segment.end_minute - segment.start_minute < 60)
+      fail('validation_error', 'Минимальная длительность брони — 1 час.', 422);
     if (input.writeoff_min || input.payment_method === 'balance')
       await this.identity.assertCanSpendHours(actor, profile.profileId);
     return { actor, input };
   }
   @Post('quote')
-  async quote(@Req() req: any, @Body() body: any) {
-    const { actor, input } = await this.input(req.user, body);
+  async quote(
+    @Req() req: any,
+    @Body() body: any,
+    @Query('kiosk') kiosk?: string,
+  ) {
+    const { actor, input } = await this.input(
+      req.user,
+      body,
+      kiosk === '1' || req.user.kioskRoomId !== undefined,
+    );
     const quote = await this.bookings.quote(actor, input);
     if (input.payment_method === 'card_online' && quote.total_amount_minor > 0)
       await this.payments.validateKioskPayment();
@@ -178,7 +192,7 @@ export class ResidentBookingsController {
     key: string,
     deferGateway: boolean,
   ) {
-    const { actor, input } = await this.input(user, body);
+    const { actor, input } = await this.input(user, body, deferGateway);
     return this.payments.finishCreate(
       actor,
       await this.bookings.create(

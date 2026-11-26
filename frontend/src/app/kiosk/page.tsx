@@ -21,10 +21,13 @@ import {
 } from 'lucide-react';
 import QRCode from 'react-qr-code';
 import { getErrorMessage, getErrorStatus, isNetworkError } from '@/lib/api';
+import { normalizeRuMobilePhone } from '@/lib/phone';
 import {
   kioskApi,
   kioskRangeFree,
+  kioskStandbyVideoUrl,
   kioskTime,
+  KioskBookingContext,
   KioskLoginChallenge,
   KioskPayment,
   KioskPaymentSetup,
@@ -33,13 +36,9 @@ import {
   KioskSlot,
   KioskStatus,
 } from '@/lib/kiosk';
-import {
-  BookingContext,
-  BookingDraft,
-  BookingQuote,
-  officeMoney,
-} from '@/lib/office-services';
+import { BookingDraft, BookingQuote, officeMoney } from '@/lib/office-services';
 import { SiteBrand } from '@/components/SiteBrand';
+import { MSTYLE_BRAND_DEFAULTS, resolveSiteIcon } from '@/lib/brand-defaults';
 import { useConfig } from '@/hooks/useConfig';
 import './kiosk.css';
 
@@ -51,6 +50,8 @@ function durationLabel(minutes: number) {
 
 const DEVICE_KEY = 'pass24_kiosk_device';
 const IDLE_MS = 60_000;
+const STANDBY_IDLE_MS = 45_000;
+const MIN_BOOKING_MINUTES = 60;
 const SCHEDULE_REFRESH_MS = 15_000;
 type Screen = 'status' | 'login' | 'booking' | 'payment' | 'admin';
 type BookingReceipt = {
@@ -63,20 +64,177 @@ function shiftBookingDate(date: string, days: number) {
   next.setUTCDate(next.getUTCDate() + days);
   return next.toISOString().slice(0, 10);
 }
+
+const weekdayLabels = ['Пн', 'Вт', 'Ср', 'Чт', 'Пт', 'Сб', 'Вс'];
+const calendarDateLabel = new Intl.DateTimeFormat('ru-RU', {
+  dateStyle: 'full',
+  timeZone: 'UTC',
+});
+const calendarMonthLabel = new Intl.DateTimeFormat('ru-RU', {
+  month: 'long',
+  year: 'numeric',
+  timeZone: 'UTC',
+});
+
+function BookingDates({
+  today,
+  date,
+  disabled,
+  onChange,
+}: {
+  today: string;
+  date: string;
+  disabled: boolean;
+  onChange: (value: string) => void;
+}) {
+  const [month, setMonth] = useState<string | null>(null);
+  const monthStart =
+    month && month >= today.slice(0, 7) ? month : today.slice(0, 7);
+  const first = new Date(`${monthStart}-01T00:00:00Z`);
+  const previous = new Date(first);
+  previous.setUTCMonth(first.getUTCMonth() - 1);
+  const next = new Date(first);
+  next.setUTCMonth(first.getUTCMonth() + 1);
+  const last = new Date(+next - 86_400_000).getUTCDate();
+  const offset = (first.getUTCDay() + 6) % 7;
+  const calendarToggle = useRef<HTMLButtonElement>(null);
+  const choose = (value: string) => {
+    onChange(value);
+    if (month) calendarToggle.current?.focus({ preventScroll: true });
+    setMonth(null);
+  };
+
+  return (
+    <div
+      className="kiosk-date-picker"
+      role="group"
+      aria-label="Дата бронирования"
+    >
+      <div className="kiosk-date-current">
+        <strong>
+          {calendarDateLabel.format(new Date(`${date}T00:00:00Z`))}
+        </strong>
+        <button
+          ref={calendarToggle}
+          type="button"
+          className="btn btn-secondary"
+          disabled={disabled}
+          aria-expanded={!!month}
+          aria-controls="kiosk-calendar"
+          onClick={() => setMonth(month ? null : date.slice(0, 7))}
+        >
+          <CalendarDays size={19} aria-hidden="true" /> Календарь
+        </button>
+      </div>
+      <div className="kiosk-date-week" role="group" aria-label="Ближайшие даты">
+        {Array.from({ length: 7 }, (_, index) => {
+          const value = shiftBookingDate(today, index);
+          const day = new Date(`${value}T00:00:00Z`);
+          return (
+            <button
+              key={value}
+              type="button"
+              className="btn btn-secondary"
+              disabled={disabled}
+              aria-label={calendarDateLabel.format(day)}
+              aria-pressed={date === value}
+              onClick={() => choose(value)}
+            >
+              <span>
+                {index === 0
+                  ? 'Сегодня'
+                  : index === 1
+                    ? 'Завтра'
+                    : weekdayLabels[(day.getUTCDay() + 6) % 7]}
+              </span>
+              <strong>{day.getUTCDate()}</strong>
+            </button>
+          );
+        })}
+      </div>
+      {month && (
+        <div id="kiosk-calendar" className="kiosk-calendar">
+          <div className="kiosk-calendar-nav">
+            <button
+              type="button"
+              className="btn btn-secondary"
+              aria-label="Предыдущий месяц"
+              disabled={disabled || monthStart <= today.slice(0, 7)}
+              onClick={() => setMonth(previous.toISOString().slice(0, 7))}
+            >
+              <ChevronLeft size={20} aria-hidden="true" />
+            </button>
+            <strong aria-live="polite">
+              {calendarMonthLabel.format(first)}
+            </strong>
+            <button
+              type="button"
+              className="btn btn-secondary"
+              aria-label="Следующий месяц"
+              disabled={disabled || next.getUTCFullYear() > 9999}
+              onClick={() => setMonth(next.toISOString().slice(0, 7))}
+            >
+              <ChevronRight size={20} aria-hidden="true" />
+            </button>
+          </div>
+          <div className="kiosk-calendar-grid">
+            {weekdayLabels.map((label) => (
+              <span key={label} aria-hidden="true">
+                {label}
+              </span>
+            ))}
+            {Array.from({ length: last }, (_, index) => {
+              const value = `${monthStart}-${String(index + 1).padStart(2, '0')}`;
+              return (
+                <button
+                  key={value}
+                  type="button"
+                  className="btn btn-secondary"
+                  disabled={disabled || value < today}
+                  style={
+                    index === 0 ? { gridColumnStart: offset + 1 } : undefined
+                  }
+                  aria-label={calendarDateLabel.format(
+                    new Date(`${value}T00:00:00Z`),
+                  )}
+                  aria-pressed={date === value}
+                  onClick={() => choose(value)}
+                >
+                  {index + 1}
+                </button>
+              );
+            })}
+          </div>
+        </div>
+      )}
+    </div>
+  );
+}
+function groupSchedule(slots: KioskSlot[] = []) {
+  return slots.reduce<KioskSlot[]>((rows, slot) => {
+    const last = rows[rows.length - 1];
+    if (last?.state === slot.state && last.end_minute === slot.start_minute) {
+      last.end_minute = slot.end_minute;
+    } else {
+      rows.push({ ...slot });
+    }
+    return rows;
+  }, []);
+}
 const LOGIN_METHODS = [
-  {
-    id: 'login',
-    label: 'Логин',
-    icon: KeyRound,
-    hint: 'Ваш логин в Pass',
-    type: 'text',
-  },
   {
     id: 'phone',
     label: 'Телефон',
     icon: Smartphone,
     hint: '+7 (900) 000-00-00',
     type: 'tel',
+  },
+  {
+    id: 'login',
+    label: 'Логин',
+    icon: KeyRound,
+    hint: 'Ваш логин в Pass',
+    type: 'text',
   },
   {
     id: 'email',
@@ -86,6 +244,13 @@ const LOGIN_METHODS = [
     type: 'email',
   },
 ] as const;
+
+function kioskPhoneInput(value: string) {
+  const digits = value.replace(/\D/g, '');
+  if (!digits) return '';
+  const national = /^[78]/.test(digits) ? digits.slice(1) : digits;
+  return `+7${national.slice(0, 10)}`;
+}
 
 function LoginForm({
   admin,
@@ -105,7 +270,7 @@ function LoginForm({
   );
   const [login, setLogin] = useState('');
   const [password, setPassword] = useState('');
-  const [sms, setSms] = useState(false);
+  const [sms, setSms] = useState(!admin && !!deviceToken);
   const [smsSent, setSmsSent] = useState(false);
   const [recover, setRecover] = useState(false);
   const [busy, setBusy] = useState(false);
@@ -114,6 +279,8 @@ function LoginForm({
   const passwordHeading = useRef<HTMLHeadingElement>(null);
   const returningFromQr = useRef(false);
   const active = useRef(true);
+  const loginValue =
+    method.id === 'phone' ? normalizeRuMobilePhone(login) : login.trim();
   useEffect(() => {
     active.current = true;
     return () => {
@@ -144,17 +311,17 @@ function LoginForm({
   }
   async function submit(e: FormEvent) {
     e.preventDefault();
-    if (busy) return;
+    if (busy || !loginValue) return;
     setBusy(true);
     setError('');
     try {
       if (sms && !smsSent) {
-        await kioskApi.requestSms(deviceToken, login.trim());
+        await kioskApi.requestSms(deviceToken, loginValue);
         if (active.current) setSmsSent(true);
       } else {
         const result = sms
-          ? await kioskApi.confirmSms(deviceToken, login.trim(), password)
-          : await kioskApi.login(login.trim(), password);
+          ? await kioskApi.confirmSms(deviceToken, loginValue, password)
+          : await kioskApi.login(loginValue, password);
         if (active.current) onLogin(result);
       }
     } catch (e) {
@@ -242,7 +409,7 @@ function LoginForm({
                   setMethod(option);
                   setLogin('');
                   setPassword('');
-                  setSms(false);
+                  setSms(option.id === 'phone' && !admin && !!deviceToken);
                   setSmsSent(false);
                   setError('');
                 }}
@@ -267,7 +434,13 @@ function LoginForm({
             autoCapitalize="none"
             spellCheck={false}
             value={login}
-            onChange={(e) => setLogin(e.target.value)}
+            onChange={(e) =>
+              setLogin(
+                method.id === 'phone'
+                  ? kioskPhoneInput(e.target.value)
+                  : e.target.value,
+              )
+            }
             disabled={busy || smsSent}
           />
         </label>
@@ -301,7 +474,7 @@ function LoginForm({
         )}
         <button
           className="btn btn-primary"
-          disabled={busy || !login.trim() || (!password && (!sms || smsSent))}
+          disabled={busy || !loginValue || (!password && (!sms || smsSent))}
         >
           {busy ? 'Подождите…' : sms && !smsSent ? 'Получить код' : 'Войти'}
         </button>
@@ -637,10 +810,7 @@ function Booking({
   const [selectedDate, setSelectedDate] = useState(initialDate || status.date);
   const date = selectedDate < status.date ? status.date : selectedDate;
   const isToday = date === status.date;
-  const tomorrowDate = shiftBookingDate(status.date, 1);
-  const [context, setContext] = useState<
-    (BookingContext & { onlinePayment?: KioskPaymentSetup }) | null
-  >(null);
+  const [context, setContext] = useState<KioskBookingContext | null>(null);
   const [slots, setSlots] = useState<KioskSlot[]>([]);
   const [slotRefreshFailed, setSlotRefreshFailed] = useState(false);
   const [start, setStart] = useState(-1);
@@ -701,7 +871,10 @@ function Booking({
       const nextContext = await kioskApi.context(session.token, officeId);
       if (!active) return;
       setContext(nextContext);
-      if (nextContext.rooms.some((room) => room.id === status.room.id)) {
+      if (
+        nextContext.bookingProfileReady !== false &&
+        nextContext.rooms.some((room) => room.id === status.room.id)
+      ) {
         const result = await kioskApi.slots(
           session.token,
           officeId,
@@ -727,9 +900,10 @@ function Booking({
     };
   }, [session.token, officeId, status.room.id, date, availabilityKey, onExit]);
   const loaded = loadedKey === availabilityKey;
-  const room = loaded
-    ? context?.rooms.find((r) => r.id === status.room.id)
-    : undefined;
+  const room =
+    loaded && context?.bookingProfileReady !== false
+      ? context?.rooms.find((r) => r.id === status.room.id)
+      : undefined;
   const canRefreshSlots = !!room;
   useEffect(() => {
     if (!canRefreshSlots) return;
@@ -831,12 +1005,27 @@ function Booking({
   const availableSlots = isToday ? status.slots : slots;
   const upcomingSlots = slots
     .filter((slot) => slot.start_minute > serverMinute)
-    .map((slot) => ({
-      ...slot,
-      selectable:
-        slot.state === 'free' &&
-        kioskRangeFree(availableSlots, slot.start_minute, slot.end_minute),
-    }));
+    .map((slot) => {
+      const minimumEnd = slots.find(
+        (item) => item.end_minute >= slot.start_minute + MIN_BOOKING_MINUTES,
+      )?.end_minute;
+      const canStart =
+        minimumEnd !== undefined &&
+        kioskRangeFree(slots, slot.start_minute, minimumEnd) &&
+        kioskRangeFree(availableSlots, slot.start_minute, minimumEnd);
+      const canExtend =
+        start >= 0 &&
+        slot.end_minute > end &&
+        kioskRangeFree(slots, start, slot.end_minute) &&
+        kioskRangeFree(availableSlots, start, slot.end_minute);
+      return {
+        ...slot,
+        minimumEnd,
+        canStart,
+        canExtend,
+        selectable: canStart || canExtend || slot.start_minute === start,
+      };
+    });
   const slotGroups = [
     { label: 'Утро', from: 0, to: 720 },
     { label: 'День', from: 720, to: 1080 },
@@ -857,12 +1046,10 @@ function Booking({
     'ru-RU',
     { day: 'numeric', month: 'long', timeZone: 'Europe/Moscow' },
   );
-  function shiftDate(days: number) {
-    setSelectedDate(shiftBookingDate(date, days));
-  }
   const valid =
     !!room &&
     free &&
+    end - start >= MIN_BOOKING_MINUTES &&
     start > serverMinute &&
     connected &&
     !slotRefreshFailed &&
@@ -970,71 +1157,12 @@ function Booking({
                 ))}
               </select>
             </div>
-            <div>
-              <label htmlFor="kiosk-booking-date">Дата бронирования</label>
-              <div className="kiosk-date-controls">
-                <button
-                  type="button"
-                  className="btn btn-secondary"
-                  aria-label="Предыдущий день"
-                  disabled={isToday || busy || !!retry}
-                  onClick={() => shiftDate(-1)}
-                >
-                  <ChevronLeft size={20} aria-hidden="true" />
-                </button>
-                <input
-                  id="kiosk-booking-date"
-                  className="input"
-                  type="date"
-                  value={date}
-                  min={status.date}
-                  max="9999-12-31"
-                  disabled={busy || !!retry}
-                  onChange={(event) => {
-                    const value = event.target.value;
-                    if (
-                      /^\d{4}-\d{2}-\d{2}$/.test(value) &&
-                      value >= status.date &&
-                      Number.isFinite(Date.parse(`${value}T00:00:00Z`))
-                    )
-                      setSelectedDate(value);
-                  }}
-                />
-                <button
-                  type="button"
-                  className="btn btn-secondary"
-                  aria-label="Следующий день"
-                  disabled={busy || !!retry || date === '9999-12-31'}
-                  onClick={() => shiftDate(1)}
-                >
-                  <ChevronRight size={20} aria-hidden="true" />
-                </button>
-              </div>
-              <div
-                className="kiosk-quick-dates"
-                role="group"
-                aria-label="Быстрый выбор даты"
-              >
-                <button
-                  type="button"
-                  className="btn btn-secondary"
-                  aria-pressed={isToday}
-                  disabled={busy || !!retry}
-                  onClick={() => setSelectedDate(status.date)}
-                >
-                  Сегодня
-                </button>
-                <button
-                  type="button"
-                  className="btn btn-secondary"
-                  aria-pressed={date === tomorrowDate}
-                  disabled={busy || !!retry}
-                  onClick={() => setSelectedDate(tomorrowDate)}
-                >
-                  Завтра
-                </button>
-              </div>
-            </div>
+            <BookingDates
+              today={status.date}
+              date={date}
+              disabled={busy || !!retry}
+              onChange={setSelectedDate}
+            />
           </div>
           {!offices.length && (
             <p role="alert">
@@ -1043,9 +1171,41 @@ function Booking({
             </p>
           )}
           {loading && <p role="status">Загрузка свободного времени…</p>}
-          {loaded && !loading && context && !room && (
-            <p role="alert">Эта переговорная недоступна вашему офису.</p>
+          {loaded && context?.bookingProfileReady === false && (
+            <div className="kiosk-panel kiosk-stack">
+              <h2>Заполните профиль для бронирования</h2>
+              <p>
+                Для брони нужен подтверждённый телефон или адрес электронной
+                почты.
+              </p>
+              <div className="kiosk-qr">
+                <QRCode
+                  value={
+                    new URL(
+                      '/login?next=%2Fprofile%23booking-contact',
+                      window.location.origin,
+                    ).href
+                  }
+                  size={224}
+                  title="QR-код для заполнения профиля Pass"
+                />
+              </div>
+              <p>Отсканируйте код, чтобы открыть профиль на телефоне.</p>
+              <button
+                className="btn btn-primary"
+                onClick={() => setRevision((value) => value + 1)}
+              >
+                Проверить профиль
+              </button>
+            </div>
           )}
+          {loaded &&
+            !loading &&
+            context &&
+            context.bookingProfileReady !== false &&
+            !room && (
+              <p role="alert">Эта переговорная недоступна вашему офису.</p>
+            )}
           {room && (
             <>
               <h2>
@@ -1054,8 +1214,8 @@ function Booking({
               </h2>
               {hasAvailableSlots && (
                 <p className="kiosk-muted">
-                  Нажмите свободный интервал. Чтобы продлить бронь, нажмите
-                  последний интервал нужного времени.
+                  Выберите время начала. Минимальная длительность брони — 1 час.
+                  Чтобы продлить бронь, нажмите последний нужный интервал.
                 </p>
               )}
               {slotRefreshFailed && (
@@ -1090,24 +1250,18 @@ function Booking({
                           aria-pressed={selected}
                           aria-label={`${kioskTime(s.start_minute)}–${kioskTime(s.end_minute)}${s.selectable ? '' : ', недоступно'}`}
                           onClick={() => {
-                            if (
-                              s.start_minute === start &&
-                              s.end_minute === end
-                            ) {
+                            if (s.start_minute === start) {
                               setStart(-1);
                               setEnd(-1);
+                            } else if (s.canExtend) {
+                              setEnd(s.end_minute);
                             } else if (
-                              end - start !== step ||
-                              !kioskRangeFree(slots, start, s.end_minute) ||
-                              !kioskRangeFree(
-                                availableSlots,
-                                start,
-                                s.end_minute,
-                              )
+                              s.canStart &&
+                              s.minimumEnd !== undefined
                             ) {
                               setStart(s.start_minute);
-                              setEnd(s.end_minute);
-                            } else setEnd(s.end_minute);
+                              setEnd(s.minimumEnd);
+                            }
                           }}
                         >
                           {kioskTime(s.start_minute)}–{kioskTime(s.end_minute)}
@@ -1391,11 +1545,120 @@ function Payment({
   );
 }
 
+function KioskStandby({
+  logoSrc,
+  onWake,
+}: {
+  logoSrc: string;
+  onWake: () => void;
+}) {
+  const [visible, setVisible] = useState(false);
+  const [videoVersion, setVideoVersion] = useState<string | null>(null);
+  const [failedVersion, setFailedVersion] = useState<string>();
+  const dialog = useRef<HTMLDialogElement>(null);
+  useEffect(() => {
+    if (visible) return;
+    let timer: number;
+    const arm = () => {
+      window.clearTimeout(timer);
+      if (!document.hidden) {
+        timer = window.setTimeout(() => setVisible(true), STANDBY_IDLE_MS);
+      }
+    };
+    arm();
+    window.addEventListener('pointerdown', arm);
+    window.addEventListener('keydown', arm);
+    document.addEventListener('visibilitychange', arm);
+    return () => {
+      window.clearTimeout(timer);
+      window.removeEventListener('pointerdown', arm);
+      window.removeEventListener('keydown', arm);
+      document.removeEventListener('visibilitychange', arm);
+    };
+  }, [visible]);
+  useEffect(() => {
+    let active = true;
+    let timer: number;
+    const refreshVideo = async () => {
+      try {
+        const { version } = await kioskApi.standby();
+        if (active) setVideoVersion(version);
+      } catch {
+        // Keep the last known video while the server is unavailable.
+      } finally {
+        if (active)
+          timer = window.setTimeout(refreshVideo, SCHEDULE_REFRESH_MS);
+      }
+    };
+    void refreshVideo();
+    return () => {
+      active = false;
+      window.clearTimeout(timer);
+    };
+  }, []);
+  useEffect(() => {
+    const element = dialog.current;
+    if (!visible || !element) return;
+    if (typeof element.showModal === 'function') element.showModal();
+    else element.setAttribute('open', '');
+  }, [visible]);
+
+  if (!visible) return null;
+  const wake = () => {
+    setVisible(false);
+    onWake();
+  };
+  return (
+    <dialog
+      ref={dialog}
+      className="kiosk-standby"
+      aria-label="Киоск в режиме ожидания"
+      onCancel={(event) => {
+        event.preventDefault();
+        wake();
+      }}
+    >
+      {!window.matchMedia('(prefers-reduced-motion: reduce)').matches && (
+        <video
+          src={kioskStandbyVideoUrl(
+            videoVersion === failedVersion ? null : videoVersion,
+          )}
+          onError={() => {
+            if (videoVersion) setFailedVersion(videoVersion);
+          }}
+          autoPlay
+          muted
+          loop
+          playsInline
+          aria-hidden="true"
+        />
+      )}
+      <button type="button" className="kiosk-standby-wake" onClick={wake}>
+        <span>Коснитесь экрана</span>
+        <span>Чтобы посмотреть расписание и забронировать переговорную</span>
+      </button>
+      <div className="kiosk-standby-brand" aria-hidden="true">
+        {/* eslint-disable-next-line @next/next/no-img-element */}
+        <img src={logoSrc} alt="" />
+      </div>
+    </dialog>
+  );
+}
+
 export default function KioskPage() {
   const config = useConfig();
+  const logoSrc = resolveSiteIcon(config, 'dark');
+  const logoIncludesName =
+    config?.brandMarkType !== 'text' &&
+    logoSrc === MSTYLE_BRAND_DEFAULTS.siteIconDark;
   const [ready, setReady] = useState(false);
   const [deviceToken, setDeviceToken] = useState('');
   const [status, setStatus] = useState<KioskStatus | null>(null);
+  const [scheduleTomorrow, setScheduleTomorrow] = useState(false);
+  const [tomorrowStatus, setTomorrowStatus] = useState<KioskStatus | null>(
+    null,
+  );
+  const [tomorrowError, setTomorrowError] = useState('');
   const [screen, setScreen] = useState<Screen>('status');
   const [initialDate, setInitialDate] = useState<string>();
   const [session, setSession] = useState<KioskSession | null>(null);
@@ -1413,7 +1676,6 @@ export default function KioskPage() {
   const kioskRoot = useRef<HTMLElement>(null);
   const settingsControl = useRef<HTMLButtonElement>(null);
   const bookControl = useRef<HTMLButtonElement>(null);
-  const tomorrowControl = useRef<HTMLButtonElement>(null);
   const previousScreen = useRef<Screen>('status');
   const deadline = useRef(Date.now() + IDLE_MS);
   const finish = useCallback(() => {
@@ -1445,16 +1707,32 @@ export default function KioskPage() {
       screen === 'status'
         ? previous === 'admin'
           ? settingsControl.current
-          : initialDate
-            ? tomorrowControl.current
-            : bookControl.current
+          : bookControl.current
         : null;
     const target =
       returnControl && !returnControl.disabled
         ? returnControl
         : kioskRoot.current?.querySelector<HTMLElement>('h1');
     target?.focus({ preventScroll: true });
-  }, [screen, settingUp, initialDate]);
+  }, [screen, settingUp]);
+  useEffect(() => {
+    if (!scheduleTomorrow || !deviceToken || screen !== 'status') return;
+    let active = true;
+    void kioskApi.status(deviceToken, true).then(
+      (value) => {
+        if (!active) return;
+        setTomorrowStatus(value);
+        setTomorrowError('');
+      },
+      () => {
+        if (active)
+          setTomorrowError('Не удалось загрузить расписание на завтра.');
+      },
+    );
+    return () => {
+      active = false;
+    };
+  }, [scheduleTomorrow, deviceToken, screen, lastUpdate]);
   useEffect(() => {
     try {
       setDeviceToken(localStorage.getItem(DEVICE_KEY) || '');
@@ -1617,31 +1895,40 @@ export default function KioskPage() {
           : available
             ? 'Свободна'
             : 'Занята';
-  const schedule = (status?.slots || []).reduce<KioskSlot[]>((rows, slot) => {
-    const last = rows[rows.length - 1];
-    if (
-      last &&
-      last.state === slot.state &&
-      last.end_minute === slot.start_minute
-    )
-      last.end_minute = slot.end_minute;
-    else rows.push({ ...slot });
-    return rows;
-  }, []);
-  const currentPeriod = schedule.find(
+  const todaySchedule = groupSchedule(status?.slots);
+  const currentPeriod = todaySchedule.find(
     (s) => s.start_minute <= minute && s.end_minute > minute,
   );
   const liveSchedule = connected && status?.date === today;
   const hasFutureSlotToday = status?.slots.some(
-    (slot) => slot.state === 'free' && slot.start_minute > minute,
+    (slot) =>
+      slot.start_minute > minute &&
+      kioskRangeFree(
+        status.slots,
+        slot.start_minute,
+        status.slots.find(
+          (end) => end.end_minute >= slot.start_minute + MIN_BOOKING_MINUTES,
+        )?.end_minute ?? -1,
+      ),
   );
   const nextFree =
     liveSchedule &&
-    schedule.find((s) => s.state === 'free' && s.start_minute > minute);
+    todaySchedule.find((s) => s.state === 'free' && s.start_minute > minute);
+  const tomorrowDate = shiftBookingDate(today, 1);
+  const shownStatus = scheduleTomorrow
+    ? tomorrowStatus?.date === tomorrowDate &&
+      tomorrowStatus.room.id === status?.room.id
+      ? tomorrowStatus
+      : null
+    : status;
+  const schedule = scheduleTomorrow
+    ? groupSchedule(shownStatus?.slots)
+    : todaySchedule;
+  const showCurrentPeriod = !scheduleTomorrow && liveSchedule;
   const workStart = schedule[0]?.start_minute ?? 0;
   const workEnd = schedule[schedule.length - 1]?.end_minute ?? 0;
   const workSpan = workEnd - workStart;
-  const pastWidth = liveSchedule
+  const pastWidth = showCurrentPeriod
     ? Math.max(0, Math.min(minute, workEnd) - workStart)
     : 0;
   const firstTick = (Math.floor(workStart / 30) + 1) * 30;
@@ -1652,7 +1939,7 @@ export default function KioskPage() {
   return (
     <main
       ref={kioskRoot}
-      className={`kiosk kiosk-screen-${screen}`}
+      className={`kiosk kiosk-screen-${screen}${screen === 'status' && deviceToken ? ' kiosk-dashboard-screen' : ''}`}
       onPointerDownCapture={(event) => {
         if (!(
           event.target instanceof Element &&
@@ -1673,10 +1960,12 @@ export default function KioskPage() {
         <div>
           <SiteBrand
             config={config}
+            showName={!logoIncludesName}
             variant="dark"
             size="sm"
             className="kiosk-brand"
           />
+          {logoIncludesName && <span className="sr-only">M-STYLE</span>}
           <p className="kiosk-room-title">
             {status?.room.title || 'Планшет переговорной'}
           </p>
@@ -1760,7 +2049,13 @@ export default function KioskPage() {
                     className={`kiosk-availability ${liveSchedule && currentSlot ? (available ? 'is-free' : 'is-busy') : ''}`}
                   >
                     <h1 className="kiosk-state" tabIndex={-1}>
-                      <span aria-hidden="true" />
+                      {liveSchedule &&
+                        currentSlot &&
+                        (available ? (
+                          <CheckCircle2 aria-hidden="true" />
+                        ) : (
+                          <Clock3 aria-hidden="true" />
+                        ))}
                       {state}
                     </h1>
                     {liveSchedule &&
@@ -1781,7 +2076,7 @@ export default function KioskPage() {
                     )}
                     {liveSchedule && !hasFutureSlotToday && (
                       <p className="kiosk-muted">
-                        На сегодня свободных интервалов нет.
+                        На сегодня нет свободного интервала от 1 часа.
                       </p>
                     )}
                     <div className="kiosk-dashboard-actions">
@@ -1789,33 +2084,48 @@ export default function KioskPage() {
                         className="btn btn-primary"
                         ref={bookControl}
                         disabled={!liveSchedule}
-                        onClick={() => open('login')}
-                      >
-                        Забронировать
-                        <ArrowRight size={22} aria-hidden="true" />
-                      </button>
-                      <button
-                        className="btn btn-secondary"
-                        ref={tomorrowControl}
-                        disabled={!liveSchedule}
                         onClick={() =>
-                          open('login', shiftBookingDate(today, 1))
+                          open(
+                            'login',
+                            scheduleTomorrow ? tomorrowDate : undefined,
+                          )
                         }
                       >
-                        <CalendarDays size={18} aria-hidden="true" />
-                        На завтра
+                        Забронировать
                       </button>
                     </div>
                   </section>
-                  <section className="kiosk-panel kiosk-stack">
-                    <h2>
-                      <CalendarDays size={24} />
-                      Расписание на сегодня
-                    </h2>
-                    {!status && !error && (
-                      <p role="status">Загрузка расписания…</p>
+                  <section className="kiosk-dashboard-schedule kiosk-stack">
+                    <h2>Расписание</h2>
+                    <div
+                      className="kiosk-schedule-days"
+                      role="group"
+                      aria-label="День расписания"
+                    >
+                      <button
+                        type="button"
+                        aria-pressed={!scheduleTomorrow}
+                        onClick={() => setScheduleTomorrow(false)}
+                      >
+                        Сегодня
+                      </button>
+                      <button
+                        type="button"
+                        aria-pressed={scheduleTomorrow}
+                        onClick={() => setScheduleTomorrow(true)}
+                      >
+                        Завтра
+                      </button>
+                    </div>
+                    {scheduleTomorrow && tomorrowError && (
+                      <p role="alert">{tomorrowError}</p>
                     )}
-                    {status && !status.slots.length && (
+                    {!shownStatus &&
+                      !error &&
+                      !(scheduleTomorrow && tomorrowError) && (
+                        <p role="status">Загрузка расписания…</p>
+                      )}
+                    {shownStatus && !shownStatus.slots.length && (
                       <p>Рабочие интервалы не заданы.</p>
                     )}
                     {workSpan > 0 && (
@@ -1848,7 +2158,7 @@ export default function KioskPage() {
                               }}
                             />
                           ))}
-                          {liveSchedule &&
+                          {showCurrentPeriod &&
                             minute >= workStart &&
                             minute < workEnd && (
                               <span
@@ -1873,7 +2183,7 @@ export default function KioskPage() {
                           key={s.start_minute}
                           className={`kiosk-schedule-row ${s.state === 'free' ? 'is-free' : ''}`}
                           aria-current={
-                            liveSchedule && s === currentPeriod
+                            showCurrentPeriod && s === currentPeriod
                               ? 'time'
                               : undefined
                           }
@@ -1883,7 +2193,6 @@ export default function KioskPage() {
                             {kioskTime(s.end_minute)}
                           </span>
                           <strong>
-                            {liveSchedule && s === currentPeriod && 'Сейчас · '}
                             {s.state === 'free' ? 'Свободно' : 'Занято'}
                           </strong>
                         </div>
@@ -1969,11 +2278,13 @@ export default function KioskPage() {
       </div>
       {screen === 'status' && (
         <footer className="kiosk-footer">
-          <span>
-            {connected
-              ? 'Расписание обновляется автоматически'
-              : 'Pass · Переговорные'}
-          </span>
+          {!deviceToken && (
+            <span>
+              {connected
+                ? 'Расписание обновляется автоматически'
+                : 'Pass · Переговорные'}
+            </span>
+          )}
           <button
             ref={settingsControl}
             aria-label="Настройки планшета"
@@ -1983,6 +2294,16 @@ export default function KioskPage() {
             <Settings size={22} />
           </button>
         </footer>
+      )}
+      {screen === 'status' && deviceToken && liveSchedule && !receipt && (
+        <KioskStandby
+          logoSrc={logoSrc}
+          onWake={() =>
+            window.requestAnimationFrame(() =>
+              bookControl.current?.focus({ preventScroll: true }),
+            )
+          }
+        />
       )}
     </main>
   );
