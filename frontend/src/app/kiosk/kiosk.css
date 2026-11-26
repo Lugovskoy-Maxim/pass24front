@@ -497,13 +497,6 @@
   color: #fff;
   overflow: hidden;
 }
-.kiosk-standby::after {
-  content: '';
-  position: absolute;
-  inset: 0;
-  border: clamp(3px, 0.55vmin, 8px) solid var(--status-active);
-  pointer-events: none;
-}
 .kiosk-standby video,
 .kiosk-standby-wake {
   position: absolute;

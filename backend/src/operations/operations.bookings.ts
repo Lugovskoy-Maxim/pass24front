@@ -111,6 +111,8 @@ export class OperationsBookings {
     if (query.bc)
       filter['room.business_center.id'] = integer(query.bc, 'bc', 1);
     if (query.room_type) filter['room.type'] = textValue(query.room_type, 32);
+    if (actor.kind === 'admin' && query.tab === 'kiosk')
+      filter.source = 'kiosk';
     let rows = await this.store
       .collection('bookings')
       .find(filter)
@@ -125,23 +127,30 @@ export class OperationsBookings {
         ['confirmed', 'paid', 'cancelled'].includes(row.status),
       );
     const search = textValue(query.search, 200).toLocaleLowerCase('ru');
+    const page = integer(query.page || 1, 'page', 1);
+    const perPage = integer(query.per_page || 20, 'per_page', 1, 100);
+    const offset = (page - 1) * perPage;
     const presented: any[] = [];
-    for (const row of rows) {
+    for (const row of search ? rows : rows.slice(offset, offset + perPage)) {
       const item = await this.present(row);
       if (
         !search ||
-        [row.number, item.requester.name, item.requester.phone, row.room?.title]
+        [
+          row.number,
+          item.requester.name,
+          item.requester.phone,
+          item.requester.email,
+          row.room?.title,
+        ]
           .join(' ')
           .toLocaleLowerCase('ru')
           .includes(search)
       )
         presented.push(item);
     }
-    const page = integer(query.page || 1, 'page', 1);
-    const perPage = integer(query.per_page || 20, 'per_page', 1, 100);
     return {
-      items: presented.slice((page - 1) * perPage, page * perPage),
-      total: presented.length,
+      items: search ? presented.slice(offset, offset + perPage) : presented,
+      total: search ? presented.length : rows.length,
       page,
       per_page: perPage,
       statuses: BOOKING_STATUSES,
@@ -257,7 +266,7 @@ export class OperationsBookings {
         'Выбранное время уже занято. Обновите доступные интервалы.',
       );
   }
-  async availability(roomId: number, date: string) {
+  async availability(roomId: number, date: string, includeBookingIds = false) {
     dateValue(date);
     const catalog = await this.catalog.get();
     const room = catalog.rooms.find((r: any) => r.id === roomId);
@@ -273,6 +282,7 @@ export class OperationsBookings {
           .filter((s: Segment) => s.date === date)
           .map((s: Segment) => ({
             ...s,
+            ...(includeBookingIds && { booking_id: row.id }),
             slot_state:
               row.status === 'blocked'
                 ? 'blocked'
@@ -300,6 +310,7 @@ export class OperationsBookings {
         end_minute: end,
         state: range?.slot_state || 'free',
         hold_until: range?.hold_until || null,
+        ...(includeBookingIds && range && { booking_id: range.booking_id }),
       });
     }
     return {
@@ -409,6 +420,7 @@ export class OperationsBookings {
       email?: string;
       phone?: string;
     }) => Promise<void>,
+    source?: 'kiosk',
   ) {
     if (actor.kind === 'admin') requirePermission(actor, 'bookings.manage');
     const receipt = await this.store.receipt(
@@ -527,7 +539,7 @@ export class OperationsBookings {
           pass_principal_id: input.pass_principal_id || null,
           pass_operation_ref: operationRef.operationId,
           operation_ref: operationRef,
-          source: actor.kind === 'admin' ? 'admin' : 'site',
+          source: source ?? (actor.kind === 'admin' ? 'admin' : 'site'),
           comment_client: textValue(input.comment_client, 5000),
           comment_admin: '',
           attendees: await this.attendees(

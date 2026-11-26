@@ -1615,8 +1615,33 @@ describe('Operations with real replica-set transactions', () => {
     ).rejects.toMatchObject({ status: 422 });
     expect(await store.collection('bookings').countDocuments()).toBe(0);
     expect(await store.collection('outbox').countDocuments()).toBe(0);
-    const created = await bookings.create(resident, draft, 'kiosk-checkout');
+    const created = await bookings.create(
+      resident,
+      draft,
+      'kiosk-checkout',
+      undefined,
+      'kiosk',
+    );
     const id = created.booking.id;
+    await expect(bookings.list(admin, { tab: 'kiosk' })).resolves.toMatchObject(
+      {
+        total: 1,
+        items: [{ id, source: 'kiosk', status: 'hold' }],
+      },
+    );
+    const { date, start_minute } = input.segments[0];
+    const adminCalendar = await bookings.availability(
+      input.room_id,
+      date,
+      true,
+    );
+    expect(
+      adminCalendar.slots.find((slot) => slot.start_minute === start_minute),
+    ).toMatchObject({ booking_id: id, state: 'hold' });
+    const publicCalendar = await bookings.availability(input.room_id, date);
+    expect(
+      publicCalendar.slots.find((slot) => slot.start_minute === start_minute),
+    ).not.toHaveProperty('booking_id');
     const token = created.payment.payment_token;
     const url = 'https://yookassa.ru/checkout/test';
     const gateway = jest.spyOn(payments as any, 'gateway').mockResolvedValue({

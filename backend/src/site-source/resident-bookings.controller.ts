@@ -209,6 +209,7 @@ export class ResidentBookingsController {
         deferGateway
           ? (contact) => this.payments.validateKioskPayment(contact)
           : undefined,
+        deferGateway ? 'kiosk' : undefined,
       ),
       deferGateway,
     );

@@ -95,6 +95,7 @@ export type TicketDetail = {
 };
 export type Booking = {
   id: number;
+  source?: string;
   number: string;
   room_id: number;
   room: {
