@@ -47,6 +47,18 @@ export class User {
   password?: string;
 
   @Prop({ select: false })
+  kioskSmsHash?: string;
+
+  @Prop({ select: false })
+  kioskSmsDeviceHash?: string;
+
+  @Prop({ select: false })
+  kioskSmsSentAt?: Date;
+
+  @Prop({ select: false })
+  kioskSmsAttempts?: number;
+
+  @Prop({ select: false })
   passwordResetCodeHash?: string;
 
   @Prop()

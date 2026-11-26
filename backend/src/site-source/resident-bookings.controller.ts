@@ -59,7 +59,11 @@ export class ResidentBookingsController {
     fail('forbidden', 'Выберите назначенный вам офис.', 403);
   }
   @Get('context')
-  async rooms(@Req() req: any, @Query('officeId') officeId?: string) {
+  async rooms(
+    @Req() req: any,
+    @Query('officeId') officeId?: string,
+    @Query('kiosk') kiosk?: string,
+  ) {
     const { actor, profile, resource, effective, office } = await this.context(
       req.user,
       officeId,
@@ -97,6 +101,9 @@ export class ResidentBookingsController {
       monthlyMinutes: quota,
       canSpendHours,
       mode: (await this.identity.store.ownership())?.mode || 'mstyle',
+      ...(kiosk === '1' && {
+        onlinePayment: await this.payments.kioskSetupStatus(),
+      }),
     };
   }
   @Get('rooms/:id/slots')

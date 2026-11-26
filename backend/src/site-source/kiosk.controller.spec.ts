@@ -13,6 +13,8 @@ describe('meeting room kiosk access', () => {
   let bookings: any;
   let identity: any;
   let paymentSetup: jest.Mock;
+  let auth: { requestKioskSms: jest.Mock; confirmKioskSms: jest.Mock };
+  let jwt: { sign: jest.Mock };
   beforeEach(() => {
     devices = {
       findOne: jest.fn(),
@@ -54,12 +56,56 @@ describe('meeting room kiosk access', () => {
       }),
     };
     paymentSetup = jest.fn().mockResolvedValue('capture_required');
+    auth = { requestKioskSms: jest.fn(), confirmKioskSms: jest.fn() };
+    jwt = { sign: jest.fn() };
     controller = new KioskController(
       bookings as OperationsBookings,
       identity as OperationsIdentity,
       { kioskSetupStatus: paymentSetup } as unknown as OperationsPayments,
-      {} as AuthService,
-      {} as JwtService,
+      auth as unknown as AuthService,
+      jwt as unknown as JwtService,
+    );
+  });
+
+  it('requires a bound tablet for SMS and throttles requests before sending', async () => {
+    const header = `Bearer ${token}`;
+    const body = { phone: '+79991234567' };
+    await expect(controller.requestSms(header, body)).rejects.toMatchObject({
+      status: 401,
+    });
+    devices.findOne.mockResolvedValue({ _id: 'tablet', roomId: 301 });
+    devices.updateOne.mockResolvedValueOnce({ modifiedCount: 0 });
+    await expect(controller.requestSms(header, body)).rejects.toMatchObject({
+      status: 429,
+    });
+    expect(auth.requestKioskSms).not.toHaveBeenCalled();
+    devices.updateOne.mockResolvedValueOnce({ modifiedCount: 1 });
+    auth.requestKioskSms.mockResolvedValueOnce({ ok: true });
+    await expect(controller.requestSms(header, body)).resolves.toEqual({
+      ok: true,
+    });
+    expect(auth.requestKioskSms).toHaveBeenCalledWith(body.phone, header);
+  });
+
+  it('issues a room-scoped JWT after confirming the SMS code', async () => {
+    const header = `Bearer ${token}`;
+    const body = { phone: '+79991234567', code: '001234' };
+    const user = { id: 'tenant', email: 'tenant@example.com' };
+    devices.findOne.mockResolvedValue({ roomId: 301 });
+    auth.confirmKioskSms.mockResolvedValueOnce({ user });
+    jwt.sign.mockReturnValue('kiosk-session');
+    await expect(controller.confirmSms(header, body)).resolves.toEqual({
+      user,
+      token: 'kiosk-session',
+    });
+    expect(auth.confirmKioskSms).toHaveBeenCalledWith(
+      body.phone,
+      body.code,
+      header,
+    );
+    expect(jwt.sign).toHaveBeenCalledWith(
+      { sub: user.id, email: user.email, kioskRoomId: 301 },
+      { expiresIn: '15m' },
     );
   });
 

@@ -989,6 +989,104 @@ export class AuthService {
     return { user: await this.toUserDto(user, offices), token };
   }
 
+  async requestKioskSms(phoneInput: unknown, deviceToken: string) {
+    const phone =
+      typeof phoneInput === 'string' && phoneInput.length <= 32
+        ? normalizeRuMobilePhone(phoneInput)
+        : null;
+    if (!phone)
+      throw new BadRequestException('Укажите корректный мобильный номер');
+    if (!this.smsService.textEnabled())
+      throw new BadRequestException('Вход по СМС временно недоступен');
+    const user = await this.findUserByPhone(phone);
+    if (!user) return { ok: true };
+
+    const deviceHash = crypto
+      .createHash('sha256')
+      .update(deviceToken)
+      .digest('hex');
+    const code = generateOtpCode(6);
+    const hash = crypto
+      .createHmac('sha256', deviceToken)
+      .update(phone + ':' + code)
+      .digest('hex');
+    const sentAt = new Date();
+    const updated = await this.userModel.updateOne(
+      {
+        _id: user._id,
+        phone: user.phone,
+        isActive: true,
+        isBlocked: { $ne: true },
+        invitePending: { $ne: true },
+        role: { $in: ['tenant', 'tenant_employee'] },
+        $or: [
+          { kioskSmsSentAt: { $exists: false } },
+          {
+            kioskSmsSentAt: {
+              $lte: new Date(+sentAt - SMS_RESEND_INTERVAL_MS),
+            },
+          },
+        ],
+      },
+      {
+        $set: {
+          kioskSmsHash: hash,
+          kioskSmsDeviceHash: deviceHash,
+          kioskSmsAttempts: 5,
+          kioskSmsSentAt: sentAt,
+        },
+      },
+    );
+    if (updated.modifiedCount)
+      await this.smsService.sendText(phone, `Код входа в киоск Pass: ${code}`);
+    return { ok: true };
+  }
+
+  async confirmKioskSms(
+    phoneInput: unknown,
+    code: unknown,
+    deviceToken: string,
+  ) {
+    const error = new UnauthorizedException('Код неверен или истёк');
+    const phone =
+      typeof phoneInput === 'string' && phoneInput.length <= 32
+        ? normalizeRuMobilePhone(phoneInput)
+        : null;
+    if (!phone || typeof code !== 'string' || !/^\d{6}$/.test(code))
+      throw error;
+    const hash = crypto
+      .createHmac('sha256', deviceToken)
+      .update(phone + ':' + code)
+      .digest('hex');
+    const filter = {
+      phone: { $in: this.phoneLookupVariants(phone) },
+      isActive: true,
+      isBlocked: { $ne: true },
+      invitePending: { $ne: true },
+      role: { $in: ['tenant', 'tenant_employee'] },
+      kioskSmsSentAt: { $gt: new Date(Date.now() - 5 * 60_000) },
+      kioskSmsAttempts: { $gt: 0 },
+      kioskSmsDeviceHash: crypto
+        .createHash('sha256')
+        .update(deviceToken)
+        .digest('hex'),
+    };
+    const user = await this.userModel.findOneAndUpdate(
+      { ...filter, kioskSmsHash: hash },
+      {
+        $unset: { kioskSmsHash: 1, kioskSmsDeviceHash: 1, kioskSmsAttempts: 1 },
+      },
+    );
+    if (!user) {
+      await this.userModel.updateOne(
+        { ...filter, kioskSmsHash: { $exists: true } },
+        { $inc: { kioskSmsAttempts: -1 } },
+      );
+      throw error;
+    }
+    return this.me(user._id.toString());
+  }
+
   async me(userId: string) {
     const user = await this.userModel.findById(userId);
     if (!user) throw new UnauthorizedException();

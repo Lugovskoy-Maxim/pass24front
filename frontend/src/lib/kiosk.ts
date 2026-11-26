@@ -94,6 +94,10 @@ export const kioskApi = {
     call<{ ok: true }>('/kiosk/login/approve', token, { code }),
   login: (login: string, password: string) =>
     call<KioskSession>('/auth/login', null, { login, password }),
+  requestSms: (token: string, phone: string) =>
+    call<{ ok: true }>('/kiosk/login/sms/request', token, { phone }),
+  confirmSms: (token: string, phone: string, code: string) =>
+    call<KioskSession>('/kiosk/login/sms/confirm', token, { phone, code }),
   rooms: (token: string) =>
     call<{
       rooms: { id: number; title: string }[];
@@ -105,8 +109,8 @@ export const kioskApi = {
     call('/kiosk/device', token, { token: deviceToken }, 'DELETE'),
   status: (token: string) => call<KioskStatus>('/kiosk/status', token),
   context: (token: string, officeId: string) =>
-    call<BookingContext>(
-      `/office-services/bookings/context?officeId=${encodeURIComponent(officeId)}`,
+    call<BookingContext & { onlinePayment?: KioskPaymentSetup }>(
+      `/office-services/bookings/context?kiosk=1&officeId=${encodeURIComponent(officeId)}`,
       token,
     ),
   slots: (token: string, officeId: string, roomId: number, date: string) =>

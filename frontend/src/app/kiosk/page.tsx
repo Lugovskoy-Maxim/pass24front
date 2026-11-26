@@ -43,6 +43,12 @@ import { SiteBrand } from '@/components/SiteBrand';
 import { useConfig } from '@/hooks/useConfig';
 import './kiosk.css';
 
+const minutePlural = new Intl.PluralRules('ru');
+function durationLabel(minutes: number) {
+  const form = minutePlural.select(minutes);
+  return `${minutes} ${form === 'one' ? 'минута' : form === 'few' ? 'минуты' : 'минут'}`;
+}
+
 const DEVICE_KEY = 'pass24_kiosk_device';
 const IDLE_MS = 60_000;
 const SCHEDULE_REFRESH_MS = 15_000;
@@ -99,6 +105,9 @@ function LoginForm({
   );
   const [login, setLogin] = useState('');
   const [password, setPassword] = useState('');
+  const [sms, setSms] = useState(false);
+  const [smsSent, setSmsSent] = useState(false);
+  const [recover, setRecover] = useState(false);
   const [busy, setBusy] = useState(false);
   const [error, setError] = useState('');
   const [qr, setQr] = useState<KioskLoginChallenge | null>(null);
@@ -139,8 +148,15 @@ function LoginForm({
     setBusy(true);
     setError('');
     try {
-      const result = await kioskApi.login(login.trim(), password);
-      if (active.current) onLogin(result);
+      if (sms && !smsSent) {
+        await kioskApi.requestSms(deviceToken, login.trim());
+        if (active.current) setSmsSent(true);
+      } else {
+        const result = sms
+          ? await kioskApi.confirmSms(deviceToken, login.trim(), password)
+          : await kioskApi.login(login.trim(), password);
+        if (active.current) onLogin(result);
+      }
     } catch (e) {
       if (active.current) setError(getErrorMessage(e));
     } finally {
@@ -150,6 +166,25 @@ function LoginForm({
       }
     }
   }
+  if (recover)
+    return (
+      <section className="kiosk-panel kiosk-login kiosk-stack">
+        <button className="kiosk-back" onClick={() => setRecover(false)}>
+          <ArrowLeft size={20} /> Назад
+        </button>
+        <h1 tabIndex={-1}>Восстановление пароля</h1>
+        <div className="kiosk-qr">
+          <QRCode
+            value={new URL('/login?mode=forgot', window.location.origin).href}
+            size={224}
+            title="QR-код для восстановления пароля Pass"
+          />
+        </div>
+        <p>
+          Отсканируйте QR-код камерой телефона, чтобы восстановить пароль Pass.
+        </p>
+      </section>
+    );
   if (qr)
     return (
       <QrLogin
@@ -182,7 +217,7 @@ function LoginForm({
           onClick={() => void startQr()}
         >
           <QrCode size={22} aria-hidden="true" />
-          {busy && !password ? 'Подготавливаем QR…' : 'Войти по QR-коду'}
+          Войти по QR-коду
         </button>
       )}
       {admin && (
@@ -206,6 +241,9 @@ function LoginForm({
                 onChange={() => {
                   setMethod(option);
                   setLogin('');
+                  setPassword('');
+                  setSms(false);
+                  setSmsSent(false);
                   setError('');
                 }}
               />
@@ -230,22 +268,32 @@ function LoginForm({
             spellCheck={false}
             value={login}
             onChange={(e) => setLogin(e.target.value)}
-            disabled={busy}
+            disabled={busy || smsSent}
           />
         </label>
-        <label>
-          Пароль
-          <input
-            className="input"
-            name="kiosk-password"
-            type="password"
-            required
-            autoComplete="off"
-            value={password}
-            onChange={(e) => setPassword(e.target.value)}
-            disabled={busy}
-          />
-        </label>
+        {(!sms || smsSent) && (
+          <label>
+            {sms ? 'Код из СМС' : 'Пароль'}
+            <input
+              className="input"
+              name="kiosk-password"
+              type={sms ? 'text' : 'password'}
+              inputMode={sms ? 'numeric' : undefined}
+              maxLength={sms ? 6 : undefined}
+              pattern={sms ? '[0-9]{6}' : undefined}
+              required
+              autoComplete="off"
+              value={password}
+              onChange={(e) => setPassword(e.target.value)}
+              disabled={busy}
+            />
+          </label>
+        )}
+        {smsSent && (
+          <p role="status">
+            Если для номера доступен вход, мы отправили СМС с кодом.
+          </p>
+        )}
         {error && (
           <p className="kiosk-error" role="alert">
             {error}
@@ -253,9 +301,36 @@ function LoginForm({
         )}
         <button
           className="btn btn-primary"
-          disabled={busy || !login.trim() || !password}
+          disabled={busy || !login.trim() || (!password && (!sms || smsSent))}
         >
-          {busy ? 'Вход…' : 'Войти'}
+          {busy ? 'Подождите…' : sms && !smsSent ? 'Получить код' : 'Войти'}
+        </button>
+        {!admin && deviceToken && method.id === 'phone' && (
+          <button
+            type="button"
+            className="btn btn-secondary"
+            disabled={busy}
+            onClick={() => {
+              setSms(!sms);
+              setSmsSent(false);
+              setPassword('');
+              setError('');
+            }}
+          >
+            {sms ? 'Войти с паролем' : 'Войти по СМС'}
+          </button>
+        )}
+        <button
+          type="button"
+          className="btn btn-secondary"
+          disabled={busy}
+          onClick={() => {
+            setPassword('');
+            setError('');
+            setRecover(true);
+          }}
+        >
+          Забыли пароль?
         </button>
       </form>
     </section>
@@ -563,13 +638,17 @@ function Booking({
   const date = selectedDate < status.date ? status.date : selectedDate;
   const isToday = date === status.date;
   const tomorrowDate = shiftBookingDate(status.date, 1);
-  const [context, setContext] = useState<BookingContext | null>(null);
+  const [context, setContext] = useState<
+    (BookingContext & { onlinePayment?: KioskPaymentSetup }) | null
+  >(null);
   const [slots, setSlots] = useState<KioskSlot[]>([]);
   const [slotRefreshFailed, setSlotRefreshFailed] = useState(false);
   const [start, setStart] = useState(-1);
   const [end, setEnd] = useState(-1);
   const [useHours, setUseHours] = useState(false);
-  const [paymentMethod, setPaymentMethod] = useState('card_online');
+  const [preferredPayment, setPaymentMethod] = useState('card_online');
+  const cardAvailable = context?.onlinePayment === 'configured';
+  const paymentMethod = cardAvailable ? preferredPayment : 'cash';
   const [quote, setQuote] = useState<{
     value: BookingQuote;
     key: string;
@@ -618,17 +697,22 @@ function Booking({
       setLoading(false);
       return;
     }
-    void Promise.all([
-      kioskApi.context(session.token, officeId),
-      kioskApi.slots(session.token, officeId, status.room.id, date),
-    ])
-      .then(([c, s]) => {
-        if (active) {
-          setContext(c);
-          setSlots(s.slots);
-          setLoadedKey(availabilityKey);
-        }
-      })
+    void (async () => {
+      const nextContext = await kioskApi.context(session.token, officeId);
+      if (!active) return;
+      setContext(nextContext);
+      if (nextContext.rooms.some((room) => room.id === status.room.id)) {
+        const result = await kioskApi.slots(
+          session.token,
+          officeId,
+          status.room.id,
+          date,
+        );
+        if (!active) return;
+        setSlots(result.slots);
+      }
+      setLoadedKey(availabilityKey);
+    })()
       .catch((e) => {
         if (active) {
           if (getErrorStatus(e) === 401) onExit();
@@ -1050,7 +1134,7 @@ function Booking({
                     onChange={(e) => setUseHours(e.target.checked)}
                   />
                   Использовать бесплатные минуты · остаток{' '}
-                  {context.availableMinutes} мин
+                  {durationLabel(context.availableMinutes)}
                 </label>
               )}
             </>
@@ -1080,7 +1164,7 @@ function Booking({
             </p>
             <p className="kiosk-selection">
               <Clock3 size={22} />
-              {kioskTime(start)}–{kioskTime(end)} · {end - start} мин
+              {kioskTime(start)}–{kioskTime(end)} · {durationLabel(end - start)}
             </p>
             {currentQuote?.total_amount_minor !== 0 && (
               <div>
@@ -1095,11 +1179,18 @@ function Booking({
                     setQuote(null);
                   }}
                 >
-                  <option value="card_online">
-                    Картой на телефоне · ЮKassa
-                  </option>
+                  {cardAvailable && (
+                    <option value="card_online">
+                      Картой на телефоне · ЮKassa
+                    </option>
+                  )}
                   <option value="cash">Наличными</option>
                 </select>
+                {!cardAvailable && (
+                  <p className="kiosk-muted">
+                    Оплата картой временно недоступна.
+                  </p>
+                )}
               </div>
             )}
             {(!free || start <= serverMinute) && (
@@ -1125,7 +1216,7 @@ function Booking({
                   {currentQuote.writeoff_min > 0 && (
                     <div>
                       <dt>Спишем из бесплатных минут</dt>
-                      <dd>{currentQuote.writeoff_min} мин</dd>
+                      <dd>{durationLabel(currentQuote.writeoff_min)}</dd>
                     </div>
                   )}
                   <div className="kiosk-quote-total">
@@ -1548,8 +1639,16 @@ export default function KioskPage() {
     liveSchedule &&
     schedule.find((s) => s.state === 'free' && s.start_minute > minute);
   const workStart = schedule[0]?.start_minute ?? 0;
-  const workEnd = schedule.at(-1)?.end_minute ?? 0;
+  const workEnd = schedule[schedule.length - 1]?.end_minute ?? 0;
   const workSpan = workEnd - workStart;
+  const pastWidth = liveSchedule
+    ? Math.max(0, Math.min(minute, workEnd) - workStart)
+    : 0;
+  const firstTick = (Math.floor(workStart / 30) + 1) * 30;
+  const ticks = Array.from(
+    { length: Math.max(0, Math.ceil((workEnd - firstTick) / 30)) },
+    (_, index) => firstTick + index * 30,
+  );
   return (
     <main
       ref={kioskRoot}
@@ -1671,7 +1770,7 @@ export default function KioskPage() {
                         nextFree.start_minute !== currentPeriod.end_minute) && (
                         <p className="kiosk-until">
                           До {kioskTime(currentPeriod.end_minute)} ·{' '}
-                          {currentPeriod.end_minute - minute} мин
+                          {durationLabel(currentPeriod.end_minute - minute)}
                         </p>
                       )}
                     {nextFree && !available && (
@@ -1729,6 +1828,23 @@ export default function KioskPage() {
                               style={{
                                 left: `${(100 * (period.start_minute - workStart)) / workSpan}%`,
                                 width: `${(100 * (period.end_minute - period.start_minute)) / workSpan}%`,
+                              }}
+                            />
+                          ))}
+                          {pastWidth > 0 && (
+                            <span
+                              className="kiosk-timeline-segment is-past"
+                              style={{
+                                width: `${(100 * pastWidth) / workSpan}%`,
+                              }}
+                            />
+                          )}
+                          {ticks.map((tick) => (
+                            <span
+                              key={tick}
+                              className={`kiosk-timeline-tick ${tick % 60 === 0 ? 'is-hour' : ''}`}
+                              style={{
+                                left: `${(100 * (tick - workStart)) / workSpan}%`,
                               }}
                             />
                           ))}

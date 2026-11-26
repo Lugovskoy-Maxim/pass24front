@@ -48,6 +48,49 @@ export class KioskController {
     return this.bookings.store.collection('kiosk_logins');
   }
 
+  @Post('login/sms/request')
+  @Header('Cache-Control', 'no-store')
+  async requestSms(
+    @Headers('authorization') authorization: string | undefined,
+    @Body() body: { phone?: unknown },
+  ) {
+    const device = await this.device(authorization);
+    const now = new Date();
+    const allowed = await this.devices().updateOne(
+      {
+        _id: device._id,
+        revoked: false,
+        $or: [
+          { smsRequestedAt: { $exists: false } },
+          { smsRequestedAt: { $lte: new Date(+now - 10_000) } },
+        ],
+      },
+      { $set: { smsRequestedAt: now } },
+    );
+    if (!allowed.modifiedCount)
+      fail('rate_limited', 'Повторите запрос через 10 секунд.', 429);
+    return this.auth.requestKioskSms(body?.phone, authorization!);
+  }
+
+  @Post('login/sms/confirm')
+  @Header('Cache-Control', 'no-store')
+  async confirmSms(
+    @Headers('authorization') authorization: string | undefined,
+    @Body() body: { phone?: unknown; code?: unknown },
+  ) {
+    const device = await this.device(authorization);
+    const { user } = await this.auth.confirmKioskSms(
+      body?.phone,
+      body?.code,
+      authorization!,
+    );
+    const token = this.jwt.sign(
+      { sub: user.id, email: user.email, kioskRoomId: device.roomId },
+      { expiresIn: '15m' },
+    );
+    return { user, token };
+  }
+
   @Post('login/start')
   @Header('Cache-Control', 'no-store')
   async startLogin(@Headers('authorization') authorization?: string) {
