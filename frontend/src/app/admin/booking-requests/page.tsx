@@ -13,6 +13,9 @@ import {
   Search,
   RotateCcw,
   ArrowLeft,
+  ChevronLeft,
+  ChevronRight,
+  RefreshCw,
 } from 'lucide-react';
 import { AdminLayout } from '@/components/AdminLayout';
 import {
@@ -48,8 +51,24 @@ import {
   params,
   paymentLabels,
   operationDate,
+  Segment,
 } from '@/lib/operations';
 import { canBookingAction } from '@/lib/booking-status';
+
+const bookingDay = (date = new Date()) =>
+  date.toLocaleDateString('sv-SE', { timeZone: 'Europe/Moscow' });
+const shiftBookingDay = (date: string, days: number) =>
+  new Date(Date.parse(`${date}T12:00:00+03:00`) + days * 86_400_000)
+    .toISOString()
+    .slice(0, 10);
+
+const calendarLabels: Record<string, string> = {
+  free: 'Свободно',
+  hold: 'Ожидает оплаты',
+  paid: 'Оплачено',
+  reserved: 'Занято',
+  blocked: 'Блокировка',
+};
 
 export default function BookingRequestsPage() {
   const { user } = useAuth();
@@ -71,14 +90,23 @@ export default function BookingRequestsPage() {
     payment_method: '',
     room_id: '',
     date: '',
-    tab: 'pending',
+    tab: '',
     page: 1,
   });
   const [view, setView] = useState('list');
   const [calendar, setCalendar] = useState<{
-    slots: Array<{ start_minute: number; end_minute: number; state: string }>;
+    key: string;
+    slots: Array<{
+      start_minute: number;
+      end_minute: number;
+      state: string;
+      booking_id?: number;
+    }>;
   } | null>(null);
   const [editor, setEditor] = useState<'new' | 'edit' | 'block' | null>(null);
+  const [initialSlot, setInitialSlot] = useState<
+    Segment & { room_id: number }
+  >();
   const [action, setAction] = useState('');
   const [note, setNote] = useState('');
   const [invoiceParty, setInvoiceParty] = useState<GuestInvoiceParty>({
@@ -122,7 +150,8 @@ export default function BookingRequestsPage() {
     }
   }, []);
   useEffect(() => {
-    void load();
+    const timer = window.setTimeout(() => void load(), 220);
+    return () => window.clearTimeout(timer);
   }, [load, filters]);
   useAutoRefresh(load);
   useEffect(() => {
@@ -153,21 +182,22 @@ export default function BookingRequestsPage() {
   }, []);
   useEffect(() => {
     let active = true;
-    setCalendar(null);
     if (view === 'calendar' && filters.room_id && filters.date) {
+      const key = `${filters.room_id}/${filters.date}`;
       setCalendarLoading(true);
       void request<{
         slots: Array<{
           start_minute: number;
           end_minute: number;
           state: string;
+          booking_id?: number;
         }>;
       }>(
         '/admin/booking-requests/availability' +
           params({ room_id: filters.room_id, date: filters.date }),
       )
         .then((next) => {
-          if (active) setCalendar(next);
+          if (active) setCalendar({ ...next, key });
         })
         .catch((e) => {
           if (active) setError(getErrorMessage(e));
@@ -180,6 +210,10 @@ export default function BookingRequestsPage() {
       active = false;
     };
   }, [view, filters.room_id, filters.date, list]);
+  const visibleCalendar =
+    calendar?.key === `${filters.room_id}/${filters.date}` ? calendar : null;
+  const setCalendarDate = (date: string) =>
+    setFilters((previous) => ({ ...previous, date, page: 1 }));
   const open = async (id: number) => {
     selection.current = id;
     setSelectedBookingId(id);
@@ -300,7 +334,10 @@ export default function BookingRequestsPage() {
             <button
               className="btn btn-secondary"
               disabled={!writable}
-              onClick={() => setEditor('block')}
+              onClick={() => {
+                setInitialSlot(undefined);
+                setEditor('block');
+              }}
             >
               <Ban size={16} />
               Блокировка
@@ -308,7 +345,10 @@ export default function BookingRequestsPage() {
             <button
               className="btn btn-primary"
               disabled={!writable}
-              onClick={() => setEditor('new')}
+              onClick={() => {
+                setInitialSlot(undefined);
+                setEditor('new');
+              }}
             >
               <Plus size={17} />
               Новая заявка
@@ -335,6 +375,8 @@ export default function BookingRequestsPage() {
                 label="Очереди бронирований"
                 active={filters.tab}
                 items={[
+                  { value: '', label: 'Все' },
+                  { value: 'kiosk', label: 'С киоска' },
                   {
                     value: 'pending',
                     label: 'Требуют действий',
@@ -342,7 +384,6 @@ export default function BookingRequestsPage() {
                   },
                   { value: 'conflicts', label: 'Конфликты' },
                   { value: 'history', label: 'История' },
-                  { value: '', label: 'Все' },
                 ]}
                 onChange={(tab) =>
                   setFilters((current) => ({ ...current, tab, page: 1 }))
@@ -364,10 +405,27 @@ export default function BookingRequestsPage() {
                 <button
                   type="button"
                   aria-pressed={view === 'calendar'}
-                  onClick={() => setView('calendar')}
+                  onClick={() => {
+                    setView('calendar');
+                    setFilters((previous) => ({
+                      ...previous,
+                      date: previous.date || bookingDay(),
+                      room_id:
+                        previous.room_id || String(catalog?.rooms[0]?.id || ''),
+                      page: 1,
+                    }));
+                  }}
                 >
                   <CalendarDays size={15} />
                   Занятость
+                </button>
+                <button
+                  type="button"
+                  aria-label="Обновить бронирования"
+                  title="Обновить бронирования"
+                  onClick={() => void load()}
+                >
+                  <RefreshCw size={15} aria-hidden="true" />
                 </button>
               </div>
             </div>
@@ -388,7 +446,7 @@ export default function BookingRequestsPage() {
                     <input
                       aria-label="Поиск заявок"
                       className="input"
-                      placeholder="Номер, имя или телефон"
+                      placeholder="Номер, имя, телефон или почта"
                       value={filters.search}
                       onChange={(e) =>
                         setFilters((f) => ({
@@ -493,12 +551,59 @@ export default function BookingRequestsPage() {
           </section>
           {error && <PageError message={error} onRetry={load} />}
           {view === 'calendar' && (
-            <section className="card p-4 mb-5">
-              {calendarLoading ? (
+            <section
+              className="card p-4 mb-5 space-y-3"
+              aria-label="Занятость помещения"
+              aria-busy={calendarLoading}
+            >
+              <div className="booking-calendar-toolbar">
+                <button
+                  type="button"
+                  className="btn btn-secondary"
+                  aria-label="Предыдущий день"
+                  disabled={!filters.date}
+                  onClick={() =>
+                    setCalendarDate(shiftBookingDay(filters.date, -1))
+                  }
+                >
+                  <ChevronLeft size={18} />
+                </button>
+                <strong>
+                  {filters.date ? operationDate(filters.date) : 'Выберите дату'}
+                </strong>
+                <button
+                  type="button"
+                  className="btn btn-secondary"
+                  aria-label="Следующий день"
+                  disabled={!filters.date}
+                  onClick={() =>
+                    setCalendarDate(shiftBookingDay(filters.date, 1))
+                  }
+                >
+                  <ChevronRight size={18} />
+                </button>
+                <button
+                  type="button"
+                  className="btn btn-secondary"
+                  onClick={() => setCalendarDate(bookingDay())}
+                >
+                  Сегодня
+                </button>
+                <button
+                  type="button"
+                  className="btn btn-secondary"
+                  onClick={() =>
+                    setCalendarDate(shiftBookingDay(bookingDay(), 1))
+                  }
+                >
+                  Завтра
+                </button>
+              </div>
+              {calendarLoading && !visibleCalendar ? (
                 <p className="text-[var(--muted)]" role="status">
                   Загрузка занятости…
                 </p>
-              ) : !calendar ? (
+              ) : !visibleCalendar ? (
                 <p className="text-[var(--muted)]">
                   {filters.room_id && filters.date
                     ? 'Не удалось загрузить занятость. Повторите загрузку.'
@@ -507,31 +612,57 @@ export default function BookingRequestsPage() {
               ) : (
                 <>
                   <p className="text-sm text-[var(--muted)] mb-3">
-                    Время московское
+                    {writable
+                      ? 'Свободное время открывает новую заявку, занятое — карточку брони.'
+                      : 'Выберите занятый интервал, чтобы открыть карточку брони.'}{' '}
+                    Время московское.
                   </p>
-                  <div className="grid grid-cols-3 sm:grid-cols-6 gap-2">
-                    {calendar.slots.map((s) => (
-                      <div
-                        key={s.start_minute}
-                        className={`rounded p-2 border text-sm ${s.state === 'free' ? 'border-emerald-500/40 bg-emerald-500/10' : 'border-[var(--border)] bg-[var(--surface-muted)]'}`}
-                      >
-                        <strong>
-                          {clock(s.start_minute)}–{clock(s.end_minute)}
-                        </strong>
-                        <p className="text-xs text-[var(--muted)]">
-                          {(
-                            {
-                              free: 'Свободно',
-                              hold: 'Ожидает оплаты',
-                              paid: 'Оплачено',
-                              reserved: 'Занято',
-                              blocked: 'Блокировка',
-                            } as Record<string, string>
-                          )[s.state] || s.state}
-                        </p>
-                      </div>
-                    ))}
+                  <div className="booking-calendar-grid">
+                    {visibleCalendar.slots.map((slot) => {
+                      const start = clock(slot.start_minute);
+                      const free = slot.state === 'free';
+                      const canCreate =
+                        free &&
+                        writable &&
+                        Date.parse(`${filters.date}T${start}:00+03:00`) >
+                          Date.now();
+                      return (
+                        <button
+                          key={slot.start_minute}
+                          type="button"
+                          className="booking-calendar-slot"
+                          data-state={slot.state}
+                          disabled={!slot.booking_id && !canCreate}
+                          onClick={() => {
+                            if (slot.booking_id) {
+                              void open(slot.booking_id);
+                              return;
+                            }
+                            if (!canCreate) return;
+                            setInitialSlot({
+                              room_id: Number(filters.room_id),
+                              date: filters.date,
+                              start_minute: slot.start_minute,
+                              end_minute: slot.end_minute,
+                            });
+                            setEditor('new');
+                          }}
+                        >
+                          <strong>
+                            {start}–{clock(slot.end_minute)}
+                          </strong>
+                          <span>
+                            {calendarLabels[slot.state] || slot.state}
+                          </span>
+                        </button>
+                      );
+                    })}
                   </div>
+                  {!visibleCalendar.slots.length && (
+                    <p className="booking-secondary">
+                      На эту дату нет рабочих интервалов.
+                    </p>
+                  )}
                 </>
               )}
             </section>
@@ -919,11 +1050,12 @@ export default function BookingRequestsPage() {
             open
             embedded
             onClose={() => setEditor(null)}
-            onSaved={() => {
+            onSaved={(id) => {
               void load();
-              if (b) void open(b.id);
+              if (id) void open(id);
             }}
             booking={editor === 'edit' ? b : undefined}
+            initialSlot={editor === 'new' ? initialSlot : undefined}
             block={editor === 'block'}
           />
         </div>

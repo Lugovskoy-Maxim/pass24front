@@ -186,7 +186,7 @@ export class OperationsAdminController {
     );
     if (!catalog.rooms.some((room: any) => room.id === roomId))
       fail('room_not_found', 'Помещение недоступно.', 404);
-    return this.bookings.availability(roomId, String(q.date || ''));
+    return this.bookings.availability(roomId, String(q.date || ''), true);
   }
   @Get('booking-requests')
   @Header('Cache-Control', 'no-store')

@@ -50,6 +50,9 @@ export class User {
   kioskSmsHash?: string;
 
   @Prop({ select: false })
+  kioskMobileRequestId?: number;
+
+  @Prop({ select: false })
   kioskSmsDeviceHash?: string;
 
   @Prop({ select: false })

@@ -5,6 +5,7 @@ import {
   CalendarDays,
   Clock3,
   CreditCard,
+  Tablet,
   UserRound,
 } from 'lucide-react';
 import { OperationsStatusBadge } from './OperationsStatusBadge';
@@ -114,6 +115,15 @@ function BookingStatus({ booking }: { booking: Booking }) {
   );
 }
 
+function BookingSource({ booking }: { booking: Booking }) {
+  if (booking.source !== 'kiosk') return null;
+  return (
+    <span className="booking-source">
+      <Tablet size={13} aria-hidden="true" /> Киоск
+    </span>
+  );
+}
+
 export function BookingRequestsList({
   list,
   loading,
@@ -180,6 +190,7 @@ export function BookingRequestsList({
                       >
                         {item.number}
                       </button>
+                      <BookingSource booking={item} />
                       <span className="booking-secondary booking-created">
                         {operationDate(item.created_at)}
                       </span>
@@ -243,7 +254,10 @@ export function BookingRequestsList({
                 aria-label={`Открыть заявку ${item.number}`}
               >
                 <span className="booking-mobile-card__top">
-                  <strong className="booking-number">{item.number}</strong>
+                  <span className="booking-number">
+                    <strong>{item.number}</strong>
+                    <BookingSource booking={item} />
+                  </span>
                   <BookingStatus booking={item} />
                 </span>
                 <span className="booking-mobile-card__room">
@@ -286,6 +300,7 @@ export function BookingOverview({ booking }: { booking: Booking }) {
     <div className="booking-overview">
       <div className="booking-overview__status">
         <BookingStatus booking={booking} />
+        <BookingSource booking={booking} />
         <span className="booking-secondary">
           Создана {operationDate(booking.created_at)}
         </span>

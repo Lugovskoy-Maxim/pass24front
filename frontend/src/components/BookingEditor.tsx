@@ -21,28 +21,38 @@ export function BookingEditor({
   onClose,
   onSaved,
   booking,
+  initialSlot,
   block = false,
   embedded = false,
 }: {
   open: boolean;
   onClose: () => void;
-  onSaved: () => void;
+  onSaved: (bookingId?: number) => void;
   booking?: Booking;
+  initialSlot?: Segment & { room_id: number };
   block?: boolean;
   embedded?: boolean;
 }) {
   const { toast } = useToast();
   const [catalog, setCatalog] = useState<Catalog | null>(null);
-  const [room, setRoom] = useState(booking?.room_id || 0);
+  const [room, setRoom] = useState(
+    booking?.room_id ?? initialSlot?.room_id ?? 0,
+  );
   const [segments, setSegments] = useState<Segment[]>(
     booking?.segments || [
-      {
-        date: new Date().toLocaleDateString('en-CA', {
-          timeZone: 'Europe/Moscow',
-        }),
-        start_minute: 600,
-        end_minute: 660,
-      },
+      initialSlot
+        ? {
+            date: initialSlot.date,
+            start_minute: initialSlot.start_minute,
+            end_minute: initialSlot.end_minute,
+          }
+        : {
+            date: new Date().toLocaleDateString('en-CA', {
+              timeZone: 'Europe/Moscow',
+            }),
+            start_minute: 600,
+            end_minute: 660,
+          },
     ],
   );
   const [search, setSearch] = useState('');
@@ -127,7 +137,7 @@ export function BookingEditor({
     setBusy(true);
     setError('');
     try {
-      await command(
+      const saved = await command<{ booking?: { id: number } }>(
         booking
           ? '/admin/booking-requests/' + booking.id
           : block
@@ -147,7 +157,7 @@ export function BookingEditor({
             : 'Заявка создана',
         'success',
       );
-      onSaved();
+      onSaved(saved.booking?.id ?? booking?.id);
       onClose();
     } catch (err) {
       setError(getErrorMessage(err));

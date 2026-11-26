@@ -77,14 +77,14 @@ export class KioskController {
   @Header('Cache-Control', 'no-store')
   async confirmSms(
     @Headers('authorization') authorization: string | undefined,
-    @Body() body: { phone?: unknown; code?: unknown },
+    @Body() body: { phone?: unknown; code?: unknown; mobile?: boolean },
   ) {
     const device = await this.device(authorization);
-    const { user } = await this.auth.confirmKioskSms(
-      body?.phone,
-      body?.code,
-      authorization!,
-    );
+    const args = [body?.phone, body?.code, authorization!] as const;
+    const { user } =
+      body?.mobile === true
+        ? await this.auth.confirmKioskSms(...args, true)
+        : await this.auth.confirmKioskSms(...args);
     const token = this.jwt.sign(
       { sub: user.id, email: user.email, kioskRoomId: device.roomId },
       { expiresIn: '15m' },

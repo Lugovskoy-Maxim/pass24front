@@ -4,6 +4,7 @@ import {
   ForbiddenException,
   Injectable,
   NotFoundException,
+  ServiceUnavailableException,
   UnauthorizedException,
 } from '@nestjs/common';
 import { resolvePersonName, splitFullName } from '../common/person-name';
@@ -509,7 +510,7 @@ export class AuthService {
         .createHash('sha256')
         .update(resetToken)
         .digest('hex');
-      const user = await this.userModel.findOne({ phone }).exec();
+      const user = await this.findUserByPhone(phone);
 
       // Ответ не раскрывает, существует ли номер в системе.
       if (!user) {
@@ -940,11 +941,12 @@ export class AuthService {
 
     const login = loginRaw.toLowerCase();
     const phone = normalizeRuMobilePhone(loginRaw);
-    const orConditions: Record<string, string>[] = [
+    const orConditions: Record<string, string | { $in: string[] }>[] = [
       { username: login },
       { email: login },
     ];
-    if (phone) orConditions.push({ phone });
+    if (phone)
+      orConditions.push({ phone: { $in: this.phoneLookupVariants(phone) } });
 
     const user = (await this.userModel
       .findOne({
@@ -996,10 +998,13 @@ export class AuthService {
         : null;
     if (!phone)
       throw new BadRequestException('Укажите корректный мобильный номер');
-    if (!this.smsService.textEnabled())
-      throw new BadRequestException('Вход по СМС временно недоступен');
+    const channel = this.smsService.textEnabled() ? 'sms' : 'mobile';
+    if (channel === 'mobile' && !this.smsService.isConfigured())
+      throw new ServiceUnavailableException(
+        'Подтверждение по телефону недоступно. Войдите с паролем.',
+      );
     const user = await this.findUserByPhone(phone);
-    if (!user) return { ok: true };
+    if (!user) return { ok: true, channel };
 
     const deviceHash = crypto
       .createHash('sha256')
@@ -1035,24 +1040,64 @@ export class AuthService {
           kioskSmsAttempts: 5,
           kioskSmsSentAt: sentAt,
         },
+        $unset: { kioskMobileRequestId: 1 },
       },
     );
-    if (updated.modifiedCount)
-      await this.smsService.sendText(phone, `Код входа в киоск Pass: ${code}`);
-    return { ok: true };
+    if (updated.modifiedCount) {
+      const challenge = {
+        _id: user._id,
+        kioskSmsHash: hash,
+        kioskSmsSentAt: sentAt,
+      };
+      try {
+        if (channel === 'sms') {
+          await this.smsService.sendText(
+            phone,
+            `Код входа в киоск Pass: ${code}`,
+          );
+        } else {
+          const { requestId } = await this.smsService.startMobileAuth(phone);
+          await this.userModel.updateOne(challenge, {
+            $set: { kioskMobileRequestId: requestId },
+          });
+        }
+      } catch {
+        await this.userModel.updateOne(challenge, {
+          $unset: {
+            kioskSmsHash: 1,
+            kioskSmsDeviceHash: 1,
+            kioskSmsAttempts: 1,
+            kioskSmsSentAt: 1,
+          },
+        });
+        throw new ServiceUnavailableException(
+          'Не удалось отправить подтверждение. Войдите с паролем или повторите попытку.',
+        );
+      }
+    }
+    return { ok: true, channel };
   }
 
   async confirmKioskSms(
     phoneInput: unknown,
     code: unknown,
     deviceToken: string,
+    mobile = false,
   ) {
-    const error = new UnauthorizedException('Код неверен или истёк');
+    const error = new UnauthorizedException(
+      mobile && code === ''
+        ? 'Подтверждение не получено или истекло. Проверьте уведомление на телефоне.'
+        : 'Код неверен или истёк',
+    );
     const phone =
       typeof phoneInput === 'string' && phoneInput.length <= 32
         ? normalizeRuMobilePhone(phoneInput)
         : null;
-    if (!phone || typeof code !== 'string' || !/^\d{6}$/.test(code))
+    if (
+      !phone ||
+      typeof code !== 'string' ||
+      !(mobile ? /^(?:\d{4,8})?$/.test(code) : /^\d{6}$/.test(code))
+    )
       throw error;
     const hash = crypto
       .createHmac('sha256', deviceToken)
@@ -1071,15 +1116,58 @@ export class AuthService {
         .update(deviceToken)
         .digest('hex'),
     };
+    if (mobile) {
+      const challenge = await this.userModel
+        .findOneAndUpdate(
+          { ...filter, kioskMobileRequestId: { $exists: true } },
+          { $inc: { kioskSmsAttempts: -1 } },
+        )
+        .select('+kioskMobileRequestId');
+      if (
+        !challenge?.kioskMobileRequestId ||
+        !(await this.smsService.verifyMobileAuth(
+          challenge.kioskMobileRequestId,
+          code,
+        ))
+      ) {
+        throw error;
+      }
+      const consumed = await this.userModel.updateOne(
+        {
+          ...filter,
+          _id: challenge._id,
+          kioskMobileRequestId: challenge.kioskMobileRequestId,
+          kioskSmsAttempts: { $gte: 0 },
+        },
+        {
+          $unset: {
+            kioskMobileRequestId: 1,
+            kioskSmsHash: 1,
+            kioskSmsDeviceHash: 1,
+            kioskSmsAttempts: 1,
+          },
+        },
+      );
+      if (!consumed.modifiedCount) throw error;
+      return this.me(challenge._id.toString());
+    }
     const user = await this.userModel.findOneAndUpdate(
-      { ...filter, kioskSmsHash: hash },
+      {
+        ...filter,
+        kioskSmsHash: hash,
+        kioskMobileRequestId: { $exists: false },
+      },
       {
         $unset: { kioskSmsHash: 1, kioskSmsDeviceHash: 1, kioskSmsAttempts: 1 },
       },
     );
     if (!user) {
       await this.userModel.updateOne(
-        { ...filter, kioskSmsHash: { $exists: true } },
+        {
+          ...filter,
+          kioskSmsHash: { $exists: true },
+          kioskMobileRequestId: { $exists: false },
+        },
         { $inc: { kioskSmsAttempts: -1 } },
       );
       throw error;
@@ -1802,6 +1890,7 @@ export class AuthService {
           digits,
           `+${digits}`,
           digits.startsWith('7') ? `8${digits.slice(1)}` : '',
+          digits.startsWith('7') ? digits.slice(1) : '',
         ].filter(Boolean),
       ),
     ];

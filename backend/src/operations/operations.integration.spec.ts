@@ -1615,8 +1615,33 @@ describe('Operations with real replica-set transactions', () => {
     ).rejects.toMatchObject({ status: 422 });
     expect(await store.collection('bookings').countDocuments()).toBe(0);
     expect(await store.collection('outbox').countDocuments()).toBe(0);
-    const created = await bookings.create(resident, draft, 'kiosk-checkout');
+    const created = await bookings.create(
+      resident,
+      draft,
+      'kiosk-checkout',
+      undefined,
+      'kiosk',
+    );
     const id = created.booking.id;
+    await expect(bookings.list(admin, { tab: 'kiosk' })).resolves.toMatchObject(
+      {
+        total: 1,
+        items: [{ id, source: 'kiosk', status: 'hold' }],
+      },
+    );
+    const { date, start_minute } = input.segments[0];
+    const adminCalendar = await bookings.availability(
+      input.room_id,
+      date,
+      true,
+    );
+    expect(
+      adminCalendar.slots.find((slot) => slot.start_minute === start_minute),
+    ).toMatchObject({ booking_id: id, state: 'hold' });
+    const publicCalendar = await bookings.availability(input.room_id, date);
+    expect(
+      publicCalendar.slots.find((slot) => slot.start_minute === start_minute),
+    ).not.toHaveProperty('booking_id');
     const token = created.payment.payment_token;
     const url = 'https://yookassa.ru/checkout/test';
     const gateway = jest.spyOn(payments as any, 'gateway').mockResolvedValue({
@@ -1772,6 +1797,48 @@ describe('Operations with real replica-set transactions', () => {
       await http.get(`${path}/video/${version}`).expect(404);
     } finally {
       await app.close();
+    }
+  });
+
+  it('falls back to Mobile ID and consumes the phone login on its original tablet only', async () => {
+    const userModel = connection.model(User.name);
+    const user = await userModel.create({
+      phone: '89991234567',
+      role: 'tenant',
+      isActive: true,
+    });
+    const smsService = {
+      textEnabled: jest.fn(() => false),
+      isConfigured: jest.fn(() => true),
+      startMobileAuth: jest.fn(async () => ({ requestId: 123 })),
+      verifyMobileAuth: jest.fn(async () => true),
+    };
+    const auth: AuthService = Object.assign(
+      Object.create(AuthService.prototype),
+      { userModel, smsService },
+    );
+    const me = jest
+      .spyOn(auth, 'me')
+      .mockResolvedValue({ user: { id: String(user._id) } } as any);
+    const phone = '+79991234567';
+    try {
+      await expect(
+        auth.requestKioskSms(phone, 'original-device'),
+      ).resolves.toEqual({ ok: true, channel: 'mobile' });
+      expect(smsService.startMobileAuth).toHaveBeenCalledWith(phone);
+      await expect(
+        auth.confirmKioskSms(phone, '', 'other-device', true),
+      ).rejects.toMatchObject({ status: 401 });
+      expect(smsService.verifyMobileAuth).not.toHaveBeenCalled();
+      await expect(
+        auth.confirmKioskSms(phone, '', 'original-device', true),
+      ).resolves.toMatchObject({ user: { id: String(user._id) } });
+      await expect(
+        auth.confirmKioskSms(phone, '', 'original-device', true),
+      ).rejects.toMatchObject({ status: 401 });
+      expect(me).toHaveBeenCalledTimes(1);
+    } finally {
+      await userModel.deleteOne({ _id: user._id });
     }
   });
 

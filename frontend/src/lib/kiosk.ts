@@ -115,9 +115,36 @@ export const kioskApi = {
   login: (login: string, password: string) =>
     call<KioskSession>('/auth/login', null, { login, password }),
   requestSms: (token: string, phone: string) =>
-    call<{ ok: true }>('/kiosk/login/sms/request', token, { phone }),
-  confirmSms: (token: string, phone: string, code: string) =>
-    call<KioskSession>('/kiosk/login/sms/confirm', token, { phone, code }),
+    call<{ ok: true; channel?: 'sms' | 'mobile' }>(
+      '/kiosk/login/sms/request',
+      token,
+      { phone },
+    ),
+  confirmSms: (token: string, phone: string, code: string, mobile: boolean) =>
+    call<KioskSession>('/kiosk/login/sms/confirm', token, {
+      phone,
+      code,
+      mobile,
+    }),
+  requestPasswordReset: (data: { phone?: string; email?: string }) =>
+    call<{
+      recoveryChannel: 'phone' | 'email' | 'admin';
+      resetToken?: string;
+      message: string;
+      contact?: { phone?: string; email?: string };
+    }>('/auth/password-reset/request', null, data),
+  passwordResetStatus: (token: string) =>
+    call<{ status: 'waiting' | 'confirmed' | 'expired'; message?: string }>(
+      `/auth/password-reset/status/${encodeURIComponent(token)}`,
+      null,
+    ),
+  confirmPasswordReset: (data: {
+    resetToken?: string;
+    email?: string;
+    code?: string;
+    password: string;
+    passwordConfirm: string;
+  }) => call<{ message: string }>('/auth/password-reset/confirm', null, data),
   rooms: (token: string) =>
     call<{
       rooms: { id: number; title: string }[];
