@@ -338,3 +338,54 @@
 .quality-distribution meter::-webkit-meter-optimum-value {
   background: var(--accent);
 }
+
+/* Quality workspace refresh */
+.quality-workspace { gap: 1.1rem; padding-block: 1rem 2rem; }
+.quality-workspace > fieldset { gap: 0.85rem 1rem; padding: 1.1rem; background: var(--surface-elevated); }
+.quality-workspace > fieldset > label,
+.quality-workspace > fieldset form label { color: var(--muted); font-size: 0.8rem; font-weight: 600; }
+.quality-workspace > fieldset form { margin: 0; }
+.quality-workspace > fieldset input:not([type='checkbox']) { min-width: 10rem; }
+.quality-workspace > fieldset input[type='checkbox'] { accent-color: var(--accent); }
+.quality-workspace button { transition: border-color 140ms, background 140ms, transform 140ms; }
+.quality-workspace button:hover:not(:disabled) { transform: translateY(-1px); }
+.quality-workspace > section[aria-labelledby='quality-weekly'] { padding: 1.15rem; }
+#quality-weekly { margin-bottom: 0.85rem; font-size: 1rem; }
+.quality-workspace dl { grid-template-columns: repeat(auto-fit, minmax(9rem, 1fr)); gap: 0.65rem; }
+.quality-workspace dl > div { min-height: 5.25rem; border: 1px solid var(--border); background: var(--surface-elevated); }
+.quality-workspace dd { font-variant-numeric: tabular-nums; letter-spacing: -0.04em; }
+.quality-workspace .quality-distribution { max-width: 36rem; margin-top: 1rem; }
+.quality-distribution li > span { display: grid; width: 1.6rem; height: 1.6rem; place-items: center; border-radius: 0.45rem; background: var(--surface-muted); font-size: 0.8rem; font-weight: 650; }
+.quality-distribution li > strong { color: var(--muted); font-size: 0.83rem; text-align: right; font-variant-numeric: tabular-nums; }
+.quality-table { border-radius: 1rem; box-shadow: var(--card-shadow); }
+.quality-table-heading { padding: 1rem 1.15rem; }
+.quality-table-heading h2 { font-size: 1.05rem; letter-spacing: -0.02em; }
+.quality-table-heading > span { padding: 0.25rem 0.55rem; border: 1px solid var(--border); border-radius: 99px; background: var(--surface-muted); font-size: 0.78rem; font-variant-numeric: tabular-nums; }
+.quality-workspace table { min-width: 72rem; border-collapse: separate; border-spacing: 0; }
+.quality-workspace thead { position: sticky; top: 0; z-index: 1; }
+.quality-workspace thead th { padding-block: 0.75rem; color: var(--muted); font-size: 0.72rem; font-weight: 650; letter-spacing: 0.035em; text-transform: uppercase; white-space: nowrap; }
+.quality-workspace tbody th,
+.quality-workspace table td { padding: 0.8rem 0.65rem; line-height: 1.45; }
+.quality-workspace tbody th { min-width: 12rem; font-weight: 600; }
+.quality-workspace tbody tr:last-child > * { border-bottom: 0; }
+.quality-workspace tbody tr:hover { background: color-mix(in srgb, var(--surface-elevated) 65%, transparent); }
+.quality-dates { white-space: nowrap; font-variant-numeric: tabular-nums; }
+.quality-actions { min-width: 11rem; }
+.quality-flags span { border-radius: 99px; padding: 0.12rem 0.45rem; background: var(--surface-muted); font-size: 0.68rem; }
+.quality-crm-link { font-variant-numeric: tabular-nums; }
+.quality-pager { padding: 0.8rem 1.1rem; background: var(--surface-elevated); }
+.quality-pager label { color: var(--muted); font-size: 0.8rem; }
+.quality-pager button { min-width: 5.25rem; }
+.quality-sync { border-radius: 0.75rem; background: var(--surface-elevated); font-size: 0.83rem; }
+.quality-export { border-radius: 0.75rem; }
+@media (max-width: 700px) {
+  .quality-workspace { gap: 0.75rem; padding-top: 0.5rem; }
+  .quality-workspace > fieldset { align-items: stretch; gap: 0.75rem; }
+  .quality-workspace > fieldset form { align-items: end; }
+  .quality-workspace > fieldset > label,
+  .quality-workspace > fieldset form { flex: 1 1 100%; }
+  .quality-workspace > fieldset form label { flex: 1; }
+  .quality-workspace > fieldset input:not([type='checkbox']) { width: 100%; min-width: 0; }
+  .quality-table-heading, .quality-pager { padding-inline: 0.8rem; }
+  .quality-table-scroll { overscroll-behavior-x: contain; }
+}

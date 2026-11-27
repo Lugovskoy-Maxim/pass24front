@@ -13,5 +13,5 @@ export default async function RatingPage({
   params: Promise<{ token: string }>;
 }) {
   const { token } = await params;
-  return <RatingForm token={token} />;
+  return <RatingForm token={token} demo={process.env.NODE_ENV === 'development' && token === 'demo'} />;
 }
