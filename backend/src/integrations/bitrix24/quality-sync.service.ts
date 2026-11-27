@@ -4,7 +4,12 @@ import {
   OnModuleDestroy,
   OnModuleInit,
 } from '@nestjs/common';
+import { ConfigService } from '@nestjs/config';
+import { isEmail } from 'class-validator';
+import { randomBytes } from 'node:crypto';
+import { MailService } from '../../mail/mail.service';
 import { OperationsStore } from '../../operations/operations.store';
+import { SmsService } from '../../sms/sms.service';
 import { Bitrix24Client, Bitrix24Error } from './bitrix24.client';
 
 interface QualityDeal {
@@ -16,6 +21,7 @@ interface QualityDeal {
   STAGE_ID: string;
   CREATED_BY_ID: string;
   COMPANY_ID: string;
+  CONTACT_ID?: string;
   SOURCE_ID: string;
   ORIGINATOR_ID: string;
   ORIGIN_ID: string;
@@ -30,6 +36,9 @@ export class QualitySyncService implements OnModuleInit, OnModuleDestroy {
   constructor(
     private readonly store: OperationsStore,
     private readonly client: Bitrix24Client,
+    private readonly config?: ConfigService,
+    private readonly mail?: MailService,
+    private readonly sms?: SmsService,
   ) {}
 
   async onModuleInit() {
@@ -111,6 +120,7 @@ export class QualitySyncService implements OnModuleInit, OnModuleDestroy {
               'STAGE_ID',
               'CREATED_BY_ID',
               'COMPANY_ID',
+              'CONTACT_ID',
               'SOURCE_ID',
               'ORIGINATOR_ID',
               'ORIGIN_ID',
@@ -234,6 +244,17 @@ export class QualitySyncService implements OnModuleInit, OnModuleDestroy {
             },
             { upsert: true },
           );
+          if (
+            checkpoint?.scannedAt &&
+            closedAt &&
+            checkpoint.categoryId === funnel.id &&
+            closedAt.getTime() >= checkpoint.scannedAt.getTime() - 1000 &&
+            /^\s*(Можно закрывать|Сделка успешна)\s*$/i.test(
+              stages.get(deal.STAGE_ID) ?? '',
+            )
+          ) {
+            await this.sendRating(String(dealId), Number(deal.CONTACT_ID));
+          }
           afterId = dealId;
         }
       }
@@ -253,5 +274,96 @@ export class QualitySyncService implements OnModuleInit, OnModuleDestroy {
     } finally {
       this.running = false;
     }
+  }
+
+  private async sendRating(id: string, contactId: number) {
+    const origin = this.config?.get<string>('PUBLIC_APP_URL')?.trim();
+    if (!origin || !Number.isSafeInteger(contactId) || contactId <= 0) return;
+    const url = URL.parse(origin);
+    if (!url || !['http:', 'https:'].includes(url.protocol)) return;
+    const tickets = this.store.collection<{
+      _id: string;
+      excluded?: boolean;
+      requests: {
+        token: string;
+        createdAt: Date;
+        deliveryChannel: string;
+        deliveryStatus: string;
+      }[];
+    }>('quality_tickets');
+    const eligible = {
+      _id: id,
+      excluded: { $ne: true },
+      'requests.0': { $exists: false },
+    };
+    if (!(await tickets.findOne(eligible, { projection: { _id: 1 } }))) return;
+
+    type ContactValue = { VALUE?: string };
+    type Contact = {
+      EMAIL?: ContactValue[];
+      PHONE?: ContactValue[];
+    };
+    let contact: Contact;
+    try {
+      ({ result: contact } = await this.client.call<Contact>(
+        'crm.contact.get',
+        {
+          id: contactId,
+        },
+      ));
+    } catch (error) {
+      if (
+        error instanceof Bitrix24Error &&
+        /^(not_found|error_not_found|access_denied|http_403|http_404)$/i.test(
+          error.code,
+        )
+      ) {
+        this.logger.warn(`Контакт для оценки заявки №${id} недоступен`);
+        return;
+      }
+      throw error;
+    }
+    const email = contact?.EMAIL?.map(({ VALUE }) => VALUE?.trim() ?? '').find(
+      (value) => isEmail(value),
+    );
+    const phone = contact?.PHONE?.map(({ VALUE }) =>
+      (VALUE ?? '').replace(/\D/g, '').replace(/^8(?=\d{10}$)/, '7'),
+    ).find((value) => /^7\d{10}$/.test(value));
+    if (email ? !this.mail?.isConfigured() : !phone || !this.sms?.textEnabled())
+      return;
+
+    const token = randomBytes(16).toString('base64url');
+    const link = new URL('/q/' + token, url).href;
+    const claimed = await tickets.updateOne(eligible, {
+      $push: {
+        requests: {
+          token,
+          createdAt: new Date(),
+          deliveryChannel: email ? 'email' : 'sms',
+          deliveryStatus: 'sending',
+        },
+      },
+    });
+    if (!claimed.modifiedCount) return;
+
+    let deliveryStatus = 'sent';
+    try {
+      if (email) {
+        await this.mail!.sendServiceRequestEmail(
+          email,
+          `Оцените работу по заявке №${id}`,
+          `Здравствуйте! Заявка №${id} завершена. Пожалуйста, оцените нашу работу: ${link}`,
+        );
+      } else {
+        await this.sms!.sendText(phone!, `Оцените заявку №${id}: ${link}`);
+      }
+    } catch {
+      deliveryStatus = 'failed';
+      this.logger.warn(`Не удалось отправить запрос оценки по заявке №${id}`);
+    }
+    await tickets.updateOne(
+      { _id: id, 'requests.token': token },
+      { $set: { 'requests.$.deliveryStatus': deliveryStatus } },
+    );
   }
 }

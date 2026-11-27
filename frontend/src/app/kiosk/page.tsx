@@ -57,7 +57,7 @@ type Screen = 'status' | 'login' | 'booking' | 'payment' | 'admin';
 type BookingReceipt = {
   statusLabel: string;
   bookingNumber?: string;
-  cashDue: boolean;
+  administratorPaymentDue: boolean;
 };
 function shiftBookingDate(date: string, days: number) {
   const next = new Date(`${date}T00:00:00Z`);
@@ -544,6 +544,7 @@ function LoginForm({
   const [smsSent, setSmsSent] = useState(false);
   const [mobile, setMobile] = useState(false);
   const [recover, setRecover] = useState(false);
+  const [register, setRegister] = useState(false);
   const [notice, setNotice] = useState('');
   const [busy, setBusy] = useState(false);
   const [error, setError] = useState('');
@@ -560,10 +561,10 @@ function LoginForm({
     };
   }, []);
   useEffect(() => {
-    if (qr || !returningFromQr.current) return;
+    if (qr || register || !returningFromQr.current) return;
     returningFromQr.current = false;
     passwordHeading.current?.focus({ preventScroll: true });
-  }, [qr]);
+  }, [qr, register]);
   async function startQr() {
     if (busy) return;
     setBusy(true);
@@ -613,6 +614,33 @@ function LoginForm({
       }
     }
   }
+  if (register)
+    return (
+      <section className="kiosk-panel kiosk-login kiosk-stack">
+        <button
+          type="button"
+          className="kiosk-back"
+          onClick={() => {
+            returningFromQr.current = true;
+            setRegister(false);
+          }}
+        >
+          <ArrowLeft size={20} aria-hidden="true" /> Назад
+        </button>
+        <h1 tabIndex={-1}>Регистрация в Pass</h1>
+        <p>
+          Отсканируйте QR-код телефоном и заполните форму регистрации. Затем
+          вернитесь к киоску и войдите.
+        </p>
+        <div className="kiosk-qr">
+          <QRCode
+            value={new URL('/login?mode=register', window.location.origin).href}
+            size={224}
+            title="QR-код для регистрации в Pass"
+          />
+        </div>
+      </section>
+    );
   if (recover)
     return (
       <KioskPasswordRecovery
@@ -799,6 +827,21 @@ function LoginForm({
           >
             Забыли пароль?
           </button>
+          {!admin && (
+            <button
+              type="button"
+              className="btn btn-secondary"
+              disabled={busy}
+              onClick={() => {
+                setPassword('');
+                setError('');
+                setSmsSent(false);
+                setRegister(true);
+              }}
+            >
+              Нет аккаунта? Зарегистрироваться
+            </button>
+          )}
           {!admin && deviceToken && (
             <button
               type="button"
@@ -1393,7 +1436,7 @@ function Booking({
           onSuccess({
             statusLabel: result.booking.status_label,
             bookingNumber: result.booking.number,
-            cashDue:
+            administratorPaymentDue:
               command.draft.paymentMethod === 'cash' &&
               result.booking.status === 'awaiting_payment',
           });
@@ -1647,13 +1690,13 @@ function Booking({
                   {qrPaymentAvailable && (
                     <option value="qr_code">По QR-коду (СБП)</option>
                   )}
-                  <option value="cash">Наличными</option>
+                  <option value="cash">Наличными / оплата по счёту</option>
                 </select>
                 {paymentMethod === 'cash' && (
                   <p className="kiosk-muted">
-                    При оплате наличными обязательно подтверждение у
-                    администратора бизнес-центра. До подтверждения оплаты время
-                    остаётся доступным.
+                    Для оплаты наличными или по счёту обратитесь к
+                    администратору бизнес-центра. Отправка заявки не резервирует
+                    время.
                   </p>
                 )}
                 {!qrPaymentAvailable && (
@@ -1694,7 +1737,7 @@ function Booking({
                       {currentQuote.total_amount_minor === 0
                         ? 'Оплата не требуется'
                         : paymentMethod === 'cash'
-                          ? 'К оплате наличными'
+                          ? 'К оплате у администратора'
                           : 'К оплате'}
                     </dt>
                     <dd>{officeMoney(currentQuote.total_amount_minor)}</dd>
@@ -2353,22 +2396,22 @@ export default function KioskPage() {
                 <CheckCircle2 size={30} />
                 <div>
                   <strong>
-                    {receipt.cashDue
+                    {receipt.administratorPaymentDue
                       ? 'Заявка принята'
                       : 'Бронирование создано'}{' '}
                     · {receipt.statusLabel}
                   </strong>
                   {receipt.bookingNumber && (
                     <p className="kiosk-booking-reference">
-                      {receipt.cashDue ? 'Заявка' : 'Бронь'}{' '}
+                      {receipt.administratorPaymentDue ? 'Заявка' : 'Бронь'}{' '}
                       {receipt.bookingNumber}
                     </p>
                   )}
-                  {receipt.cashDue && (
+                  {receipt.administratorPaymentDue && (
                     <p>
-                      При оплате наличными обязательно подтверждение у
-                      администратора бизнес-центра. До подтверждения оплаты
-                      время остаётся доступным.
+                      Назовите номер заявки администратору бизнес-центра, чтобы
+                      оплатить наличными или запросить счёт. Отправка заявки не
+                      резервирует время.
                     </p>
                   )}
                   <p>Вы вышли из аккаунта.</p>
