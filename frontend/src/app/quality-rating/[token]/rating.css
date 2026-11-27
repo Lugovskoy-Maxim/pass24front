@@ -1,0 +1,64 @@
+.rating-page {
+  display: grid;
+  min-height: 100dvh;
+  place-items: center;
+  padding: 2rem 1.25rem;
+  background: var(--bg);
+  color: var(--foreground);
+  font-family: var(--font-manrope), Manrope, system-ui, sans-serif;
+}
+
+.rating-card {
+  width: min(100%, 34rem);
+  padding: clamp(1.5rem, 5vw, 2.75rem);
+  border: 1px solid var(--border);
+  border-radius: 1.5rem;
+  background: var(--surface);
+  box-shadow: var(--card-shadow);
+}
+
+.rating-kicker {
+  display: inline-block;
+  margin-bottom: 1.25rem;
+  color: var(--muted);
+  font-size: 0.72rem;
+  font-weight: 750;
+  letter-spacing: 0.13em;
+}
+
+.rating-title { margin: 0; font-size: clamp(1.6rem, 5vw, 2rem); font-weight: 700; letter-spacing: -0.045em; }
+.rating-context { margin: 0.65rem 0 1.75rem; color: var(--muted); line-height: 1.55; }
+.rating-form { display: grid; gap: 1.5rem; margin-top: 2rem; }
+.rating-choices { min-width: 0; margin: 0; padding: 0; border: 0; }
+.rating-choices legend { font-size: 1rem; font-weight: 650; }
+.rating-hint { margin: 0.35rem 0 1rem; color: var(--muted); font-size: 0.88rem; }
+.rating-options { display: grid; grid-template-columns: repeat(5, minmax(0, 1fr)); gap: 0.65rem; }
+.rating-option { position: relative; cursor: pointer; }
+.rating-option input { position: absolute; width: 1px; height: 1px; opacity: 0; }
+.rating-option span { display: grid; min-height: 3.5rem; place-items: center; border: 1px solid var(--border-strong); border-radius: 0.9rem; background: var(--surface-muted); color: var(--foreground); font-size: 1.1rem; font-weight: 650; transition: border-color 150ms, background 150ms, color 150ms, transform 150ms; }
+.rating-option:hover span { border-color: var(--accent); transform: translateY(-1px); }
+.rating-option input:checked + span { border-color: var(--accent); background: var(--accent); color: var(--on-accent); box-shadow: 0 5px 14px color-mix(in srgb, var(--accent) 22%, transparent); }
+.rating-option input:focus-visible + span { outline: 3px solid var(--focus-border); outline-offset: 3px; }
+.rating-comment-field { display: grid; gap: 0.65rem; font-size: 0.92rem; font-weight: 600; }
+.rating-comment-field em { margin-left: 0.35rem; color: var(--muted); font-size: 0.8rem; font-style: normal; font-weight: 400; }
+.rating-comment-field textarea { width: 100%; min-height: 6.5rem; resize: vertical; padding: 0.85rem 0.95rem; border: 1px solid var(--border-strong); border-radius: 0.85rem; background: var(--surface-muted); color: inherit; font: inherit; font-weight: 400; line-height: 1.5; }
+.rating-comment-field textarea::placeholder { color: var(--muted); }
+.rating-comment-field textarea:focus-visible { border-color: var(--accent); outline: 3px solid color-mix(in srgb, var(--accent) 18%, transparent); outline-offset: 1px; }
+.rating-submit { min-height: 3.1rem; border: 0; border-radius: 0.85rem; background: var(--accent); color: var(--on-accent); font: inherit; font-weight: 650; cursor: pointer; transition: background 150ms, transform 150ms; }
+.rating-submit:hover:not(:disabled) { background: var(--accent-hover); transform: translateY(-1px); }
+.rating-submit:disabled { cursor: not-allowed; opacity: 0.48; }
+.rating-privacy { margin: -0.8rem 0 0; color: var(--muted); font-size: 0.79rem; line-height: 1.5; text-align: center; }
+.rating-error { margin: 1rem 0; padding: 0.8rem 0.9rem; border: 1px solid var(--form-error-border); border-radius: 0.75rem; background: var(--form-error-bg); color: var(--form-error-text); font-size: 0.9rem; }
+.rating-loading { margin-top: 1.5rem; color: var(--muted); }
+.rating-result { margin-top: 1.5rem; padding: 1.1rem; border-radius: 0.9rem; background: var(--surface-muted); color: var(--foreground); }
+.rating-result > p:first-child { margin: 0 0 0.25rem; color: var(--muted); font-size: 0.88rem; }
+.rating-result strong { font-size: 1.75rem; }
+.rating-result strong span { color: var(--muted); font-size: 1rem; }
+.rating-comment { margin: 0.75rem 0 0; white-space: pre-wrap; line-height: 1.5; }
+.rating-inline { margin: 0.75rem; }
+.rating-inline .rating-card { width: 100%; padding: 1rem; border-radius: 0.9rem; box-shadow: none; }
+.rating-inline .rating-title { font-size: 1.25rem; }
+.rating-inline .rating-form { gap: 1rem; margin-top: 1.25rem; }
+.rating-inline .rating-option span { min-height: 2.75rem; }
+@media (max-width: 420px) { .rating-page { padding: 1rem 0.75rem; } .rating-card { border-radius: 1.15rem; } .rating-options { gap: 0.4rem; } .rating-option span { min-height: 3.1rem; border-radius: 0.75rem; } }
+@media (prefers-reduced-motion: reduce) { .rating-option span, .rating-submit { transition: none; } }

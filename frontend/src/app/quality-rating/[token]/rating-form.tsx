@@ -1,6 +1,7 @@
 'use client';
 
 import { useEffect, useState, type FormEvent } from 'react';
+import './rating.css';
 
 export interface RatingAnswer {
   score: number;
@@ -11,24 +12,27 @@ type Rating = { title: string; closed: false } | { closed: true };
 export function RatingForm({
   token,
   inline = false,
+  demo = false,
   chatAnswer,
 }: {
   token: string;
   inline?: boolean;
+  demo?: boolean;
   chatAnswer?: RatingAnswer;
 }) {
   const base = process.env.NEXT_PUBLIC_API_URL || 'http://127.0.0.1:4000/api';
   const url = base + '/quality-rating/' + encodeURIComponent(token);
-  const [rating, setRating] = useState<Rating>();
+  const [rating, setRating] = useState<Rating>(demo ? { title: 'Заявка №1842 · Настройка доступа в офис', closed: false } : undefined);
   const [score, setScore] = useState(0);
   const [comment, setComment] = useState('');
   const [pending, setPending] = useState(false);
   const [error, setError] = useState('');
   const answered = !!rating?.closed || !!chatAnswer;
+  const isLowScore = score >= 1 && score <= 3;
   const loaded = !!rating;
 
   useEffect(() => {
-    if (answered) return;
+    if (demo || answered) return;
     const controller = new AbortController();
     let loading = false;
     function refresh() {
@@ -64,10 +68,14 @@ export function RatingForm({
       window.clearInterval(timer);
       document.removeEventListener('visibilitychange', refresh);
     };
-  }, [url, answered, loaded]);
+  }, [url, answered, loaded, demo]);
 
   async function submit(event: FormEvent<HTMLFormElement>) {
     event.preventDefault();
+    if (demo) {
+      setRating({ closed: true });
+      return;
+    }
     setPending(true);
     setError('');
     try {
@@ -90,40 +98,41 @@ export function RatingForm({
   return (
     <Container
       className={
-        inline ? 'm-3 rounded border p-4' : 'mx-auto my-12 w-full max-w-lg px-4'
+        inline ? 'rating-inline' : 'rating-page'
       }
     >
-      <Heading className="text-2xl font-semibold">Оценка заявки</Heading>
+      <div className="rating-card">
+        {!inline && <span className="rating-kicker">PASS24 · M-STYLE</span>}
+        <Heading className="rating-title">Оцените нашу работу</Heading>
       {rating && !rating.closed && !inline && (
-        <p className="my-4">{rating.title}</p>
+          <p className="rating-context">{rating.title}</p>
       )}
       {error && (
-        <p role="alert" className="my-4">
+          <p role="alert" className="rating-error">
           {error}
         </p>
       )}
-      {!rating && !chatAnswer && !error && <p role="status">Загрузка…</p>}
+        {!rating && !chatAnswer && !error && <p role="status" className="rating-loading">Загружаем опрос…</p>}
       {chatAnswer && (
-        <section aria-label="Ваш ответ">
-          <p>Ваша оценка: {chatAnswer.score} из 5</p>
+          <section aria-label="Ваш ответ" className="rating-result">
+            <p>Ваша оценка</p>
+            <strong>{chatAnswer.score}<span> / 5</span></strong>
           {chatAnswer.comment && (
-            <p className="whitespace-pre-wrap">{chatAnswer.comment}</p>
+              <p className="rating-comment">{chatAnswer.comment}</p>
           )}
         </section>
       )}
       {rating?.closed && !chatAnswer && (
-        <p role="status">Опрос закрыт. Ответ уже получен.</p>
+          <p role="status" className="rating-result">{demo ? 'Спасибо! Демо-отзыв принят.' : 'Опрос закрыт. Ответ уже получен.'}</p>
       )}
       {rating && !answered && (
-        <form onSubmit={submit} className="grid gap-4">
-          <fieldset disabled={pending}>
-            <legend>Выберите оценку</legend>
-            <div className="flex gap-4">
+          <form onSubmit={submit} className="rating-form">
+            <fieldset className="rating-choices" disabled={pending}>
+              <legend>Как прошла работа по заявке?</legend>
+              <p className="rating-hint">Выберите оценку от 1 до 5</p>
+              <div className="rating-options">
               {[1, 2, 3, 4, 5].map((value) => (
-                <label
-                  key={value}
-                  className="inline-flex items-center gap-1 p-2"
-                >
+                  <label key={value} className="rating-option">
                   <input
                     type="radio"
                     name="score"
@@ -131,31 +140,40 @@ export function RatingForm({
                     checked={score === value}
                     onChange={() => setScore(value)}
                   />
-                  {value}
+                    <span>{value}</span>
                 </label>
               ))}
             </div>
           </fieldset>
-          <label className="grid gap-2">
-            Комментарий (необязательно)
+            <label className="rating-comment-field">
+              <span>
+                {isLowScore ? 'Что пошло не так?' : 'Комментарий'}{' '}
+                <em>необязательно</em>
+              </span>
             <textarea
               value={comment}
               onChange={(event) => setComment(event.target.value)}
               maxLength={500}
-              rows={3}
+                rows={4}
               disabled={pending}
-              className="rounded border p-2"
+                placeholder={
+                  isLowScore
+                    ? 'Расскажите, что случилось и что мы могли сделать лучше'
+                    : 'Что прошло хорошо? Что можно улучшить?'
+                }
             />
           </label>
           <button
             type="submit"
             disabled={pending || !score}
-            className="btn-primary"
+              className="rating-submit"
           >
             {pending ? 'Отправка…' : 'Отправить'}
           </button>
+            <p className="rating-privacy">Ваш отзыв поможет нам улучшить качество обслуживания.</p>
         </form>
       )}
+      </div>
     </Container>
   );
 }
